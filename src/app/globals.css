@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
+/* Flat Rate Tracker is dark-mode only (per product spec). Setting
+   color-scheme: dark makes native form widgets — date pickers, number
+   spinners, scrollbars — render with dark theming regardless of the
+   user's OS preference, so their icons don't blend into our zinc-950
+   background. */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --background: #09090b; /* zinc-950 */
+  --foreground: #fafafa; /* zinc-50 */
 }
 
 @theme inline {
@@ -12,15 +19,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
