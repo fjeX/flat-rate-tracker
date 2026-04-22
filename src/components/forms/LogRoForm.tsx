@@ -164,9 +164,13 @@ export function LogRoForm({
   }
 
   // --- submit -----------------------------------------------------------
+  //
+  // The outer element is a <div>, not a <form>. The op-code modals
+  // render inside this tree and have their own <form> elements; a real
+  // outer <form> would capture their submit events and trigger a save.
+  // We trigger save via the explicit Save button's onClick instead.
 
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleSave() {
     setError(null);
     startTransition(async () => {
       try {
@@ -198,10 +202,7 @@ export function LogRoForm({
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="mx-auto max-w-3xl space-y-6 p-4 pb-24"
-    >
+    <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
       {/* ---- Header ---- */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">
@@ -505,7 +506,8 @@ export function LogRoForm({
 
       <div className="sticky bottom-4 z-10 flex justify-end">
         <button
-          type="submit"
+          type="button"
+          onClick={handleSave}
           disabled={isSubmitting}
           className="rounded-md bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-orange-500 disabled:opacity-60"
         >
@@ -531,6 +533,6 @@ export function LogRoForm({
         onClose={() => setNewLibraryOpen(false)}
         isPending={newLibraryPending}
       />
-    </form>
+    </div>
   );
 }
