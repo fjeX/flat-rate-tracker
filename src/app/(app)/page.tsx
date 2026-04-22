@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import {
@@ -12,14 +13,13 @@ import {
 import { aggregateStats } from "@/lib/stats";
 import { ClockedHoursInput } from "@/components/dashboard/ClockedHoursInput";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { RecentRoList } from "@/components/dashboard/RecentRoList";
+import { RoList } from "@/components/ro/RoList";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  // Ranges we care about today. We fetch once over the widest window
-  // (start-of-month → today) and aggregate client-side. Cheap for personal
-  // data volumes and avoids multiple roundtrips.
+  // Ranges we care about today. We fetch once over the widest window and
+  // aggregate client-side. Cheap for personal data volumes.
   const today = isoDate();
   const settings = await db.getSettings(supabase);
   const period = getPeriodForDate(
@@ -32,12 +32,12 @@ export default async function DashboardPage() {
   const weekStart = startOfWeek(today);
   const weekEnd = endOfWeek(today);
 
-  // Widest range: the earliest of {monthStart, periodStart, weekStart}.
   const fetchFrom = [monthStart, period.start, weekStart].sort()[0];
 
-  const [entries, clocks] = await Promise.all([
+  const [entries, clocks, library] = await Promise.all([
     db.listEntries(supabase, { from: fetchFrom, to: monthEnd }),
     db.listDailyClocks(supabase, { from: fetchFrom, to: monthEnd }),
+    db.listOpCodes(supabase),
   ]);
 
   const statsToday = aggregateStats(entries, clocks, { start: today, end: today });
@@ -59,14 +59,12 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-4 pb-16">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-zinc-500">
-            Pay period
-          </div>
-          <div className="text-lg font-semibold">
-            {formatPeriodLabel(period)}
-          </div>
+      <div>
+        <div className="text-xs uppercase tracking-wide text-zinc-500">
+          Pay period
+        </div>
+        <div className="text-lg font-semibold">
+          {formatPeriodLabel(period)}
         </div>
       </div>
 
@@ -85,7 +83,21 @@ export default async function DashboardPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-zinc-400">Recent ROs</h2>
-        <RecentRoList entries={recentEntries} />
+        <RoList
+          entries={recentEntries}
+          library={library}
+          emptyState={
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center">
+              <p className="text-sm text-zinc-400">No ROs logged yet.</p>
+              <Link
+                href="/log"
+                className="mt-2 inline-block text-sm font-medium text-orange-400 hover:text-orange-300"
+              >
+                Log your first RO →
+              </Link>
+            </div>
+          }
+        />
       </section>
     </main>
   );
