@@ -147,7 +147,7 @@ export function CustomOpCodeModal({
   onClose: () => void;
 }) {
   return (
-    <Modal open={open} onClose={onClose} title="Custom op code (one-time)">
+    <Modal open={open} onClose={onClose} title="Other op code (one-time)">
       <CustomOpCodeBody
         initialCode={initialCode ?? ""}
         onAdd={onAdd}

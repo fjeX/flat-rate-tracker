@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Search, Trash2, X } from "lucide-react";
@@ -60,6 +60,23 @@ export function LogRoForm({
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
+
+  // Close the op-code picker when clicking anywhere outside it.
+  const pickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(e.target as Node)
+      ) {
+        setPickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    return () =>
+      document.removeEventListener("mousedown", handleMouseDown);
+  }, [pickerOpen]);
 
   const filteredLibrary = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -225,7 +242,8 @@ export function LogRoForm({
               onChange={(e) => setRoNumber(e.target.value)}
               required
               inputMode="text"
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none"
+              placeholder="12345"
+              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-mono placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
             />
           </label>
         </div>
@@ -240,7 +258,8 @@ export function LogRoForm({
               value={year}
               onChange={(e) => setYear(e.target.value)}
               inputMode="numeric"
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              placeholder="2000"
+              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
             />
           </label>
           <label className="block">
@@ -251,7 +270,8 @@ export function LogRoForm({
               type="text"
               value={make}
               onChange={(e) => setMake(e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              placeholder="Toyota"
+              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
             />
           </label>
           <label className="block">
@@ -262,7 +282,8 @@ export function LogRoForm({
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              placeholder="Camry"
+              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
             />
           </label>
         </div>
@@ -281,7 +302,7 @@ export function LogRoForm({
         </div>
 
         {/* Picker */}
-        <div className="relative">
+        <div className="relative" ref={pickerRef}>
           <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-3">
             <Search className="h-4 w-4 text-zinc-500" />
             <input
@@ -308,7 +329,7 @@ export function LogRoForm({
           </div>
 
           {pickerOpen && (
-            <div className="absolute z-10 mt-1 w-full rounded-md border border-zinc-800 bg-zinc-900 shadow-lg">
+            <div className="absolute z-30 mt-1 w-full rounded-md border border-zinc-800 bg-zinc-900 shadow-lg">
               <ul className="max-h-64 overflow-y-auto">
                 {filteredLibrary.length === 0 ? (
                   <li className="px-3 py-2 text-sm text-zinc-500">
@@ -348,7 +369,7 @@ export function LogRoForm({
                   className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Custom op code (one-time)
+                  Other op code (one-time)
                 </button>
                 <button
                   type="button"
@@ -393,7 +414,7 @@ export function LogRoForm({
                       </span>
                       {line.custom && (
                         <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
-                          Custom
+                          Other
                         </span>
                       )}
                       <div className="truncate text-xs text-zinc-500">

@@ -4,6 +4,18 @@ import { useState, useTransition } from "react";
 import { upsertDailyClockHoursAction } from "@/app/actions/daily-clock";
 import { computeEfficiency, fmtPct } from "@/lib/stats";
 
+// Input state is a raw string so the field can be genuinely empty (not "0").
+// Parsing happens at commit time + for the live efficiency calc.
+function toText(hours: number): string {
+  return hours > 0 ? String(hours) : "";
+}
+
+function parseHoursText(text: string): number {
+  if (text.trim() === "") return 0;
+  const n = Number(text);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 export function ClockedHoursInput({
   date,
   initialHours,
@@ -13,21 +25,22 @@ export function ClockedHoursInput({
   initialHours: number;
   todayFlagHours: number;
 }) {
-  const [hours, setHours] = useState<number>(initialHours);
+  const [hoursText, setHoursText] = useState<string>(toText(initialHours));
   const [savedHours, setSavedHours] = useState<number>(initialHours);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const efficiency = computeEfficiency(todayFlagHours, hours);
-  const dirty = hours !== savedHours;
+  const parsedHours = parseHoursText(hoursText);
+  const efficiency = computeEfficiency(todayFlagHours, parsedHours);
+  const dirty = parsedHours !== savedHours;
 
   function commit() {
     if (!dirty) return;
     setError(null);
     startTransition(async () => {
       try {
-        await upsertDailyClockHoursAction(date, hours);
-        setSavedHours(hours);
+        await upsertDailyClockHoursAction(date, parsedHours);
+        setSavedHours(parsedHours);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to save.");
       }
@@ -47,11 +60,8 @@ export function ClockedHoursInput({
               min={0}
               max={24}
               step={0.1}
-              value={Number.isFinite(hours) ? hours : ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                setHours(v === "" ? 0 : Number(v));
-              }}
+              value={hoursText}
+              onChange={(e) => setHoursText(e.target.value)}
               onBlur={commit}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -59,12 +69,11 @@ export function ClockedHoursInput({
                   (e.target as HTMLInputElement).blur();
                 }
               }}
-              className="mt-1 w-28 rounded-md border border-orange-900/60 bg-zinc-950/80 px-3 py-2 text-lg font-semibold text-zinc-100 focus:border-orange-500 focus:outline-none"
+              placeholder="0"
+              className="mt-1 w-28 rounded-md border border-orange-900/60 bg-zinc-950/80 px-3 py-2 text-lg font-semibold text-zinc-100 placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
             />
           </label>
-          {error && (
-            <p className="mt-1 text-xs text-red-300">{error}</p>
-          )}
+          {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
           {!error && isPending && (
             <p className="mt-1 text-xs text-orange-300/80">Saving…</p>
           )}
