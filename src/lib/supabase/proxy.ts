@@ -3,6 +3,7 @@
 // unauthenticated users away from protected routes.
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { Database } from "./database.types";
 
 // Routes that an unauthenticated user is allowed to visit. Everything else
 // requires a session.
@@ -11,7 +12,7 @@ const PUBLIC_ROUTES = ["/signin", "/signup"];
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {

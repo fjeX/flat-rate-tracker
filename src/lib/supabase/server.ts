@@ -2,11 +2,12 @@
 // cookies() is async in Next.js 15+, so this factory is async.
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { Database } from "./database.types";
 
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
@@ -28,3 +29,5 @@ export async function createClient() {
     },
   );
 }
+
+export type TypedSupabaseClient = Awaited<ReturnType<typeof createClient>>;

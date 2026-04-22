@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/actions/auth";
+import * as db from "@/lib/db";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -14,12 +15,7 @@ export default async function Home() {
     redirect("/signin");
   }
 
-  // Fetch the user's op codes to prove the signup trigger ran. Temporary —
-  // this page becomes the real Dashboard in a later step.
-  const { data: opCodes } = await supabase
-    .from("op_codes")
-    .select("code, description, flag_hours")
-    .order("sort_order", { ascending: true });
+  const opCodes = await db.listOpCodes(supabase);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
@@ -43,18 +39,18 @@ export default async function Home() {
           <h2 className="text-sm font-medium text-zinc-400 mb-3">
             Your op code library
           </h2>
-          {opCodes && opCodes.length > 0 ? (
+          {opCodes.length > 0 ? (
             <ul className="space-y-1 text-sm">
               {opCodes.map((oc) => (
                 <li
-                  key={oc.code}
+                  key={oc.id}
                   className="flex items-center justify-between border-b border-zinc-800 last:border-0 py-1.5"
                 >
                   <span>
                     <span className="font-mono text-orange-400">{oc.code}</span>
                     <span className="text-zinc-500"> — {oc.description}</span>
                   </span>
-                  <span className="text-zinc-400">{oc.flag_hours}h</span>
+                  <span className="text-zinc-400">{oc.flagHours}h</span>
                 </li>
               ))}
             </ul>
