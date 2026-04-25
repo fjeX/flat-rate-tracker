@@ -1,0 +1,11 @@
+.git
+.next
+node_modules
+.env
+.env.local
+.env*.local
+supabase/.temp
+docs
+.claude
+npm-debug.log*
+*.tsbuildinfo

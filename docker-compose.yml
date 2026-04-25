@@ -1,0 +1,21 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+        - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+    restart: unless-stopped
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.flat-rate-tracker.rule=Host(`tracker.slimelab.cc`)"
+      - "traefik.http.routers.flat-rate-tracker.entrypoints=websecure"
+      - "traefik.http.routers.flat-rate-tracker.tls=true"
+      - "traefik.http.routers.flat-rate-tracker.tls.certresolver=cloudflare"
+      - "traefik.http.services.flat-rate-tracker.loadbalancer.server.port=3000"
+
+networks:
+  proxy:
+    external: true

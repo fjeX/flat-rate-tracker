@@ -1,0 +1,64 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+
+function toSigninWithError(message: string): never {
+  redirect(`/signin?error=${encodeURIComponent(message)}`);
+}
+
+function toSignupWithError(message: string): never {
+  redirect(`/signup?error=${encodeURIComponent(message)}`);
+}
+
+export async function signUp(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !password) {
+    toSignupWithError("Email and password are required.");
+  }
+  if (password.length < 8) {
+    toSignupWithError("Password must be at least 8 characters.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signUp({ email, password });
+
+  if (error) {
+    toSignupWithError(error.message);
+  }
+
+  // Local dev has email confirmation disabled, so the user is signed in
+  // immediately. On phase-2+ with confirmation on, the user would land here
+  // but have no session until they click the confirm link — adjust then.
+  revalidatePath("/", "layout");
+  redirect("/");
+}
+
+export async function signIn(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !password) {
+    toSigninWithError("Email and password are required.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    toSigninWithError(error.message);
+  }
+
+  revalidatePath("/", "layout");
+  redirect("/");
+}
+
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+  redirect("/signin");
+}

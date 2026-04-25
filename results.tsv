@@ -1,0 +1,5 @@
+experiment	commit	metric	status	description
+0	3d6d426	4	baseline	RO# + Year + Make + Model all require manual typing; op codes manual
+1	072c278	0	keep	Scan RO button: Tesseract OCR fills RO#/Year/Make/Model + matches library op codes
+2	1d9cdca	0	keep	OCR noise normalization (0/O, 1/I) + scan result feedback banner
+3	75e770e	0	keep	Remove capture attr for camera+gallery choice; RO# numeric keyboard; auto-focus on scan miss
