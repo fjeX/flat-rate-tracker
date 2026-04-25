@@ -13,6 +13,22 @@ type Props = {
 
 type Status = "idle" | "loading" | "success" | "error";
 
+// Tesseract Page Segmentation Modes used per field type.
+// SINGLE_LINE (7): for fields that are one line of text (RO number, VIN).
+// SINGLE_BLOCK (6): for fields that may span multiple lines (vehicle, op codes).
+const FIELD_PSM: Record<string, string> = {
+  roNumber: "7",
+  vin:      "7",
+  vehicle:  "6",
+  opCodes:  "6",
+};
+
+// VIN only uses uppercase letters (minus I, O, Q) and digits — whitelisting
+// those characters cuts out OCR noise for the most error-prone field.
+const FIELD_WHITELIST: Record<string, string> = {
+  vin: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789 :\n",
+};
+
 export function ScanRoButton({ library, template, onResult }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus]   = useState<Status>("idle");
@@ -40,27 +56,44 @@ export function ScanRoButton({ library, template, onResult }: Props) {
 
       if (template && template.regions.length > 0) {
         // ── Region-based scan ─────────────────────────────────────────────────
-        // Crop each mapped region and run Tesseract on the tight crop.
-        // Merge partial results into one OcrResult.
+        // 1. Crop all regions and spin up the Tesseract worker in parallel so
+        //    the (expensive) worker init overlaps with canvas work.
+        // 2. For each region, tune Tesseract's page segmentation mode and
+        //    character whitelist before recognizing — one worker, sequential
+        //    recognitions, so only one WASM instance lives in memory.
+        // 3. Merge partial results into one OcrResult.
+
+        const [worker, crops] = await Promise.all([
+          Tesseract.createWorker("eng"),
+          Promise.all(template.regions.map((r) => cropImageRegion(file, r))),
+        ]);
+
         const partial: Partial<Omit<OcrResult, "confidence">> = {};
 
-        await Promise.all(
-          template.regions.map(async (region) => {
-            const crop = await cropImageRegion(file, region);
-            const { data } = await Tesseract.recognize(crop, "eng");
-            const fields = extractFieldFromText(data.text, region.field, library);
-            Object.assign(partial, fields);
-          }),
-        );
+        for (let i = 0; i < template.regions.length; i++) {
+          const region = template.regions[i];
+          const params: Record<string, string> = {
+            tessedit_pageseg_mode: FIELD_PSM[region.field] ?? "6",
+          };
+          if (FIELD_WHITELIST[region.field]) {
+            params.tessedit_char_whitelist = FIELD_WHITELIST[region.field];
+          }
+          await worker.setParameters(params);
+          const { data } = await worker.recognize(crops[i]);
+          const fields = extractFieldFromText(data.text, region.field, library);
+          Object.assign(partial, fields);
+        }
+
+        await worker.terminate();
 
         const fieldsFound = [partial.roNumber, partial.year, partial.make, partial.model].filter(Boolean).length;
         result = {
-          roNumber:   partial.roNumber   ?? "",
-          year:       partial.year       ?? "",
-          make:       partial.make       ?? "",
-          model:      partial.model      ?? "",
-          vin:        partial.vin        ?? "",
-          opCodeIds:  partial.opCodeIds  ?? [],
+          roNumber:  partial.roNumber  ?? "",
+          year:      partial.year      ?? "",
+          make:      partial.make      ?? "",
+          model:     partial.model     ?? "",
+          vin:       partial.vin       ?? "",
+          opCodeIds: partial.opCodeIds ?? [],
           confidence: fieldsFound >= 3 ? "high" : "low",
         };
       } else {
