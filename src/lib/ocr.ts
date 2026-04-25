@@ -1,4 +1,4 @@
-import type { OpCode } from "@/lib/types";
+import type { FieldId, FieldRegion, OpCode } from "@/lib/types";
 
 export type OcrResult = {
   roNumber: string;
@@ -93,6 +93,51 @@ export function parseOcrText(rawText: string, library: OpCode[]): OcrResult {
   const confidence: "high" | "low" = fieldsFound >= 3 ? "high" : "low";
 
   return { roNumber, year, make, model, vin, opCodeIds, confidence };
+}
+
+// ── Region-based OCR helpers ─────────────────────────────────────────────────
+// Used by ScanRoButton when the user has configured an RO template.
+// Each region is cropped from the photo using canvas so Tesseract only sees
+// the relevant portion — far less noise, much better accuracy.
+
+// Crop one region from an image file using an offscreen canvas.
+// `region` coordinates are percentages (0–100) of the image's natural dimensions.
+export async function cropImageRegion(
+  file: File | Blob,
+  region: FieldRegion,
+): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const px = Math.round((region.x / 100) * bitmap.width);
+  const py = Math.round((region.y / 100) * bitmap.height);
+  const pw = Math.max(1, Math.round((region.width / 100) * bitmap.width));
+  const ph = Math.max(1, Math.round((region.height / 100) * bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = pw;
+  canvas.height = ph;
+  canvas.getContext("2d")!.drawImage(bitmap, px, py, pw, ph, 0, 0, pw, ph);
+  bitmap.close();
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob failed"))),
+      "image/jpeg",
+      0.92,
+    ),
+  );
+}
+
+// Extract only the field(s) relevant to a given FieldId from an OCR text string.
+export function extractFieldFromText(
+  text: string,
+  field: FieldId,
+  library: OpCode[],
+): Partial<Omit<OcrResult, "confidence">> {
+  const full = parseOcrText(text, library);
+  switch (field) {
+    case "roNumber": return { roNumber: full.roNumber };
+    case "vehicle":  return { year: full.year, make: full.make, model: full.model };
+    case "vin":      return { vin: full.vin };
+    case "opCodes":  return { opCodeIds: full.opCodeIds };
+  }
 }
 
 function escapeRe(s: string): string {

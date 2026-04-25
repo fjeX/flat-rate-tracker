@@ -2,6 +2,22 @@
 // These are camelCase on purpose; the DB uses snake_case and mappers
 // in src/lib/db/* convert between the two.
 
+// ── RO Template ───────────────────────────────────────────────────────────────
+export type FieldId = "roNumber" | "vehicle" | "vin" | "opCodes";
+
+export type FieldRegion = {
+  field: FieldId;
+  x: number;      // 0–100 % of image width
+  y: number;      // 0–100 % of image height
+  width: number;  // 0–100 %
+  height: number; // 0–100 %
+};
+
+export type RoTemplate = {
+  imageStoragePath: string; // Supabase Storage path: "{userId}/template"
+  regions: FieldRegion[];
+};
+
 export type Vehicle = {
   year: string;
   make: string;
@@ -65,6 +81,7 @@ export type UserSettings = {
   timerStartTime: number | null; // epoch ms, null = paused or not running
   timerAccumulated: number; // ms accumulated while paused
   updatedAt: string;
+  roTemplate: RoTemplate | null;
 };
 
 // ------------------------------------------------------------------------

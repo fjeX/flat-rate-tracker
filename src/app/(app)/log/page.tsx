@@ -11,7 +11,10 @@ export default async function LogPage({
   const { edit } = await searchParams;
 
   const supabase = await createClient();
-  const opCodes = await db.listOpCodes(supabase);
+  const [opCodes, settings] = await Promise.all([
+    db.listOpCodes(supabase),
+    db.getSettings(supabase),
+  ]);
 
   let existingEntry;
   if (edit) {
@@ -21,6 +24,10 @@ export default async function LogPage({
   }
 
   return (
-    <LogRoForm initialOpCodes={opCodes} existingEntry={existingEntry} />
+    <LogRoForm
+      initialOpCodes={opCodes}
+      existingEntry={existingEntry}
+      roTemplate={settings.roTemplate}
+    />
   );
 }

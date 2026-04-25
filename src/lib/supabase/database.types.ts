@@ -201,6 +201,7 @@ export type Database = {
       user_settings: {
         Row: {
           period_overrides: Json
+          ro_template: Json | null
           split_day: number
           timer_accumulated: number
           timer_ro_id: string | null
@@ -210,6 +211,7 @@ export type Database = {
         }
         Insert: {
           period_overrides?: Json
+          ro_template?: Json | null
           split_day?: number
           timer_accumulated?: number
           timer_ro_id?: string | null
@@ -219,6 +221,7 @@ export type Database = {
         }
         Update: {
           period_overrides?: Json
+          ro_template?: Json | null
           split_day?: number
           timer_accumulated?: number
           timer_ro_id?: string | null

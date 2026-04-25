@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Search, Trash2, X } from "lucide-react";
-import type { Entry, NewEntry, NewEntryOpCode, OpCode } from "@/lib/types";
+import type { Entry, NewEntry, NewEntryOpCode, OpCode, RoTemplate } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { saveEntry } from "@/app/actions/entries";
@@ -36,9 +36,11 @@ function linesFromEntry(entry: Entry | undefined): LineDraft[] {
 export function LogRoForm({
   initialOpCodes,
   existingEntry,
+  roTemplate,
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
+  roTemplate?: RoTemplate | null;
 }) {
   const router = useRouter();
   const isEdit = Boolean(existingEntry);
@@ -246,7 +248,7 @@ export function LogRoForm({
         </h1>
         <div className="flex items-center gap-3">
           {!isEdit && (
-            <ScanRoButton library={library} onResult={handleScanResult} />
+            <ScanRoButton library={library} template={roTemplate ?? null} onResult={handleScanResult} />
           )}
           {isEdit && (
             <Link

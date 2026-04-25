@@ -2,32 +2,27 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Camera, CheckCircle, Loader2 } from "lucide-react";
-import type { OpCode } from "@/lib/types";
+import type { OpCode, RoTemplate } from "@/lib/types";
 import type { OcrResult } from "@/lib/ocr";
 
 type Props = {
   library: OpCode[];
+  template: RoTemplate | null;
   onResult: (result: OcrResult) => void;
 };
 
 type Status = "idle" | "loading" | "success" | "error";
 
-export function ScanRoButton({ library, onResult }: Props) {
+export function ScanRoButton({ library, template, onResult }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<Status>("idle");
+  const [status, setStatus]   = useState<Status>("idle");
   const [summary, setSummary] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-dismiss the success banner after 4 s.
   useEffect(() => {
     if (status !== "success") return;
-    timerRef.current = setTimeout(() => {
-      setStatus("idle");
-      setSummary(null);
-    }, 4000);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+    timerRef.current = setTimeout(() => { setStatus("idle"); setSummary(null); }, 4000);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [status]);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -36,14 +31,46 @@ export function ScanRoButton({ library, onResult }: Props) {
     e.target.value = "";
     setStatus("loading");
     setSummary(null);
+
     try {
       const Tesseract = (await import("tesseract.js")).default;
-      const { data } = await Tesseract.recognize(file, "eng");
-      const { parseOcrText } = await import("@/lib/ocr");
-      const result = parseOcrText(data.text, library);
+      const { cropImageRegion, extractFieldFromText, parseOcrText } = await import("@/lib/ocr");
+
+      let result: OcrResult;
+
+      if (template && template.regions.length > 0) {
+        // ── Region-based scan ─────────────────────────────────────────────────
+        // Crop each mapped region and run Tesseract on the tight crop.
+        // Merge partial results into one OcrResult.
+        const partial: Partial<Omit<OcrResult, "confidence">> = {};
+
+        await Promise.all(
+          template.regions.map(async (region) => {
+            const crop = await cropImageRegion(file, region);
+            const { data } = await Tesseract.recognize(crop, "eng");
+            const fields = extractFieldFromText(data.text, region.field, library);
+            Object.assign(partial, fields);
+          }),
+        );
+
+        const fieldsFound = [partial.roNumber, partial.year, partial.make, partial.model].filter(Boolean).length;
+        result = {
+          roNumber:   partial.roNumber   ?? "",
+          year:       partial.year       ?? "",
+          make:       partial.make       ?? "",
+          model:      partial.model      ?? "",
+          vin:        partial.vin        ?? "",
+          opCodeIds:  partial.opCodeIds  ?? [],
+          confidence: fieldsFound >= 3 ? "high" : "low",
+        };
+      } else {
+        // ── Fallback: full-image scan ─────────────────────────────────────────
+        const { data } = await Tesseract.recognize(file, "eng");
+        result = parseOcrText(data.text, library);
+      }
+
       onResult(result);
 
-      // Build a human-readable summary of what was detected.
       const parts: string[] = [];
       if (result.roNumber) parts.push(`RO# ${result.roNumber}`);
       if (result.year || result.make || result.model)
