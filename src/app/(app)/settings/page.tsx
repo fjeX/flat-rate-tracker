@@ -15,7 +15,7 @@ export default async function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
       <h1 className="text-xl font-semibold text-zinc-100">Settings</h1>
       <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
-      <RoTemplateCard userId={user!.id} initialTemplate={settings.roTemplate} />
+      <RoTemplateCard userId={user!.id} initialTemplates={settings.roTemplates} />
       <DataCard />
       <DangerZoneCard />
     </div>

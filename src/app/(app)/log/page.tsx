@@ -27,7 +27,7 @@ export default async function LogPage({
     <LogRoForm
       initialOpCodes={opCodes}
       existingEntry={existingEntry}
-      roTemplate={settings.roTemplate}
+      roTemplates={settings.roTemplates}
     />
   );
 }

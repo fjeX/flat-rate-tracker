@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Camera, Pencil, Trash2 } from "lucide-react";
+import { Camera, Pencil, Plus, Trash2 } from "lucide-react";
 import { deleteRoTemplateAction } from "@/app/actions/ro-template";
 import { RoTemplateEditor } from "./RoTemplateEditor";
 import type { RoTemplate } from "@/lib/types";
@@ -13,29 +13,52 @@ const FIELD_LABELS: Record<string, string> = {
   opCodes:  "Op Codes",
 };
 
+type EditorState =
+  | { open: false }
+  | { open: true; template: RoTemplate | null };
+
 export function RoTemplateCard({
   userId,
-  initialTemplate,
+  initialTemplates,
 }: {
   userId: string;
-  initialTemplate: RoTemplate | null;
+  initialTemplates: RoTemplate[];
 }) {
-  const [template, setTemplate] = useState<RoTemplate | null>(initialTemplate);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [deleting, startDelete] = useTransition();
+  const [templates, setTemplates]   = useState<RoTemplate[]>(initialTemplates);
+  const [editor, setEditor]         = useState<EditorState>({ open: false });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [, startDelete]             = useTransition();
 
-  function handleEditorClose() {
-    // The server action revalidates /settings, so the page will re-fetch the
-    // updated template. Optimistically close — the card will show the saved
-    // state after the next navigation or revalidation.
-    setEditorOpen(false);
+  function openNew() {
+    setEditor({ open: true, template: null });
   }
 
-  function handleDelete() {
-    if (!confirm("Delete the RO template? The scanner will fall back to full-image mode.")) return;
+  function openEdit(t: RoTemplate) {
+    setEditor({ open: true, template: t });
+  }
+
+  function handleEditorClose(saved?: RoTemplate) {
+    setEditor({ open: false });
+    if (saved) {
+      setTemplates((prev) => {
+        const idx = prev.findIndex((t) => t.id === saved.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = saved;
+          return next;
+        }
+        return [...prev, saved];
+      });
+    }
+  }
+
+  function handleDelete(templateId: string) {
+    if (!confirm("Delete this template? The scanner will no longer use it.")) return;
+    setDeletingId(templateId);
     startDelete(async () => {
-      await deleteRoTemplateAction();
-      setTemplate(null);
+      await deleteRoTemplateAction(templateId);
+      setTemplates((prev) => prev.filter((t) => t.id !== templateId));
+      setDeletingId(null);
     });
   }
 
@@ -46,66 +69,74 @@ export function RoTemplateCard({
           <div className="flex items-center gap-3">
             <Camera className="h-5 w-5 text-orange-400 flex-shrink-0" />
             <div>
-              <h2 className="text-sm font-semibold text-zinc-100">RO Scan Template</h2>
+              <h2 className="text-sm font-semibold text-zinc-100">RO Scan Templates</h2>
               <p className="mt-0.5 text-xs text-zinc-400">
-                Mark where each field lives on your shop&apos;s RO so the scanner knows exactly where to look.
+                Mark where each field lives on your RO so the scanner knows exactly where to look.
+                Add one template per page layout.
               </p>
             </div>
           </div>
-
-          <div className="flex gap-2 flex-shrink-0">
-            {template && (
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-red-800 hover:text-red-400 disabled:opacity-60"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete
-              </button>
-            )}
-            <button
-              onClick={() => setEditorOpen(true)}
-              className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
-            >
-              {template ? (
-                <><Pencil className="h-3.5 w-3.5" /> Edit</>
-              ) : (
-                <><Camera className="h-3.5 w-3.5" /> Set Up Template</>
-              )}
-            </button>
-          </div>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 flex-shrink-0"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Template
+          </button>
         </div>
 
-        {template ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {template.regions.map((r) => (
-              <span
-                key={r.field}
-                className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-xs text-zinc-300"
-              >
-                ✓ {FIELD_LABELS[r.field] ?? r.field}
-              </span>
-            ))}
-            {(["roNumber", "vehicle", "vin", "opCodes"] as const)
-              .filter((f) => !template.regions.some((r) => r.field === f))
-              .map((f) => (
-                <span key={f} className="rounded-full border border-zinc-800 px-2.5 py-0.5 text-xs text-zinc-600">
-                  {FIELD_LABELS[f]}
-                </span>
-              ))}
-          </div>
-        ) : (
+        {templates.length === 0 ? (
           <p className="mt-3 text-xs text-zinc-500">
-            No template set. The scanner will try to read the entire page, which can miss fields on unfamiliar RO layouts.
+            No templates yet. The scanner will try to read the entire page, which can miss fields on unfamiliar RO layouts.
           </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {templates.map((t) => (
+              <div key={t.id} className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-zinc-200">{t.name}</span>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      disabled={deletingId === t.id}
+                      className="flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:border-red-800 hover:text-red-400 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => openEdit(t)}
+                      className="flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {t.regions.map((r) => (
+                    <span key={r.field} className="rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300">
+                      ✓ {FIELD_LABELS[r.field] ?? r.field}
+                    </span>
+                  ))}
+                  {(["roNumber", "vehicle", "vin", "opCodes"] as const)
+                    .filter((f) => !t.regions.some((r) => r.field === f))
+                    .map((f) => (
+                      <span key={f} className="rounded-full border border-zinc-800 px-2 py-0.5 text-xs text-zinc-600">
+                        {FIELD_LABELS[f]}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {editorOpen && (
+      {editor.open && (
         <RoTemplateEditor
           userId={userId}
-          initialTemplate={template}
+          initialTemplate={editor.template}
           onClose={handleEditorClose}
         />
       )}

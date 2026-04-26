@@ -36,11 +36,11 @@ function linesFromEntry(entry: Entry | undefined): LineDraft[] {
 export function LogRoForm({
   initialOpCodes,
   existingEntry,
-  roTemplate,
+  roTemplates,
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
-  roTemplate?: RoTemplate | null;
+  roTemplates?: RoTemplate[];
 }) {
   const router = useRouter();
   const isEdit = Boolean(existingEntry);
@@ -248,7 +248,7 @@ export function LogRoForm({
         </h1>
         <div className="flex items-center gap-3">
           {!isEdit && (
-            <ScanRoButton library={library} template={roTemplate ?? null} onResult={handleScanResult} />
+            <ScanRoButton library={library} templates={roTemplates ?? []} onResult={handleScanResult} />
           )}
           {isEdit && (
             <Link

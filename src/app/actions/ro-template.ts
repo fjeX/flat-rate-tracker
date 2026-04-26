@@ -5,9 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import type { FieldRegion } from "@/lib/types";
 
+// Upsert one template in the user's template array.
 // Called after the client has already uploaded the image to Supabase Storage.
-// Just saves the metadata (storage path + region coordinates) to user_settings.
 export async function saveRoTemplateMetadata(
+  id: string,
+  name: string,
   imageStoragePath: string,
   regions: FieldRegion[],
 ): Promise<void> {
@@ -16,26 +18,33 @@ export async function saveRoTemplateMetadata(
     throw new Error("At least one region is required.");
 
   const supabase = await createClient();
-  await db.updateSettings(supabase, {
-    roTemplate: { imageStoragePath, regions },
-  });
+  const settings = await db.getSettings(supabase);
+
+  const updated = [
+    ...settings.roTemplates.filter((t) => t.id !== id),
+    { id, name, imageStoragePath, regions },
+  ];
+
+  await db.updateSettings(supabase, { roTemplates: updated });
 
   revalidatePath("/settings");
   revalidatePath("/log");
 }
 
-// Removes the template: deletes the storage file and clears the DB column.
-export async function deleteRoTemplateAction(): Promise<void> {
+// Delete one template by id — removes the storage file and splices it from the array.
+export async function deleteRoTemplateAction(templateId: string): Promise<void> {
   const supabase = await createClient();
   const settings = await db.getSettings(supabase);
 
-  if (settings.roTemplate?.imageStoragePath) {
+  const target = settings.roTemplates.find((t) => t.id === templateId);
+  if (target?.imageStoragePath) {
     await supabase.storage
       .from("ro-templates")
-      .remove([settings.roTemplate.imageStoragePath]);
+      .remove([target.imageStoragePath]);
   }
 
-  await db.updateSettings(supabase, { roTemplate: null });
+  const updated = settings.roTemplates.filter((t) => t.id !== templateId);
+  await db.updateSettings(supabase, { roTemplates: updated });
 
   revalidatePath("/settings");
   revalidatePath("/log");

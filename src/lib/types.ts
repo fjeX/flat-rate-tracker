@@ -14,7 +14,9 @@ export type FieldRegion = {
 };
 
 export type RoTemplate = {
-  imageStoragePath: string; // Supabase Storage path: "{userId}/template"
+  id: string;
+  name: string;
+  imageStoragePath: string; // Supabase Storage path: "{userId}/template_{id}"
   regions: FieldRegion[];
 };
 
@@ -81,7 +83,7 @@ export type UserSettings = {
   timerStartTime: number | null; // epoch ms, null = paused or not running
   timerAccumulated: number; // ms accumulated while paused
   updatedAt: string;
-  roTemplate: RoTemplate | null;
+  roTemplates: RoTemplate[];
 };
 
 // ------------------------------------------------------------------------

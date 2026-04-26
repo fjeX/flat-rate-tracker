@@ -106,7 +106,7 @@ export function RoTemplateEditor({
 }: {
   userId: string;
   initialTemplate: RoTemplate | null;
-  onClose: () => void;
+  onClose: (saved?: RoTemplate) => void;
 }) {
   const [imageFile,      setImageFile]      = useState<File | null>(null);
   const [imageObjectUrl, setImageObjectUrl] = useState<string | null>(null);
@@ -114,6 +114,7 @@ export function RoTemplateEditor({
   const [regions,        setRegions]        = useState<FieldRegion[]>(initialTemplate?.regions ?? []);
   const [activeField,    setActiveField]    = useState<FieldId>("roNumber");
   const [ghostBox,       setGhostBox]       = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [templateName,   setTemplateName]   = useState(initialTemplate?.name ?? "");
   const [saving,         setSaving]         = useState(false);
   const [errorMsg,       setErrorMsg]       = useState<string | null>(null);
 
@@ -229,7 +230,9 @@ export function RoTemplateEditor({
     setErrorMsg(null);
     setSaving(true);
     try {
-      const storagePath = `${userId}/template`;
+      const id = initialTemplate?.id ?? crypto.randomUUID();
+      const storagePath = initialTemplate?.imageStoragePath ?? `${userId}/template_${id}`;
+      const name = templateName.trim() || "Page 1";
 
       if (imageFile) {
         const { error } = await createClient()
@@ -238,11 +241,8 @@ export function RoTemplateEditor({
         if (error) throw error;
       }
 
-      await saveRoTemplateMetadata(
-        imageFile ? storagePath : initialTemplate!.imageStoragePath,
-        regions,
-      );
-      onClose();
+      await saveRoTemplateMetadata(id, name, storagePath, regions);
+      onClose({ id, name, imageStoragePath: storagePath, regions });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Save failed.");
     } finally {
@@ -268,12 +268,24 @@ export function RoTemplateEditor({
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => onClose()}
             className="rounded p-1 text-zinc-400 hover:text-zinc-100"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        {/* Template name */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-400">Template name</label>
+          <input
+            type="text"
+            value={templateName}
+            onChange={(e) => setTemplateName(e.target.value)}
+            placeholder="e.g. Page 1, Page 2, Walk-around…"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:outline-none"
+          />
         </div>
 
         {/* Field selector */}
@@ -420,7 +432,7 @@ export function RoTemplateEditor({
           </p>
           <div className="flex gap-3">
             <button
-              onClick={onClose}
+              onClick={() => onClose()}
               className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
             >
               Cancel

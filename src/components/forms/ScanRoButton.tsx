@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Camera, CheckCircle, ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
 import type { FieldId, OpCode, RoTemplate } from "@/lib/types";
 import type { OcrResult } from "@/lib/ocr";
 
 type Props = {
   library: OpCode[];
-  template: RoTemplate | null;
+  templates: RoTemplate[];
   onResult: (result: OcrResult) => void;
 };
 
@@ -43,12 +43,15 @@ type RegionDebug = {
   extracted: Partial<Omit<OcrResult, "confidence">>;
 };
 
-export function ScanRoButton({ library, template, onResult }: Props) {
+export function ScanRoButton({ library, templates, onResult }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // Holds the template selected for the current scan (set before opening file picker).
+  const activeTemplateRef = useRef<RoTemplate | null>(null);
   const [status, setStatus]           = useState<Status>("idle");
   const [summary, setSummary]         = useState<string | null>(null);
   const [debugRegions, setDebugRegions] = useState<RegionDebug[] | null>(null);
   const [showDebug, setShowDebug]     = useState(false);
+  const [pickerOpen, setPickerOpen]   = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -56,6 +59,21 @@ export function ScanRoButton({ library, template, onResult }: Props) {
     timerRef.current = setTimeout(() => { setStatus("idle"); setSummary(null); }, 4000);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [status]);
+
+  function handleScanClick() {
+    if (templates.length > 1) {
+      setPickerOpen(true);
+    } else {
+      activeTemplateRef.current = templates[0] ?? null;
+      inputRef.current?.click();
+    }
+  }
+
+  function handlePickTemplate(t: RoTemplate) {
+    setPickerOpen(false);
+    activeTemplateRef.current = t;
+    inputRef.current?.click();
+  }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -65,6 +83,8 @@ export function ScanRoButton({ library, template, onResult }: Props) {
     setSummary(null);
     setDebugRegions(null);
     setShowDebug(false);
+
+    const template = activeTemplateRef.current;
 
     try {
       const Tesseract = (await import("tesseract.js")).default;
@@ -163,7 +183,7 @@ export function ScanRoButton({ library, template, onResult }: Props) {
       />
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={handleScanClick}
         disabled={status === "loading"}
         className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-60"
       >
@@ -174,6 +194,35 @@ export function ScanRoButton({ library, template, onResult }: Props) {
         )}
         {status === "loading" ? "Scanning…" : "Scan RO"}
       </button>
+
+      {/* Template picker — shown only when user has multiple templates */}
+      {pickerOpen && (
+        <div className="w-full rounded-md border border-zinc-700 bg-zinc-900 p-2 shadow-lg">
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-xs font-medium text-zinc-400">Which template?</p>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(false)}
+              className="rounded p-0.5 text-zinc-500 hover:text-zinc-300"
+              aria-label="Close picker"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-1">
+            {templates.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => handlePickTemplate(t)}
+                className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-700"
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {status === "success" && summary && (
         <p className="flex items-center gap-1 text-xs text-green-400">
