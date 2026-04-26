@@ -59,32 +59,42 @@ function extractRoNumber(text: string): string {
 }
 
 function extractVehicle(text: string): { year: string; make: string; model: string } {
-  // ── Year ──────────────────────────────────────────────────────────────────
-  const yearMatch = /\b((?:1|2)(?:9|0)\d{2})\b/.exec(text);
-  const year = yearMatch?.[1] ?? "";
-
-  // ── Make ──────────────────────────────────────────────────────────────────
   const upper = text.toUpperCase();
   const normalised = normaliseOcr(upper);
 
+  // ── Make ──────────────────────────────────────────────────────────────────
   let make = "";
   let makeIndex = -1;
 
   for (const m of KNOWN_MAKES) {
-    // Try clean text first.
     const idx = upper.indexOf(m.toUpperCase());
     if (idx !== -1) {
       make = m === "Chevy" ? "Chevrolet" : m === "VW" ? "Volkswagen" : m;
       makeIndex = idx;
       break;
     }
-    // Try noise-normalised text (handles "T0Y0TA" → "TOYOTA", "HYUNDA1").
     const nIdx = normalised.indexOf(normaliseOcr(m.toUpperCase()));
     if (nIdx !== -1) {
       make = m === "Chevy" ? "Chevrolet" : m === "VW" ? "Volkswagen" : m;
-      // Map normalised index back to original text index (approximate).
       makeIndex = nIdx;
       break;
+    }
+  }
+
+  // ── Year ──────────────────────────────────────────────────────────────────
+  // Try 4-digit year first (1900–2099).
+  let year = match1(text, /\b((?:19|20)\d{2})\b/);
+
+  if (!year && makeIndex !== -1) {
+    // Many shops print 2-digit years ("18 TOYOTA" instead of "2018 TOYOTA").
+    // Look on the same line as the make, in the text before the make name.
+    const lineStart = text.lastIndexOf("\n", makeIndex) + 1;
+    const beforeMake = text.slice(lineStart, makeIndex);
+    const m2 = /\b'?(\d{2})\b/.exec(beforeMake);
+    if (m2) {
+      const yy = parseInt(m2[1], 10);
+      // 00–29 → 20XX (2000–2029), 30–99 → 19XX (1930–1999)
+      year = `${yy <= 29 ? "20" : "19"}${m2[1].padStart(2, "0")}`;
     }
   }
 
@@ -104,33 +114,77 @@ function extractVehicle(text: string): { year: string; make: string; model: stri
 
 function extractVin(text: string): string {
   const VIN_CHARSET = "[A-HJ-NPR-Z0-9]";
-  const VIN_RE = new RegExp(
-    `(?:VIN\\s*[:#]?\\s*)?(${VIN_CHARSET}{17})(?=[^A-HJ-NPR-Z0-9]|$)`,
-    "i",
-  );
+  const VIN_RE = new RegExp(`(${VIN_CHARSET}{17})`);
 
-  // Try clean uppercase text.
-  let m = VIN_RE.exec(text.toUpperCase());
-  if (m) return m[1].toUpperCase();
+  const upper = text.toUpperCase();
 
-  // OCR often confuses I↔1 and O↔0. Normalize common substitutions and retry.
-  const cleaned = text.toUpperCase()
+  // Pass 1: clean text, exact match.
+  let m = VIN_RE.exec(upper);
+  if (m) return m[1];
+
+  // Pass 2: strip whitespace — Tesseract frequently inserts a space mid-VIN
+  // (observed between characters 9 and 10 on real printed ROs).
+  const spaceless = upper.replace(/\s+/g, "");
+  m = VIN_RE.exec(spaceless);
+  if (m) return m[1];
+
+  // Pass 3: strip whitespace + apply I/O/Q noise corrections.
+  const cleaned = spaceless
     .replace(/[IΙ]/g, "1")   // I (and Greek iota) → 1
     .replace(/O/g, "0")       // O → 0 (VINs never contain O)
     .replace(/Q/g, "0");      // Q → 0 (VINs never contain Q)
   m = VIN_RE.exec(cleaned);
-  return m ? m[1].toUpperCase() : "";
+  return m ? m[1] : "";
+}
+
+// Minimum edit distance between two strings (insertions, deletions, substitutions).
+// Used for fuzzy op code matching — catches single-character OCR errors.
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
 }
 
 function extractOpCodes(text: string, library: OpCode[]): string[] {
   const upper = text.toUpperCase();
   const normalised = normaliseOcr(upper);
+
+  // Pre-split OCR text into words for fuzzy pass — deduplicated for efficiency.
+  const words = [...new Set([
+    ...upper.split(/[\s,;:()\n]+/),
+    ...normalised.split(/[\s,;:()\n]+/),
+  ])].filter((w) => w.length >= 3);
+
   return library
     .filter((oc) => {
       const code = oc.code.trim().toUpperCase();
+      const normCode = normaliseOcr(code);
+
+      // Pass 1: exact boundary match (fast path).
       const boundary = `(?:^|[\\s,;:()])${escapeRe(code)}(?:[\\s,;:()]|$)`;
       const re = new RegExp(boundary, "m");
-      return re.test(upper) || re.test(normalised);
+      if (re.test(upper) || re.test(normalised)) return true;
+
+      // Pass 2: fuzzy match — edit distance ≤ 1 for codes of 4+ chars.
+      // Catches single-character OCR substitutions (e.g. RUTATE → ROTATE).
+      if (code.length >= 4) {
+        for (const word of words) {
+          if (Math.abs(word.length - normCode.length) <= 1 && levenshtein(word, normCode) <= 1) {
+            return true;
+          }
+        }
+      }
+
+      return false;
     })
     .map((oc) => oc.id);
 }
@@ -240,10 +294,14 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Swap common OCR look-alike pairs so code matching survives noise.
+// Swap common OCR look-alike pairs so matching survives noise.
+// Applied symmetrically to both OCR text and library codes before comparison,
+// so both sides are on equal footing.
 function normaliseOcr(upper: string): string {
   return upper
     .replace(/0/g, "O")
     .replace(/1/g, "I")
+    .replace(/5/g, "S")   // 5 ↔ S are frequently confused
+    .replace(/8/g, "B")   // 8 ↔ B are frequently confused
     .replace(/\bI\b/g, "1");
 }

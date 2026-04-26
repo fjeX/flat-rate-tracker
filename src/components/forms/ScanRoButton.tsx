@@ -15,12 +15,13 @@ type Status = "idle" | "loading" | "success" | "error";
 
 // Tesseract Page Segmentation Modes used per field type.
 // SINGLE_LINE (7): for fields that are one line of text (RO number, VIN).
-// SINGLE_BLOCK (6): for fields that may span multiple lines (vehicle, op codes).
+// SINGLE_BLOCK (6): for fields that may span multiple lines (vehicle).
+// SPARSE_TEXT (11): for op codes in table/list layouts — finds text in any order.
 const FIELD_PSM: Record<string, string> = {
   roNumber: "7",
   vin:      "7",
   vehicle:  "6",
-  opCodes:  "6",
+  opCodes:  "11",
 };
 
 // VIN only uses uppercase letters (minus I, O, Q) and digits — whitelisting
