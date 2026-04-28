@@ -37,10 +37,16 @@ export function LogRoForm({
   initialOpCodes,
   existingEntry,
   roTemplates,
+  onSave,
+  onCreateOpCode,
+  redirectTo = "/",
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
   roTemplates?: RoTemplate[];
+  onSave?: (input: NewEntry) => void | Promise<void>;
+  onCreateOpCode?: (draft: OpCodeDraft) => OpCode;
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const isEdit = Boolean(existingEntry);
@@ -139,7 +145,9 @@ export function LogRoForm({
   async function addNewLibraryLine(draft: OpCodeDraft) {
     setNewLibraryPending(true);
     try {
-      const created = await createLibraryOpCode(draft);
+      const created = onCreateOpCode
+        ? onCreateOpCode(draft)
+        : await createLibraryOpCode(draft);
       setLibrary((l) => [...l, created]);
       addFromLibrary(created);
       setNewLibraryOpen(false);
@@ -231,8 +239,12 @@ export function LogRoForm({
             position: i,
           })),
         };
-        await saveEntry(input, existingEntry?.id);
-        router.push("/");
+        if (onSave) {
+          await onSave(input);
+        } else {
+          await saveEntry(input, existingEntry?.id);
+        }
+        router.push(redirectTo);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save.");
       }

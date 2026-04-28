@@ -5,9 +5,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./database.types";
 
-// Routes that an unauthenticated user is allowed to visit. Everything else
-// requires a session.
-const PUBLIC_ROUTES = ["/signin", "/signup"];
+// Auth pages redirect logged-in users to the app. Guest routes allow anyone.
+const AUTH_PAGES = ["/signin", "/signup"];
+const GUEST_ROUTES = ["/guest"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -40,15 +40,16 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const isPublicRoute = PUBLIC_ROUTES.some((p) => pathname.startsWith(p));
+  const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
+  const isGuestRoute = GUEST_ROUTES.some((p) => pathname.startsWith(p));
 
-  if (!user && !isPublicRoute) {
+  if (!user && !isAuthPage && !isGuestRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicRoute) {
+  if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

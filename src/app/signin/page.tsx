@@ -54,6 +54,14 @@ export default async function SignInPage({
             Create one
           </Link>
         </p>
+        <div className="mt-3 border-t border-zinc-800 pt-3">
+          <Link
+            href="/guest"
+            className="block w-full rounded-md border border-zinc-700 px-3 py-2 text-center text-sm text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
+          >
+            Try as Guest
+          </Link>
+        </div>
       </div>
     </main>
   );

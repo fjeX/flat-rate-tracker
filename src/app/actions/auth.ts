@@ -27,7 +27,12 @@ export async function signUp(formData: FormData) {
   const { error } = await supabase.auth.signUp({ email, password });
 
   if (error) {
-    toSignupWithError(error.message);
+    const msg = error.message?.toLowerCase() ?? "";
+    if (msg.includes("fetch") || msg.includes("network") || (error.status ?? 0) === 0) {
+      toSignupWithError("Unable to connect to the server. Please try again.");
+    } else {
+      toSignupWithError(error.message);
+    }
   }
 
   // Local dev has email confirmation disabled, so the user is signed in
@@ -49,7 +54,14 @@ export async function signIn(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    toSigninWithError(error.message);
+    const msg = error.message?.toLowerCase() ?? "";
+    if (msg.includes("fetch") || msg.includes("network") || (error.status ?? 0) === 0) {
+      toSigninWithError("Unable to connect to the server. Please try again.");
+    } else if (msg.includes("invalid login") || msg.includes("invalid credentials") || error.status === 400) {
+      toSigninWithError("Incorrect email or password.");
+    } else {
+      toSigninWithError(error.message);
+    }
   }
 
   revalidatePath("/", "layout");
