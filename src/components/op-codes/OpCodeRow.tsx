@@ -68,6 +68,11 @@ export function OpCodeRow({
             {opCode.description}
           </p>
         )}
+        {opCode.notes && (
+          <p className="truncate text-xs italic text-zinc-500">
+            {opCode.notes}
+          </p>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-1">

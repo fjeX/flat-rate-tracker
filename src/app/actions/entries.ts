@@ -66,8 +66,13 @@ export async function addOpCodeLineToEntryAction(
   entryId: string,
   line: Omit<NewEntryOpCode, "position">,
 ): Promise<void> {
+  if (!entryId) throw new Error("Entry ID is required.");
   const supabase = await createClient();
-  await db.addEntryLine(supabase, entryId, line);
+  try {
+    await db.addEntryLine(supabase, entryId, line);
+  } catch (err) {
+    throw new Error(err instanceof Error ? err.message : "Failed to add op code.");
+  }
   revalidatePath("/");
   revalidatePath("/history");
   revalidatePath("/pay-period");

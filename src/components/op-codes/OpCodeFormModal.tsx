@@ -7,6 +7,7 @@ export type OpCodeFormValues = {
   code: string;
   description: string;
   flagHours: number;
+  notes: string;
 };
 
 type Mode = "add" | "edit";
@@ -43,6 +44,7 @@ function OpCodeFormBody({
         code: draft.code.trim(),
         description: draft.description.trim(),
         flagHours: draft.flagHours,
+        notes: draft.notes.trim(),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save.");
@@ -96,6 +98,21 @@ function OpCodeFormBody({
             className="mt-1 w-32 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
           />
         </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-wide text-zinc-400">
+            Notes{" "}
+            <span className="font-normal normal-case text-zinc-600">
+              (optional)
+            </span>
+          </span>
+          <textarea
+            value={draft.notes}
+            onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+            rows={2}
+            placeholder="Part numbers, reminders, procedure notes…"
+            className="mt-1 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+          />
+        </label>
       </div>
 
       {error && <p className="text-sm text-red-300">{error}</p>}
@@ -145,6 +162,7 @@ export function OpCodeFormModal({
     code: "",
     description: "",
     flagHours: 0,
+    notes: "",
   };
 
   return (

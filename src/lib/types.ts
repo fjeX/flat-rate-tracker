@@ -59,6 +59,7 @@ export type OpCode = {
   code: string;
   description: string;
   flagHours: number;
+  notes: string;
   sortOrder: number;
   createdAt: string;
 };
@@ -109,6 +110,7 @@ export type NewOpCode = {
   code: string;
   description: string;
   flagHours: number;
+  notes?: string;
   sortOrder?: number; // optional — appended to end of library if omitted
 };
 

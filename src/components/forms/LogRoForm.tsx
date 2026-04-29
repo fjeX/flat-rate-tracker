@@ -67,6 +67,7 @@ export function LogRoForm({
   const [model, setModel] = useState(existingEntry?.vehicle.model ?? "");
   const [vin, setVin] = useState(existingEntry?.vehicle.vin ?? "");
   const [mileage, setMileage] = useState(existingEntry?.vehicle.mileage ?? "");
+  const [autoFill, setAutoFill] = useState(false);
   const [notes, setNotes] = useState(existingEntry?.notes ?? "");
   const [lines, setLines] = useState<LineDraft[]>(() =>
     linesFromEntry(existingEntry),
@@ -83,6 +84,31 @@ export function LogRoForm({
   const [isSubmitting, startTransition] = useTransition();
 
   const roInputRef = useRef<HTMLInputElement>(null);
+
+  // On new-RO load, restore autofill make from localStorage if the user saved one.
+  useEffect(() => {
+    if (isEdit) return;
+    const saved = localStorage.getItem("frt_default_make");
+    if (saved) {
+      setAutoFill(true);
+      setMake((m) => m || saved);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleMakeChange(value: string) {
+    setMake(value);
+    if (autoFill) localStorage.setItem("frt_default_make", value);
+  }
+
+  function handleAutoFillToggle(checked: boolean) {
+    setAutoFill(checked);
+    if (checked) {
+      localStorage.setItem("frt_default_make", make);
+    } else {
+      localStorage.removeItem("frt_default_make");
+    }
+  }
 
   // Close the op-code picker when clicking anywhere outside it.
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -342,25 +368,49 @@ export function LogRoForm({
                   className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
                 />
               </label>
-              <label className="block">
-                <span className="text-xs uppercase tracking-wide text-zinc-400">
-                  Make
-                </span>
+              <div className="block">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wide text-zinc-400">
+                    Make
+                  </span>
+                  {!isEdit && (
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={autoFill}
+                        onChange={(e) => handleAutoFillToggle(e.target.checked)}
+                        className="h-3 w-3 accent-orange-500"
+                      />
+                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+                        Autofill
+                      </span>
+                    </label>
+                  )}
+                </div>
                 <input
                   type="text"
                   list="make-options"
                   value={make}
-                  onChange={(e) => setMake(e.target.value)}
+                  onChange={(e) => handleMakeChange(e.target.value)}
                   placeholder="Toyota"
                   autoComplete="off"
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+                  className={`mt-1 w-full rounded-md border bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none ${
+                    autoFill
+                      ? "border-orange-500/50 focus:border-orange-500"
+                      : "border-zinc-800 focus:border-orange-500"
+                  }`}
                 />
+                {autoFill && make && (
+                  <p className="mt-0.5 text-[10px] text-orange-400">
+                    ✓ Saved — new ROs will pre-fill with {make}
+                  </p>
+                )}
                 <datalist id="make-options">
                   {COMMON_MAKES.map((m) => (
                     <option key={m} value={m} />
                   ))}
                 </datalist>
-              </label>
+              </div>
               <label className="block">
                 <span className="text-xs uppercase tracking-wide text-zinc-400">
                   Model
@@ -615,17 +665,17 @@ export function LogRoForm({
         )}
       </section>
 
-      {/* ---- Notes ---- */}
+      {/* ---- Vehicle Notes ---- */}
       <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
         <label className="block">
           <span className="text-xs uppercase tracking-wide text-zinc-400">
-            Notes
+            Vehicle Notes
           </span>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="Optional — parts ordered, follow-up needed, etc."
+            placeholder="Optional — customer concern, parts ordered, follow-up needed, etc."
             className="mt-1 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
           />
         </label>

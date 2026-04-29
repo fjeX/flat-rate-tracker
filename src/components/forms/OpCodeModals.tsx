@@ -11,6 +11,7 @@ export type OpCodeDraft = {
   code: string;
   description: string;
   flagHours: number;
+  notes?: string;
 };
 
 function OpCodeFields({

@@ -163,6 +163,7 @@ export type Database = {
           description: string
           flag_hours: number
           id: string
+          notes: string
           sort_order: number
           user_id: string
         }
@@ -172,6 +173,7 @@ export type Database = {
           description?: string
           flag_hours?: number
           id?: string
+          notes?: string
           sort_order?: number
           user_id: string
         }
@@ -181,6 +183,7 @@ export type Database = {
           description?: string
           flag_hours?: number
           id?: string
+          notes?: string
           sort_order?: number
           user_id?: string
         }

@@ -96,7 +96,12 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
     await new Promise<void>((resolve, reject) => {
       startSaving(async () => {
         try {
-          const created = await createLibraryOpCode(values);
+          const created = await createLibraryOpCode({
+            code: values.code,
+            description: values.description,
+            flagHours: values.flagHours,
+            notes: values.notes,
+          });
           setItems((curr) => [...curr, created]);
           setModal({ kind: "closed" });
           router.refresh();
@@ -112,7 +117,12 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
     await new Promise<void>((resolve, reject) => {
       startSaving(async () => {
         try {
-          const updated = await updateLibraryOpCode(id, values);
+          const updated = await updateLibraryOpCode(id, {
+            code: values.code,
+            description: values.description,
+            flagHours: values.flagHours,
+            notes: values.notes,
+          });
           setItems((curr) =>
             curr.map((op) => (op.id === id ? updated : op)),
           );
@@ -254,6 +264,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
                 code: modal.opCode.code,
                 description: modal.opCode.description,
                 flagHours: modal.opCode.flagHours,
+                notes: modal.opCode.notes,
               }
             : undefined
         }

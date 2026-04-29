@@ -14,6 +14,7 @@ export async function createLibraryOpCode(input: {
   code: string;
   description: string;
   flagHours: number;
+  notes?: string;
 }): Promise<OpCode> {
   const code = input.code.trim();
   if (!code) throw new Error("Op code is required.");
@@ -25,6 +26,7 @@ export async function createLibraryOpCode(input: {
     code,
     description: input.description.trim(),
     flagHours: input.flagHours,
+    notes: input.notes?.trim(),
   });
 
   revalidateOpCodes();
@@ -34,11 +36,11 @@ export async function createLibraryOpCode(input: {
 
 export async function updateLibraryOpCode(
   id: string,
-  patch: { code?: string; description?: string; flagHours?: number },
+  patch: { code?: string; description?: string; flagHours?: number; notes?: string },
 ): Promise<OpCode> {
   if (!id) throw new Error("Op code id is required.");
 
-  const clean: { code?: string; description?: string; flagHours?: number } = {};
+  const clean: { code?: string; description?: string; flagHours?: number; notes?: string } = {};
   if (patch.code !== undefined) {
     const code = patch.code.trim();
     if (!code) throw new Error("Op code is required.");
@@ -51,6 +53,9 @@ export async function updateLibraryOpCode(
     if (!Number.isFinite(patch.flagHours) || patch.flagHours < 0)
       throw new Error("Flag hours must be a non-negative number.");
     clean.flagHours = patch.flagHours;
+  }
+  if (patch.notes !== undefined) {
+    clean.notes = patch.notes.trim();
   }
 
   const supabase = await createClient();

@@ -12,6 +12,7 @@ function toOpCode(row: OpCodeRow): OpCode {
     code: row.code,
     description: row.description,
     flagHours: Number(row.flag_hours),
+    notes: row.notes ?? "",
     sortOrder: row.sort_order,
     createdAt: row.created_at,
   };
@@ -51,6 +52,7 @@ export async function createOpCode(
       code: input.code,
       description: input.description,
       flag_hours: input.flagHours,
+      ...(input.notes ? { notes: input.notes } : {}),
       sort_order: sortOrder,
     })
     .select()
@@ -68,6 +70,7 @@ export async function updateOpCode(
   if (patch.code !== undefined) update.code = patch.code;
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.flagHours !== undefined) update.flag_hours = patch.flagHours;
+  if (patch.notes !== undefined) update.notes = patch.notes;
 
   const { data, error } = await supabase
     .from("op_codes")

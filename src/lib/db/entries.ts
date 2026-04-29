@@ -115,7 +115,7 @@ function toLineInsert(
   line: NewEntryOpCode,
   position: number,
 ): Database["public"]["Tables"]["entry_op_codes"]["Insert"] {
-  return {
+  const insert: Database["public"]["Tables"]["entry_op_codes"]["Insert"] = {
     entry_id: entryId,
     op_code_id: line.opCodeId ?? null,
     custom: line.custom,
@@ -123,9 +123,12 @@ function toLineInsert(
     custom_description: line.customDescription ?? null,
     flag_hours: line.flagHours,
     actual_hours: line.actualHours,
-    notes: line.notes ?? "",
     position,
   };
+  // Only include notes when non-empty so the insert works even before the
+  // migration is applied — the DB default '' covers the missing column case.
+  if (line.notes) insert.notes = line.notes;
+  return insert;
 }
 
 export async function createEntry(
@@ -240,7 +243,7 @@ export async function addEntryLine(
   const { error } = await supabase
     .from("entry_op_codes")
     .insert(toLineInsert(entryId, { ...line, position }, position));
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 // Update just a single op code line's actualHours — used by the RO detail
