@@ -1,0 +1,38 @@
+VM Instructions — Fix "fetch failed"
+
+  The "fetch failed" error means the Next.js app can't reach your Supabase instance. Work through these in order:
+
+  Step 1 — Check if Supabase containers are running
+  # SSH into the VM, then:
+  cd ~/supabase/docker          # or wherever you cloned the supabase repo
+  docker compose ps
+  Every container (db, kong, auth, rest, etc.) should show Up. If any are down or missing, start them:
+  docker compose up -d
+
+  Step 2 — Verify the Next.js app can reach Supabase
+  # From the VM, test that Kong/API is reachable on its port:
+  curl http://localhost:8000/rest/v1/ -H "apikey: YOUR_ANON_KEY"
+  # Should return a JSON response, not a connection error
+
+  Step 3 — Check what URL was baked into the Next.js image
+  cd ~/path/to/your/flat-rate-tracker  # wherever the app lives on the VM
+  cat .env | grep NEXT_PUBLIC_SUPABASE_URL
+  # Should be https://api.slimelab.cc (or whatever your self-hosted URL is)
+  If the URL is wrong, fix .env and rebuild — changing .env alone does nothing, the value is baked into the image at build time.
+
+  Step 4 — Pull new code + rebuild
+  git pull
+  docker compose down
+  docker compose build
+  docker compose up -d
+
+  Step 5 — Check if anything drifted from the previous session
+  git status
+  git diff
+  The other Claude Code session may have modified files locally but not committed them. If you see changes, decide if they should
+  be kept or discarded before pulling.
+
+  Step 6 — Verify
+  - Go to https://tracker.slimelab.cc/signin — you should see the "Try as Guest" button
+  - Click it → should land on /guest with an amber banner
+  - Try logging in with wrong credentials — should say "Incorrect email or password." not "fetch failed"
