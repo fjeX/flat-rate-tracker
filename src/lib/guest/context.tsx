@@ -87,6 +87,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         customDescription: oc.customDescription,
         flagHours: oc.flagHours,
         actualHours: oc.actualHours,
+        notes: oc.notes,
         position: i,
       })),
       flagHours: input.opCodes.reduce((s, oc) => s + (oc.flagHours || 0), 0),

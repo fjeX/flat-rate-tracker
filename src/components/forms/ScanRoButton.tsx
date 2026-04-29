@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle, ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, Camera, CheckCircle, ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
 import type { FieldId, OpCode, RoTemplate } from "@/lib/types";
 import type { OcrResult } from "@/lib/ocr";
 
@@ -43,6 +44,36 @@ type RegionDebug = {
   extracted: Partial<Omit<OcrResult, "confidence">>;
 };
 
+type RegionStatus = { icon: "success" | "partial" | "none"; label: string };
+
+function getRegionStatus(r: RegionDebug): RegionStatus {
+  const e = r.extracted;
+  if (r.field === "opCodes") {
+    const count = e.opCodeIds?.length ?? 0;
+    if (count > 0) return { icon: "success", label: `${count} op code${count > 1 ? "s" : ""}` };
+    if (r.rawText) return { icon: "partial", label: "Read but none matched" };
+    return { icon: "none", label: "Not detected" };
+  }
+  if (r.field === "vehicle") {
+    const parts = [e.year, e.make, e.model].filter(Boolean);
+    if (parts.length === 3) return { icon: "success", label: parts.join(" ") };
+    if (parts.length > 0) return { icon: "partial", label: `${parts.join(" ")} (partial)` };
+    if (r.rawText) return { icon: "partial", label: "Read but not matched" };
+    return { icon: "none", label: "Not detected" };
+  }
+  if (r.field === "roNumber") {
+    if (e.roNumber) return { icon: "success", label: e.roNumber };
+    if (r.rawText) return { icon: "partial", label: "Read but not matched" };
+    return { icon: "none", label: "Not detected" };
+  }
+  if (r.field === "vin") {
+    if (e.vin) return { icon: "success", label: `…${e.vin.slice(-6)}` };
+    if (r.rawText) return { icon: "partial", label: "Read but not matched" };
+    return { icon: "none", label: "Not detected" };
+  }
+  return { icon: "none", label: "Not detected" };
+}
+
 export function ScanRoButton({ library, templates, onResult }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   // Holds the template selected for the current scan (set before opening file picker).
@@ -51,6 +82,7 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
   const [summary, setSummary]         = useState<string | null>(null);
   const [debugRegions, setDebugRegions] = useState<RegionDebug[] | null>(null);
   const [showDebug, setShowDebug]     = useState(false);
+  const [confidence, setConfidence]   = useState<"high" | "low" | null>(null);
   const [pickerOpen, setPickerOpen]   = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -83,6 +115,7 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
     setSummary(null);
     setDebugRegions(null);
     setShowDebug(false);
+    setConfidence(null);
 
     const template = activeTemplateRef.current;
 
@@ -154,6 +187,8 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
       }
 
       onResult(result);
+      setConfidence(result.confidence);
+      setShowDebug(result.confidence === "low");
 
       const parts: string[] = [];
       if (result.roNumber) parts.push(`RO# ${result.roNumber}`);
@@ -224,6 +259,33 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
         </div>
       )}
 
+      {/* No template yet — show setup guide */}
+      {templates.length === 0 && status === "idle" && (
+        <div className="w-full rounded-md border border-zinc-800 bg-zinc-950 p-3 text-left">
+          <p className="mb-2 text-xs font-medium text-zinc-400">
+            First time scanning? 3 steps to set it up:
+          </p>
+          <ol className="space-y-1 text-xs text-zinc-500">
+            <li className="flex gap-2">
+              <span className="font-mono text-orange-400 flex-shrink-0">1.</span>
+              Go to{" "}
+              <Link href="/settings" className="text-orange-400 hover:underline underline-offset-2">
+                Settings
+              </Link>{" "}
+              and click <span className="text-zinc-300">Add Template</span>.
+            </li>
+            <li className="flex gap-2">
+              <span className="font-mono text-orange-400 flex-shrink-0">2.</span>
+              Upload a photo of your RO form and draw boxes around each field.
+            </li>
+            <li className="flex gap-2">
+              <span className="font-mono text-orange-400 flex-shrink-0">3.</span>
+              Come back here and tap <span className="text-zinc-300">Scan RO</span> — the form will auto-fill.
+            </li>
+          </ol>
+        </div>
+      )}
+
       {status === "success" && summary && (
         <p className="flex items-center gap-1 text-xs text-green-400">
           <CheckCircle className="h-3 w-3 flex-shrink-0" />
@@ -236,8 +298,8 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
         </p>
       )}
 
-      {/* Debug overlay — shows raw Tesseract output per region after any scan */}
-      {debugRegions && debugRegions.length > 0 && (
+      {/* Scan details — hidden on high-confidence full success */}
+      {debugRegions && debugRegions.length > 0 && !(status === "success" && confidence === "high") && (
         <div className="w-full text-right">
           <button
             type="button"
@@ -245,24 +307,33 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
             className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
           >
             {showDebug ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {showDebug ? "Hide raw OCR" : "Show raw OCR"}
+            {showDebug ? "Hide details" : "Scan details"}
           </button>
 
           {showDebug && (
             <div className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-left">
-              <p className="mb-2 text-xs font-semibold text-zinc-400">Raw Tesseract output per region</p>
-              <div className="space-y-3">
-                {debugRegions.map((r) => (
-                  <div key={r.field} className="border-t border-zinc-800 pt-2 first:border-t-0 first:pt-0">
-                    <p className="text-xs font-medium text-zinc-300">{FIELD_LABELS[r.field]}</p>
-                    <pre className="mt-0.5 whitespace-pre-wrap break-all text-xs text-zinc-500">
-                      {r.rawText || "(empty — no text detected)"}
-                    </pre>
-                    <p className="mt-0.5 text-xs text-zinc-600">
-                      Extracted: <span className="text-zinc-400">{JSON.stringify(r.extracted)}</span>
-                    </p>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                {debugRegions.map((r) => {
+                  const { icon, label } = getRegionStatus(r);
+                  return (
+                    <div key={r.field} className="flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-zinc-300">{FIELD_LABELS[r.field]}</span>
+                        <span className={`flex items-center gap-1 text-xs ${icon === "success" ? "text-green-400" : icon === "partial" ? "text-yellow-400" : "text-zinc-500"}`}>
+                          {icon === "success" && <CheckCircle className="h-3 w-3 flex-shrink-0" />}
+                          {icon === "partial" && <AlertTriangle className="h-3 w-3 flex-shrink-0" />}
+                          {icon === "none"    && <X className="h-3 w-3 flex-shrink-0" />}
+                          {label}
+                        </span>
+                      </div>
+                      {r.rawText && (
+                        <p className="truncate text-xs text-zinc-600">
+                          Scanned: {r.rawText.replace(/\n/g, " ")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

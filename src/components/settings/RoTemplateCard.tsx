@@ -86,9 +86,28 @@ export function RoTemplateCard({
         </div>
 
         {templates.length === 0 ? (
-          <p className="mt-3 text-xs text-zinc-500">
-            No templates yet. The scanner will try to read the entire page, which can miss fields on unfamiliar RO layouts.
-          </p>
+          <div className="mt-4 space-y-3">
+            <p className="text-xs text-zinc-500">
+              No templates yet. Without one, the scanner tries to read the entire page and often misses fields.
+            </p>
+            <div>
+              <p className="mb-2 text-xs font-medium text-zinc-400">How to set up scanning — 3 steps:</p>
+              <ol className="space-y-2 text-xs text-zinc-500">
+                <li className="flex gap-2">
+                  <span className="flex-shrink-0 font-mono text-orange-400">1.</span>
+                  Click <span className="text-zinc-300">"Add Template"</span> above, give it a name (e.g. your shop's RO form), then upload a clear photo of a blank RO.
+                </li>
+                <li className="flex gap-2">
+                  <span className="flex-shrink-0 font-mono text-orange-400">2.</span>
+                  Draw boxes around each field you want scanned — RO number, vehicle info, VIN, and op codes. The scanner will only look inside those boxes.
+                </li>
+                <li className="flex gap-2">
+                  <span className="flex-shrink-0 font-mono text-orange-400">3.</span>
+                  Go to <span className="text-zinc-300">Log RO</span> and tap <span className="text-zinc-300">"Scan RO"</span>. Point your camera at the RO and the form auto-fills.
+                </li>
+              </ol>
+            </div>
+          </div>
         ) : (
           <div className="mt-4 space-y-3">
             {templates.map((t) => (

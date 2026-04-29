@@ -1,14 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useRef, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { formatDateLong } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import {
+  addOpCodeLineToEntryAction,
   deleteEntryAction,
   setLineActualHoursAction,
 } from "@/app/actions/entries";
@@ -22,6 +23,7 @@ export function RoDetailModal({
   library?: OpCode[];
   onClose: () => void;
 }) {
+  const router = useRouter();
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
   const totalActual = entry.opCodes.reduce(
     (s, oc) => s + (oc.actualHours ?? 0),
@@ -48,6 +50,7 @@ export function RoDetailModal({
           make={entry.vehicle.make}
           model={entry.vehicle.model}
           vin={entry.vehicle.vin}
+          mileage={entry.vehicle.mileage}
         />
 
         <div className="rounded-md border border-zinc-800">
@@ -76,6 +79,13 @@ export function RoDetailModal({
           </div>
         </div>
 
+        {/* Quick-add op code from library */}
+        <AddOpCodePicker
+          entryId={entry.id}
+          library={library}
+          onAdded={() => router.refresh()}
+        />
+
         {entry.notes && (
           <div className="rounded-md border border-zinc-800 bg-zinc-950 p-3">
             <div className="mb-1 text-xs uppercase tracking-wide text-zinc-500">
@@ -100,20 +110,27 @@ function VehicleLine({
   make,
   model,
   vin,
+  mileage,
 }: {
   year: string;
   make: string;
   model: string;
   vin: string;
+  mileage: string;
 }) {
   const label = [year, make, model].filter(Boolean).join(" ").trim();
-  if (!label && !vin) return null;
+  if (!label && !vin && !mileage) return null;
   return (
     <div className="space-y-0.5">
       {label && <div className="text-sm text-zinc-300">{label}</div>}
       {vin && (
         <div className="font-mono text-xs text-zinc-500">
           VIN: {vin}
+        </div>
+      )}
+      {mileage && (
+        <div className="text-xs text-zinc-500">
+          Mileage: {mileage}
         </div>
       )}
     </div>
@@ -164,42 +181,174 @@ function LineRow({
   }
 
   return (
-    <li className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-zinc-800 px-3 py-2 last:border-b-0">
-      <div className="min-w-0">
-        <span className="font-mono text-sm text-orange-400">{code}</span>
-        {line.custom && (
-          <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
-            Other
-          </span>
-        )}
-        {description && (
-          <div className="truncate text-xs text-zinc-500">{description}</div>
-        )}
+    <li className="border-b border-zinc-800 px-3 py-2 last:border-b-0">
+      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+        <div className="min-w-0">
+          <span className="font-mono text-sm text-orange-400">{code}</span>
+          {line.custom && (
+            <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+              Other
+            </span>
+          )}
+          {description && (
+            <div className="truncate text-xs text-zinc-500">{description}</div>
+          )}
+        </div>
+        <div className="w-16 text-right font-mono text-sm">
+          {fmtHours(line.flagHours)}
+        </div>
+        <div className="w-20">
+          <input
+            type="number"
+            min={0}
+            step={0.1}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            placeholder="—"
+            disabled={saving}
+            className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-right font-mono text-sm text-zinc-100 placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+          />
+          {error && <div className="text-[10px] text-red-300">{error}</div>}
+        </div>
       </div>
-      <div className="w-16 text-right font-mono text-sm">
-        {fmtHours(line.flagHours)}
-      </div>
-      <div className="w-20">
-        <input
-          type="number"
-          min={0}
-          step={0.1}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          placeholder="—"
-          disabled={saving}
-          className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-right font-mono text-sm text-zinc-100 placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
-        />
-        {error && <div className="text-[10px] text-red-300">{error}</div>}
-      </div>
+      {line.notes && (
+        <p className="mt-1.5 text-xs text-zinc-500 italic">{line.notes}</p>
+      )}
     </li>
+  );
+}
+
+// ------------------------------------------------------------------------
+
+function AddOpCodePicker({
+  entryId,
+  library,
+  onAdded,
+}: {
+  entryId: string;
+  library: OpCode[];
+  onAdded: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return library;
+    return library.filter(
+      (oc) =>
+        oc.code.toLowerCase().includes(q) ||
+        oc.description.toLowerCase().includes(q),
+    );
+  }, [search, library]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [open]);
+
+  function addLine(oc: OpCode) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await addOpCodeLineToEntryAction(entryId, {
+          opCodeId: oc.id,
+          custom: false,
+          customCode: null,
+          customDescription: null,
+          flagHours: oc.flagHours,
+          actualHours: null,
+          notes: "",
+        });
+        onAdded();
+        setSearch("");
+        setOpen(false);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to add.");
+      }
+    });
+  }
+
+  if (!library.length) return null;
+
+  return (
+    <div ref={containerRef} className="relative">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-zinc-700 py-2 text-xs text-zinc-500 hover:border-orange-500/50 hover:text-zinc-300"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add op code
+        </button>
+      ) : (
+        <div className="rounded-md border border-zinc-700 bg-zinc-900">
+          <div className="flex items-center gap-2 px-3">
+            <Search className="h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search op codes…"
+              className="w-full bg-transparent py-2 text-sm placeholder-zinc-500 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => { setOpen(false); setSearch(""); }}
+              className="text-zinc-500 hover:text-zinc-300"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <ul className="max-h-48 overflow-y-auto border-t border-zinc-800">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-xs text-zinc-500">No matches.</li>
+            ) : (
+              filtered.map((oc) => (
+                <li key={oc.id}>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => addLine(oc)}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800 disabled:opacity-50"
+                  >
+                    <span>
+                      <span className="font-mono text-sm text-orange-400">{oc.code}</span>
+                      <span className="ml-2 text-xs text-zinc-500">{oc.description}</span>
+                    </span>
+                    <span className="text-xs text-zinc-400">{oc.flagHours}h</span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+          {error && (
+            <div className="border-t border-zinc-800 px-3 py-1.5 text-xs text-red-300">
+              {error}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

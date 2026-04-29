@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import type { Entry, NewEntry } from "@/lib/types";
+import type { Entry, NewEntry, NewEntryOpCode } from "@/lib/types";
 
 // Create or update an entry. Returns the persisted entry so the client can
 // navigate / display success. Throws on validation or DB errors.
@@ -57,6 +57,17 @@ export async function saveEntry(
 export async function deleteEntryAction(id: string): Promise<void> {
   const supabase = await createClient();
   await db.deleteEntry(supabase, id);
+  revalidatePath("/");
+  revalidatePath("/history");
+  revalidatePath("/pay-period");
+}
+
+export async function addOpCodeLineToEntryAction(
+  entryId: string,
+  line: Omit<NewEntryOpCode, "position">,
+): Promise<void> {
+  const supabase = await createClient();
+  await db.addEntryLine(supabase, entryId, line);
   revalidatePath("/");
   revalidatePath("/history");
   revalidatePath("/pay-period");

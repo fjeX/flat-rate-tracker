@@ -25,6 +25,7 @@ export type Vehicle = {
   make: string;
   model: string;
   vin: string;
+  mileage: string;
 };
 
 export type EntryOpCode = {
@@ -35,6 +36,7 @@ export type EntryOpCode = {
   customDescription: string | null;
   flagHours: number;
   actualHours: number | null;
+  notes: string;
   position: number;
 };
 
