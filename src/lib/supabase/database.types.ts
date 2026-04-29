@@ -65,6 +65,7 @@ export type Database = {
           updated_at: string
           user_id: string
           vehicle_make: string
+          vehicle_mileage: string
           vehicle_model: string
           vehicle_year: string
         }
@@ -78,6 +79,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           vehicle_make?: string
+          vehicle_mileage?: string
           vehicle_model?: string
           vehicle_year?: string
         }
@@ -91,6 +93,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           vehicle_make?: string
+          vehicle_mileage?: string
           vehicle_model?: string
           vehicle_year?: string
         }
@@ -105,6 +108,7 @@ export type Database = {
           entry_id: string
           flag_hours: number
           id: string
+          notes: string
           op_code_id: string | null
           position: number
         }
@@ -116,6 +120,7 @@ export type Database = {
           entry_id: string
           flag_hours?: number
           id?: string
+          notes?: string
           op_code_id?: string | null
           position?: number
         }
@@ -127,6 +132,7 @@ export type Database = {
           entry_id?: string
           flag_hours?: number
           id?: string
+          notes?: string
           op_code_id?: string | null
           position?: number
         }

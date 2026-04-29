@@ -21,6 +21,7 @@ function toEntryOpCode(row: EntryOpCodeRow): EntryOpCode {
     customDescription: row.custom_description,
     flagHours: Number(row.flag_hours),
     actualHours: row.actual_hours === null ? null : Number(row.actual_hours),
+    notes: row.notes ?? '',
     position: row.position,
   };
 }
@@ -37,6 +38,7 @@ function toEntry(row: EntryRow & { entry_op_codes?: EntryOpCodeRow[] }): Entry {
       year: row.vehicle_year,
       make: row.vehicle_make,
       model: row.vehicle_model,
+      mileage: row.vehicle_mileage ?? '',
     },
     flagHours: Number(row.flag_hours),
     notes: row.notes,
@@ -120,6 +122,7 @@ function toLineInsert(
     custom_description: line.customDescription ?? null,
     flag_hours: line.flagHours,
     actual_hours: line.actualHours,
+    notes: line.notes ?? '',
     position,
   };
 }
@@ -143,6 +146,7 @@ export async function createEntry(
       vehicle_year: input.vehicle.year,
       vehicle_make: input.vehicle.make,
       vehicle_model: input.vehicle.model,
+      vehicle_mileage: input.vehicle.mileage,
       notes: input.notes,
     })
     .select()
@@ -179,6 +183,7 @@ export async function updateEntry(
     update.vehicle_year = patch.vehicle.year;
     update.vehicle_make = patch.vehicle.make;
     update.vehicle_model = patch.vehicle.model;
+    update.vehicle_mileage = patch.vehicle.mileage;
   }
 
   if (Object.keys(update).length > 0) {
@@ -225,5 +230,38 @@ export async function setLineActualHours(
     .from("entry_op_codes")
     .update({ actual_hours: actualHours })
     .eq("id", lineId);
+  if (error) throw error;
+}
+
+// Delete a single op code line from an entry. The DB trigger recomputes
+// entries.flag_hours automatically.
+export async function deleteEntryLine(
+  supabase: DbClient,
+  lineId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("entry_op_codes")
+    .delete()
+    .eq("id", lineId);
+  if (error) throw error;
+}
+
+// Append a new op code line to an existing entry, positioned after the
+// current last line. The DB trigger recomputes entries.flag_hours.
+export async function addEntryLine(
+  supabase: DbClient,
+  entryId: string,
+  line: NewEntryOpCode,
+): Promise<void> {
+  const { data: existing } = await supabase
+    .from("entry_op_codes")
+    .select("position")
+    .eq("entry_id", entryId)
+    .order("position", { ascending: false })
+    .limit(1);
+  const nextPosition = existing?.length ? existing[0].position + 1 : 0;
+  const { error } = await supabase
+    .from("entry_op_codes")
+    .insert(toLineInsert(entryId, line, nextPosition));
   if (error) throw error;
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import type { Entry, NewEntry } from "@/lib/types";
+import type { Entry, NewEntry, OpCode } from "@/lib/types";
 
 // Create or update an entry. Returns the persisted entry so the client can
 // navigate / display success. Throws on validation or DB errors.
@@ -68,6 +68,34 @@ export async function setLineActualHoursAction(
 ): Promise<void> {
   const supabase = await createClient();
   await db.setLineActualHours(supabase, lineId, actualHours);
+  revalidatePath("/");
+  revalidatePath("/history");
+  revalidatePath("/pay-period");
+}
+
+export async function deleteEntryLineAction(lineId: string): Promise<void> {
+  const supabase = await createClient();
+  await db.deleteEntryLine(supabase, lineId);
+  revalidatePath("/");
+  revalidatePath("/history");
+  revalidatePath("/pay-period");
+}
+
+export async function addOpCodeLineToEntryAction(
+  entryId: string,
+  opCode: Pick<OpCode, "id" | "flagHours">,
+): Promise<void> {
+  const supabase = await createClient();
+  await db.addEntryLine(supabase, entryId, {
+    opCodeId: opCode.id,
+    custom: false,
+    customCode: null,
+    customDescription: null,
+    flagHours: opCode.flagHours,
+    actualHours: null,
+    notes: '',
+    position: 0,
+  });
   revalidatePath("/");
   revalidatePath("/history");
   revalidatePath("/pay-period");

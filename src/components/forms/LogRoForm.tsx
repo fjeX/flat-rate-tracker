@@ -15,6 +15,14 @@ import {
   type OpCodeDraft,
 } from "./OpCodeModals";
 
+const COMMON_MAKES = [
+  "Acura", "Audi", "BMW", "Buick", "Cadillac", "Chevrolet", "Chrysler",
+  "Dodge", "Fiat", "Ford", "Genesis", "GMC", "Honda", "Hyundai", "Infiniti",
+  "Jeep", "Kia", "Land Rover", "Lexus", "Lincoln", "Mazda", "Mercedes-Benz",
+  "Mini", "Mitsubishi", "Nissan", "Porsche", "Ram", "Subaru", "Tesla",
+  "Toyota", "Volkswagen", "Volvo",
+];
+
 type LineDraft = NewEntryOpCode & { key: string };
 
 function linesFromEntry(entry: Entry | undefined): LineDraft[] {
@@ -27,6 +35,7 @@ function linesFromEntry(entry: Entry | undefined): LineDraft[] {
     customDescription: oc.customDescription,
     flagHours: oc.flagHours,
     actualHours: oc.actualHours,
+    notes: oc.notes,
     position: oc.position,
   }));
 }
@@ -46,6 +55,7 @@ export function LogRoForm({
   const [year, setYear] = useState(existingEntry?.vehicle.year ?? "");
   const [make, setMake] = useState(existingEntry?.vehicle.make ?? "");
   const [model, setModel] = useState(existingEntry?.vehicle.model ?? "");
+  const [mileage, setMileage] = useState(existingEntry?.vehicle.mileage ?? "");
   const [notes, setNotes] = useState(existingEntry?.notes ?? "");
   const [lines, setLines] = useState<LineDraft[]>(() =>
     linesFromEntry(existingEntry),
@@ -61,7 +71,6 @@ export function LogRoForm({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
 
-  // Close the op-code picker when clicking anywhere outside it.
   const pickerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!pickerOpen) return;
@@ -74,8 +83,7 @@ export function LogRoForm({
       }
     }
     document.addEventListener("mousedown", handleMouseDown);
-    return () =>
-      document.removeEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [pickerOpen]);
 
   const filteredLibrary = useMemo(() => {
@@ -103,6 +111,7 @@ export function LogRoForm({
         customDescription: null,
         flagHours: oc.flagHours,
         actualHours: null,
+        notes: "",
         position: ls.length,
       },
     ]);
@@ -121,6 +130,7 @@ export function LogRoForm({
         customDescription: draft.description,
         flagHours: draft.flagHours,
         actualHours: null,
+        notes: "",
         position: ls.length,
       },
     ]);
@@ -164,11 +174,6 @@ export function LogRoForm({
   }
 
   // --- submit -----------------------------------------------------------
-  //
-  // The outer element is a <div>, not a <form>. The op-code modals
-  // render inside this tree and have their own <form> elements; a real
-  // outer <form> would capture their submit events and trigger a save.
-  // We trigger save via the explicit Save button's onClick instead.
 
   function handleSave() {
     setError(null);
@@ -181,6 +186,7 @@ export function LogRoForm({
             year: year.trim(),
             make: make.trim(),
             model: model.trim(),
+            mileage: mileage.trim(),
           },
           notes,
           opCodes: lines.map((line, i) => ({
@@ -190,6 +196,7 @@ export function LogRoForm({
             customDescription: line.customDescription,
             flagHours: line.flagHours,
             actualHours: line.actualHours,
+            notes: line.notes ?? "",
             position: i,
           })),
         };
@@ -209,10 +216,7 @@ export function LogRoForm({
           {isEdit ? `Edit RO #${existingEntry!.roNumber}` : "Log RO"}
         </h1>
         {isEdit && (
-          <Link
-            href="/"
-            className="text-sm text-zinc-400 hover:text-zinc-200"
-          >
+          <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
             Cancel
           </Link>
         )}
@@ -249,44 +253,70 @@ export function LogRoForm({
           </label>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <label className="block">
-            <span className="text-xs uppercase tracking-wide text-zinc-400">
-              Year
-            </span>
-            <input
-              type="text"
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              inputMode="numeric"
-              placeholder="2000"
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs uppercase tracking-wide text-zinc-400">
-              Make
-            </span>
-            <input
-              type="text"
-              value={make}
-              onChange={(e) => setMake(e.target.value)}
-              placeholder="Toyota"
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs uppercase tracking-wide text-zinc-400">
-              Model
-            </span>
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="Camry"
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
-            />
-          </label>
+        <div className="border-t border-zinc-800/60 pt-3">
+          <div className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+            Vehicle (optional)
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <label className="block">
+              <span className="text-xs uppercase tracking-wide text-zinc-400">
+                Year
+              </span>
+              <input
+                type="text"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                inputMode="numeric"
+                placeholder="2000"
+                className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs uppercase tracking-wide text-zinc-400">
+                Make
+              </span>
+              <input
+                type="text"
+                list="make-list"
+                value={make}
+                onChange={(e) => setMake(e.target.value)}
+                placeholder="Toyota"
+                className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+              />
+              <datalist id="make-list">
+                {COMMON_MAKES.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </label>
+            <label className="block">
+              <span className="text-xs uppercase tracking-wide text-zinc-400">
+                Model
+              </span>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="Camry"
+                className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+              />
+            </label>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs uppercase tracking-wide text-zinc-400">
+                Mileage
+              </span>
+              <input
+                type="text"
+                value={mileage}
+                onChange={(e) => setMileage(e.target.value)}
+                inputMode="numeric"
+                placeholder="45000"
+                className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+              />
+            </label>
+          </div>
         </div>
       </section>
 
@@ -446,7 +476,9 @@ export function LogRoForm({
                         onChange={(e) =>
                           updateLine(line.key, {
                             flagHours:
-                              e.target.value === "" ? 0 : Number(e.target.value),
+                              e.target.value === ""
+                                ? 0
+                                : Number(e.target.value),
                           })
                         }
                         className="mt-0.5 w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
@@ -474,6 +506,22 @@ export function LogRoForm({
                       />
                     </label>
                   </div>
+                  <div className="mt-2">
+                    <label className="block">
+                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+                        Notes
+                      </span>
+                      <input
+                        type="text"
+                        value={line.notes ?? ""}
+                        onChange={(e) =>
+                          updateLine(line.key, { notes: e.target.value })
+                        }
+                        placeholder="Parts ordered, follow-up, etc."
+                        className="mt-0.5 w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+                      />
+                    </label>
+                  </div>
                 </li>
               );
             })}
@@ -481,7 +529,7 @@ export function LogRoForm({
         )}
       </section>
 
-      {/* ---- Notes ---- */}
+      {/* ---- RO Notes ---- */}
       <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
         <label className="block">
           <span className="text-xs uppercase tracking-wide text-zinc-400">

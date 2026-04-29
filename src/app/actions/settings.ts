@@ -163,6 +163,7 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
         vehicle_year: e.vehicle.year,
         vehicle_make: e.vehicle.make,
         vehicle_model: e.vehicle.model,
+        vehicle_mileage: e.vehicle.mileage ?? '',
         flag_hours: e.flagHours,
         notes: e.notes,
         created_at: e.createdAt,
@@ -181,6 +182,7 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
         custom_description: oc.customDescription,
         flag_hours: oc.flagHours,
         actual_hours: oc.actualHours,
+        notes: oc.notes ?? '',
         position: oc.position,
       })),
     );
