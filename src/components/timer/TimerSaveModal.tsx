@@ -38,18 +38,22 @@ export function TimerSaveModal({
   entry,
   library,
   elapsedMs,
+  initialLineId,
   onClose,
 }: {
   entry: Entry;
   library: OpCode[];
   elapsedMs: number;
+  initialLineId?: string | null;
   onClose: () => void;
 }) {
   const router = useRouter();
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
-  const [selectedId, setSelectedId] = useState<string | null>(
-    entry.opCodes[0]?.id ?? null,
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    const valid =
+      initialLineId && entry.opCodes.some((l) => l.id === initialLineId);
+    return valid ? initialLineId : (entry.opCodes[0]?.id ?? null);
+  });
   const [error, setError] = useState<string | null>(null);
   const [pending, startPending] = useTransition();
 

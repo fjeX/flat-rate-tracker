@@ -10,6 +10,7 @@ export default async function TimerPage() {
     db.listEntries(supabase, { limit: 20 }),
     db.listOpCodes(supabase),
   ]);
+  const roTemplates = settings.roTemplates;
 
   // The attached RO may be outside the 20 most-recent window, so fetch by id
   // if we have one that isn't already in the list.
@@ -31,6 +32,7 @@ export default async function TimerPage() {
       attachedEntry={attachedEntry}
       recentEntries={entries}
       library={library}
+      roTemplates={roTemplates}
     />
   );
 }

@@ -17,7 +17,7 @@ export function Nav({ timerRunning = false }: { timerRunning?: boolean }) {
   const pathname = usePathname();
   return (
     <nav className="sticky top-[57px] z-10 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
-      <div className="mx-auto max-w-5xl overflow-x-auto">
+      <div className="mx-auto max-w-5xl overflow-x-auto no-scrollbar">
         <ul className="flex min-w-max gap-1 px-2">
           {TABS.map((tab) => {
             const active = tab.match(pathname);
