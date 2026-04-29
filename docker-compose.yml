@@ -7,6 +7,8 @@ services:
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
     container_name: frt
     restart: unless-stopped
+    extra_hosts:
+      - "api.slimelab.cc:172.21.0.3"
     networks:
       - proxy
     labels:
