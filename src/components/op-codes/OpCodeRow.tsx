@@ -38,20 +38,18 @@ export function OpCodeRow({
     <li
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900 px-2 py-2 last:border-b-0"
+      {...(!isSearching ? { ...attributes, ...listeners } : {})}
+      className={`flex items-center gap-2 border-b border-zinc-800 bg-zinc-900 px-2 py-2 last:border-b-0${!isSearching ? " cursor-grab active:cursor-grabbing" : ""}`}
     >
       {isSearching ? (
         <div className="h-8 w-8 shrink-0" aria-hidden="true" />
       ) : (
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          aria-label={`Reorder ${opCode.code}`}
-          className="flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 active:cursor-grabbing"
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-zinc-500"
+          aria-hidden="true"
         >
           <GripVertical className="h-4 w-4" />
-        </button>
+        </div>
       )}
 
       <div className="min-w-0 flex-1">
@@ -80,7 +78,7 @@ export function OpCodeRow({
           type="button"
           onClick={() => onEdit(opCode)}
           aria-label={`Edit ${opCode.code}`}
-          className="rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          className="cursor-pointer rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
         >
           <Pencil className="h-4 w-4" />
         </button>
@@ -89,7 +87,7 @@ export function OpCodeRow({
           onClick={() => onDelete(opCode)}
           disabled={deleting}
           aria-label={`Delete ${opCode.code}`}
-          className="rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-300 disabled:opacity-50"
+          className="cursor-pointer rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-300 disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" />
         </button>

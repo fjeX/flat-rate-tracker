@@ -54,6 +54,14 @@ export async function saveEntry(
   return entry;
 }
 
+export async function deleteEntryLineAction(lineId: string): Promise<void> {
+  const supabase = await createClient();
+  await db.deleteEntryLine(supabase, lineId);
+  revalidatePath("/");
+  revalidatePath("/history");
+  revalidatePath("/pay-period");
+}
+
 export async function deleteEntryAction(id: string): Promise<void> {
   const supabase = await createClient();
   await db.deleteEntry(supabase, id);

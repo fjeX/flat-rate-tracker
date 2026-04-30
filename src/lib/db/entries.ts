@@ -225,6 +225,17 @@ export async function deleteEntry(supabase: DbClient, id: string): Promise<void>
   if (error) throw error;
 }
 
+export async function deleteEntryLine(
+  supabase: DbClient,
+  lineId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("entry_op_codes")
+    .delete()
+    .eq("id", lineId);
+  if (error) throw error;
+}
+
 // Append a single new op code line to an existing entry.
 // Position is set to max(existing positions) + 1.
 export async function addEntryLine(

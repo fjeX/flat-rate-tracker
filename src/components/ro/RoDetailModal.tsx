@@ -11,6 +11,7 @@ import { fmtHours } from "@/lib/stats";
 import {
   addOpCodeLineToEntryAction,
   deleteEntryAction,
+  deleteEntryLineAction,
   setLineActualHoursAction,
 } from "@/app/actions/entries";
 
@@ -65,6 +66,8 @@ export function RoDetailModal({
                 key={line.id}
                 line={line}
                 libraryById={libraryById}
+                isOnly={entry.opCodes.length === 1}
+                onDeleted={() => router.refresh()}
               />
             ))}
           </ul>
@@ -142,15 +145,20 @@ function VehicleLine({
 function LineRow({
   line,
   libraryById,
+  isOnly,
+  onDeleted,
 }: {
   line: EntryOpCode;
   libraryById: Map<string, OpCode>;
+  isOnly: boolean;
+  onDeleted: () => void;
 }) {
   const router = useRouter();
   const [text, setText] = useState<string>(
     line.actualHours !== null ? String(line.actualHours) : "",
   );
-  const [saving, startTransition] = useTransition();
+  const [saving, startSave] = useTransition();
+  const [deleting, startDelete] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const ref = line.opCodeId ? libraryById.get(line.opCodeId) : undefined;
@@ -170,7 +178,7 @@ function LineRow({
     }
     if (parsed === line.actualHours) return;
     setError(null);
-    startTransition(async () => {
+    startSave(async () => {
       try {
         await setLineActualHoursAction(line.id, parsed);
         router.refresh();
@@ -180,9 +188,26 @@ function LineRow({
     });
   }
 
+  function handleDelete() {
+    if (isOnly) {
+      alert("An RO needs at least one line.");
+      return;
+    }
+    if (!window.confirm("Remove this line?")) return;
+    setError(null);
+    startDelete(async () => {
+      try {
+        await deleteEntryLineAction(line.id);
+        onDeleted();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to remove.");
+      }
+    });
+  }
+
   return (
     <li className="border-b border-zinc-800 px-3 py-2 last:border-b-0">
-      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+      <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
         <div className="min-w-0">
           <span className="font-mono text-sm text-orange-400">{code}</span>
           {line.custom && (
@@ -212,12 +237,21 @@ function LineRow({
               }
             }}
             placeholder="—"
-            disabled={saving}
+            disabled={saving || deleting}
             className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-right font-mono text-sm text-zinc-100 placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
           />
-          {error && <div className="text-[10px] text-red-300">{error}</div>}
         </div>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting || isOnly}
+          aria-label="Remove line"
+          className="rounded p-1 text-zinc-600 hover:text-red-400 disabled:opacity-30"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
+      {error && <div className="mt-1 text-[10px] text-red-300">{error}</div>}
       {line.notes && (
         <p className="mt-1.5 text-xs text-zinc-500 italic">{line.notes}</p>
       )}
