@@ -9,10 +9,41 @@ You are assisting with the Flat Rate Tracker (FRT) — a Next.js app for logging
 1. New feature or fix built and tested locally (laptop or PC)
 2. Changes committed and pushed to GitHub (`frt` remote)
 3. SSH into VM → `git pull origin master`
-4. Apply any new DB migrations (see below)
-5. Rebuild the Docker image if code changed: `docker compose down && docker compose build && docker compose up -d`
+4. Apply any new DB migrations if needed (see The One Thing That's VM-Only below)
+5. Rebuild the Docker image if app code changed (see After a Pull below)
 
 **Never edit app code directly on the VM.** The VM's job is to run the app, not develop it. If something looks wrong in the code, the fix happens locally, gets pushed, and gets pulled in.
+
+## After a Pull — What to Do Next
+
+After every `git pull origin master`, run these two checks in order:
+
+### 1. Check for new migrations
+```bash
+git log --oneline ORIG_HEAD..HEAD -- supabase/migrations/
+```
+- **Output is empty** → no schema changes, skip to step 2
+- **Output shows commits** → new migrations came in, apply them before anything else (see The One Thing That's VM-Only below)
+
+### 2. Check for app code changes
+```bash
+git log --oneline ORIG_HEAD..HEAD -- src/ Dockerfile package.json next.config.ts
+```
+- **Output is empty** → no rebuild needed, you're done
+- **Output shows commits** → app code changed, rebuild the container:
+  ```bash
+  cd ~/docker/flat-rate-tracker
+  docker compose down && docker compose build && docker compose up -d
+  ```
+
+**Always do migrations before rebuilding.** The new image expects the new schema — if the DB is still behind when the container comes up, it will fail immediately.
+
+### Rebuild takes a few minutes
+The `docker compose build` step compiles the Next.js app. It's done when you see the prompt return. Then:
+```bash
+docker compose ps   # should show app running (Up)
+```
+If it shows `Exit` or `Restarting`, check logs: `docker compose logs --tail=50`
 
 ## VM Directory Structure
 
@@ -25,24 +56,26 @@ The self-hosted Supabase database is the only component that differs between env
 
 ### Applying migrations
 
-1. After a `git pull`, check if any new migration files came in:
-   ```bash
-   git log --oneline -5 -- supabase/migrations/
-   ```
-2. If yes, apply each new `.sql` file (oldest timestamp first) via `docker exec`:
-   ```bash
-   docker exec supabase-db psql -U postgres -d postgres -f /path/to/migration.sql
-   ```
-   Or paste the SQL directly into the Supabase Studio SQL editor if it's accessible.
-3. Verify the columns exist:
-   ```bash
-   docker exec supabase-db psql -U postgres -d postgres \
-     -c "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, column_name;"
-   ```
+When the post-pull check (step 1 above) shows new migration files, apply them oldest-first:
+
+```bash
+# See which files are new
+git diff ORIG_HEAD HEAD -- supabase/migrations/
+
+# Apply each one (replace filename with actual file)
+docker exec supabase-db psql -U postgres -d postgres \
+  -c "$(cat supabase/migrations/<timestamp>_<name>.sql)"
+```
 
 Migration files live at: `~/docker/flat-rate-tracker/supabase/migrations/`
 
-**Never skip this check after a pull.** Missing migrations are the most common production failure mode — the app code and DB schema get out of sync silently.
+**Verify after applying:**
+```bash
+docker exec supabase-db psql -U postgres -d postgres \
+  -c "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, column_name;"
+```
+
+If the new columns appear in that list, the migration worked. Then proceed to the rebuild check (step 2).
 
 ## Infrastructure Reference
 
