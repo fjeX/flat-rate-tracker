@@ -11,6 +11,7 @@ const TABS = [
   { href: "/pay-period", label: "Pay Period", match: (p: string) => p.startsWith("/pay-period") },
   { href: "/op-codes", label: "Op Codes", match: (p: string) => p.startsWith("/op-codes") },
   { href: "/settings", label: "Settings", match: (p: string) => p.startsWith("/settings") },
+  { href: "/account", label: "Account", match: (p: string) => p.startsWith("/account") },
 ];
 
 export function Nav({ timerRunning = false }: { timerRunning?: boolean }) {

@@ -14,6 +14,7 @@ import { aggregateStats, fmtHours, fmtPct } from "@/lib/stats";
 import { ClockedHoursInput } from "@/components/dashboard/ClockedHoursInput";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
+import { AveragesChart } from "@/components/dashboard/AveragesChart";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -51,8 +52,9 @@ export default async function DashboardPage() {
   // Auth — we need the email for the greeting avatar
   const { data: { user } } = await supabase.auth.getUser();
   const email = user?.email ?? "";
-  const avatarLetter = email.charAt(0).toUpperCase() || "?";
-  const displayName = email.split("@")[0] || "there";
+  const firstName = user?.user_metadata?.first_name as string | undefined;
+  const avatarLetter = firstName?.charAt(0).toUpperCase() || email.charAt(0).toUpperCase() || "?";
+  const displayName = firstName?.trim() || email.split("@")[0] || "there";
 
   // Date ranges
   const today = isoDate();
@@ -63,7 +65,8 @@ export default async function DashboardPage() {
   const weekStart = startOfWeek(today);
   const weekEnd = endOfWeek(today);
 
-  const fetchFrom = [monthStart, period.start, weekStart].sort()[0];
+  const ninetyDaysAgo = isoDate(new Date(Date.now() - 90 * 86_400_000));
+  const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
   const [entries, clocks, library] = await Promise.all([
     db.listEntries(supabase, { from: fetchFrom, to: monthEnd }),
@@ -218,13 +221,17 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        {/* ── Averages chart placeholder ──────────────────────── */}
-        <section>
-          <div className="section-title">Avg Flag Hours by Day</div>
-          <div className="card padded" style={{ color: "var(--fg-3)", fontSize: 13, textAlign: "center", padding: "20px 14px" }}>
-            Day-of-week averages chart — coming soon
-          </div>
-        </section>
+        {/* ── Averages chart ──────────────────────────────────── */}
+        <AveragesChart
+          entries={entries}
+          today={today}
+          periodStart={period.start}
+          periodEnd={period.end}
+          weekStart={weekStart}
+          weekEnd={weekEnd}
+          monthStart={monthStart}
+          monthEnd={monthEnd}
+        />
 
       </div>
     </main>

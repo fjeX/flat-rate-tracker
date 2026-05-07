@@ -11,24 +11,25 @@ import {
   startOfWeek,
 } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
-import { RoList } from "@/components/ro/RoList";
+import { RoDetailModal } from "@/components/ro/RoDetailModal";
+import { HistoryBarChart } from "./HistoryBarChart";
 
-type FilterKind = "today" | "week" | "period" | "month" | "all" | "custom";
+type FilterKind = "today" | "week" | "period" | "month" | "all";
 
 const CHIPS: { kind: FilterKind; label: string }[] = [
-  { kind: "today", label: "Today" },
-  { kind: "week", label: "This Week" },
-  { kind: "period", label: "Pay Period" },
-  { kind: "month", label: "This Month" },
-  { kind: "all", label: "All" },
-  { kind: "custom", label: "Custom" },
+  { kind: "today",  label: "Today" },
+  { kind: "week",   label: "Week" },
+  { kind: "period", label: "Period" },
+  { kind: "month",  label: "Month" },
+  { kind: "all",    label: "All" },
 ];
+
+const GOAL_HOURS = 88;
 
 function getRange(
   kind: FilterKind,
   today: string,
   settings: UserSettings,
-  custom: { from: string; to: string },
 ): { start: string; end: string } | null {
   switch (kind) {
     case "today":
@@ -36,40 +37,74 @@ function getRange(
     case "week":
       return { start: startOfWeek(today), end: endOfWeek(today) };
     case "period": {
-      const p = getPeriodForDate(
-        today,
-        settings.splitDay,
-        settings.periodOverrides,
-      );
+      const p = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
       return { start: p.start, end: p.end };
     }
     case "month":
       return { start: startOfMonth(today), end: endOfMonth(today) };
     case "all":
       return null;
-    case "custom":
-      return { start: custom.from, end: custom.to };
   }
 }
 
-function groupByDate(entries: Entry[]): { date: string; entries: Entry[] }[] {
-  const map = new Map<string, Entry[]>();
-  for (const e of entries) {
-    if (!map.has(e.date)) map.set(e.date, []);
-    map.get(e.date)!.push(e);
-  }
-  return Array.from(map.entries())
-    .map(([date, entries]) => ({ date, entries }))
-    .sort((a, b) => b.date.localeCompare(a.date));
+// Format a time string from an ISO timestamp, e.g. "2:14 PM"
+function fmtTime(isoTimestamp: string): string {
+  const d = new Date(isoTimestamp);
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function formatGroupLabel(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
-  return d.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+function fmtRowDate(date: string, today: string, createdAt: string): string {
+  const yesterday = (() => {
+    const d = new Date(today + "T12:00:00");
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const time = fmtTime(createdAt);
+  if (date === today) return `Today · ${time}`;
+  if (date === yesterday) return `Yesterday · ${time}`;
+  const MONTHS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const [, m, d] = date.split("-").map(Number);
+  return `${MONTHS[m - 1]} ${d} · ${time}`;
+}
+
+function RoRow({
+  entry,
+  today,
+  onOpen,
+}: {
+  entry: Entry;
+  today: string;
+  onOpen: () => void;
+}) {
+  const vehicle = [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const dateLine = fmtRowDate(entry.date, today, entry.createdAt);
+
+  return (
+    <button
+      type="button"
+      className="history-ro-row"
+      onClick={onOpen}
+      style={{ width: "100%", textAlign: "left", background: "transparent", border: "none" }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span className="history-ro-num">#{entry.roNumber}</span>
+        </div>
+        <div className="history-ro-meta">{dateLine}</div>
+        {vehicle && <div className="history-ro-vehicle">{vehicle}</div>}
+      </div>
+      <div className="history-ro-hours">
+        {fmtHours(entry.flagHours)}
+        <span style={{ color: "var(--fg-3)", fontWeight: 500, fontSize: 12 }}>h</span>
+      </div>
+    </button>
+  );
 }
 
 export function HistoryView({
@@ -77,52 +112,66 @@ export function HistoryView({
   library,
   settings,
   today,
+  periodStart: periodStartProp,
+  periodEnd: periodEndProp,
+  weekStart: weekStartProp,
+  weekEnd: weekEndProp,
+  monthStart: monthStartProp,
+  monthEnd: monthEndProp,
 }: {
   entries: Entry[];
   library: OpCode[];
   settings: UserSettings;
   today: string;
+  periodStart: string;
+  periodEnd: string;
+  weekStart: string;
+  weekEnd: string;
+  monthStart: string;
+  monthEnd: string;
 }) {
-  const [filter, setFilter] = useState<FilterKind>("all");
-  const [customFrom, setCustomFrom] = useState<string>(today);
-  const [customTo, setCustomTo] = useState<string>(today);
+  const [filter, setFilter] = useState<FilterKind>("period");
   const [search, setSearch] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
 
-  const range = getRange(filter, today, settings, {
-    from: customFrom,
-    to: customTo,
-  });
+  const range = getRange(filter, today, settings);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return entries.filter((e) => {
-      if (range && (e.date < range.start || e.date > range.end)) return false;
-      if (q) {
-        const vehicle = [e.vehicle.year, e.vehicle.make, e.vehicle.model]
-          .join(" ")
-          .toLowerCase();
-        const haystack = `${e.roNumber} ${vehicle} ${e.notes}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
+    return entries
+      .filter((e) => {
+        if (range && (e.date < range.start || e.date > range.end)) return false;
+        if (q) {
+          const vehicle = [e.vehicle.year, e.vehicle.make, e.vehicle.model]
+            .join(" ")
+            .toLowerCase();
+          const haystack = `${e.roNumber} ${vehicle} ${e.notes}`.toLowerCase();
+          if (!haystack.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [entries, range, search]);
 
-  const totalFlag = filtered.reduce((s, e) => s + e.flagHours, 0);
-  const totalActual = filtered.reduce(
-    (s, e) =>
-      s + e.opCodes.reduce((ss, oc) => ss + (oc.actualHours ?? 0), 0),
-    0,
+  // Period flag hours for the chart header
+  const periodFlagHours = useMemo(
+    () =>
+      entries
+        .filter((e) => e.date >= periodStartProp && e.date <= periodEndProp)
+        .reduce((s, e) => s + e.flagHours, 0),
+    [entries, periodStartProp, periodEndProp],
   );
 
-  const groups = useMemo(() => groupByDate(filtered), [filtered]);
+  // Entries scoped to chart's filter (not search-filtered, so chart always shows full picture)
+  const chartEntries = useMemo(() => {
+    if (!range) return entries;
+    return entries.filter((e) => e.date >= range.start && e.date <= range.end);
+  }, [entries, range]);
+
+  const openEntry = openId ? entries.find((e) => e.id === openId) ?? null : null;
 
   return (
     <main className="app-main" style={{ paddingBottom: 80 }}>
-      <div className="section-title">
-        <span>History</span>
-      </div>
-
       {/* Filter chips */}
       <div className="filter-row">
         {CHIPS.map((chip) => (
@@ -137,31 +186,22 @@ export function HistoryView({
         ))}
       </div>
 
-      {/* Custom date range */}
-      {filter === "custom" && (
-        <div className="card padded" style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
-          <label style={{ display: "block" }}>
-            <div className="field-label">From</div>
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="input"
-            />
-          </label>
-          <label style={{ display: "block" }}>
-            <div className="field-label">To</div>
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="input"
-            />
-          </label>
-        </div>
-      )}
+      {/* Bar chart */}
+      <HistoryBarChart
+        entries={chartEntries}
+        filter={filter}
+        today={today}
+        periodStart={periodStartProp}
+        periodEnd={periodEndProp}
+        weekStart={weekStartProp}
+        weekEnd={weekEndProp}
+        monthStart={monthStartProp}
+        monthEnd={monthEndProp}
+        periodFlagHours={periodFlagHours}
+        goalHours={GOAL_HOURS}
+      />
 
-      {/* Search */}
+      {/* Search bar */}
       <div
         style={{
           display: "flex",
@@ -171,6 +211,7 @@ export function HistoryView({
           border: "1px solid var(--line-soft)",
           borderRadius: 8,
           padding: "0 12px",
+          marginTop: 12,
         }}
       >
         <Search style={{ width: 16, height: 16, color: "var(--fg-3)", flexShrink: 0 }} />
@@ -187,77 +228,37 @@ export function HistoryView({
             type="button"
             onClick={() => setSearch("")}
             aria-label="Clear search"
-            style={{ color: "var(--fg-3)", display: "flex", alignItems: "center" }}
+            style={{ color: "var(--fg-3)", display: "flex", alignItems: "center", background: "transparent", border: "none", cursor: "pointer" }}
           >
             <X style={{ width: 16, height: 16 }} />
           </button>
         )}
       </div>
 
-      {/* Summary */}
-      <div className="history-summary">
-        <div>
-          <span className="k">ROs</span>
-          <span className="v">{filtered.length}</span>
-        </div>
-        <div>
-          <span className="k">Flag</span>
-          <span className="v" style={{ color: "var(--brand)" }}>
-            {fmtHours(totalFlag)}h
-          </span>
-        </div>
-        <div>
-          <span className="k">Actual</span>
-          <span className="v">{fmtHours(totalActual)}h</span>
-        </div>
-      </div>
-
-      {/* Grouped by day */}
-      {groups.length === 0 ? (
-        <div className="card padded" style={{ textAlign: "center" }}>
-          <p style={{ fontSize: "0.875rem" }}>No ROs in this range.</p>
+      {/* Flat RO list */}
+      {filtered.length === 0 ? (
+        <div className="card padded" style={{ textAlign: "center", marginTop: 12 }}>
+          <p style={{ fontSize: "0.875rem", color: "var(--fg-3)", margin: 0 }}>No ROs in this range.</p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {groups.map((group) => {
-            const groupFlag = group.entries.reduce((s, e) => s + e.flagHours, 0);
-            const groupActual = group.entries.reduce(
-              (s, e) => s + e.opCodes.reduce((ss, oc) => ss + (oc.actualHours ?? 0), 0),
-              0,
-            );
-            const eff = groupActual > 0 ? groupFlag / groupActual : null;
-
-            return (
-              <div key={group.date} className="card flush">
-                <div
-                  style={{
-                    padding: "11px 14px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    background: "var(--bg-1)",
-                    borderBottom: "1px solid var(--line-soft)",
-                  }}
-                >
-                  <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
-                    {formatGroupLabel(group.date)}
-                  </span>
-                  <span style={{ display: "flex", gap: 10, alignItems: "center", fontSize: "0.75rem" }}>
-                    <span style={{ color: "var(--brand)", fontVariantNumeric: "tabular-nums" }}>
-                      {fmtHours(groupFlag)}h
-                    </span>
-                    {eff !== null && (
-                      <span style={{ color: "var(--fg-3)", fontVariantNumeric: "tabular-nums" }}>
-                        {Math.round(eff * 100)}%
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <RoList entries={group.entries} library={library} />
-              </div>
-            );
-          })}
+        <div className="card flush" style={{ marginTop: 12 }}>
+          {filtered.map((entry) => (
+            <RoRow
+              key={entry.id}
+              entry={entry}
+              today={today}
+              onOpen={() => setOpenId(entry.id)}
+            />
+          ))}
         </div>
+      )}
+
+      {openEntry && (
+        <RoDetailModal
+          entry={openEntry}
+          library={library}
+          onClose={() => setOpenId(null)}
+        />
       )}
     </main>
   );

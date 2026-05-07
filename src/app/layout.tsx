@@ -28,6 +28,12 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
+      {/* Applies saved theme before first paint to prevent flash */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='light')document.documentElement.classList.add('theme-light');}catch(e){}})();`,
+        }}
+      />
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
