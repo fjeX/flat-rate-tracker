@@ -21,10 +21,10 @@ export default async function AppLayout({
   const timerRunning = settings.timerStartTime !== null;
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <Header userEmail={user.email} />
       <Nav timerRunning={timerRunning} />
-      <div className="flex-1">{children}</div>
+      <div style={{ flex: 1 }}>{children}</div>
     </div>
   );
 }

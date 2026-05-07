@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Search, Trash2, X } from "lucide-react";
+import { Camera, ChevronDown, ChevronUp, Plus, Search, Trash2, X } from "lucide-react";
 import type { Entry, NewEntry, NewEntryOpCode, OpCode, RoTemplate } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
@@ -80,6 +80,9 @@ export function LogRoForm({
   const [newLibraryOpen, setNewLibraryOpen] = useState(false);
   const [newLibraryPending, setNewLibraryPending] = useState(false);
 
+  const [vehicleOpen, setVehicleOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
 
@@ -138,6 +141,15 @@ export function LogRoForm({
   }, [search, library]);
 
   const totalFlag = lines.reduce((s, l) => s + (l.flagHours || 0), 0);
+
+  // Quick-add chips: first 6 library codes not already in lines
+  const quickChips = useMemo(
+    () =>
+      library
+        .slice(0, 6)
+        .filter((oc) => !lines.some((l) => l.opCodeId === oc.id)),
+    [library, lines],
+  );
 
   // --- line manipulation ------------------------------------------------
 
@@ -292,47 +304,56 @@ export function LogRoForm({
     });
   }
 
+  // Derived display values for save bar summary
+  const vehicleSummary = [year, make, model].filter(Boolean).join(" ");
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
-      {/* ---- Header ---- */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">
-          {isEdit ? `Edit RO #${existingEntry!.roNumber}` : "Log RO"}
-        </h1>
-        <div className="flex items-center gap-3">
-          {!isEdit && (
-            <ScanRoButton library={library} templates={roTemplates ?? []} onResult={handleScanResult} />
-          )}
-          {isEdit && (
-            <Link
-              href="/"
-              className="text-sm text-zinc-400 hover:text-zinc-200"
-            >
-              Cancel
-            </Link>
-          )}
-        </div>
+    <div className="mx-auto max-w-xl p-4 pb-32">
+
+      {/* ---- Section title ---- */}
+      <div className="section-title" style={{ marginBottom: 16 }}>
+        <span>{isEdit ? `Edit RO #${existingEntry!.roNumber}` : "New repair order"}</span>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          required
+          style={{
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            fontSize: 11,
+            color: "var(--fg-3)",
+            letterSpacing: "0.04em",
+            cursor: "pointer",
+          }}
+        />
       </div>
 
-      {/* ---- Basics ---- */}
-      <section className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-xs uppercase tracking-wide text-zinc-400">
-              Date
-            </span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs uppercase tracking-wide text-zinc-400">
-              RO #
-            </span>
+      {/* ---- Scan banner (new RO only) ---- */}
+      {!isEdit && (
+        <div className="scan-banner">
+          <div className="ico">
+            <Camera size={20} style={{ color: "var(--brand)" }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="label">Scan RO ticket</div>
+            <div className="sub">Auto-fills RO#, vehicle and op codes</div>
+          </div>
+          <ScanRoButton library={library} templates={roTemplates ?? []} onResult={handleScanResult} />
+        </div>
+      )}
+
+      {/* ---- Step 1: RO number ---- */}
+      <div className="step-card active">
+        <div className="step-head" style={{ cursor: "default" }}>
+          <div className="step-num">1</div>
+          <div className="step-title">RO number</div>
+          <div className="step-summary">required</div>
+        </div>
+        <div className="step-body">
+          <div className="ro-hero">
+            <span className="hash">#</span>
             <input
               ref={roInputRef}
               type="text"
@@ -341,48 +362,277 @@ export function LogRoForm({
               required
               inputMode="numeric"
               placeholder="12345"
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-mono placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
             />
-          </label>
+          </div>
+        </div>
+      </div>
+
+      {/* ---- Step 2: Op codes ---- */}
+      <div className="step-card active">
+        <div className="step-head" style={{ cursor: "default" }}>
+          <div className="step-num">2</div>
+          <div className="step-title">Op codes</div>
+          {lines.length > 0 && (
+            <div className="step-summary">
+              {lines.length} line{lines.length !== 1 ? "s" : ""} · {fmtHours(totalFlag)}h
+            </div>
+          )}
+        </div>
+        <div className="step-body">
+          {/* Search / picker */}
+          <div className="opc-search" ref={pickerRef}>
+            <span className="icon">
+              <Search size={15} />
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPickerOpen(true);
+              }}
+              onFocus={() => setPickerOpen(true)}
+              placeholder="Search or add op code…"
+              className="input"
+              style={{ width: "100%", paddingRight: search ? 36 : undefined }}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--fg-3)",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+                aria-label="Clear"
+              >
+                <X size={14} />
+              </button>
+            )}
+
+            {pickerOpen && (
+              <div className="opc-dropdown">
+                <div style={{ maxHeight: 256, overflowY: "auto" }}>
+                  {filteredLibrary.length === 0 ? (
+                    <div className="opc-dropdown-item" style={{ color: "var(--fg-3)", cursor: "default" }}>
+                      No matches in your library.
+                    </div>
+                  ) : (
+                    filteredLibrary.map((oc) => (
+                      <button
+                        key={oc.id}
+                        type="button"
+                        className="opc-dropdown-item"
+                        onClick={() => addFromLibrary(oc)}
+                      >
+                        <span>
+                          <span className="opc-code">{oc.code}</span>
+                          <span style={{ marginLeft: 8, fontSize: 12, color: "var(--fg-2)" }}>
+                            {oc.description}
+                          </span>
+                        </span>
+                        <span style={{ fontSize: 12, color: "var(--fg-3)", fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
+                          {oc.flagHours}h
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="opc-dropdown-footer">
+                  <div className="opc-dropdown-footer-label">Other</div>
+                  <button
+                    type="button"
+                    className="opc-dropdown-item"
+                    onClick={() => setCustomOpen(true)}
+                    style={{ borderRadius: 6 }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Plus size={13} />
+                      Other op code (one-time)
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="opc-dropdown-item"
+                    onClick={() => setNewLibraryOpen(true)}
+                    style={{ borderRadius: 6 }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Plus size={13} />
+                      Create new library op code
+                    </span>
+                  </button>
+                </div>
+                <div style={{ borderTop: "1px solid var(--line)", padding: "6px 12px", textAlign: "right" }}>
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(false)}
+                    style={{ fontSize: 11, color: "var(--fg-3)", background: "transparent", border: "none", cursor: "pointer" }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Op code lines */}
+          {lines.length === 0 ? (
+            <p style={{ textAlign: "center", fontSize: 13, color: "var(--fg-3)", padding: "16px 0" }}>
+              No op codes yet. Search above or tap a chip below.
+            </p>
+          ) : (
+            <div style={{ marginTop: 8 }}>
+              {lines.map((line) => {
+                const { code, description } = lineLabel(line);
+                return (
+                  <div key={line.key} className="opc-line">
+                    <div className="grow">
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <span className="opc-code">{code}</span>
+                        {line.custom && (
+                          <span style={{
+                            fontSize: 10,
+                            letterSpacing: "0.06em",
+                            textTransform: "uppercase",
+                            color: "var(--fg-3)",
+                            background: "var(--bg-3)",
+                            padding: "1px 5px",
+                            borderRadius: 4,
+                          }}>
+                            Other
+                          </span>
+                        )}
+                      </div>
+                      <div className="opc-desc" style={{ fontSize: 12, color: "var(--fg-2)" }}>
+                        {description}
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={Number.isFinite(line.flagHours) ? line.flagHours : ""}
+                      onChange={(e) =>
+                        updateLine(line.key, {
+                          flagHours: e.target.value === "" ? 0 : Number(e.target.value),
+                        })
+                      }
+                      className="opc-hours-input"
+                      title="Flag hours"
+                      placeholder="flag"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={line.actualHours ?? ""}
+                      onChange={(e) =>
+                        updateLine(line.key, {
+                          actualHours: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                      className="opc-hours-input"
+                      title="Actual hours"
+                      placeholder="act"
+                    />
+                    <button
+                      type="button"
+                      className="remove"
+                      onClick={() => removeLine(line.key)}
+                      aria-label="Remove line"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Quick-add chips */}
+          {quickChips.length > 0 && (
+            <div className="opc-quick">
+              {quickChips.map((oc) => (
+                <button
+                  key={oc.id}
+                  type="button"
+                  className="opc-chip"
+                  onClick={() => addFromLibrary(oc)}
+                >
+                  <span className="c">{oc.code}</span>
+                  <span className="h">{oc.flagHours}h</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Total */}
+          {lines.length > 0 && (
+            <div className="opc-total">
+              <span className="label">Total flag hours</span>
+              <span className="val">{fmtHours(totalFlag)}h</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ---- Step 3: Vehicle (collapsible) ---- */}
+      <div className={`step-card${vehicleOpen ? " active" : " collapsed"}`}>
+        <div className="step-head" onClick={() => setVehicleOpen((v) => !v)}>
+          <div className="step-num">3</div>
+          <div className="step-title">
+            Vehicle
+            <span className="optional-badge">optional</span>
+          </div>
+          {vehicleSummary && !vehicleOpen && (
+            <div className="step-summary">{vehicleSummary}</div>
+          )}
+          {vehicleOpen ? <ChevronUp size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} />}
         </div>
 
-        {/* Vehicle section */}
-        <div className="border-t border-zinc-800 pt-3">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Vehicle{" "}
-            <span className="font-normal normal-case text-zinc-600">(optional)</span>
-          </p>
+        {vehicleOpen && (
+          <div className="step-body">
+            <datalist id="make-options">
+              {COMMON_MAKES.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
 
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <label className="block">
-                <span className="text-xs uppercase tracking-wide text-zinc-400">
-                  Year
-                </span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <div>
+                <label className="field-label">Year</label>
                 <input
                   type="text"
                   value={year}
                   onChange={(e) => setYear(e.target.value)}
                   inputMode="numeric"
                   placeholder="2000"
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+                  className="input"
+                  style={{ width: "100%" }}
                 />
-              </label>
-              <div className="block">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wide text-zinc-400">
-                    Make
-                  </span>
+              </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <label className="field-label" style={{ margin: 0 }}>Make</label>
                   {!isEdit && (
-                    <label className="flex cursor-pointer items-center gap-1.5">
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                       <input
                         type="checkbox"
                         checked={autoFill}
                         onChange={(e) => handleAutoFillToggle(e.target.checked)}
-                        className="h-3 w-3 accent-orange-500"
+                        style={{ accentColor: "var(--brand)", width: 11, height: 11 }}
                       />
-                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-                        Autofill
+                      <span style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-3)" }}>
+                        Auto
                       </span>
                     </label>
                   )}
@@ -394,313 +644,133 @@ export function LogRoForm({
                   onChange={(e) => handleMakeChange(e.target.value)}
                   placeholder="Toyota"
                   autoComplete="off"
-                  className={`mt-1 w-full rounded-md border bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:outline-none ${
-                    autoFill
-                      ? "border-orange-500/50 focus:border-orange-500"
-                      : "border-zinc-800 focus:border-orange-500"
-                  }`}
+                  className="input"
+                  style={{
+                    width: "100%",
+                    borderColor: autoFill ? "var(--brand-soft)" : undefined,
+                  }}
                 />
                 {autoFill && make && (
-                  <p className="mt-0.5 text-[10px] text-orange-400">
-                    ✓ Saved — new ROs will pre-fill with {make}
+                  <p style={{ marginTop: 2, fontSize: 10, color: "var(--brand)" }}>
+                    ✓ Saved — new ROs pre-fill with {make}
                   </p>
                 )}
-                <datalist id="make-options">
-                  {COMMON_MAKES.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
               </div>
-              <label className="block">
-                <span className="text-xs uppercase tracking-wide text-zinc-400">
-                  Model
-                </span>
+              <div>
+                <label className="field-label">Model</label>
                 <input
                   type="text"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                   placeholder="Camry"
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+                  className="input"
+                  style={{ width: "100%" }}
                 />
-              </label>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-xs uppercase tracking-wide text-zinc-400">
-                  VIN
-                </span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <label className="field-label">VIN</label>
                 <input
                   type="text"
                   value={vin}
                   onChange={(e) => setVin(e.target.value.toUpperCase())}
                   maxLength={17}
-                  placeholder="17-character VIN"
+                  placeholder="17-char VIN"
                   autoCapitalize="characters"
                   autoCorrect="off"
                   spellCheck={false}
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+                  className="input mono"
+                  style={{ width: "100%" }}
                 />
-              </label>
-              <label className="block">
-                <span className="text-xs uppercase tracking-wide text-zinc-400">
-                  Mileage
-                </span>
+              </div>
+              <div>
+                <label className="field-label">Mileage</label>
                 <input
                   type="text"
                   inputMode="numeric"
                   value={mileage}
                   onChange={(e) => setMileage(e.target.value)}
-                  placeholder="e.g. 65,000"
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+                  placeholder="65,000"
+                  className="input"
+                  style={{ width: "100%" }}
                 />
-              </label>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        )}
+      </div>
 
-      {/* ---- Op Codes ---- */}
-      <section className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-300">Op codes</h2>
-          <span className="text-xs text-zinc-400">
-            Total:{" "}
-            <span className="font-mono text-orange-400">
-              {fmtHours(totalFlag)}h
-            </span>
-          </span>
-        </div>
-
-        {/* Picker */}
-        <div className="relative" ref={pickerRef}>
-          <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-3">
-            <Search className="h-4 w-4 text-zinc-500" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPickerOpen(true);
-              }}
-              onFocus={() => setPickerOpen(true)}
-              placeholder="Search or add op code…"
-              className="w-full bg-transparent py-2 text-sm placeholder-zinc-500 focus:outline-none"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                className="text-zinc-500 hover:text-zinc-300"
-                aria-label="Clear"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+      {/* ---- Step 4: Notes (collapsible) ---- */}
+      <div className={`step-card${notesOpen ? " active" : " collapsed"}`}>
+        <div className="step-head" onClick={() => setNotesOpen((v) => !v)}>
+          <div className="step-num">4</div>
+          <div className="step-title">
+            Notes
+            <span className="optional-badge">optional</span>
           </div>
-
-          {pickerOpen && (
-            <div className="absolute z-30 mt-1 w-full rounded-md border border-zinc-800 bg-zinc-900 shadow-lg">
-              <ul className="max-h-64 overflow-y-auto">
-                {filteredLibrary.length === 0 ? (
-                  <li className="px-3 py-2 text-sm text-zinc-500">
-                    No matches in your library.
-                  </li>
-                ) : (
-                  filteredLibrary.map((oc) => (
-                    <li key={oc.id}>
-                      <button
-                        type="button"
-                        onClick={() => addFromLibrary(oc)}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800"
-                      >
-                        <span>
-                          <span className="font-mono text-sm text-orange-400">
-                            {oc.code}
-                          </span>
-                          <span className="ml-2 text-xs text-zinc-500">
-                            {oc.description}
-                          </span>
-                        </span>
-                        <span className="text-xs text-zinc-400">
-                          {oc.flagHours}h
-                        </span>
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
-              <div className="border-t border-zinc-800 p-2">
-                <div className="mb-1 px-1 text-xs uppercase tracking-wide text-zinc-500">
-                  Other
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCustomOpen(true)}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Other op code (one-time)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewLibraryOpen(true)}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Create new library op code
-                </button>
-              </div>
-              <div className="border-t border-zinc-800 px-3 py-1.5 text-right">
-                <button
-                  type="button"
-                  onClick={() => setPickerOpen(false)}
-                  className="text-xs text-zinc-500 hover:text-zinc-300"
-                >
-                  Close
-                </button>
-              </div>
+          {notes && !notesOpen && (
+            <div className="step-summary" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
+              {notes}
             </div>
           )}
+          {notesOpen ? <ChevronUp size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} />}
         </div>
 
-        {/* Lines */}
-        {lines.length === 0 ? (
-          <p className="py-4 text-center text-sm text-zinc-500">
-            No op codes added yet. Search above to get started.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {lines.map((line) => {
-              const { code, description } = lineLabel(line);
-              return (
-                <li
-                  key={line.key}
-                  className="rounded-md border border-zinc-800 bg-zinc-950 p-3"
-                >
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="font-mono text-sm text-orange-400">
-                        {code}
-                      </span>
-                      {line.custom && (
-                        <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
-                          Other
-                        </span>
-                      )}
-                      <div className="truncate text-xs text-zinc-500">
-                        {description}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeLine(line.key)}
-                      className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-300"
-                      aria-label="Remove line"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="block">
-                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-                        Flag hrs
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.1}
-                        value={
-                          Number.isFinite(line.flagHours) ? line.flagHours : ""
-                        }
-                        onChange={(e) =>
-                          updateLine(line.key, {
-                            flagHours:
-                              e.target.value === "" ? 0 : Number(e.target.value),
-                          })
-                        }
-                        className="mt-0.5 w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-                        Actual hrs
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.1}
-                        value={line.actualHours ?? ""}
-                        onChange={(e) =>
-                          updateLine(line.key, {
-                            actualHours:
-                              e.target.value === ""
-                                ? null
-                                : Number(e.target.value),
-                          })
-                        }
-                        placeholder="—"
-                        className="mt-0.5 w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
-                      />
-                    </label>
-                  </div>
-                  <label className="mt-2 block">
-                    <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-                      Notes
-                    </span>
-                    <textarea
-                      value={line.notes ?? ""}
-                      onChange={(e) =>
-                        updateLine(line.key, { notes: e.target.value })
-                      }
-                      rows={2}
-                      placeholder="Parts ordered, customer concern, follow-up needed…"
-                      className="mt-0.5 w-full resize-y rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
-                    />
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
+        {notesOpen && (
+          <div className="step-body">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              placeholder="Customer concern, parts ordered, follow-up needed…"
+              className="input"
+              style={{ width: "100%", resize: "vertical" }}
+            />
+          </div>
         )}
-      </section>
+      </div>
 
-      {/* ---- Vehicle Notes ---- */}
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-        <label className="block">
-          <span className="text-xs uppercase tracking-wide text-zinc-400">
-            Vehicle Notes
-          </span>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            placeholder="Optional — customer concern, parts ordered, follow-up needed, etc."
-            className="mt-1 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
-          />
-        </label>
-      </section>
-
-      {/* ---- Error + Save ---- */}
+      {/* ---- Error ---- */}
       {error && (
-        <div className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+        <div style={{
+          borderRadius: 8,
+          border: "1px solid color-mix(in oklab, var(--bad) 40%, transparent)",
+          background: "color-mix(in oklab, var(--bad) 10%, transparent)",
+          padding: "8px 12px",
+          fontSize: 13,
+          color: "var(--bad)",
+          marginBottom: 12,
+        }}>
           {error}
         </div>
       )}
 
-      <div className="sticky bottom-4 z-10 flex justify-end">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isSubmitting}
-          className="rounded-md bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-orange-500 disabled:opacity-60"
-        >
-          {isSubmitting
-            ? "Saving…"
-            : isEdit
-              ? "Save Changes"
-              : "Save RO"}
-        </button>
+      {/* ---- Sticky save bar ---- */}
+      <div className="save-bar">
+        <div className="summary">
+          {roNumber ? (
+            <>RO <b>#{roNumber}</b>{vehicleSummary ? ` · ${vehicleSummary}` : ""}{lines.length > 0 ? ` · ${lines.length} op code${lines.length !== 1 ? "s" : ""}` : ""}</>
+          ) : (
+            <span style={{ color: "var(--fg-3)" }}>Fill in RO # to save</span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {isEdit && (
+            <Link href="/" className="btn btn-ghost btn-sm">
+              Cancel
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="btn btn-primary btn-sm"
+          >
+            {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Save RO"}
+          </button>
+        </div>
       </div>
 
       {/* ---- Modals ---- */}

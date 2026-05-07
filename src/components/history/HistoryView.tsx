@@ -52,6 +52,26 @@ function getRange(
   }
 }
 
+function groupByDate(entries: Entry[]): { date: string; entries: Entry[] }[] {
+  const map = new Map<string, Entry[]>();
+  for (const e of entries) {
+    if (!map.has(e.date)) map.set(e.date, []);
+    map.get(e.date)!.push(e);
+  }
+  return Array.from(map.entries())
+    .map(([date, entries]) => ({ date, entries }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function formatGroupLabel(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function HistoryView({
   entries,
   library,
@@ -95,104 +115,150 @@ export function HistoryView({
     0,
   );
 
-  return (
-    <main className="mx-auto max-w-5xl space-y-4 p-4 pb-16">
-      <h1 className="text-xl font-semibold">History</h1>
+  const groups = useMemo(() => groupByDate(filtered), [filtered]);
 
-      {/* Filter chips */}
-      <div className="-mx-4 overflow-x-auto px-4">
-        <div className="flex min-w-max gap-2">
-          {CHIPS.map((chip) => (
-            <button
-              key={chip.kind}
-              type="button"
-              onClick={() => setFilter(chip.kind)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                filter === chip.kind
-                  ? "bg-orange-600 text-white"
-                  : "border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-              }`}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
+  return (
+    <main className="app-main" style={{ paddingBottom: 80 }}>
+      <div className="section-title">
+        <span>History</span>
       </div>
 
-      {/* Custom range inputs */}
+      {/* Filter chips */}
+      <div className="filter-row">
+        {CHIPS.map((chip) => (
+          <button
+            key={chip.kind}
+            type="button"
+            onClick={() => setFilter(chip.kind)}
+            className={`filter-chip${filter === chip.kind ? " active" : ""}`}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Custom date range */}
       {filter === "custom" && (
-        <div className="flex items-end gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
-          <label className="block">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-              From
-            </span>
+        <div className="card padded" style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+          <label style={{ display: "block" }}>
+            <div className="field-label">From</div>
             <input
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="mt-1 rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
+              className="input"
             />
           </label>
-          <label className="block">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-              To
-            </span>
+          <label style={{ display: "block" }}>
+            <div className="field-label">To</div>
             <input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="mt-1 rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm focus:border-orange-500 focus:outline-none"
+              className="input"
             />
           </label>
         </div>
       )}
 
       {/* Search */}
-      <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-3">
-        <Search className="h-4 w-4 text-zinc-500" />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          background: "var(--bg-0)",
+          border: "1px solid var(--line-soft)",
+          borderRadius: 8,
+          padding: "0 12px",
+        }}
+      >
+        <Search style={{ width: 16, height: 16, color: "var(--fg-3)", flexShrink: 0 }} />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search RO#, vehicle, or notes"
-          className="w-full bg-transparent py-2 text-sm placeholder-zinc-600 focus:outline-none"
+          className="input"
+          style={{ border: "none", background: "transparent", flex: 1, padding: "8px 0" }}
         />
         {search && (
           <button
             type="button"
             onClick={() => setSearch("")}
             aria-label="Clear search"
-            className="text-zinc-500 hover:text-zinc-300"
+            style={{ color: "var(--fg-3)", display: "flex", alignItems: "center" }}
           >
-            <X className="h-4 w-4" />
+            <X style={{ width: 16, height: 16 }} />
           </button>
         )}
       </div>
 
       {/* Summary */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-xs">
-        <span className="text-zinc-400">
-          <span className="font-semibold text-zinc-100">
-            {filtered.length}
-          </span>{" "}
-          RO{filtered.length === 1 ? "" : "s"}
-        </span>
-        <span className="text-zinc-400">
-          <span className="font-semibold text-orange-400">
+      <div className="history-summary">
+        <div>
+          <span className="k">ROs</span>
+          <span className="v">{filtered.length}</span>
+        </div>
+        <div>
+          <span className="k">Flag</span>
+          <span className="v" style={{ color: "var(--brand)" }}>
             {fmtHours(totalFlag)}h
-          </span>{" "}
-          flag
-        </span>
-        <span className="text-zinc-400">
-          <span className="font-semibold text-zinc-100">
-            {fmtHours(totalActual)}h
-          </span>{" "}
-          actual
-        </span>
+          </span>
+        </div>
+        <div>
+          <span className="k">Actual</span>
+          <span className="v">{fmtHours(totalActual)}h</span>
+        </div>
       </div>
 
-      {/* List */}
-      <RoList entries={filtered} library={library} />
+      {/* Grouped by day */}
+      {groups.length === 0 ? (
+        <div className="card padded" style={{ textAlign: "center" }}>
+          <p style={{ fontSize: "0.875rem" }}>No ROs in this range.</p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {groups.map((group) => {
+            const groupFlag = group.entries.reduce((s, e) => s + e.flagHours, 0);
+            const groupActual = group.entries.reduce(
+              (s, e) => s + e.opCodes.reduce((ss, oc) => ss + (oc.actualHours ?? 0), 0),
+              0,
+            );
+            const eff = groupActual > 0 ? groupFlag / groupActual : null;
+
+            return (
+              <div key={group.date} className="card flush">
+                <div
+                  style={{
+                    padding: "11px 14px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    background: "var(--bg-1)",
+                    borderBottom: "1px solid var(--line-soft)",
+                  }}
+                >
+                  <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
+                    {formatGroupLabel(group.date)}
+                  </span>
+                  <span style={{ display: "flex", gap: 10, alignItems: "center", fontSize: "0.75rem" }}>
+                    <span style={{ color: "var(--brand)", fontVariantNumeric: "tabular-nums" }}>
+                      {fmtHours(groupFlag)}h
+                    </span>
+                    {eff !== null && (
+                      <span style={{ color: "var(--fg-3)", fontVariantNumeric: "tabular-nums" }}>
+                        {Math.round(eff * 100)}%
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <RoList entries={group.entries} library={library} />
+              </div>
+            );
+          })}
+        </div>
+      )}
     </main>
   );
 }

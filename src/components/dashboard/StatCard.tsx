@@ -10,30 +10,18 @@ export function StatCard({
   stats: Stats;
   highlighted?: boolean;
 }) {
+  const eff = stats.efficiency;
+  const effGood = eff !== null && eff >= 1.0;
+  const effBad  = eff !== null && eff < 0.85;
+
   return (
-    <div
-      className={`rounded-xl border p-3 ${
-        highlighted
-          ? "border-orange-900/60 bg-gradient-to-br from-orange-950/60 to-red-950/40"
-          : "border-zinc-800 bg-zinc-900"
-      }`}
-    >
-      <div
-        className={`text-xs uppercase tracking-wide ${
-          highlighted ? "text-orange-300/80" : "text-zinc-500"
-        }`}
-      >
-        {label}
+    <div className={`stat${highlighted ? " featured" : ""}`}>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value tabular">
+        {fmtHours(stats.flagHours)}<span className="unit">h</span>
       </div>
-      <div
-        className={`mt-2 text-2xl font-semibold ${
-          highlighted ? "text-orange-300" : "text-zinc-100"
-        }`}
-      >
-        {fmtHours(stats.flagHours)}h
-      </div>
-      <div className="mt-1 text-xs text-zinc-400">
-        {fmtHours(stats.clockedHours)}h clocked · {fmtPct(stats.efficiency)} eff
+      <div className={`stat-delta${effGood ? " good" : effBad ? " bad" : " neutral"}`}>
+        {eff !== null ? `${fmtPct(eff)} eff` : `${fmtHours(stats.clockedHours)}h clocked`}
       </div>
     </div>
   );
