@@ -11,9 +11,6 @@ export function Header({ userEmail }: { userEmail?: string | null }) {
         </span>
         <div>
           <div className="app-brand-name">Flat Rate Tracker</div>
-          {userEmail && (
-            <span className="app-brand-sub">{userEmail.split("@")[0]}</span>
-          )}
         </div>
       </Link>
 

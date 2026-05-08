@@ -387,8 +387,8 @@ function computeFooter(tab: TabId, bars: BarData[]): string {
 // ---------------------------------------------------------------------------
 
 const CHART_W = 300;
-const CHART_H = 80;
-const BAR_AREA_H = 62;
+const CHART_H = 58;
+const BAR_AREA_H = 42;
 const LABEL_H = 14;
 const MIN_BAR_H = 2;
 
@@ -572,7 +572,7 @@ export function AveragesChart({
           </div>
 
           {/* Bar chart */}
-          <div style={{ padding: "4px 0 8px" }}>
+          <div style={{ padding: "2px 0 4px" }}>
             <BarChart bars={bars} />
           </div>
 

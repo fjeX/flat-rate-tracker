@@ -11,7 +11,7 @@ import {
   startOfWeek,
 } from "@/lib/periods";
 import { aggregateStats, fmtHours, fmtPct } from "@/lib/stats";
-import { ClockedHoursInput } from "@/components/dashboard/ClockedHoursInput";
+import { TodayCard } from "@/components/dashboard/TodayCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
@@ -120,7 +120,7 @@ export default async function DashboardPage() {
     <main className="app-main" style={{ paddingBottom: 64 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-        {/* ── Greeting card ───────────────────────────────────── */}
+        {/* ── Greeting + Pace card ────────────────────────────── */}
         <div className="card flush">
           <div className="greeting">
             <div className="avatar">{avatarLetter}</div>
@@ -136,25 +136,7 @@ export default async function DashboardPage() {
               {pillLabel}
             </span>
           </div>
-        </div>
-
-        {/* ── Stat tiles ──────────────────────────────────────── */}
-        <div className="stat-grid">
-          <StatCard label="Today · Flag"   stats={statsToday}  highlighted />
-          <StatCard label="This Week"      stats={statsWeek} />
-          <StatCard label="Pay Period"     stats={statsPeriod} />
-          <StatCard label="This Month"     stats={statsMonth} />
-        </div>
-
-        {/* ── Clocked hours input ─────────────────────────────── */}
-        <ClockedHoursInput
-          date={today}
-          initialHours={todaysClock?.hours ?? 0}
-          todayFlagHours={statsToday.flagHours}
-        />
-
-        {/* ── Pace bar ────────────────────────────────────────── */}
-        <div className="card padded">
+          <div style={{ height: 1, background: "var(--line)", margin: "0 16px" }} />
           <div className="pace">
             <div className="pace-head">
               <span className="title">Pay Period Pace</span>
@@ -162,20 +144,16 @@ export default async function DashboardPage() {
                 {fmtHours(statsPeriod.flagHours)}h of {GOAL_HOURS}h goal
               </span>
             </div>
-
             <div className="pace-track">
-              {/* Progress fill */}
               <div
                 className={paceFillClass}
                 style={{ width: `${actualFill * 100}%` }}
               />
-              {/* Today marker */}
               <div
                 className="pace-target"
                 style={{ left: `calc(${paceTarget * 100}% - 1px)` }}
               />
             </div>
-
             <div className="pace-foot">
               <span>{formatPeriodLabel(period)}</span>
               <span>
@@ -185,6 +163,18 @@ export default async function DashboardPage() {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* ── Stat tiles ──────────────────────────────────────── */}
+        <div className="stat-grid">
+          <TodayCard
+            date={today}
+            stats={statsToday}
+            initialHours={todaysClock?.hours ?? 0}
+          />
+          <StatCard label="This Week"      stats={statsWeek} />
+          <StatCard label="Pay Period"     stats={statsPeriod} />
+          <StatCard label="This Month"     stats={statsMonth} />
         </div>
 
         {/* ── Recent ROs ──────────────────────────────────────── */}

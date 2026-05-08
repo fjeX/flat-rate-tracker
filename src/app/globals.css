@@ -198,7 +198,10 @@ body {
 
 /* ── Stat tiles ──────────────────────────────────────── */
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (min-width: 600px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 600px) { .stat-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } }
+
+.stat.today-card { grid-column: 1 / -1; }
+@media (min-width: 600px) { .stat.today-card { grid-column: auto; } }
 
 .stat {
   padding: 12px 14px;
@@ -277,7 +280,7 @@ body {
 .avg-head h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
 .avg-head .sub { font-size: 11.5px; color: var(--fg-3); margin-top: 2px; }
 
-.avg-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+.avg-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
 .avg-tab {
   padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 550;
   border: 1px solid var(--line); background: transparent; color: var(--fg-3);
@@ -312,7 +315,7 @@ body {
 .avg-bar-col.best .day { color: var(--brand); font-weight: 600; }
 
 .avg-foot {
-  padding: 10px 14px 14px;
+  padding: 8px 14px 10px;
   border-top: 1px solid var(--line-soft);
   display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--fg-2);
 }
