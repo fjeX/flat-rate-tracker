@@ -15,15 +15,16 @@ Run the following steps using the Bash tool from this directory (`~/docker/flat-
    ```bash
    git pull origin master
    ```
+   - "Already up to date" is fine — still rebuild, the Docker image may be stale
 
 2. **Check for new migrations**
    ```bash
-   git log --oneline ORIG_HEAD..HEAD -- supabase/migrations/
+   git log --oneline ORIG_HEAD..HEAD -- supabase/migrations/ 2>/dev/null || git log --oneline -5 -- supabase/migrations/
    ```
    - Empty output → no migrations, continue
    - Shows commits → new migrations came in; apply them via the Supabase SQL editor before rebuilding
 
-3. **Rebuild and redeploy**
+3. **Rebuild and redeploy** — always run this, even if git said "Already up to date"
    ```bash
    docker compose down && docker compose build && docker compose up -d
    ```
