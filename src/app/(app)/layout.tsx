@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { Header } from "@/components/layout/Header";
 import { Nav } from "@/components/layout/Nav";
+import { TimerPip } from "@/components/timer/TimerPip";
+import type { Entry, OpCode } from "@/lib/types";
 
 export default async function AppLayout({
   children,
@@ -19,12 +21,36 @@ export default async function AppLayout({
 
   const settings = await db.getSettings(supabase);
   const timerRunning = settings.timerStartTime !== null;
+  const timerActive = timerRunning || settings.timerAccumulated > 0;
+
+  // Only fetch pip data when the timer has something to show
+  let pipEntry: Entry | null = null;
+  let pipLibrary: OpCode[] = [];
+  if (timerActive) {
+    const [entry, library] = await Promise.all([
+      settings.timerRoId
+        ? db.getEntry(supabase, settings.timerRoId)
+        : Promise.resolve(null),
+      db.listOpCodes(supabase),
+    ]);
+    pipEntry = entry;
+    pipLibrary = library;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <Header userEmail={user.email} />
       <Nav timerRunning={timerRunning} />
       <div style={{ flex: 1 }}>{children}</div>
+      <TimerPip
+        initialTimer={{
+          roId: settings.timerRoId,
+          startTime: settings.timerStartTime,
+          accumulated: settings.timerAccumulated,
+        }}
+        attachedEntry={pipEntry}
+        library={pipLibrary}
+      />
     </div>
   );
 }
