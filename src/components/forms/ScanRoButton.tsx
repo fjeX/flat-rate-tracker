@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Camera, CheckCircle, ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle, ChevronDown, ChevronUp, Info, Loader2, X } from "lucide-react";
 import type { FieldId, OpCode, RoTemplate } from "@/lib/types";
 import type { OcrResult } from "@/lib/ocr";
 
@@ -84,6 +84,7 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
   const [showDebug, setShowDebug]     = useState(false);
   const [confidence, setConfidence]   = useState<"high" | "low" | null>(null);
   const [pickerOpen, setPickerOpen]   = useState(false);
+  const [showInfo, setShowInfo]       = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -207,7 +208,7 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
       {/* No capture attribute — lets mobile browsers offer both camera and gallery. */}
       <input
         ref={inputRef}
@@ -216,19 +217,73 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
         className="hidden"
         onChange={handleFile}
       />
-      <button
-        type="button"
-        onClick={handleScanClick}
-        disabled={status === "loading"}
-        className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-60"
-      >
-        {status === "loading" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Camera className="h-4 w-4 text-orange-400" />
-        )}
-        {status === "loading" ? "Scanning…" : "Scan RO"}
-      </button>
+
+      {/* Button row: info icon + Scan RO button */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          type="button"
+          onClick={() => setShowInfo((v) => !v)}
+          aria-label="First-time setup help"
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: showInfo ? "var(--brand)" : "var(--fg-3)",
+            display: "flex",
+            alignItems: "center",
+            padding: 2,
+          }}
+        >
+          <Info className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={handleScanClick}
+          disabled={status === "loading"}
+          className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-60"
+        >
+          {status === "loading" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Camera className="h-4 w-4 text-orange-400" />
+          )}
+          {status === "loading" ? "Scanning…" : "Scan RO"}
+        </button>
+      </div>
+
+      {/* Info dropdown — absolutely positioned, appears below the button row */}
+      {showInfo && (
+        <div style={{
+          position: "absolute",
+          right: 0,
+          top: "calc(100% + 6px)",
+          zIndex: 50,
+          width: 260,
+          borderRadius: 8,
+          border: "1px solid var(--line)",
+          background: "var(--bg-2)",
+          padding: 12,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+        }}>
+          <p style={{ marginBottom: 8, fontSize: 12, fontWeight: 600, color: "var(--fg-2)" }}>
+            First time scanning? 3 steps to set it up:
+          </p>
+          <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+            <li style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
+              <span style={{ fontFamily: "monospace", color: "var(--brand)", flexShrink: 0 }}>1.</span>
+              <span>Go to{" "}<Link href="/settings" style={{ color: "var(--brand)" }}>Settings</Link>{" "}and click <span style={{ color: "var(--fg-1)" }}>Add Template</span>.</span>
+            </li>
+            <li style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
+              <span style={{ fontFamily: "monospace", color: "var(--brand)", flexShrink: 0 }}>2.</span>
+              <span>Upload a photo of your RO form and draw boxes around each field.</span>
+            </li>
+            <li style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
+              <span style={{ fontFamily: "monospace", color: "var(--brand)", flexShrink: 0 }}>3.</span>
+              <span>Come back here and tap <span style={{ color: "var(--fg-1)" }}>Scan RO</span> — the form will auto-fill.</span>
+            </li>
+          </ol>
+        </div>
+      )}
 
       {/* Template picker — shown only when user has multiple templates */}
       {pickerOpen && (
@@ -256,33 +311,6 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
               </button>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* No template yet — show setup guide */}
-      {templates.length === 0 && status === "idle" && (
-        <div className="w-full rounded-md border border-zinc-800 bg-zinc-950 p-3 text-left">
-          <p className="mb-2 text-xs font-medium text-zinc-400">
-            First time scanning? 3 steps to set it up:
-          </p>
-          <ol className="space-y-1 text-xs text-zinc-500">
-            <li className="flex gap-2">
-              <span className="font-mono text-orange-400 flex-shrink-0">1.</span>
-              Go to{" "}
-              <Link href="/settings" className="text-orange-400 hover:underline underline-offset-2">
-                Settings
-              </Link>{" "}
-              and click <span className="text-zinc-300">Add Template</span>.
-            </li>
-            <li className="flex gap-2">
-              <span className="font-mono text-orange-400 flex-shrink-0">2.</span>
-              Upload a photo of your RO form and draw boxes around each field.
-            </li>
-            <li className="flex gap-2">
-              <span className="font-mono text-orange-400 flex-shrink-0">3.</span>
-              Come back here and tap <span className="text-zinc-300">Scan RO</span> — the form will auto-fill.
-            </li>
-          </ol>
         </div>
       )}
 

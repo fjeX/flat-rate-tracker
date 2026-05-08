@@ -393,6 +393,7 @@ const LABEL_H = 14;
 const MIN_BAR_H = 2;
 
 function BarChart({ bars }: { bars: BarData[] }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const count = bars.length;
   if (count === 0) return null;
 
@@ -400,6 +401,18 @@ function BarChart({ bars }: { bars: BarData[] }) {
   const barW = Math.max(8, Math.floor((CHART_W - (count - 1) * 6) / count));
   const totalW = barW * count + Math.max(0, count - 1) * 6;
   const offsetX = (CHART_W - totalW) / 2;
+
+  const showAllLabels = count <= 8;
+  const seenMonths = new Set<string>();
+  const labelVisible = bars.map((bar) => {
+    if (bar.isBest) return true;
+    const month = bar.label.split(" ")[0];
+    if (!seenMonths.has(month)) { seenMonths.add(month); return true; }
+    return false;
+  });
+
+  const TOOLTIP_W = 50;
+  const TOOLTIP_H = 18;
 
   return (
     <svg
@@ -415,8 +428,16 @@ function BarChart({ bars }: { bars: BarData[] }) {
           : MIN_BAR_H;
         const y = BAR_AREA_H - barH;
 
+        const tooltipCenterX = x + barW / 2;
+        const tooltipX = Math.min(Math.max(tooltipCenterX - TOOLTIP_W / 2, 0), CHART_W - TOOLTIP_W);
+        const tooltipY = y - TOOLTIP_H - 4;
+
         return (
-          <g key={i}>
+          <g
+            key={i}
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+          >
             <rect
               x={x}
               y={y}
@@ -430,16 +451,42 @@ function BarChart({ bars }: { bars: BarData[] }) {
                   : undefined
               }
             />
-            <text
-              x={x + barW / 2}
-              y={CHART_H - 1}
-              textAnchor="middle"
-              fontSize={9}
-              fill={bar.isBest ? "var(--brand)" : "var(--fg-3)"}
-              fontWeight={bar.isBest ? 600 : 400}
-            >
-              {bar.label}
-            </text>
+            {(showAllLabels || labelVisible[i]) && (
+              <text
+                x={x + barW / 2}
+                y={CHART_H - 1}
+                textAnchor="middle"
+                fontSize={9}
+                fill={bar.isBest ? "var(--brand)" : "var(--fg-3)"}
+                fontWeight={bar.isBest ? 600 : 400}
+              >
+                {bar.label}
+              </text>
+            )}
+            {hoveredIdx === i && (
+              <>
+                <rect
+                  x={tooltipX}
+                  y={tooltipY}
+                  width={TOOLTIP_W}
+                  height={TOOLTIP_H}
+                  rx={4}
+                  fill="var(--bg-3)"
+                  stroke="var(--line)"
+                  strokeWidth={1}
+                />
+                <text
+                  x={tooltipX + TOOLTIP_W / 2}
+                  y={tooltipY + TOOLTIP_H / 2 + 3}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="var(--fg-0)"
+                  fontWeight={bar.isBest ? 600 : 400}
+                >
+                  {bar.label}: {fmtHours(bar.value)}h
+                </text>
+              </>
+            )}
           </g>
         );
       })}

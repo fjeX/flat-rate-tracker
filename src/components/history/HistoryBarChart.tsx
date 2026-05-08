@@ -337,20 +337,6 @@ export function HistoryBarChart({
           );
         })}
 
-        {/* "← today" marker for period/month/week filters when today is in range */}
-        {todayIdx >= 0 && (filter === "period" || filter === "month" || filter === "week") && (
-          <text
-            x={startX + todayIdx * (barW + 4) + barW / 2}
-            y={TOP_PAD + CHART_H + LABEL_H - 1}
-            textAnchor="middle"
-            fontSize="7.5"
-            fill="var(--brand)"
-            fontWeight="600"
-          >
-            ↑
-          </text>
-        )}
-
         {/* Bottom labels — show first and last only for dense charts, all for sparse */}
         {bars.length <= 8 ? (
           bars.map((bar, i) => {
