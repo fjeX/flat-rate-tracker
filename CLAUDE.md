@@ -85,6 +85,7 @@ Traefik is already running on this VM and owns ports 80 and 443. **Never add Cad
 
 - **Traefik network:** `proxy` (external Docker network)
 - **Certresolver:** `cloudflare`
+- **Entrypoint for internet-facing services:** `websecure-ext` (port 444) — use this for anything exposed to the public internet. `websecure` does not exist in this Traefik config; using it will cause Traefik to silently drop the router with no error.
 
 ### Domains
 
@@ -109,7 +110,7 @@ networks:
 labels:
   - "traefik.enable=true"
   - "traefik.http.routers.supabase-api.rule=Host(`api.slimelab.cc`)"
-  - "traefik.http.routers.supabase-api.entrypoints=websecure"
+  - "traefik.http.routers.supabase-api.entrypoints=websecure-ext"
   - "traefik.http.routers.supabase-api.tls=true"
   - "traefik.http.routers.supabase-api.tls.certresolver=cloudflare"
   - "traefik.http.services.supabase-api.loadbalancer.server.port=8000"

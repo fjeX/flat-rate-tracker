@@ -11,7 +11,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.flat-rate-tracker.rule=Host(`tracker.slimelab.cc`)"
-      - "traefik.http.routers.flat-rate-tracker.entrypoints=websecure"
+      - "traefik.http.routers.flat-rate-tracker.entrypoints=websecure-ext"
       - "traefik.http.routers.flat-rate-tracker.tls=true"
       - "traefik.http.routers.flat-rate-tracker.tls.certresolver=cloudflare"
       - "traefik.http.services.flat-rate-tracker.loadbalancer.server.port=3000"
