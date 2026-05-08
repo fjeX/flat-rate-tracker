@@ -37,8 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
-# claude code
-.claude/
+# claude code — ignore local settings but track skills
+.claude/settings.local.json
+.claude/handoffs/
 
 # typescript
 *.tsbuildinfo
