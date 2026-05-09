@@ -58,7 +58,7 @@ export function TimerPip({
     try {
       setSelectedLineId(localStorage.getItem("frt:timer_line_id"));
     } catch { /* ignore */ }
-  }, []);
+  }, [pathname]);
   // null = default bottom-center CSS positioning; set after first drag
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
