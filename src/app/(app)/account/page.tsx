@@ -1,8 +1,12 @@
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { AccountView } from "@/components/account/AccountView";
 
 export default async function AccountPage() {
   const supabase = await createClient();
+  const cookieStore = await cookies();
+  const weekStartDay = (Number(cookieStore.get("frt_week_start")?.value ?? "0") as 0 | 1);
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -23,6 +27,7 @@ export default async function AccountPage() {
         initialFirstName={firstName}
         initialLastName={lastName}
         initialEmail={email}
+        initialWeekStartDay={weekStartDay}
       />
     </main>
   );

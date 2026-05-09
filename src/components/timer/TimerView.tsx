@@ -63,6 +63,26 @@ export function TimerView({
   const [linePickEntry, setLinePickEntry] = useState<Entry | null>(null);
   const [preselectedLineId, setPreselectedLineId] = useState<string | null>(null);
 
+  // Restore selected line from localStorage when the attached RO is known
+  useEffect(() => {
+    if (!attachedEntry) return;
+    try {
+      const stored = localStorage.getItem("frt:timer_line_id");
+      if (stored && attachedEntry.opCodes.some((l) => l.id === stored)) {
+        setPreselectedLineId(stored);
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachedEntry?.id]);
+
+  function persistLineId(id: string | null) {
+    setPreselectedLineId(id);
+    try {
+      if (id) localStorage.setItem("frt:timer_line_id", id);
+      else localStorage.removeItem("frt:timer_line_id");
+    } catch { /* ignore */ }
+  }
+
   const libraryById = useMemo(
     () => new Map(library.map((oc) => [oc.id, oc])),
     [library],
@@ -121,6 +141,7 @@ export function TimerView({
   }
 
   function handleClearRo() {
+    persistLineId(null);
     run(() => setTimerRoAction(null));
   }
 
@@ -128,13 +149,13 @@ export function TimerView({
     if (entry.opCodes.length > 1) {
       setLinePickEntry(entry);
     } else {
-      setPreselectedLineId(entry.opCodes[0]?.id ?? null);
+      persistLineId(entry.opCodes[0]?.id ?? null);
       run(() => setTimerRoAction(entry.id));
     }
   }
 
   function handleLineConfirm(lineId: string, entry: Entry) {
-    setPreselectedLineId(lineId);
+    persistLineId(lineId);
     setLinePickEntry(null);
     if (entry.id !== attachedEntry?.id) {
       run(() => setTimerRoAction(entry.id));
@@ -144,9 +165,7 @@ export function TimerView({
   async function handleLogRoSave(input: NewEntry) {
     const saved = await saveEntry(input);
     await setTimerRoAction(saved.id);
-    setPreselectedLineId(
-      saved.opCodes.length === 1 ? (saved.opCodes[0]?.id ?? null) : null,
-    );
+    persistLineId(saved.opCodes.length === 1 ? (saved.opCodes[0]?.id ?? null) : null);
     setLogRoOpen(false);
   }
 

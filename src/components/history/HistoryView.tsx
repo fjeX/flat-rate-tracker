@@ -30,12 +30,13 @@ function getRange(
   kind: FilterKind,
   today: string,
   settings: UserSettings,
+  weekStartDay: 0 | 1,
 ): { start: string; end: string } | null {
   switch (kind) {
     case "today":
       return { start: today, end: today };
     case "week":
-      return { start: startOfWeek(today), end: endOfWeek(today) };
+      return { start: startOfWeek(today, weekStartDay), end: endOfWeek(today, weekStartDay) };
     case "period": {
       const p = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
       return { start: p.start, end: p.end };
@@ -118,6 +119,7 @@ export function HistoryView({
   weekEnd: weekEndProp,
   monthStart: monthStartProp,
   monthEnd: monthEndProp,
+  weekStartDay,
 }: {
   entries: Entry[];
   library: OpCode[];
@@ -129,12 +131,13 @@ export function HistoryView({
   weekEnd: string;
   monthStart: string;
   monthEnd: string;
+  weekStartDay: 0 | 1;
 }) {
   const [filter, setFilter] = useState<FilterKind>("period");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const range = getRange(filter, today, settings);
+  const range = getRange(filter, today, settings, weekStartDay);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

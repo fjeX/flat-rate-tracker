@@ -50,16 +50,18 @@ export function endOfMonth(date: string): string {
   return `${y}-${pad2(m)}-${pad2(daysInMonth(y, m))}`;
 }
 
-// "This Week" starts on Sunday (per handoff).
-export function startOfWeek(date: string): string {
+// weekStartDay: 0 = Sunday (default), 1 = Monday
+export function startOfWeek(date: string, weekStartDay: 0 | 1 = 0): string {
   const [y, m, d] = date.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() - dt.getDay());
+  const dow = dt.getDay(); // 0=Sun
+  const offset = weekStartDay === 0 ? dow : (dow === 0 ? 6 : dow - 1);
+  dt.setDate(dt.getDate() - offset);
   return isoDate(dt);
 }
 
-export function endOfWeek(date: string): string {
-  return addDays(startOfWeek(date), 6);
+export function endOfWeek(date: string, weekStartDay: 0 | 1 = 0): string {
+  return addDays(startOfWeek(date, weekStartDay), 6);
 }
 
 // ------------------------------------------------------------------------

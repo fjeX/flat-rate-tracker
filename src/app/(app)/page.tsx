@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import {
@@ -58,12 +59,14 @@ export default async function DashboardPage() {
 
   // Date ranges
   const today = isoDate();
+  const cookieStore = await cookies();
+  const weekStartDay = (Number(cookieStore.get("frt_week_start")?.value ?? "0") as 0 | 1);
   const settings = await db.getSettings(supabase);
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
   const monthStart = startOfMonth(today);
   const monthEnd = endOfMonth(today);
-  const weekStart = startOfWeek(today);
-  const weekEnd = endOfWeek(today);
+  const weekStart = startOfWeek(today, weekStartDay);
+  const weekEnd = endOfWeek(today, weekStartDay);
 
   const ninetyDaysAgo = isoDate(new Date(Date.now() - 90 * 86_400_000));
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
@@ -221,6 +224,7 @@ export default async function DashboardPage() {
           weekEnd={weekEnd}
           monthStart={monthStart}
           monthEnd={monthEnd}
+          weekStartDay={weekStartDay}
         />
 
       </div>

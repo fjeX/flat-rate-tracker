@@ -28,6 +28,7 @@ export default function GuestHistoryPage() {
       weekEnd={endOfWeek(today)}
       monthStart={startOfMonth(today)}
       monthEnd={endOfMonth(today)}
+      weekStartDay={0}
     />
   );
 }

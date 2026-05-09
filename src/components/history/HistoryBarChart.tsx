@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Entry } from "@/lib/types";
 import { addDays } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
@@ -204,6 +205,8 @@ export function HistoryBarChart({
   periodFlagHours,
   goalHours,
 }: Props) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
   const bars = buildBars(
     entries,
     filter,
@@ -254,6 +257,8 @@ export function HistoryBarChart({
   const LABEL_H = 14; // height reserved at bottom for date labels
   const TOP_PAD = 6;
   const CHART_H = SVG_H - LABEL_H - TOP_PAD;
+  const TOOLTIP_W = 56;
+  const TOOLTIP_H = 18;
   const n = bars.length;
 
   // Bar dimensions — cap bar width to keep them readable
@@ -309,8 +314,16 @@ export function HistoryBarChart({
             };
           }
 
+          const tooltipCenterX = x + barW / 2;
+          const tooltipX = Math.min(Math.max(tooltipCenterX - TOOLTIP_W / 2, 0), SVG_W - TOOLTIP_W);
+          const tooltipY = TOP_PAD - TOOLTIP_H - 4;
+
           return (
-            <g key={i}>
+            <g
+              key={i}
+              onMouseEnter={() => setHoveredIdx(i)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            >
               <rect
                 x={x}
                 y={y}
@@ -320,8 +333,8 @@ export function HistoryBarChart({
                 ry={3}
                 {...fillProps}
               />
-              {/* Hour value above bar for today or if it has hours */}
-              {bar.hours > 0 && bar.isToday && (
+              {/* Hour value above bar for today when not hovered */}
+              {bar.hours > 0 && bar.isToday && hoveredIdx !== i && (
                 <text
                   x={x + barW / 2}
                   y={y - 2}
@@ -332,6 +345,31 @@ export function HistoryBarChart({
                 >
                   {fmtHours(bar.hours)}
                 </text>
+              )}
+              {/* Hover tooltip */}
+              {hoveredIdx === i && (
+                <>
+                  <rect
+                    x={tooltipX}
+                    y={tooltipY}
+                    width={TOOLTIP_W}
+                    height={TOOLTIP_H}
+                    rx={4}
+                    fill="var(--bg-3)"
+                    stroke="var(--line)"
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={tooltipX + TOOLTIP_W / 2}
+                    y={tooltipY + TOOLTIP_H / 2 + 3.5}
+                    textAnchor="middle"
+                    fontSize={9}
+                    fill="var(--fg-0)"
+                    fontWeight={bar.isToday ? 600 : 400}
+                  >
+                    {bar.label}: {fmtHours(bar.hours)}h
+                  </text>
+                </>
               )}
             </g>
           );
@@ -383,7 +421,7 @@ export function HistoryBarChart({
                 fontSize="7.5"
                 fill="var(--brand)"
               >
-                today
+                Today
               </text>
             )}
           </>

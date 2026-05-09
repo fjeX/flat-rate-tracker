@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { updateProfile, updateEmail, updatePassword } from "@/app/actions/account";
+import { setWeekStartDayAction } from "@/app/actions/settings";
 
 interface Props {
   initialFirstName: string;
   initialLastName: string;
   initialEmail: string;
+  initialWeekStartDay: 0 | 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -30,7 +33,9 @@ function Feedback({ error, message }: { error?: string; message?: string }) {
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
-export function AccountView({ initialFirstName, initialLastName, initialEmail }: Props) {
+export function AccountView({ initialFirstName, initialLastName, initialEmail, initialWeekStartDay }: Props) {
+  const router = useRouter();
+
   // Profile
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
@@ -51,6 +56,10 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail }:
   // Theme
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
+  // Week start preference
+  const [weekStartDay, setWeekStartDay] = useState<0 | 1>(initialWeekStartDay);
+  const [weekPending, startWeekTransition] = useTransition();
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem("theme");
@@ -59,6 +68,14 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail }:
       // localStorage not available (SSR or private mode)
     }
   }, []);
+
+  function handleWeekStartDay(next: 0 | 1) {
+    setWeekStartDay(next);
+    startWeekTransition(async () => {
+      await setWeekStartDayAction(next);
+      router.refresh();
+    });
+  }
 
   function applyTheme(next: "dark" | "light") {
     setTheme(next);
@@ -264,6 +281,49 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail }:
             </div>
             <Feedback {...passwordResult} />
           </form>
+        </div>
+      </section>
+
+      {/* ── Preferences ──────────────────────────────────────── */}
+      <section>
+        <div className="section-title">Preferences</div>
+        <div className="card padded-lg">
+          <p className="field-label" style={{ marginBottom: 12 }}>
+            Week Starts On
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={weekPending}
+              onClick={() => handleWeekStartDay(0)}
+              style={{
+                borderColor: weekStartDay === 0 ? "var(--brand)" : "var(--line)",
+                background: weekStartDay === 0 ? "var(--brand-bg)" : "var(--bg-3)",
+                color: weekStartDay === 0 ? "var(--brand)" : "var(--fg-2)",
+                fontWeight: weekStartDay === 0 ? 600 : 400,
+              }}
+            >
+              Sunday
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={weekPending}
+              onClick={() => handleWeekStartDay(1)}
+              style={{
+                borderColor: weekStartDay === 1 ? "var(--brand)" : "var(--line)",
+                background: weekStartDay === 1 ? "var(--brand-bg)" : "var(--bg-3)",
+                color: weekStartDay === 1 ? "var(--brand)" : "var(--fg-2)",
+                fontWeight: weekStartDay === 1 ? 600 : 400,
+              }}
+            >
+              Monday
+            </button>
+          </div>
+          <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--fg-3)" }}>
+            Affects the Week view in History and the Averages chart.
+          </p>
         </div>
       </section>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Entry } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { getPeriodForDate, addDays } from "@/lib/periods";
@@ -15,6 +15,7 @@ type BarData = {
   label: string;
   value: number; // avg flag hours
   isBest: boolean;
+  isCurrent: boolean; // today / this week / this period / this month
 };
 
 type Props = {
@@ -26,6 +27,7 @@ type Props = {
   weekEnd: string;
   monthStart: string;
   monthEnd: string;
+  weekStartDay: 0 | 1;
 };
 
 // ---------------------------------------------------------------------------
@@ -62,37 +64,59 @@ function dateAtOffset(windowStart: string, offset: number): string {
 // Per-tab data computation
 // ---------------------------------------------------------------------------
 
-function computeDay(entries: Entry[], windowStart: string, windowEnd: string): BarData[] {
-  // Total flag hours per day-of-week, and count of distinct calendar days with that dow
-  const totalByDow: number[] = new Array(7).fill(0);
-  const countByDow: number[] = new Array(7).fill(0);
+function computeDay(
+  entries: Entry[],
+  windowStart: string,
+  windowEnd: string,
+  today: string,
+  avgMode: "all" | "worked",
+  weekStartDay: 0 | 1,
+): BarData[] {
+  const displayOrder = weekStartDay === 0
+    ? [0, 1, 2, 3, 4, 5, 6]   // Sun-first
+    : [1, 2, 3, 4, 5, 6, 0];  // Mon-first
+  const labels = weekStartDay === 0
+    ? ["S", "M", "T", "W", "T", "F", "S"]
+    : ["M", "T", "W", "T", "F", "S", "S"];
 
-  // Count calendar days in window for each dow
+  const totalByDow: number[] = new Array(7).fill(0);
+  const countByDow: number[] = new Array(7).fill(0);   // calendar days
+  const workedByDow: number[] = new Array(7).fill(0);  // distinct dates with entries
+
+  const workedDates = new Set<string>();
+  for (const entry of entries) {
+    if (entry.date < windowStart || entry.date > windowEnd) continue;
+    workedDates.add(entry.date);
+  }
+
   const totalDays = daysBetweenInclusive(windowStart, windowEnd);
   for (let i = 0; i < totalDays; i++) {
     const d = dateAtOffset(windowStart, i);
     const jsDay = new Date(d + "T00:00:00").getDay();
     countByDow[jsDay]++;
+    if (workedDates.has(d)) workedByDow[jsDay]++;
   }
 
-  // Sum flag hours per entry into that entry's day-of-week bucket
   for (const entry of entries) {
     if (entry.date < windowStart || entry.date > windowEnd) continue;
     const jsDay = new Date(entry.date + "T00:00:00").getDay();
     totalByDow[jsDay] += entry.flagHours;
   }
 
+  const divisor = avgMode === "worked" ? workedByDow : countByDow;
   const avgByDow = totalByDow.map((total, dow) =>
-    countByDow[dow] > 0 ? total / countByDow[dow] : 0
+    divisor[dow] > 0 ? total / divisor[dow] : 0
   );
 
-  const bars: BarData[] = DISPLAY_DAY_ORDER.map((dow, idx) => ({
-    label: DAY_LABELS[idx],
+  const todayDow = new Date(today + "T00:00:00").getDay();
+
+  const bars: BarData[] = displayOrder.map((dow, idx) => ({
+    label: labels[idx],
     value: avgByDow[dow],
     isBest: false,
+    isCurrent: dow === todayDow,
   }));
 
-  // Mark best (highest avg)
   const maxVal = Math.max(...bars.map((b) => b.value));
   if (maxVal > 0) {
     for (const bar of bars) {
@@ -106,25 +130,28 @@ function computeDay(entries: Entry[], windowStart: string, windowEnd: string): B
   return bars;
 }
 
-function computeWeek(entries: Entry[], windowStart: string, windowEnd: string): BarData[] {
-  // Group entries by the Monday of their ISO week
+function getWeekStart(date: string, weekStartDay: 0 | 1): string {
+  const dow = new Date(date + "T00:00:00").getDay(); // 0=Sun
+  const offset = weekStartDay === 0 ? dow : (dow === 0 ? 6 : dow - 1);
+  return addDays(date, -offset);
+}
+
+function computeWeek(
+  entries: Entry[],
+  windowStart: string,
+  windowEnd: string,
+  today: string,
+  weekStartDay: 0 | 1,
+): BarData[] {
   const weekTotals = new Map<string, number>();
   const weekSet = new Set<string>();
 
-  // Enumerate all week-starts in the window
-  let cursor = windowStart;
-  // Find the Monday on or before windowStart
-  const startDate = new Date(windowStart + "T00:00:00");
-  const startDow = startDate.getDay(); // 0=Sun
-  // Days to subtract to get to Monday
-  const offsetToMon = startDow === 0 ? 6 : startDow - 1;
-  const firstMonday = addDays(windowStart, -offsetToMon);
+  const firstWeekStart = getWeekStart(windowStart, weekStartDay);
 
-  cursor = firstMonday;
+  let cursor = firstWeekStart;
   while (cursor <= windowEnd) {
-    // Only include week-starts that overlap with the window
-    const weekEnd = addDays(cursor, 6);
-    if (weekEnd >= windowStart) {
+    const wEnd = addDays(cursor, 6);
+    if (wEnd >= windowStart) {
       weekSet.add(cursor);
       if (!weekTotals.has(cursor)) weekTotals.set(cursor, 0);
     }
@@ -133,21 +160,19 @@ function computeWeek(entries: Entry[], windowStart: string, windowEnd: string): 
 
   for (const entry of entries) {
     if (entry.date < windowStart || entry.date > windowEnd) continue;
-    const dow = new Date(entry.date + "T00:00:00").getDay();
-    const offsetToMon2 = dow === 0 ? 6 : dow - 1;
-    const monday = addDays(entry.date, -offsetToMon2);
-    const prev = weekTotals.get(monday) ?? 0;
-    weekTotals.set(monday, prev + entry.flagHours);
+    const ws = getWeekStart(entry.date, weekStartDay);
+    weekTotals.set(ws, (weekTotals.get(ws) ?? 0) + entry.flagHours);
   }
 
-  // Sort weeks chronologically and build bars
+  const currentWeekStart = getWeekStart(today, weekStartDay);
   const sortedWeeks = Array.from(weekSet).sort();
-  const bars: BarData[] = sortedWeeks.map((weekStart2) => {
-    const [, m2, d2] = weekStart2.split("-").map(Number);
+  const bars: BarData[] = sortedWeeks.map((ws) => {
+    const [, m2, d2] = ws.split("-").map(Number);
     return {
       label: `${MONTHS_SHORT[m2 - 1]} ${d2}`,
-      value: weekTotals.get(weekStart2) ?? 0,
+      value: weekTotals.get(ws) ?? 0,
       isBest: false,
+      isCurrent: ws === currentWeekStart,
     };
   });
 
@@ -164,8 +189,13 @@ function computeWeek(entries: Entry[], windowStart: string, windowEnd: string): 
   return bars;
 }
 
-function computePeriod(entries: Entry[], windowStart: string, windowEnd: string, splitDay: number): BarData[] {
-  // Group entries by pay period key
+function computePeriod(
+  entries: Entry[],
+  windowStart: string,
+  windowEnd: string,
+  splitDay: number,
+  today: string,
+): BarData[] {
   const periodTotals = new Map<string, { total: number; start: string; end: string }>();
 
   for (const entry of entries) {
@@ -179,30 +209,27 @@ function computePeriod(entries: Entry[], windowStart: string, windowEnd: string,
     }
   }
 
-  // Also enumerate periods in the window that may have no entries
   let cursor = windowStart;
   while (cursor <= windowEnd) {
     const period = getPeriodForDate(cursor, splitDay, {});
     if (!periodTotals.has(period.key)) {
       periodTotals.set(period.key, { total: 0, start: period.start, end: period.end });
     }
-    // Move to next period (end + 1 day)
     cursor = addDays(period.end, 1);
-    if (cursor <= windowStart) {
-      // Protect against infinite loop
-      cursor = addDays(cursor, 1);
-    }
+    if (cursor <= windowStart) cursor = addDays(cursor, 1);
   }
 
+  const currentPeriod = getPeriodForDate(today, splitDay, {});
   const sorted = Array.from(periodTotals.entries())
     .sort(([, a], [, b]) => a.start.localeCompare(b.start));
 
-  const bars: BarData[] = sorted.map(([, { total, start }]) => {
+  const bars: BarData[] = sorted.map(([key, { total, start }]) => {
     const [, m, d] = start.split("-").map(Number);
     return {
       label: `${MONTHS_SHORT[m - 1]} ${d}`,
       value: total,
       isBest: false,
+      isCurrent: key === currentPeriod.key,
     };
   });
 
@@ -219,10 +246,16 @@ function computePeriod(entries: Entry[], windowStart: string, windowEnd: string,
   return bars;
 }
 
-function computeMonth(entries: Entry[], windowStart: string, windowEnd: string): BarData[] {
+function computeMonth(
+  entries: Entry[],
+  windowStart: string,
+  windowEnd: string,
+  today: string,
+  avgMode: "all" | "worked",
+): BarData[] {
   const monthTotals = new Map<string, number>();
+  const workedDaysByMonth = new Map<string, Set<string>>();
 
-  // Enumerate all months in window
   const [startYear, startMonth] = windowStart.split("-").map(Number);
   const [endYear, endMonth] = windowEnd.split("-").map(Number);
 
@@ -237,20 +270,25 @@ function computeMonth(entries: Entry[], windowStart: string, windowEnd: string):
 
   for (const entry of entries) {
     if (entry.date < windowStart || entry.date > windowEnd) continue;
-    const key = entry.date.substring(0, 7); // "YYYY-MM"
-    const prev = monthTotals.get(key) ?? 0;
-    monthTotals.set(key, prev + entry.flagHours);
+    const key = entry.date.substring(0, 7);
+    monthTotals.set(key, (monthTotals.get(key) ?? 0) + entry.flagHours);
+    if (!workedDaysByMonth.has(key)) workedDaysByMonth.set(key, new Set());
+    workedDaysByMonth.get(key)!.add(entry.date);
   }
 
+  const currentMonth = today.substring(0, 7);
   const sorted = Array.from(monthTotals.entries()).sort(([a], [b]) => a.localeCompare(b));
 
   const bars: BarData[] = sorted.map(([key, total]) => {
     const [y2, m2] = key.split("-").map(Number);
-    const days = daysInMonth(y2, m2);
+    const divisor = avgMode === "worked"
+      ? (workedDaysByMonth.get(key)?.size ?? 0)
+      : daysInMonth(y2, m2);
     return {
       label: MONTHS_SHORT[m2 - 1],
-      value: total / days,
+      value: divisor > 0 ? total / divisor : 0,
       isBest: false,
+      isCurrent: key === currentMonth,
     };
   });
 
@@ -405,7 +443,7 @@ function BarChart({ bars }: { bars: BarData[] }) {
   const showAllLabels = count <= 8;
   const seenMonths = new Set<string>();
   const labelVisible = bars.map((bar) => {
-    if (bar.isBest) return true;
+    if (bar.isCurrent || bar.isBest) return true;
     const month = bar.label.split(" ")[0];
     if (!seenMonths.has(month)) { seenMonths.add(month); return true; }
     return false;
@@ -444,9 +482,9 @@ function BarChart({ bars }: { bars: BarData[] }) {
               width={barW}
               height={barH}
               rx={3}
-              fill={bar.isBest ? "var(--brand)" : "var(--bg-4)"}
+              fill={bar.isCurrent ? "var(--brand)" : "var(--bg-4)"}
               style={
-                bar.isBest
+                bar.isCurrent
                   ? { filter: "drop-shadow(0 0 6px oklch(0.65 0.18 50 / 0.40))" }
                   : undefined
               }
@@ -457,8 +495,8 @@ function BarChart({ bars }: { bars: BarData[] }) {
                 y={CHART_H - 1}
                 textAnchor="middle"
                 fontSize={9}
-                fill={bar.isBest ? "var(--brand)" : "var(--fg-3)"}
-                fontWeight={bar.isBest ? 600 : 400}
+                fill={bar.isCurrent ? "var(--brand)" : "var(--fg-3)"}
+                fontWeight={bar.isCurrent ? 600 : 400}
               >
                 {bar.label}
               </text>
@@ -481,7 +519,7 @@ function BarChart({ bars }: { bars: BarData[] }) {
                   textAnchor="middle"
                   fontSize={9}
                   fill="var(--fg-0)"
-                  fontWeight={bar.isBest ? 600 : 400}
+                  fontWeight={bar.isCurrent ? 600 : 400}
                 >
                   {bar.label}: {fmtHours(bar.value)}h
                 </text>
@@ -519,11 +557,25 @@ export function AveragesChart({
   weekEnd,
   monthStart,
   monthEnd,
+  weekStartDay,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("day");
+  const [avgMode, setAvgMode] = useState<"all" | "worked">("worked");
+  const [showInfo, setShowInfo] = useState(false);
 
-  // 90-day window (the entries passed in cover this)
-  const ninetyDaysAgo = addDays(today, -89); // inclusive 90-day window
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("frt:avg_mode");
+      if (stored === "all" || stored === "worked") setAvgMode(stored);
+    } catch { /* ignore */ }
+  }, []);
+
+  function toggleAvgMode(next: "all" | "worked") {
+    setAvgMode(next);
+    try { localStorage.setItem("frt:avg_mode", next); } catch { /* ignore */ }
+  }
+
+  const ninetyDaysAgo = addDays(today, -89);
   const windowStart = ninetyDaysAgo;
   const windowEnd = today;
 
@@ -532,13 +584,13 @@ export function AveragesChart({
   const bars: BarData[] = (() => {
     switch (activeTab) {
       case "day":
-        return computeDay(entries, windowStart, windowEnd);
+        return computeDay(entries, windowStart, windowEnd, today, avgMode, weekStartDay);
       case "week":
-        return computeWeek(entries, windowStart, windowEnd);
+        return computeWeek(entries, windowStart, windowEnd, today, weekStartDay);
       case "period":
-        return computePeriod(entries, windowStart, windowEnd, splitDay);
+        return computePeriod(entries, windowStart, windowEnd, splitDay, today);
       case "month":
-        return computeMonth(entries, windowStart, windowEnd);
+        return computeMonth(entries, windowStart, windowEnd, today, avgMode);
     }
   })();
 
@@ -551,6 +603,20 @@ export function AveragesChart({
     { id: "period", label: "Period" },
     { id: "month", label: "Month" },
   ];
+
+  const showModeToggle = activeTab === "day" || activeTab === "month";
+
+  const infoText = activeTab === "day"
+    ? avgMode === "worked"
+      ? "Average flag hours per day of the week — only counting days you actually worked."
+      : "Average flag hours per day of the week — spread across all calendar days in the last 90 days."
+    : activeTab === "month"
+    ? avgMode === "worked"
+      ? "Average flag hours per day you worked, grouped by month."
+      : "Average flag hours per calendar day of each month (total ÷ days in month)."
+    : activeTab === "week"
+    ? "Total flag hours per calendar week."
+    : "Total flag hours per pay period.";
 
   return (
     <>
@@ -570,6 +636,113 @@ export function AveragesChart({
               </button>
             ))}
           </div>
+
+          {/* Mode toggle + info — only on day/month tabs */}
+          {showModeToggle && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => toggleAvgMode("worked")}
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 8px",
+                    borderRadius: 20,
+                    border: "1px solid",
+                    cursor: "pointer",
+                    borderColor: avgMode === "worked" ? "var(--brand)" : "var(--line)",
+                    background: avgMode === "worked" ? "var(--brand-bg)" : "var(--bg-3)",
+                    color: avgMode === "worked" ? "var(--brand)" : "var(--fg-3)",
+                    fontWeight: avgMode === "worked" ? 600 : 400,
+                  }}
+                >
+                  Worked days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleAvgMode("all")}
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 8px",
+                    borderRadius: 20,
+                    border: "1px solid",
+                    cursor: "pointer",
+                    borderColor: avgMode === "all" ? "var(--brand)" : "var(--line)",
+                    background: avgMode === "all" ? "var(--brand-bg)" : "var(--bg-3)",
+                    color: avgMode === "all" ? "var(--brand)" : "var(--fg-3)",
+                    fontWeight: avgMode === "all" ? 600 : 400,
+                  }}
+                >
+                  All days
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInfo((v) => !v)}
+                aria-label="How is this calculated?"
+                style={{
+                  fontSize: 11,
+                  width: 16,
+                  height: 16,
+                  borderRadius: "50%",
+                  border: "1px solid var(--line)",
+                  background: showInfo ? "var(--brand-bg)" : "var(--bg-3)",
+                  color: showInfo ? "var(--brand)" : "var(--fg-3)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  lineHeight: 1,
+                  padding: 0,
+                  flexShrink: 0,
+                }}
+              >
+                i
+              </button>
+            </div>
+          )}
+          {!showModeToggle && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+              <button
+                type="button"
+                onClick={() => setShowInfo((v) => !v)}
+                aria-label="How is this calculated?"
+                style={{
+                  fontSize: 11,
+                  width: 16,
+                  height: 16,
+                  borderRadius: "50%",
+                  border: "1px solid var(--line)",
+                  background: showInfo ? "var(--brand-bg)" : "var(--bg-3)",
+                  color: showInfo ? "var(--brand)" : "var(--fg-3)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  lineHeight: 1,
+                  padding: 0,
+                }}
+              >
+                i
+              </button>
+            </div>
+          )}
+
+          {/* Info tooltip */}
+          {showInfo && (
+            <p style={{
+              margin: "0 0 8px",
+              fontSize: 11.5,
+              color: "var(--fg-2)",
+              lineHeight: 1.5,
+              padding: "6px 10px",
+              background: "var(--bg-3)",
+              borderRadius: 6,
+              border: "1px solid var(--line-soft)",
+            }}>
+              {infoText}
+            </p>
+          )}
 
           {/* Bar chart */}
           <div style={{ padding: "2px 0 4px" }}>

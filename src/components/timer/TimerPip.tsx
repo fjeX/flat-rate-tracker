@@ -25,15 +25,15 @@ function formatElapsed(ms: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function getFirstLineLabel(entry: Entry, library: OpCode[]): string {
-  const first = entry.opCodes[0];
-  if (!first) return "";
+function getLineLabel(entry: Entry, library: OpCode[], lineId: string | null): string {
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
-  if (first.custom) {
-    const parts = [first.customCode?.trim(), first.customDescription?.trim()].filter(Boolean);
+  const line = (lineId ? entry.opCodes.find((l) => l.id === lineId) : null) ?? entry.opCodes[0];
+  if (!line) return "";
+  if (line.custom) {
+    const parts = [line.customCode?.trim(), line.customDescription?.trim()].filter(Boolean);
     return parts.join(" · ");
   }
-  const ref = first.opCodeId ? libraryById.get(first.opCodeId) : undefined;
+  const ref = line.opCodeId ? libraryById.get(line.opCodeId) : undefined;
   return [ref?.code, ref?.description].filter(Boolean).join(" · ");
 }
 
@@ -52,6 +52,13 @@ export function TimerPip({
   const [saveOpen, setSaveOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [pending, startPending] = useTransition();
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      setSelectedLineId(localStorage.getItem("frt:timer_line_id"));
+    } catch { /* ignore */ }
+  }, []);
   // null = default bottom-center CSS positioning; set after first drag
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -167,6 +174,7 @@ export function TimerPip({
             elapsedMs={elapsedMs}
             attachedEntry={attachedEntry}
             library={library}
+            selectedLineId={selectedLineId}
             pending={pending}
             onMinimize={() => setExpanded(false)}
             onPause={() => run(() => pauseTimerAction())}
@@ -252,6 +260,7 @@ function ExpandedCard({
   elapsedMs,
   attachedEntry,
   library,
+  selectedLineId,
   pending,
   onMinimize,
   onPause,
@@ -264,6 +273,7 @@ function ExpandedCard({
   elapsedMs: number;
   attachedEntry: Entry | null;
   library: OpCode[];
+  selectedLineId: string | null;
   pending: boolean;
   onMinimize: () => void;
   onPause: () => void;
@@ -271,7 +281,7 @@ function ExpandedCard({
   onReset: () => void;
   onSave: () => void;
 }) {
-  const lineLabel = attachedEntry ? getFirstLineLabel(attachedEntry, library) : "";
+  const lineLabel = attachedEntry ? getLineLabel(attachedEntry, library, selectedLineId) : "";
 
   return (
     <div className="w-72 rounded-3xl p-4">

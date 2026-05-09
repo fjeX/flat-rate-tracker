@@ -1,5 +1,6 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
@@ -73,6 +74,17 @@ export async function setSplitDayAction(splitDay: number): Promise<void> {
   await db.updateSettings(supabase, { splitDay });
   revalidatePeriodScreens();
   revalidatePath("/settings");
+}
+
+export async function setWeekStartDayAction(day: 0 | 1): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set("frt_week_start", String(day), {
+    maxAge: 60 * 60 * 24 * 365,
+    path: "/",
+    sameSite: "lax",
+    httpOnly: false,
+  });
+  revalidatePath("/", "layout");
 }
 
 // ---------------------------------------------------------------------------
