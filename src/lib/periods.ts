@@ -24,6 +24,22 @@ export function isoDate(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+// Like isoDate() but converts to a specific IANA timezone first.
+// Fixes the day-rollover bug where the server (UTC) thinks "today" is different
+// from what the user's local clock shows.
+export function isoDateInTz(tz: string, d: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+  } catch {
+    return isoDate(d);
+  }
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }

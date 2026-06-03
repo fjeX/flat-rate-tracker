@@ -8,6 +8,7 @@ import {
   formatPeriodLabel,
   getPeriodForDate,
   isoDate,
+  isoDateInTz,
   startOfMonth,
   startOfWeek,
 } from "@/lib/periods";
@@ -58,8 +59,9 @@ export default async function DashboardPage() {
   const displayName = firstName?.trim() || email.split("@")[0] || "there";
 
   // Date ranges
-  const today = isoDate();
   const cookieStore = await cookies();
+  const tz = cookieStore.get("frt_timezone")?.value;
+  const today = tz ? isoDateInTz(tz) : isoDate();
   const weekStartDay = (Number(cookieStore.get("frt_week_start")?.value ?? "0") as 0 | 1);
   const settings = await db.getSettings(supabase);
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
@@ -68,7 +70,9 @@ export default async function DashboardPage() {
   const weekStart = startOfWeek(today, weekStartDay);
   const weekEnd = endOfWeek(today, weekStartDay);
 
-  const ninetyDaysAgo = isoDate(new Date(Date.now() - 90 * 86_400_000));
+  const ninetyDaysAgo = tz
+    ? isoDateInTz(tz, new Date(Date.now() - 90 * 86_400_000))
+    : isoDate(new Date(Date.now() - 90 * 86_400_000));
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
   const [entries, clocks, library] = await Promise.all([
@@ -174,6 +178,7 @@ export default async function DashboardPage() {
             date={today}
             stats={statsToday}
             initialHours={todaysClock?.hours ?? 0}
+            library={library}
           />
           <StatCard label="This Week"      stats={statsWeek} />
           <StatCard label="Pay Period"     stats={statsPeriod} />
@@ -228,6 +233,7 @@ export default async function DashboardPage() {
         />
 
       </div>
+
     </main>
   );
 }

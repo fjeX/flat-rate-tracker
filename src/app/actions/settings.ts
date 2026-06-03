@@ -87,6 +87,22 @@ export async function setWeekStartDayAction(day: 0 | 1): Promise<void> {
   revalidatePath("/", "layout");
 }
 
+export async function setTimezoneAction(tz: string): Promise<void> {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+  } catch {
+    throw new Error("Invalid timezone.");
+  }
+  const cookieStore = await cookies();
+  cookieStore.set("frt_timezone", tz, {
+    maxAge: 60 * 60 * 24 * 365 * 10,
+    path: "/",
+    sameSite: "lax",
+    httpOnly: false,
+  });
+  revalidatePath("/", "layout");
+}
+
 // ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------

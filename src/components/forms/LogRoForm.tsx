@@ -84,6 +84,7 @@ export function LogRoForm({
   const [notesOpen, setNotesOpen] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  const [savedRoNumber, setSavedRoNumber] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
 
   const roInputRef = useRef<HTMLInputElement>(null);
@@ -266,7 +267,23 @@ export function LogRoForm({
   // outer <form> would capture their submit events and trigger a save.
   // We trigger save via the explicit Save button's onClick instead.
 
-  function handleSave() {
+  function resetForm() {
+    setDate(isoDate());
+    setRoNumber("");
+    setYear("");
+    if (!autoFill) setMake("");
+    setModel("");
+    setVin("");
+    setMileage("");
+    setNotes("");
+    setLines([]);
+    setError(null);
+    setVehicleOpen(false);
+    setNotesOpen(false);
+    setTimeout(() => roInputRef.current?.focus(), 50);
+  }
+
+  function handleSave(afterSave?: () => void) {
     setError(null);
     startTransition(async () => {
       try {
@@ -297,10 +314,23 @@ export function LogRoForm({
         } else {
           await saveEntry(input, existingEntry?.id);
         }
-        router.push(redirectTo);
+        if (afterSave) {
+          afterSave();
+        } else {
+          router.push(redirectTo);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save.");
       }
+    });
+  }
+
+  function handleSaveAndNew() {
+    const savedRo = roNumber.trim();
+    handleSave(() => {
+      setSavedRoNumber(savedRo);
+      resetForm();
+      setTimeout(() => setSavedRoNumber(null), 3500);
     });
   }
 
@@ -309,6 +339,21 @@ export function LogRoForm({
 
   return (
     <div className="mx-auto max-w-xl p-4 pb-32">
+
+      {/* ---- Save & New confirmation ---- */}
+      {savedRoNumber && (
+        <div style={{
+          borderRadius: 8,
+          border: "1px solid color-mix(in oklab, var(--good) 40%, transparent)",
+          background: "color-mix(in oklab, var(--good) 10%, transparent)",
+          padding: "8px 12px",
+          fontSize: 13,
+          color: "var(--good)",
+          marginBottom: 12,
+        }}>
+          RO #{savedRoNumber} saved ✓
+        </div>
+      )}
 
       {/* ---- Section title ---- */}
       <div className="section-title" style={{ marginBottom: 16 }}>
@@ -762,9 +807,19 @@ export function LogRoForm({
               Cancel
             </Link>
           )}
+          {!isEdit && (
+            <button
+              type="button"
+              onClick={handleSaveAndNew}
+              disabled={isSubmitting}
+              className="btn btn-ghost btn-sm"
+            >
+              Save & New
+            </button>
+          )}
           <button
             type="button"
-            onClick={handleSave}
+            onClick={() => handleSave()}
             disabled={isSubmitting}
             className="btn btn-primary btn-sm"
           >
