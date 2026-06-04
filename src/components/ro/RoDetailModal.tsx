@@ -108,6 +108,29 @@ export function RoDetailModal({
 
 // ------------------------------------------------------------------------
 
+const DESC_CHAR_LIMIT = 80;
+
+function ExpandableDescription({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  if (text.length <= DESC_CHAR_LIMIT) {
+    return <div className="text-xs text-zinc-500">{text}</div>;
+  }
+  return (
+    <div className="text-xs text-zinc-500">
+      {expanded ? text : text.slice(0, DESC_CHAR_LIMIT) + "…"}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+        className="ml-1 text-orange-400 hover:text-orange-300 focus:outline-none"
+      >
+        {expanded ? "less" : "more"}
+      </button>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------------
+
 function VehicleLine({
   year,
   make,
@@ -225,9 +248,7 @@ function LineRow({
               Other
             </span>
           )}
-          {description && (
-            <div className="truncate text-xs text-zinc-500">{description}</div>
-          )}
+          {description && <ExpandableDescription text={description} />}
         </div>
         <div className="w-16 text-right font-mono text-sm">
           {fmtHours(line.flagHours)}

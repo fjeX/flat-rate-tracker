@@ -15,6 +15,8 @@ import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { HistoryBarChart } from "./HistoryBarChart";
 
 type FilterKind = "today" | "week" | "period" | "month" | "all";
+type SortKind = "date" | "hours" | "ro_number";
+type SortDir = "desc" | "asc";
 
 const CHIPS: { kind: FilterKind; label: string }[] = [
   { kind: "today",  label: "Today" },
@@ -22,6 +24,12 @@ const CHIPS: { kind: FilterKind; label: string }[] = [
   { kind: "period", label: "Period" },
   { kind: "month",  label: "Month" },
   { kind: "all",    label: "All" },
+];
+
+const SORT_CHIPS: { kind: SortKind; label: string }[] = [
+  { kind: "date",      label: "Date" },
+  { kind: "hours",     label: "Hours" },
+  { kind: "ro_number", label: "RO #" },
 ];
 
 const GOAL_HOURS = 88;
@@ -134,8 +142,19 @@ export function HistoryView({
   weekStartDay: 0 | 1;
 }) {
   const [filter, setFilter] = useState<FilterKind>("period");
+  const [sortBy, setSortBy] = useState<SortKind>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+
+  function handleSortClick(kind: SortKind) {
+    if (sortBy === kind) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortBy(kind);
+      setSortDir("desc");
+    }
+  }
 
   const range = getRange(filter, today, settings, weekStartDay);
 
@@ -153,8 +172,18 @@ export function HistoryView({
         }
         return true;
       })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [entries, range, search]);
+      .sort((a, b) => {
+        let cmp = 0;
+        if (sortBy === "date") {
+          cmp = a.createdAt.localeCompare(b.createdAt);
+        } else if (sortBy === "hours") {
+          cmp = a.flagHours - b.flagHours;
+        } else if (sortBy === "ro_number") {
+          cmp = a.roNumber.localeCompare(b.roNumber, undefined, { numeric: true });
+        }
+        return sortDir === "desc" ? -cmp : cmp;
+      });
+  }, [entries, range, search, sortBy, sortDir]);
 
   // Period flag hours for the chart header
   const periodFlagHours = useMemo(
@@ -187,6 +216,27 @@ export function HistoryView({
             {chip.label}
           </button>
         ))}
+      </div>
+
+      {/* Sort chips */}
+      <div className="filter-row" style={{ marginTop: 6 }}>
+        <span style={{ fontSize: 12, color: "var(--fg-3)", fontWeight: 500, alignSelf: "center", flexShrink: 0 }}>
+          Sort By:
+        </span>
+        {SORT_CHIPS.map((chip) => {
+          const active = sortBy === chip.kind;
+          const arrow = active ? (sortDir === "desc" ? " ↓" : " ↑") : "";
+          return (
+            <button
+              key={chip.kind}
+              type="button"
+              onClick={() => handleSortClick(chip.kind)}
+              className={`filter-chip${active ? " active" : ""}`}
+            >
+              {chip.label}{arrow}
+            </button>
+          );
+        })}
       </div>
 
       {/* Bar chart */}

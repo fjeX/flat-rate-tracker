@@ -155,7 +155,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
                   name="first_name"
                   type="text"
                   className="input"
-                  placeholder="Liem"
+                  placeholder="John"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   autoComplete="given-name"
@@ -170,7 +170,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
                   name="last_name"
                   type="text"
                   className="input"
-                  placeholder="Nguyen"
+                  placeholder="Smith"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   autoComplete="family-name"
