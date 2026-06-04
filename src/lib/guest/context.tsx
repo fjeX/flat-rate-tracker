@@ -24,12 +24,12 @@ const defaultSettings: UserSettings = {
 };
 
 export const GUEST_SAMPLE_OPCODES: OpCode[] = [
-  { id: "g-1", userId: "guest", code: "100-1", description: "Engine Oil & Filter Change", flagHours: 0.3, notes: "", sortOrder: 0, createdAt: "" },
-  { id: "g-2", userId: "guest", code: "600-5", description: "Brake Pads & Rotors — Front", flagHours: 1.8, notes: "", sortOrder: 1, createdAt: "" },
-  { id: "g-3", userId: "guest", code: "600-6", description: "Brake Pads & Rotors — Rear", flagHours: 1.5, notes: "", sortOrder: 2, createdAt: "" },
-  { id: "g-4", userId: "guest", code: "320-1", description: "Coolant System Flush", flagHours: 0.8, notes: "", sortOrder: 3, createdAt: "" },
-  { id: "g-5", userId: "guest", code: "440-2", description: "A/C Recharge & Inspection", flagHours: 1.0, notes: "", sortOrder: 4, createdAt: "" },
-  { id: "g-6", userId: "guest", code: "401-3", description: "Transmission Fluid Change", flagHours: 1.2, notes: "", sortOrder: 5, createdAt: "" },
+  { id: "g-1", userId: "guest", code: "100-1", description: "Engine Oil & Filter Change", flagHours: 0.3, notes: "", sortOrder: 0, createdAt: "", subOpCodes: [] },
+  { id: "g-2", userId: "guest", code: "600-5", description: "Brake Pads & Rotors — Front", flagHours: 1.8, notes: "", sortOrder: 1, createdAt: "", subOpCodes: [] },
+  { id: "g-3", userId: "guest", code: "600-6", description: "Brake Pads & Rotors — Rear", flagHours: 1.5, notes: "", sortOrder: 2, createdAt: "", subOpCodes: [] },
+  { id: "g-4", userId: "guest", code: "320-1", description: "Coolant System Flush", flagHours: 0.8, notes: "", sortOrder: 3, createdAt: "", subOpCodes: [] },
+  { id: "g-5", userId: "guest", code: "440-2", description: "A/C Recharge & Inspection", flagHours: 1.0, notes: "", sortOrder: 4, createdAt: "", subOpCodes: [] },
+  { id: "g-6", userId: "guest", code: "401-3", description: "Transmission Fluid Change", flagHours: 1.2, notes: "", sortOrder: 5, createdAt: "", subOpCodes: [] },
 ];
 
 function reducer(state: GuestState, action: GuestAction): GuestState {
@@ -89,6 +89,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         actualHours: oc.actualHours,
         notes: oc.notes,
         position: i,
+        subOpCodeId: oc.subOpCodeId ?? null,
       })),
       flagHours: input.opCodes.reduce((s, oc) => s + (oc.flagHours || 0), 0),
     };
@@ -106,6 +107,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
       notes: draft.notes ?? "",
       sortOrder: 0,
       createdAt: new Date().toISOString(),
+      subOpCodes: [],
     };
   }
 

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Camera, ChevronDown, ChevronUp, Plus, Search, Trash2, X } from "lucide-react";
-import type { Entry, NewEntry, NewEntryOpCode, OpCode, RoTemplate } from "@/lib/types";
+import type { Entry, NewEntry, NewEntryOpCode, OpCode, RoTemplate, SubOpCode } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { saveEntry } from "@/app/actions/entries";
@@ -16,6 +16,7 @@ import {
 } from "./OpCodeModals";
 import { ScanRoButton } from "./ScanRoButton";
 import type { OcrResult } from "@/lib/ocr";
+import { Modal } from "@/components/ui/Modal";
 
 const COMMON_MAKES = [
   "Acura", "Audi", "BMW", "Buick", "Cadillac", "Chevrolet", "Chrysler",
@@ -39,8 +40,53 @@ function linesFromEntry(entry: Entry | undefined): LineDraft[] {
     actualHours: oc.actualHours,
     notes: oc.notes,
     position: oc.position,
+    subOpCodeId: oc.subOpCodeId,
   }));
 }
+
+// ── Sub op code picker modal ──────────────────────────────────────────────
+
+function SubOpCodePickerModal({
+  opCode,
+  onSelect,
+  onClose,
+}: {
+  opCode: OpCode;
+  onSelect: (sub: SubOpCode) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal open onClose={onClose} title={`Sub op code for ${opCode.code}`}>
+      <div className="space-y-1">
+        <p className="text-xs text-zinc-500 pb-2">
+          Select which procedure was performed on this vehicle.
+        </p>
+        {opCode.subOpCodes.map((sub) => (
+          <button
+            key={sub.id}
+            type="button"
+            onClick={() => onSelect(sub)}
+            className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left hover:bg-zinc-800"
+          >
+            <span className="min-w-0">
+              <span className="font-mono text-sm font-medium text-orange-400">
+                {sub.code}
+              </span>
+              {sub.description && (
+                <span className="ml-2 text-sm text-zinc-300">{sub.description}</span>
+              )}
+            </span>
+            <span className="shrink-0 font-mono text-sm text-zinc-400">
+              {fmtHours(sub.flagHours)}h
+            </span>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 
 export function LogRoForm({
   initialOpCodes,
@@ -79,6 +125,7 @@ export function LogRoForm({
   const [customOpen, setCustomOpen] = useState(false);
   const [newLibraryOpen, setNewLibraryOpen] = useState(false);
   const [newLibraryPending, setNewLibraryPending] = useState(false);
+  const [subPickerOc, setSubPickerOc] = useState<OpCode | null>(null);
 
   const [vehicleOpen, setVehicleOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -154,23 +201,37 @@ export function LogRoForm({
 
   // --- line manipulation ------------------------------------------------
 
+  function buildLineFromLibrary(oc: OpCode, sub?: SubOpCode): LineDraft {
+    return {
+      key: crypto.randomUUID(),
+      opCodeId: oc.id,
+      custom: false,
+      customCode: null,
+      customDescription: null,
+      flagHours: sub ? sub.flagHours : oc.flagHours,
+      actualHours: null,
+      notes: "",
+      position: lines.length,
+      subOpCodeId: sub ? sub.id : null,
+    };
+  }
+
   function addFromLibrary(oc: OpCode) {
-    setLines((ls) => [
-      ...ls,
-      {
-        key: crypto.randomUUID(),
-        opCodeId: oc.id,
-        custom: false,
-        customCode: null,
-        customDescription: null,
-        flagHours: oc.flagHours,
-        actualHours: null,
-        notes: "",
-        position: ls.length,
-      },
-    ]);
     setSearch("");
     setPickerOpen(false);
+    if (oc.subOpCodes.length > 0) {
+      // Pause and ask which sub op code was performed.
+      setSubPickerOc(oc);
+      return;
+    }
+    setLines((ls) => [...ls, { ...buildLineFromLibrary(oc), position: ls.length }]);
+  }
+
+  function confirmSubPick(sub: SubOpCode) {
+    if (!subPickerOc) return;
+    const oc = subPickerOc;
+    setSubPickerOc(null);
+    setLines((ls) => [...ls, { ...buildLineFromLibrary(oc, sub), position: ls.length }]);
   }
 
   function addCustomLine(draft: OpCodeDraft) {
@@ -186,6 +247,7 @@ export function LogRoForm({
         actualHours: null,
         notes: "",
         position: ls.length,
+        subOpCodeId: null,
       },
     ]);
     setCustomOpen(false);
@@ -215,17 +277,29 @@ export function LogRoForm({
     setLines((ls) => ls.filter((l) => l.key !== key));
   }
 
-  function lineLabel(line: LineDraft): { code: string; description: string } {
+  function lineLabel(line: LineDraft): {
+    code: string;
+    description: string;
+    subCode: string | null;
+  } {
     if (line.custom) {
       return {
         code: line.customCode ?? "",
         description: line.customDescription ?? "",
+        subCode: null,
       };
     }
     const ref = library.find((oc) => oc.id === line.opCodeId);
+    if (line.subOpCodeId && ref) {
+      const sub = ref.subOpCodes.find((s) => s.id === line.subOpCodeId);
+      if (sub) {
+        return { code: ref.code, description: sub.description, subCode: sub.code };
+      }
+    }
     return {
       code: ref?.code ?? "",
       description: ref?.description ?? "",
+      subCode: null,
     };
   }
 
@@ -237,13 +311,13 @@ export function LogRoForm({
     if (result.make) setMake(result.make);
     if (result.model) setModel(result.model);
     if (result.vin) setVin(result.vin);
-    // If the scan missed the RO#, drop focus there so the tech can type it fast.
     if (!result.roNumber) setTimeout(() => roInputRef.current?.focus(), 50);
     if (result.opCodeIds.length > 0) {
       const newLines: LineDraft[] = result.opCodeIds.flatMap((id) => {
         if (lines.some((l) => l.opCodeId === id)) return [];
         const oc = library.find((o) => o.id === id);
         if (!oc) return [];
+        // OCR-matched codes with subs skip the picker and add without a sub selected.
         return [{
           key: crypto.randomUUID(),
           opCodeId: oc.id,
@@ -254,6 +328,7 @@ export function LogRoForm({
           actualHours: null,
           notes: "",
           position: lines.length,
+          subOpCodeId: null,
         }];
       });
       if (newLines.length > 0) setLines((ls) => [...ls, ...newLines]);
@@ -261,11 +336,6 @@ export function LogRoForm({
   }
 
   // --- submit -----------------------------------------------------------
-  //
-  // The outer element is a <div>, not a <form>. The op-code modals
-  // render inside this tree and have their own <form> elements; a real
-  // outer <form> would capture their submit events and trigger a save.
-  // We trigger save via the explicit Save button's onClick instead.
 
   function resetForm() {
     setDate(isoDate());
@@ -307,6 +377,7 @@ export function LogRoForm({
             actualHours: line.actualHours,
             notes: line.notes,
             position: i,
+            subOpCodeId: line.subOpCodeId,
           })),
         };
         if (onSave) {
@@ -334,7 +405,6 @@ export function LogRoForm({
     });
   }
 
-  // Derived display values for save bar summary
   const vehicleSummary = [year, make, model].filter(Boolean).join(" ");
 
   return (
@@ -483,9 +553,23 @@ export function LogRoForm({
                           <span style={{ marginLeft: 8, fontSize: 12, color: "var(--fg-2)" }}>
                             {oc.description}
                           </span>
+                          {oc.subOpCodes.length > 0 && (
+                            <span style={{
+                              marginLeft: 6,
+                              fontSize: 10,
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
+                              color: "var(--fg-3)",
+                              background: "var(--bg-3)",
+                              padding: "1px 5px",
+                              borderRadius: 4,
+                            }}>
+                              {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
+                            </span>
+                          )}
                         </span>
                         <span style={{ fontSize: 12, color: "var(--fg-3)", fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
-                          {oc.flagHours}h
+                          {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
                         </span>
                       </button>
                     ))
@@ -537,12 +621,25 @@ export function LogRoForm({
           ) : (
             <div style={{ marginTop: 8 }}>
               {lines.map((line) => {
-                const { code, description } = lineLabel(line);
+                const { code, description, subCode } = lineLabel(line);
                 return (
                   <div key={line.key} className="opc-line">
                     <div className="grow">
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                         <span className="opc-code">{code}</span>
+                        {subCode && (
+                          <span style={{
+                            fontSize: 10,
+                            letterSpacing: "0.06em",
+                            textTransform: "uppercase",
+                            color: "var(--brand)",
+                            background: "color-mix(in oklab, var(--brand) 15%, transparent)",
+                            padding: "1px 5px",
+                            borderRadius: 4,
+                          }}>
+                            {subCode}
+                          </span>
+                        )}
                         {line.custom && (
                           <span style={{
                             fontSize: 10,
@@ -614,7 +711,9 @@ export function LogRoForm({
                   onClick={() => addFromLibrary(oc)}
                 >
                   <span className="c">{oc.code}</span>
-                  <span className="h">{oc.flagHours}h</span>
+                  <span className="h">
+                    {oc.subOpCodes.length > 0 ? "→" : `${oc.flagHours}h`}
+                  </span>
                 </button>
               ))}
             </div>
@@ -842,6 +941,13 @@ export function LogRoForm({
         onClose={() => setNewLibraryOpen(false)}
         isPending={newLibraryPending}
       />
+      {subPickerOc && (
+        <SubOpCodePickerModal
+          opCode={subPickerOc}
+          onSelect={confirmSubPick}
+          onClose={() => setSubPickerOc(null)}
+        />
+      )}
     </div>
   );
 }

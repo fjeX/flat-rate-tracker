@@ -130,6 +130,7 @@ export function QuickAddModal({
             actualHours: null,
             notes: "",
             position: i,
+            subOpCodeId: null,
           })),
         };
         await saveEntry(input);

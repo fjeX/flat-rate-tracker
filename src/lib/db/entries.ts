@@ -23,6 +23,7 @@ function toEntryOpCode(row: EntryOpCodeRow): EntryOpCode {
     actualHours: row.actual_hours === null ? null : Number(row.actual_hours),
     notes: row.notes,
     position: row.position,
+    subOpCodeId: row.sub_op_code_id ?? null,
   };
 }
 
@@ -125,9 +126,9 @@ function toLineInsert(
     actual_hours: line.actualHours,
     position,
   };
-  // Only include notes when non-empty so the insert works even before the
-  // migration is applied — the DB default '' covers the missing column case.
   if (line.notes) insert.notes = line.notes;
+  // Only include sub_op_code_id when set — safe on DBs that haven't run migration yet.
+  if (line.subOpCodeId) insert.sub_op_code_id = line.subOpCodeId;
   return insert;
 }
 

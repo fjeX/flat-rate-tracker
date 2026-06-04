@@ -114,6 +114,7 @@ export type Database = {
           notes: string
           op_code_id: string | null
           position: number
+          sub_op_code_id: string | null
         }
         Insert: {
           actual_hours?: number | null
@@ -126,6 +127,7 @@ export type Database = {
           notes?: string
           op_code_id?: string | null
           position?: number
+          sub_op_code_id?: string | null
         }
         Update: {
           actual_hours?: number | null
@@ -138,6 +140,7 @@ export type Database = {
           notes?: string
           op_code_id?: string | null
           position?: number
+          sub_op_code_id?: string | null
         }
         Relationships: [
           {
@@ -149,6 +152,54 @@ export type Database = {
           },
           {
             foreignKeyName: "entry_op_codes_op_code_id_fkey"
+            columns: ["op_code_id"]
+            isOneToOne: false
+            referencedRelation: "op_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entry_op_codes_sub_op_code_id_fkey"
+            columns: ["sub_op_code_id"]
+            isOneToOne: false
+            referencedRelation: "op_code_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      op_code_variants: {
+        Row: {
+          code: string
+          created_at: string
+          description: string
+          flag_hours: number
+          id: string
+          op_code_id: string
+          sort_order: number
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string
+          flag_hours?: number
+          id?: string
+          op_code_id: string
+          sort_order?: number
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string
+          flag_hours?: number
+          id?: string
+          op_code_id?: string
+          sort_order?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "op_code_variants_op_code_id_fkey"
             columns: ["op_code_id"]
             isOneToOne: false
             referencedRelation: "op_codes"

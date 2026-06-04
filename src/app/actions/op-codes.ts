@@ -10,11 +10,20 @@ function revalidateOpCodes() {
   revalidatePath("/op-codes");
 }
 
+// Sub code shape accepted by create/update actions.
+type SubCodeInput = {
+  id?: string; // undefined = new (not yet in DB)
+  code: string;
+  description: string;
+  flagHours: number;
+};
+
 export async function createLibraryOpCode(input: {
   code: string;
   description: string;
   flagHours: number;
   notes?: string;
+  subCodes?: SubCodeInput[];
 }): Promise<OpCode> {
   const code = input.code.trim();
   if (!code) throw new Error("Op code is required.");
@@ -29,14 +38,34 @@ export async function createLibraryOpCode(input: {
     notes: input.notes?.trim(),
   });
 
-  revalidateOpCodes();
+  if (input.subCodes && input.subCodes.length > 0) {
+    await Promise.all(
+      input.subCodes.map((sub, i) =>
+        db.insertSubOpCode(supabase, created.id, created.userId, {
+          code: sub.code.trim(),
+          description: sub.description.trim(),
+          flagHours: sub.flagHours,
+          sortOrder: i,
+        }),
+      ),
+    );
+  }
 
-  return created;
+  const full = await db.getOpCode(supabase, created.id);
+  revalidateOpCodes();
+  return full!;
 }
 
 export async function updateLibraryOpCode(
   id: string,
-  patch: { code?: string; description?: string; flagHours?: number; notes?: string },
+  patch: {
+    code?: string;
+    description?: string;
+    flagHours?: number;
+    notes?: string;
+    subCodes?: SubCodeInput[];
+    removedSubIds?: string[];
+  },
 ): Promise<OpCode> {
   if (!id) throw new Error("Op code id is required.");
 
@@ -46,32 +75,57 @@ export async function updateLibraryOpCode(
     if (!code) throw new Error("Op code is required.");
     clean.code = code;
   }
-  if (patch.description !== undefined) {
-    clean.description = patch.description.trim();
-  }
+  if (patch.description !== undefined) clean.description = patch.description.trim();
   if (patch.flagHours !== undefined) {
     if (!Number.isFinite(patch.flagHours) || patch.flagHours < 0)
       throw new Error("Flag hours must be a non-negative number.");
     clean.flagHours = patch.flagHours;
   }
-  if (patch.notes !== undefined) {
-    clean.notes = patch.notes.trim();
-  }
+  if (patch.notes !== undefined) clean.notes = patch.notes.trim();
 
   const supabase = await createClient();
-  const updated = await db.updateOpCode(supabase, id, clean);
+  await db.updateOpCode(supabase, id, clean);
 
+  // Delete sub codes the user removed.
+  if (patch.removedSubIds && patch.removedSubIds.length > 0) {
+    await db.deleteSubOpCodes(supabase, patch.removedSubIds);
+  }
+
+  // Sync sub codes: insert new ones, update existing ones.
+  if (patch.subCodes && patch.subCodes.length > 0) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not authenticated.");
+
+    await Promise.all(
+      patch.subCodes.map(async (sub, i) => {
+        if (sub.id) {
+          await db.updateSubOpCode(supabase, sub.id, {
+            code: sub.code.trim(),
+            description: sub.description.trim(),
+            flagHours: sub.flagHours,
+            sortOrder: i,
+          });
+        } else {
+          await db.insertSubOpCode(supabase, id, user.id, {
+            code: sub.code.trim(),
+            description: sub.description.trim(),
+            flagHours: sub.flagHours,
+            sortOrder: i,
+          });
+        }
+      }),
+    );
+  }
+
+  const full = await db.getOpCode(supabase, id);
   revalidateOpCodes();
-
-  return updated;
+  return full!;
 }
 
 export async function deleteLibraryOpCode(id: string): Promise<void> {
   if (!id) throw new Error("Op code id is required.");
-
   const supabase = await createClient();
   await db.deleteOpCode(supabase, id);
-
   revalidateOpCodes();
 }
 
@@ -85,6 +139,5 @@ export async function reorderLibraryOpCodes(
 
   const supabase = await createClient();
   await db.reorderOpCodes(supabase, orderedIds);
-
   revalidateOpCodes();
 }

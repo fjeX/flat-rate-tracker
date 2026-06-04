@@ -101,6 +101,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
             description: values.description,
             flagHours: values.flagHours,
             notes: values.notes,
+            subCodes: values.hasSubCodes ? values.subCodes : [],
           });
           setItems((curr) => [...curr, created]);
           setModal({ kind: "closed" });
@@ -122,6 +123,8 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
             description: values.description,
             flagHours: values.flagHours,
             notes: values.notes,
+            subCodes: values.hasSubCodes ? values.subCodes : [],
+            removedSubIds: values.removedSubIds,
           });
           setItems((curr) =>
             curr.map((op) => (op.id === id ? updated : op)),
@@ -158,6 +161,25 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
         setDeletingId(null);
       }
     });
+  }
+
+  // Build the initial form values for editing.
+  function editInitial(opCode: OpCode): OpCodeFormValues {
+    return {
+      code: opCode.code,
+      description: opCode.description,
+      flagHours: opCode.flagHours,
+      notes: opCode.notes,
+      hasSubCodes: opCode.subOpCodes.length > 0,
+      subCodes: opCode.subOpCodes.map((s) => ({
+        draftKey: s.id,
+        id: s.id,
+        code: s.code,
+        description: s.description,
+        flagHours: s.flagHours,
+      })),
+      removedSubIds: [],
+    };
   }
 
   return (
@@ -258,16 +280,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       <OpCodeFormModal
         open={modal.kind === "edit"}
         mode="edit"
-        initial={
-          modal.kind === "edit"
-            ? {
-                code: modal.opCode.code,
-                description: modal.opCode.description,
-                flagHours: modal.opCode.flagHours,
-                notes: modal.opCode.notes,
-              }
-            : undefined
-        }
+        initial={modal.kind === "edit" ? editInitial(modal.opCode) : undefined}
         onClose={() => setModal({ kind: "closed" })}
         onSubmit={(values) =>
           modal.kind === "edit"

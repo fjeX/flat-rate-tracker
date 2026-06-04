@@ -60,6 +60,11 @@ export function OpCodeRow({
           <span className="text-xs text-orange-400">
             {fmtHours(opCode.flagHours)}h
           </span>
+          {opCode.subOpCodes.length > 0 && (
+            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+              {opCode.subOpCodes.length} sub{opCode.subOpCodes.length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
         {opCode.description && (
           <p className="truncate text-xs text-zinc-400">

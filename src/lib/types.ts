@@ -38,6 +38,7 @@ export type EntryOpCode = {
   actualHours: number | null;
   notes: string;
   position: number;
+  subOpCodeId: string | null; // reference to a sub op code (variant), null if none selected
 };
 
 export type Entry = {
@@ -53,6 +54,17 @@ export type Entry = {
   notes: string;
 };
 
+export type SubOpCode = {
+  id: string;
+  opCodeId: string;
+  userId: string;
+  code: string;
+  description: string;
+  flagHours: number;
+  sortOrder: number;
+  createdAt: string;
+};
+
 export type OpCode = {
   id: string;
   userId: string;
@@ -62,6 +74,7 @@ export type OpCode = {
   notes: string;
   sortOrder: number;
   createdAt: string;
+  subOpCodes: SubOpCode[]; // empty array when none defined
 };
 
 export type DailyClock = {

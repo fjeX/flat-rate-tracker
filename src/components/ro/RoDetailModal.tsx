@@ -165,9 +165,14 @@ function LineRow({
   const code = line.custom
     ? (line.customCode ?? "").trim() || "—"
     : (ref?.code ?? "—");
+  const subRef = line.subOpCodeId && ref
+    ? ref.subOpCodes.find((s) => s.id === line.subOpCodeId)
+    : undefined;
   const description = line.custom
     ? (line.customDescription ?? "").trim()
-    : (ref?.description ?? "");
+    : subRef
+      ? subRef.description
+      : (ref?.description ?? "");
 
   function commit() {
     const trimmed = text.trim();
@@ -210,6 +215,11 @@ function LineRow({
       <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
         <div className="min-w-0">
           <span className="font-mono text-sm text-orange-400">{code}</span>
+          {subRef && (
+            <span className="ml-2 rounded bg-orange-950/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-orange-400">
+              {subRef.code}
+            </span>
+          )}
           {line.custom && (
             <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
               Other
@@ -274,6 +284,7 @@ function AddOpCodePicker({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [subPickOc, setSubPickOc] = useState<OpCode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
@@ -298,8 +309,11 @@ function AddOpCodePicker({
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [open]);
 
-  function addLine(oc: OpCode) {
+  function addLine(oc: OpCode, subOpCodeId?: string) {
     setError(null);
+    const flagHours = subOpCodeId
+      ? (oc.subOpCodes.find((s) => s.id === subOpCodeId)?.flagHours ?? oc.flagHours)
+      : oc.flagHours;
     startTransition(async () => {
       try {
         await addOpCodeLineToEntryAction(entryId, {
@@ -307,17 +321,27 @@ function AddOpCodePicker({
           custom: false,
           customCode: null,
           customDescription: null,
-          flagHours: oc.flagHours,
+          flagHours,
           actualHours: null,
           notes: "",
+          subOpCodeId: subOpCodeId ?? null,
         });
         onAdded();
         setSearch("");
         setOpen(false);
+        setSubPickOc(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to add.");
       }
     });
+  }
+
+  function handleOpCodeClick(oc: OpCode) {
+    if (oc.subOpCodes.length > 0) {
+      setSubPickOc(oc);
+    } else {
+      addLine(oc);
+    }
   }
 
   if (!library.length) return null;
@@ -333,6 +357,48 @@ function AddOpCodePicker({
           <Plus className="h-3.5 w-3.5" />
           Add op code
         </button>
+      ) : subPickOc ? (
+        // Sub op code selection step
+        <div className="rounded-md border border-zinc-700 bg-zinc-900">
+          <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setSubPickOc(null)}
+              className="text-xs text-zinc-500 hover:text-zinc-300"
+            >
+              ← Back
+            </button>
+            <span className="text-xs text-zinc-400">
+              Sub op code for{" "}
+              <span className="font-mono text-orange-400">{subPickOc.code}</span>
+            </span>
+          </div>
+          <ul className="max-h-48 overflow-y-auto">
+            {subPickOc.subOpCodes.map((sub) => (
+              <li key={sub.id}>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => addLine(subPickOc, sub.id)}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  <span>
+                    <span className="font-mono text-sm text-orange-400">{sub.code}</span>
+                    {sub.description && (
+                      <span className="ml-2 text-xs text-zinc-400">{sub.description}</span>
+                    )}
+                  </span>
+                  <span className="text-xs text-zinc-400">{sub.flagHours}h</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {error && (
+            <div className="border-t border-zinc-800 px-3 py-1.5 text-xs text-red-300">
+              {error}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="rounded-md border border-zinc-700 bg-zinc-900">
           <div className="flex items-center gap-2 px-3">
@@ -362,14 +428,16 @@ function AddOpCodePicker({
                   <button
                     type="button"
                     disabled={pending}
-                    onClick={() => addLine(oc)}
+                    onClick={() => handleOpCodeClick(oc)}
                     className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800 disabled:opacity-50"
                   >
                     <span>
                       <span className="font-mono text-sm text-orange-400">{oc.code}</span>
                       <span className="ml-2 text-xs text-zinc-500">{oc.description}</span>
                     </span>
-                    <span className="text-xs text-zinc-400">{oc.flagHours}h</span>
+                    <span className="text-xs text-zinc-400">
+                      {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
+                    </span>
                   </button>
                 </li>
               ))
