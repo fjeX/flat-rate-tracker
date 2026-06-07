@@ -38,15 +38,18 @@ export function OpCodeRow({
     <li
       ref={setNodeRef}
       style={style}
-      {...(!isSearching ? { ...attributes, ...listeners } : {})}
-      className={`flex items-center gap-2 border-b border-zinc-800 bg-zinc-900 px-2 py-2 last:border-b-0${!isSearching ? " cursor-grab active:cursor-grabbing" : ""}`}
+      {...attributes}
+      onClick={() => onEdit(opCode)}
+      className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2 cursor-pointer transition-colors hover:border-zinc-700 hover:bg-zinc-800/60"
     >
       {isSearching ? (
         <div className="h-8 w-8 shrink-0" aria-hidden="true" />
       ) : (
         <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center text-zinc-500"
-          aria-hidden="true"
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 cursor-grab active:cursor-grabbing hover:text-zinc-300"
+          aria-label="Drag to reorder"
         >
           <GripVertical className="h-4 w-4" />
         </div>
@@ -78,7 +81,7 @@ export function OpCodeRow({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={() => onEdit(opCode)}

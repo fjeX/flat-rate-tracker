@@ -7,7 +7,7 @@ import { Camera, ChevronDown, ChevronUp, Plus, Search, Trash2, X } from "lucide-
 import type { Entry, NewEntry, NewEntryOpCode, OpCode, RoTemplate, SubOpCode } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
-import { saveEntry } from "@/app/actions/entries";
+import { saveEntry, deleteEntryAction } from "@/app/actions/entries";
 import { createLibraryOpCode } from "@/app/actions/op-codes";
 import {
   CustomOpCodeModal,
@@ -133,6 +133,20 @@ export function LogRoForm({
   const [error, setError] = useState<string | null>(null);
   const [savedRoNumber, setSavedRoNumber] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
+  const [isDeleting, startDelete] = useTransition();
+
+  function handleDeleteRo() {
+    if (!existingEntry) return;
+    if (!window.confirm(`Delete RO #${existingEntry.roNumber}? This can't be undone.`)) return;
+    startDelete(async () => {
+      try {
+        await deleteEntryAction(existingEntry.id);
+        router.push("/");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to delete RO.");
+      }
+    });
+  }
 
   const roInputRef = useRef<HTMLInputElement>(null);
 
@@ -901,6 +915,18 @@ export function LogRoForm({
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {isEdit && (
+            <button
+              type="button"
+              onClick={handleDeleteRo}
+              disabled={isDeleting || isSubmitting}
+              className="btn btn-sm"
+              style={{ color: "#fca5a5", borderColor: "rgba(153,27,27,0.5)", background: "transparent", marginRight: "auto" }}
+            >
+              <Trash2 style={{ width: 14, height: 14 }} />
+              {isDeleting ? "Deleting…" : "Delete RO"}
+            </button>
+          )}
           {isEdit && (
             <Link href="/" className="btn btn-ghost btn-sm">
               Cancel

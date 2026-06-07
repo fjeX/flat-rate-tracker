@@ -4,6 +4,40 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 
+function HoursInput({
+  value,
+  onChange,
+  className,
+}: {
+  value: number;
+  onChange: (val: number) => void;
+  className?: string;
+}) {
+  const [raw, setRaw] = useState(String(value));
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={raw}
+      onChange={(e) => {
+        const str = e.target.value;
+        if (!/^[0-9]*\.?[0-9]*$/.test(str)) return;
+        setRaw(str);
+        const parsed = parseFloat(str);
+        onChange(isNaN(parsed) ? 0 : parsed);
+      }}
+      onBlur={() => {
+        const parsed = parseFloat(raw);
+        const normalized = isNaN(parsed) || parsed < 0 ? 0 : parsed;
+        setRaw(String(normalized));
+        onChange(normalized);
+      }}
+      className={className}
+    />
+  );
+}
+
 export type SubCodeDraft = {
   draftKey: string; // local React key; crypto.randomUUID() for new, id for existing
   id?: string;      // undefined = not yet saved
@@ -29,12 +63,14 @@ function OpCodeFormBody({
   initial,
   onSubmit,
   onClose,
+  onDelete,
   isPending,
 }: {
   mode: Mode;
   initial: OpCodeFormValues;
   onSubmit: (values: OpCodeFormValues) => Promise<void>;
   onClose: () => void;
+  onDelete?: () => void;
   isPending: boolean;
 }) {
   const [draft, setDraft] = useState<OpCodeFormValues>(initial);
@@ -167,17 +203,9 @@ function OpCodeFormBody({
               </span>
             )}
           </span>
-          <input
-            type="number"
-            min={0}
-            step={0.1}
-            value={Number.isFinite(draft.flagHours) ? draft.flagHours : ""}
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                flagHours: e.target.value === "" ? 0 : Number(e.target.value),
-              })
-            }
+          <HoursInput
+            value={draft.flagHours}
+            onChange={(val) => setDraft({ ...draft, flagHours: val })}
             className="mt-1 w-32 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
           />
         </label>
@@ -241,16 +269,9 @@ function OpCodeFormBody({
                   placeholder="Description…"
                   className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
                 />
-                <input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={Number.isFinite(sub.flagHours) ? sub.flagHours : ""}
-                  onChange={(e) =>
-                    updateSubCode(sub.draftKey, {
-                      flagHours: e.target.value === "" ? 0 : Number(e.target.value),
-                    })
-                  }
+                <HoursInput
+                  value={sub.flagHours}
+                  onChange={(val) => updateSubCode(sub.draftKey, { flagHours: val })}
                   className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
                 />
                 <button
@@ -278,7 +299,20 @@ function OpCodeFormBody({
 
       {error && <p className="text-sm text-red-300">{error}</p>}
 
-      <div className="flex justify-end gap-2 pt-2">
+      <div className="flex items-center justify-between gap-2 pt-2">
+        <div>
+          {mode === "edit" && onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={isPending}
+              className="rounded-md border border-red-900/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2">
         <button
           type="button"
           onClick={onClose}
@@ -294,6 +328,7 @@ function OpCodeFormBody({
         >
           {isPending ? "Saving…" : mode === "add" ? "Save" : "Save changes"}
         </button>
+        </div>
       </div>
     </form>
   );
@@ -305,6 +340,7 @@ export function OpCodeFormModal({
   initial,
   onSubmit,
   onClose,
+  onDelete,
   isPending,
 }: {
   open: boolean;
@@ -312,6 +348,7 @@ export function OpCodeFormModal({
   initial?: OpCodeFormValues;
   onSubmit: (values: OpCodeFormValues) => Promise<void>;
   onClose: () => void;
+  onDelete?: () => void;
   isPending: boolean;
 }) {
   const title = mode === "add" ? "New op code" : "Edit op code";
@@ -332,6 +369,7 @@ export function OpCodeFormModal({
         initial={seeded}
         onSubmit={onSubmit}
         onClose={onClose}
+        onDelete={onDelete}
         isPending={isPending}
       />
     </Modal>

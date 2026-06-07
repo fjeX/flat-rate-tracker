@@ -152,6 +152,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       try {
         await deleteLibraryOpCode(opCode.id);
         setItems((curr) => curr.filter((op) => op.id !== opCode.id));
+        setModal({ kind: "closed" });
         router.refresh();
       } catch (err) {
         window.alert(
@@ -183,7 +184,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
   }
 
   return (
-    <div className="space-y-3">
+    <main className="mx-auto max-w-3xl space-y-3 p-4 pb-16">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -231,7 +232,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       )}
 
       {/* List */}
-      <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-1.5">
         {items.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-zinc-500">
             No op codes yet. Add one to get started.
@@ -250,7 +251,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
               items={visible.map((op) => op.id)}
               strategy={verticalListSortingStrategy}
             >
-              <ul className="divide-y divide-zinc-800">
+              <ul className="space-y-1.5">
                 {visible.map((op) => (
                   <OpCodeRow
                     key={op.id}
@@ -287,8 +288,13 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
             ? submitEdit(modal.opCode.id, values)
             : Promise.resolve()
         }
+        onDelete={
+          modal.kind === "edit"
+            ? () => handleDelete(modal.opCode)
+            : undefined
+        }
         isPending={saving}
       />
-    </div>
+    </main>
   );
 }

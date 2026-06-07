@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Search, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -38,16 +39,25 @@ export function QuickAddModal({
 
   const roInputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     if (!pickerOpen) return;
     function onDown(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
+      const inSearch = pickerRef.current?.contains(e.target as Node);
+      const inDropdown = dropdownRef.current?.contains(e.target as Node);
+      if (!inSearch && !inDropdown) setPickerOpen(false);
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
+  }, [pickerOpen]);
+
+  useEffect(() => {
+    if (pickerOpen && pickerRef.current) {
+      const r = pickerRef.current.getBoundingClientRect();
+      setDropdownRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
   }, [pickerOpen]);
 
   useEffect(() => {
@@ -190,7 +200,7 @@ export function QuickAddModal({
           )}
 
           {/* Search picker */}
-          <div ref={pickerRef} className="relative">
+          <div ref={pickerRef}>
             <div className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 focus-within:border-orange-500/50">
               <Search className="h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
               <input
@@ -212,40 +222,45 @@ export function QuickAddModal({
                 </button>
               )}
             </div>
-            {pickerOpen && (
-              <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md border border-zinc-700 bg-zinc-900 shadow-lg">
-                <ul className="max-h-48 overflow-y-auto">
-                  {filteredLibrary.length === 0 ? (
-                    <li className="px-3 py-2 text-xs text-zinc-500">
-                      No matches in your library.
-                    </li>
-                  ) : (
-                    filteredLibrary.map((oc) => (
-                      <li key={oc.id}>
-                        <button
-                          type="button"
-                          onClick={() => addFromLibrary(oc)}
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800"
-                        >
-                          <span>
-                            <span className="font-mono text-sm text-orange-400">
-                              {oc.code}
-                            </span>
-                            <span className="ml-2 text-xs text-zinc-500">
-                              {oc.description}
-                            </span>
-                          </span>
-                          <span className="text-xs text-zinc-400">
-                            {oc.flagHours}h
-                          </span>
-                        </button>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
-            )}
           </div>
+          {pickerOpen && dropdownRect && typeof document !== "undefined" && createPortal(
+            <div
+              ref={dropdownRef}
+              style={{ position: "fixed", top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, zIndex: 9999 }}
+              className="rounded-md border border-zinc-700 bg-zinc-900 shadow-xl"
+            >
+              <ul className="max-h-48 overflow-y-auto">
+                {filteredLibrary.length === 0 ? (
+                  <li className="px-3 py-2 text-xs text-zinc-500">
+                    No matches in your library.
+                  </li>
+                ) : (
+                  filteredLibrary.map((oc) => (
+                    <li key={oc.id}>
+                      <button
+                        type="button"
+                        onClick={() => addFromLibrary(oc)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800"
+                      >
+                        <span>
+                          <span className="font-mono text-sm text-orange-400">
+                            {oc.code}
+                          </span>
+                          <span className="ml-2 text-xs text-zinc-500">
+                            {oc.description}
+                          </span>
+                        </span>
+                        <span className="text-xs text-zinc-400">
+                          {oc.flagHours}h
+                        </span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>,
+            document.body
+          )}
 
           {/* Lines table */}
           {lines.length > 0 && (
