@@ -8,6 +8,8 @@ import type { Database } from "./database.types";
 // Auth pages redirect logged-in users to the app. Guest routes allow anyone.
 const AUTH_PAGES = ["/signin", "/signup"];
 const GUEST_ROUTES = ["/guest"];
+// Public routes that don't require auth (landing page, etc.)
+const PUBLIC_ROUTES = ["/"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -42,8 +44,9 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
   const isGuestRoute = GUEST_ROUTES.some((p) => pathname.startsWith(p));
+  const isPublicRoute = PUBLIC_ROUTES.some((p) => pathname === p);
 
-  if (!user && !isAuthPage && !isGuestRoute) {
+  if (!user && !isAuthPage && !isGuestRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
     return NextResponse.redirect(url);
@@ -51,7 +54,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 

@@ -5,7 +5,7 @@ import { signOut } from "@/app/actions/auth";
 export function Header({ userEmail }: { userEmail?: string | null }) {
   return (
     <header className="app-header">
-      <Link href="/" className="app-brand">
+      <Link href="/dashboard" className="app-brand">
         <span className="app-brand-mark">
           <Wrench size={18} color="white" strokeWidth={2} />
         </span>

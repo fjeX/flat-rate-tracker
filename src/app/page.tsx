@@ -1,0 +1,817 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect } from "react";
+
+/* ── Scroll reveal ────────────────────────────────────── */
+function useReveal() {
+  useEffect(() => {
+    if (!window.matchMedia?.("(prefers-reduced-motion: no-preference)").matches) return;
+    const wrap = document.getElementById("lp");
+    if (!wrap) return;
+    wrap.classList.add("lp-animate");
+
+    const check = () => {
+      const vh = window.innerHeight;
+      wrap.querySelectorAll<HTMLElement>("[data-rv]").forEach((el) => {
+        if (!el.classList.contains("rv-in")) {
+          const r = el.getBoundingClientRect();
+          if (r.top < vh * 0.92 && r.bottom > 0) el.classList.add("rv-in");
+        }
+      });
+    };
+
+    let raf = 0;
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; check(); });
+    };
+    requestAnimationFrame(check);
+    setTimeout(check, 150);
+    setTimeout(check, 450);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+}
+
+type RvProps = {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+  style?: React.CSSProperties;
+  as?: React.ElementType;
+  [key: string]: unknown;
+};
+
+function Rv({ children, delay = 0, className = "", style, as: Tag = "div", ...rest }: RvProps) {
+  return (
+    <Tag
+      data-rv
+      className={className}
+      style={{ transitionDelay: delay ? `${delay}ms` : undefined, ...style }}
+      {...rest}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+/* ── Shared primitives ───────────────────────────────── */
+
+function Wordmark({ size = 17 }: { size?: number }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div
+        className="w-[34px] h-[34px] rounded-lg bg-orange-600 p-2 grid grid-cols-3 items-end"
+        style={{ gap: "2.5px" }}
+        aria-hidden="true"
+      >
+        <span className="block w-full bg-white rounded-sm" style={{ height: 6 }} />
+        <span className="block w-full bg-white rounded-sm" style={{ height: 11 }} />
+        <span className="block w-full bg-white rounded-sm" style={{ height: 17 }} />
+      </div>
+      <span className="font-extrabold tracking-tight whitespace-nowrap" style={{ fontSize: size }}>
+        Flat Rate Tracker
+      </span>
+    </div>
+  );
+}
+
+function Pill({ state }: { state: "green" | "amber" | "red" }) {
+  const map = {
+    green: { cls: "bg-green-500/15 text-green-400", label: "On pace" },
+    amber: { cls: "bg-amber-500/15 text-amber-400", label: "Slightly behind" },
+    red: { cls: "bg-red-500/15 text-red-400", label: "Behind pace" },
+  };
+  const m = map[state];
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[11px] font-bold tracking-[0.04em] whitespace-nowrap ${m.cls}`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+      {m.label}
+    </span>
+  );
+}
+
+function PaceBar({
+  now,
+  goal,
+  pct,
+  todayPct,
+  state,
+  compact = false,
+}: {
+  now: string;
+  goal: string;
+  pct: number;
+  todayPct: number;
+  state: "green" | "amber" | "red";
+  compact?: boolean;
+}) {
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-[14px] p-[18px]">
+      <div className="flex items-center justify-between mb-3.5">
+        <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-zinc-500">
+          Pay Period Pace{compact ? "" : " · 9 days left"}
+        </span>
+        <Pill state={state} />
+      </div>
+      <div className="flex items-baseline justify-between mb-3">
+        <span
+          className="font-mono font-bold text-zinc-50 whitespace-nowrap"
+          style={{ fontSize: compact ? 18 : 22 }}
+        >
+          {now}
+          <span className="text-zinc-500 ml-0.5" style={{ fontSize: compact ? 12 : 14 }}>
+            {" "}flag hrs
+          </span>
+        </span>
+        <span className="font-mono text-zinc-500 text-sm whitespace-nowrap">goal {goal}</span>
+      </div>
+      <div
+        className="relative bg-zinc-800 rounded-full"
+        style={{ height: compact ? 12 : 14 }}
+      >
+        <div
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{
+            width: `${pct}%`,
+            background: "linear-gradient(90deg, #ea580c, #f97316)",
+          }}
+        />
+        <div
+          className="absolute -top-[5px] -bottom-[5px] w-0.5 bg-zinc-300"
+          style={{ left: `${todayPct}%` }}
+        >
+          <span className="absolute -top-4 left-1/2 -translate-x-1/2 font-mono text-[8px] tracking-[0.1em] text-zinc-400 whitespace-nowrap">
+            TODAY
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatTile({
+  lab,
+  big,
+  unit,
+  sub,
+  mini = false,
+}: {
+  lab: string;
+  big: string;
+  unit: string;
+  sub?: React.ReactNode;
+  mini?: boolean;
+}) {
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
+      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-2">{lab}</div>
+      <div className="font-mono font-bold text-zinc-50 leading-none" style={{ fontSize: mini ? 22 : 26 }}>
+        {big}
+        <span className="text-[13px] text-zinc-500 ml-0.5">{unit}</span>
+      </div>
+      {sub && <div className="font-mono text-[11px] text-zinc-400 mt-1.5">{sub}</div>}
+    </div>
+  );
+}
+
+function BarChart({ bars, height }: { bars: number[]; height: number }) {
+  return (
+    <div className="flex items-end gap-1.5" style={{ height }}>
+      {bars.map((h, i) => (
+        <div
+          key={i}
+          className={`flex-1 rounded-t-sm ${h > 78 ? "bg-orange-600" : "bg-zinc-700"}`}
+          style={{ height: `${h}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ROForm() {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-1.5">
+          RO Number
+        </label>
+        <div className="bg-[#1a1a1e] border border-zinc-800 rounded-[9px] px-3 py-2.5 flex items-center justify-between">
+          <span className="font-mono font-semibold text-zinc-100 text-[15px]">48213</span>
+          <span className="flex items-center gap-0.5 h-5 px-1.5 border border-zinc-700 rounded-md">
+            {[false, false, true, false, true, false].map((thin, i) => (
+              <span
+                key={i}
+                className="block h-full rounded-[1px] bg-orange-500"
+                style={{ width: thin ? 1 : 2, opacity: thin ? 0.6 : 1 }}
+              />
+            ))}
+          </span>
+        </div>
+      </div>
+      <div>
+        <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-1.5">
+          Op Code
+        </label>
+        <div className="bg-[#1a1a1e] border border-zinc-800 rounded-[9px] px-3 py-2.5 flex items-center gap-2.5">
+          <span className="font-mono font-semibold text-zinc-100 text-[15px]">BRK-FR</span>
+          <span className="font-mono text-[11px] text-zinc-500">Front brake job · 2.4 hrs</span>
+        </div>
+      </div>
+      <div className="flex gap-2 mt-0.5">
+        <button className="font-bold text-[13px] px-3.5 py-2 rounded-lg bg-orange-600 text-white whitespace-nowrap cursor-default">
+          Save &amp; New
+        </button>
+        <button className="font-bold text-[13px] px-3.5 py-2 rounded-lg border border-zinc-700 text-zinc-200 whitespace-nowrap cursor-default">
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OpCodeList() {
+  return (
+    <div className="flex flex-col gap-px bg-zinc-800 border border-zinc-800 rounded-xl overflow-hidden">
+      {/* BRK — expanded */}
+      <div
+        className="grid items-center gap-2.5 px-3 py-2.5 bg-zinc-900"
+        style={{ gridTemplateColumns: "16px 64px 1fr auto" }}
+      >
+        <span className="text-[10px] text-zinc-500">▾</span>
+        <span className="font-mono font-semibold text-[12px] text-zinc-100">BRK</span>
+        <span className="text-[13px] font-semibold text-zinc-300">Brake Job</span>
+        <span className="font-mono text-[12px] text-zinc-400">—</span>
+      </div>
+      {[
+        { code: "BRK-FR", desc: "Front", hrs: "2.4" },
+        { code: "BRK-RR", desc: "Rear", hrs: "2.1" },
+        { code: "BRK-FL", desc: "Flush", hrs: "0.6" },
+      ].map((row) => (
+        <div
+          key={row.code}
+          className="grid items-center gap-2.5 py-2.5 bg-[#1a1a1e]"
+          style={{ gridTemplateColumns: "64px 1fr auto", paddingLeft: 36, paddingRight: 13 }}
+        >
+          <span className="font-mono font-semibold text-[12px] text-orange-500">{row.code}</span>
+          <span className="text-[13px] text-zinc-300">{row.desc}</span>
+          <span className="font-mono text-[12px] text-zinc-400">{row.hrs}</span>
+        </div>
+      ))}
+      {/* SUSP — collapsed */}
+      <div
+        className="grid items-center gap-2.5 px-3 py-2.5 bg-zinc-900 opacity-90"
+        style={{ gridTemplateColumns: "16px 64px 1fr auto" }}
+      >
+        <span className="text-[10px] text-zinc-500">▸</span>
+        <span className="font-mono font-semibold text-[12px] text-zinc-100">SUSP</span>
+        <span className="text-[13px] font-semibold text-zinc-300">Suspension</span>
+        <span className="font-mono text-[12px] text-zinc-400">3 sub-codes</span>
+      </div>
+    </div>
+  );
+}
+
+function DiscrepancyCard() {
+  return (
+    <div className="flex flex-col gap-2.5">
+      {[
+        { label: "Shop flagged", value: "64.2", unit: "hrs" },
+        { label: "You clocked", value: "66.5", unit: "hrs" },
+      ].map((row) => (
+        <div key={row.label} className="flex items-baseline justify-between">
+          <span className="font-mono text-[12px] tracking-[0.05em] text-zinc-400">{row.label}</span>
+          <span className="font-mono font-bold text-[18px] text-zinc-100">
+            {row.value}{" "}
+            <span className="text-[11px] text-zinc-500 font-normal">{row.unit}</span>
+          </span>
+        </div>
+      ))}
+      <div className="h-px bg-zinc-800 my-0.5" />
+      <div className="flex items-baseline justify-between">
+        <span className="font-mono text-[12px] tracking-[0.05em] text-zinc-300">Discrepancy</span>
+        <span className="font-mono font-bold text-[18px] text-amber-400">
+          −2.3{" "}
+          <span className="text-[11px] text-zinc-500 font-normal">hrs</span>
+        </span>
+      </div>
+      <p className="font-mono text-[11px] text-zinc-500 leading-relaxed pt-0.5">
+        3 ROs may be missing hours — check before payday.
+      </p>
+    </div>
+  );
+}
+
+function HistoryRows() {
+  const rows = [
+    { code: "BRK-FR", hrs: "2.4", t: "Today 2:14p" },
+    { code: "DIAG", hrs: "1.0", t: "Today 11:02a" },
+    { code: "ALN-4", hrs: "1.8", t: "Today 9:40a" },
+  ];
+  return (
+    <div className="flex flex-col gap-1.5">
+      {rows.map((r, i) => (
+        <div
+          key={i}
+          className="grid items-center gap-2.5 px-3 py-2 bg-[#1a1a1e] border border-zinc-800 rounded-[9px]"
+          style={{ gridTemplateColumns: "70px 1fr auto" }}
+        >
+          <span className="font-mono font-semibold text-[12px] text-orange-500">{r.code}</span>
+          <span className="font-mono text-[12px] text-zinc-100">{r.hrs} hrs</span>
+          <span className="font-mono text-[11px] text-zinc-500">{r.t}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Sections ────────────────────────────────────────── */
+
+function Nav() {
+  return (
+    <nav
+      className="sticky top-0 z-50 border-b border-zinc-800"
+      style={{
+        background: "color-mix(in srgb, #09090b 82%, transparent)",
+        backdropFilter: "blur(12px)",
+      }}
+    >
+      <div className="max-w-[1180px] mx-auto px-7 flex items-center justify-between h-[66px] max-sm:h-[60px] max-sm:px-[18px]">
+        <Wordmark />
+        <div className="flex gap-2.5 items-center">
+          <Link
+            href="/guest"
+            className="hidden sm:inline-flex items-center gap-2 font-bold text-sm px-4 py-2 rounded-lg border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-white/[0.03] transition-colors whitespace-nowrap"
+          >
+            Try as guest
+          </Link>
+          <Link
+            href="/signup"
+            className="inline-flex items-center font-bold text-sm px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-500 transition-colors whitespace-nowrap"
+          >
+            Create free account
+          </Link>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function Hero() {
+  const bars = [42, 55, 38, 67, 49, 72, 58, 80, 61, 44, 69, 88, 52, 75];
+  return (
+    <header className="pt-[72px] pb-[88px] max-[900px]:pt-12 max-[900px]:pb-16 max-sm:pt-9 max-sm:pb-[52px]">
+      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex flex-col gap-0">
+        <Rv>
+          <div className="inline-flex items-center gap-2.5">
+            <span className="block w-5 h-0.5 bg-orange-600" />
+            <span className="font-mono text-[13px] font-semibold tracking-[0.18em] uppercase text-orange-600 max-sm:text-[12px] max-sm:tracking-[0.12em]">
+              Built for flat rate techs
+            </span>
+          </div>
+        </Rv>
+
+        <Rv delay={60}>
+          <h1
+            className="font-extrabold leading-none tracking-tight text-zinc-50 text-balance mt-5 mb-0 max-sm:mt-4"
+            style={{ fontSize: "clamp(33px, 5vw, 56px)", maxWidth: 840 }}
+          >
+            Your whole pay period, on one screen.
+          </h1>
+        </Rv>
+
+        <Rv delay={120}>
+          <p
+            className="text-zinc-400 leading-[1.55] mt-5 mb-0 max-sm:mt-4"
+            style={{ fontSize: "clamp(16px, 2vw, 18px)", maxWidth: 520 }}
+          >
+            Log your ROs, track flag hours against your pay period, and see your pace at a glance.
+            No spreadsheets, no guessing.
+          </p>
+        </Rv>
+
+        <Rv delay={180}>
+          <div className="flex gap-3 flex-wrap mt-7 max-sm:mt-6 max-sm:flex-col max-sm:items-stretch">
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] bg-orange-600 text-white hover:bg-orange-500 transition-colors active:translate-y-px max-sm:justify-center"
+            >
+              Create free account
+            </Link>
+            <Link
+              href="/guest"
+              className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-white/[0.03] transition-colors active:translate-y-px max-sm:justify-center"
+            >
+              Try it first{" "}
+              <span className="font-mono text-orange-500">— no account →</span>
+            </Link>
+          </div>
+          <p className="font-mono text-[12px] text-zinc-500 mt-5 max-sm:mt-[18px]">
+            Free to start · Works on your phone in the bay
+          </p>
+        </Rv>
+
+        {/* Dashboard mock */}
+        <Rv delay={120} className="flex flex-col gap-3 mt-8 max-sm:mt-6">
+          <div className="grid grid-cols-4 gap-2.5 max-sm:grid-cols-2">
+            <StatTile lab="Today" big="6.4" unit="hrs" sub={<span className="text-green-400">112% eff</span>} />
+            <StatTile lab="This Week" big="38.1" unit="hrs" sub={<span className="text-green-400">104% eff</span>} />
+            <StatTile lab="Pay Period" big="64.2" unit="hrs" sub={<span className="text-green-400">98% eff</span>} />
+            <StatTile lab="This Month" big="142" unit="hrs" sub={<span className="text-green-400">101% eff</span>} />
+          </div>
+          <div
+            className="grid gap-3 max-sm:grid-cols-1"
+            style={{ gridTemplateColumns: "1.25fr 1fr" }}
+          >
+            <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" />
+            <div className="bg-zinc-900 border border-zinc-800 rounded-[14px] p-[18px] flex flex-col">
+              <div className="flex items-center justify-between mb-3.5">
+                <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-zinc-500">
+                  Flag hrs · 14 days
+                </span>
+              </div>
+              <BarChart bars={bars} height={84} />
+            </div>
+          </div>
+        </Rv>
+      </div>
+    </header>
+  );
+}
+
+function PaceSection() {
+  return (
+    <section className="py-24 max-[900px]:py-[72px] max-sm:py-14">
+      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
+        <div className="max-w-[620px]">
+          <Rv>
+            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
+              Pay Period Pace
+            </span>
+          </Rv>
+          <Rv delay={60}>
+            <h2
+              className="font-extrabold tracking-tight text-zinc-50 text-balance mt-4 mb-0"
+              style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
+            >
+              See your pace at a glance.
+            </h2>
+          </Rv>
+          <Rv delay={120}>
+            <p
+              className="text-zinc-400 leading-[1.55] mt-4 mb-0"
+              style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
+            >
+              One bar shows everything: how many flag hours you&apos;ve banked, your goal, and a{" "}
+              <strong className="text-zinc-200">today</strong> tick for exactly where you should be.
+              Green means you&apos;re good. Color shifts the second you start slipping.
+            </p>
+          </Rv>
+        </div>
+
+        <Rv delay={100} className="mt-10 flex flex-col gap-3.5 max-w-[720px]">
+          <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" />
+          <div className="grid grid-cols-2 gap-3.5 max-sm:grid-cols-1">
+            <PaceBar now="48.0" goal="88" pct={55} todayPct={62} state="amber" compact />
+            <PaceBar now="33.5" goal="88" pct={38} todayPct={62} state="red" compact />
+          </div>
+        </Rv>
+      </div>
+    </section>
+  );
+}
+
+function HowItWorks() {
+  const steps = [
+    {
+      n: "01",
+      t: "Log the repair order",
+      d: "RO number and op code — type it or scan the barcode. Two taps and you're onto the next one.",
+    },
+    {
+      n: "02",
+      t: "We bank your flag hours",
+      d: "Every RO rolls into your pay period total automatically. Your op code library fills in the hours.",
+    },
+    {
+      n: "03",
+      t: "See if you're on pace",
+      d: "One glance at the pace bar tells you if you're going to make your check — before payday, not after.",
+    },
+  ];
+  return (
+    <section className="pb-24 max-[900px]:pb-[72px] max-sm:pb-14">
+      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
+        <Rv>
+          <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
+            How it works
+          </span>
+        </Rv>
+        <Rv delay={60}>
+          <h2
+            className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
+            style={{ fontSize: 36 }}
+          >
+            Three steps. That&apos;s the whole app.
+          </h2>
+        </Rv>
+        <div className="grid grid-cols-3 gap-5 mt-11 max-[900px]:grid-cols-1 max-[900px]:gap-7">
+          {steps.map((s, i) => (
+            <Rv key={s.n} delay={i * 90} className="pt-6 border-t-2 border-zinc-800">
+              <div className="font-mono font-bold text-[13px] text-orange-600 tracking-[0.1em]">
+                {s.n}
+              </div>
+              <h3 className="text-[21px] font-bold mt-3 mb-2 text-zinc-50 tracking-tight">{s.t}</h3>
+              <p className="text-zinc-400 leading-[1.55] m-0 text-[15px]">{s.d}</p>
+            </Rv>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const featCards = [
+  {
+    tag: "Dashboard",
+    title: "Real numbers, four ways",
+    desc: "Today, this week, pay period, this month — flag hours, clocked hours, and efficiency. No estimates.",
+    visual: (
+      <div className="grid grid-cols-2 gap-2">
+        <StatTile lab="Today" big="6.4" unit="h" sub={<span className="text-green-400">112%</span>} mini />
+        <StatTile lab="Week" big="38.1" unit="h" sub={<span className="text-green-400">104%</span>} mini />
+      </div>
+    ),
+  },
+  {
+    tag: "Pay Period Pace",
+    title: "Know if you'll make it",
+    desc: "A live bar against your goal with a today tick, and an at-a-glance pill: on pace, slightly behind, behind.",
+    visual: <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" compact />,
+  },
+  {
+    tag: "RO Logging",
+    title: "Logged in two taps",
+    desc: "RO number plus op code. Scan a barcode for the RO, hit Save & New, and start the next one.",
+    visual: <ROForm />,
+  },
+  {
+    tag: "Op Code Library",
+    title: "Your codes, your way",
+    desc: 'Build a personal library with parent / child codes — "Brake Job" → Front, Rear, Flush. Stop retyping.',
+    visual: <OpCodeList />,
+  },
+  {
+    tag: "Pay Period View",
+    title: "Catch missing hours",
+    desc: "Compares what the shop flagged against what you clocked, so you spot the gap before payday.",
+    visual: <DiscrepancyCard />,
+  },
+  {
+    tag: "History + Charts",
+    title: "Every RO, charted",
+    desc: "Full sortable log with flag hours over time. Each entry shows op code, hours, and timestamp.",
+    visual: (
+      <div className="flex flex-col gap-2.5">
+        <BarChart bars={[40, 58, 46, 70, 55, 78, 62]} height={48} />
+        <HistoryRows />
+      </div>
+    ),
+  },
+];
+
+function Features() {
+  return (
+    <section id="features" className="pb-24 max-[900px]:pb-[72px] max-sm:pb-14">
+      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
+        <div className="max-w-[620px]">
+          <Rv>
+            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
+              Everything you track
+            </span>
+          </Rv>
+          <Rv delay={60}>
+            <h2
+              className="font-extrabold tracking-tight text-zinc-50 text-balance mt-4 mb-0"
+              style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
+            >
+              Made for the bay, not the boardroom.
+            </h2>
+          </Rv>
+        </div>
+
+        <div className="grid grid-cols-3 gap-[18px] mt-12 max-[900px]:grid-cols-2 max-sm:grid-cols-1 max-sm:mt-8">
+          {featCards.map((f, i) => (
+            <Rv
+              key={f.tag}
+              delay={(i % 3) * 80}
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-[22px] flex flex-col hover:border-zinc-700 hover:-translate-y-0.5 transition-all duration-200"
+            >
+              <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-orange-600">
+                {f.tag}
+              </span>
+              <h3 className="text-[19px] font-bold mt-2 mb-1.5 text-zinc-50 tracking-tight">
+                {f.title}
+              </h3>
+              <p className="text-zinc-400 text-sm leading-[1.5] mb-[18px]">{f.desc}</p>
+              <div className="mt-auto">{f.visual}</div>
+            </Rv>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GuestMode() {
+  return (
+    <section className="py-[88px] bg-zinc-900 border-t border-b border-zinc-800 max-sm:py-14">
+      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
+        <div
+          className="grid gap-12 max-[900px]:grid-cols-1 max-[900px]:gap-8"
+          style={{ gridTemplateColumns: "1.1fr 0.9fr" }}
+        >
+          <div>
+            <Rv>
+              <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-orange-600">
+                Guest mode
+              </span>
+            </Rv>
+            <Rv delay={60}>
+              <h2
+                className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
+                style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
+              >
+                No account? No problem.
+              </h2>
+            </Rv>
+            <Rv delay={120}>
+              <p
+                className="text-zinc-400 leading-[1.55] mt-4 mb-7 max-sm:mb-6"
+                style={{ fontSize: "clamp(16px, 1.8vw, 17px)", maxWidth: 440 }}
+              >
+                Log ROs, check your stats, watch your pace — the whole app, no signup. Your data
+                stays in your browser. Make an account when you&apos;re ready to keep it.
+              </p>
+            </Rv>
+            <Rv delay={180}>
+              <Link
+                href="/guest"
+                className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] bg-orange-600 text-white hover:bg-orange-500 transition-colors max-sm:w-full max-sm:justify-center"
+              >
+                Try it first — no account needed
+              </Link>
+            </Rv>
+          </div>
+
+          <Rv
+            delay={120}
+            className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6"
+          >
+            <div className="flex items-center gap-2.5 mb-[18px] flex-wrap">
+              <span className="font-mono text-[11px] font-bold tracking-[0.08em] uppercase text-orange-600 bg-orange-600/10 px-2.5 py-1.5 rounded-full whitespace-nowrap">
+                ● Guest session
+              </span>
+              <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-zinc-500 ml-auto">
+                saved locally
+              </span>
+            </div>
+            <ul className="flex flex-col gap-3 m-0 p-0 list-none">
+              {[
+                "Log unlimited repair orders",
+                "Full dashboard & pace tracking",
+                "Op code library & history",
+                "Job timer with PiP mode",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2.5 text-sm text-zinc-300">
+                  <span className="w-[18px] h-[18px] rounded-full bg-green-500/15 text-green-400 grid place-items-center text-[11px] flex-shrink-0 mt-px">
+                    ✓
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <p className="font-mono text-[11px] text-zinc-500 mt-[18px] leading-relaxed">
+              Nothing leaves your phone until you create an account — then it all syncs over.
+            </p>
+          </Rv>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FinalCTA() {
+  return (
+    <section className="py-24 max-sm:py-16">
+      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
+        <Rv
+          className="rounded-[22px] text-center"
+          style={{
+            padding: "clamp(34px, 5vw, 60px) clamp(20px, 5vw, 60px)",
+            background:
+              "linear-gradient(135deg, color-mix(in srgb, #ea580c 16%, #131316), #131316)",
+            border:
+              "1px solid color-mix(in srgb, #ea580c 30%, #27272a)",
+          }}
+        >
+          <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-orange-600">
+            Flat Rate Tracker
+          </span>
+          <h2
+            className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
+            style={{ fontSize: "clamp(28px, 4.5vw, 46px)" }}
+          >
+            Stop guessing. Start tracking.
+          </h2>
+          <p
+            className="text-zinc-400 leading-[1.55] mt-4 mb-8 mx-auto"
+            style={{ fontSize: "clamp(16px, 1.8vw, 18px)", maxWidth: 480 }}
+          >
+            Set up in under a minute. See exactly where your pay period stands by your next RO.
+          </p>
+          <div className="flex gap-3 justify-center flex-wrap max-sm:flex-col max-sm:items-stretch">
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] bg-orange-600 text-white hover:bg-orange-500 transition-colors active:translate-y-px max-sm:justify-center"
+            >
+              Create free account
+            </Link>
+            <Link
+              href="/guest"
+              className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-white/[0.03] transition-colors active:translate-y-px max-sm:justify-center"
+            >
+              Try it first{" "}
+              <span className="font-mono text-orange-500">— no account →</span>
+            </Link>
+          </div>
+        </Rv>
+      </div>
+    </section>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="border-t border-zinc-800 py-10">
+      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start max-sm:gap-[18px]">
+        <Wordmark size={15} />
+        <div className="flex gap-5">
+          {[
+            { label: "Features", href: "#features" },
+            { label: "Guest mode", href: "/guest" },
+            { label: "Sign in", href: "/signin" },
+          ].map((l) => (
+            <Link
+              key={l.label}
+              href={l.href}
+              className="font-mono text-sm text-zinc-500 hover:text-zinc-300 transition-colors whitespace-nowrap no-underline"
+            >
+              {l.label}
+            </Link>
+          ))}
+        </div>
+        <span className="font-mono text-[12px] text-zinc-500">© 2026 Flat Rate Tracker</span>
+      </div>
+    </footer>
+  );
+}
+
+/* ── Page ────────────────────────────────────────────── */
+export default function LandingPage() {
+  useReveal();
+  return (
+    <>
+      <style>{`
+        @media (prefers-reduced-motion: no-preference) {
+          #lp.lp-animate [data-rv] {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.65s cubic-bezier(0.22, 0.61, 0.36, 1),
+                        transform 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
+          }
+          #lp.lp-animate [data-rv].rv-in {
+            opacity: 1;
+            transform: none;
+          }
+        }
+      `}</style>
+      <div id="lp" className="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-orange-600 selection:text-white">
+        <Nav />
+        <Hero />
+        <PaceSection />
+        <HowItWorks />
+        <Features />
+        <GuestMode />
+        <FinalCTA />
+        <Footer />
+      </div>
+    </>
+  );
+}

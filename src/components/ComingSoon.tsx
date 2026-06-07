@@ -8,7 +8,7 @@ export function ComingSoon({ title }: { title: string }) {
         This screen is coming in a later build step.
       </p>
       <Link
-        href="/"
+        href="/dashboard"
         className="mt-6 inline-block text-sm text-orange-400 hover:text-orange-300"
       >
         ← Back to Dashboard

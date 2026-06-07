@@ -39,7 +39,7 @@ export async function signUp(formData: FormData) {
   // immediately. On phase-2+ with confirmation on, the user would land here
   // but have no session until they click the confirm link — adjust then.
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect("/dashboard");
 }
 
 export async function signIn(formData: FormData) {
@@ -65,7 +65,7 @@ export async function signIn(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect("/dashboard");
 }
 
 export async function signOut() {

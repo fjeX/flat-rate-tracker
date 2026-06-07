@@ -94,7 +94,7 @@ export function LogRoForm({
   roTemplates,
   onSave,
   onCreateOpCode,
-  redirectTo = "/",
+  redirectTo = "/dashboard",
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -141,7 +141,7 @@ export function LogRoForm({
     startDelete(async () => {
       try {
         await deleteEntryAction(existingEntry.id);
-        router.push("/");
+        router.push("/dashboard");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to delete RO.");
       }
@@ -928,7 +928,7 @@ export function LogRoForm({
             </button>
           )}
           {isEdit && (
-            <Link href="/" className="btn btn-ghost btn-sm">
+            <Link href="/dashboard" className="btn btn-ghost btn-sm">
               Cancel
             </Link>
           )}
