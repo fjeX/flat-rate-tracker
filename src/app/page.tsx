@@ -62,21 +62,13 @@ function Rv({ children, delay = 0, className = "", style, as: Tag = "div", ...re
 /* ── Shared primitives ───────────────────────────────── */
 
 function Wordmark({ size = 17 }: { size?: number }) {
+  const height = size <= 15 ? 36 : 60;
   return (
-    <div className="flex items-center gap-2.5">
-      <div
-        className="w-[34px] h-[34px] rounded-lg bg-orange-600 p-2 grid grid-cols-3 items-end"
-        style={{ gap: "2.5px" }}
-        aria-hidden="true"
-      >
-        <span className="block w-full bg-white rounded-sm" style={{ height: 6 }} />
-        <span className="block w-full bg-white rounded-sm" style={{ height: 11 }} />
-        <span className="block w-full bg-white rounded-sm" style={{ height: 17 }} />
-      </div>
-      <span className="font-extrabold tracking-tight whitespace-nowrap" style={{ fontSize: size }}>
-        Flat Rate Tracker
-      </span>
-    </div>
+    <img
+      src="/frt-logo.png"
+      alt="Flat Rate Tracker"
+      style={{ height, width: "auto", display: "block" }}
+    />
   );
 }
 
@@ -342,7 +334,7 @@ function Nav() {
         backdropFilter: "blur(12px)",
       }}
     >
-      <div className="max-w-[1180px] mx-auto px-7 flex items-center justify-between h-[66px] max-sm:h-[60px] max-sm:px-[18px]">
+      <div className="max-w-[1180px] mx-auto px-7 flex items-center justify-between h-[76px] max-sm:h-[68px] max-sm:px-[18px]">
         <Link href="/" className="no-underline">
           <Wordmark />
         </Link>

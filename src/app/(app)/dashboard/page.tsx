@@ -97,6 +97,7 @@ export default async function DashboardPage() {
   const periodDays  = daysBetween(period.start, period.end);
   const currentDay  = dayOfPeriod(period.start, today, periodDays);
   // Where the "today" tick sits on the bar (0–1)
+  const daysLeft     = periodDays - currentDay;
   const paceTarget  = currentDay / periodDays;
   // How full the progress fill is (0–1, clamped to 1 for display)
   const actualFill  = Math.min(statsPeriod.flagHours / GOAL_HOURS, 1);
@@ -148,19 +149,28 @@ export default async function DashboardPage() {
           <div style={{ height: 1, background: "var(--line)", margin: "0 16px" }} />
           <div className="pace">
             <div className="pace-head">
-              <span className="title">Pay Period Pace</span>
-              <span className="meta">
-                {fmtHours(statsPeriod.flagHours)}h of {GOAL_HOURS}h goal
+              <span className="title">
+                Pay Period Pace
+                <span className="pace-head-meta"> · {daysLeft} {daysLeft === 1 ? "day" : "days"} left</span>
               </span>
             </div>
-            <div className="pace-track">
-              <div
-                className={paceFillClass}
-                style={{ width: `${actualFill * 100}%` }}
-              />
+            <div className="pace-values">
+              <span className="pace-now">
+                {fmtHours(statsPeriod.flagHours)}<span className="pace-unit"> flag hrs</span>
+              </span>
+              <span className="pace-goal">Goal {GOAL_HOURS}</span>
+            </div>
+            <div className="pace-track-wrap">
+              <span className="pace-today-label" style={{ left: `${paceTarget * 100}%` }}>TODAY</span>
+              <div className="pace-track">
+                <div
+                  className={paceFillClass}
+                  style={{ width: `${actualFill * 100}%` }}
+                />
+              </div>
               <div
                 className="pace-target"
-                style={{ left: `calc(${paceTarget * 100}% - 1px)` }}
+                style={{ left: `${paceTarget * 100}%` }}
               />
             </div>
             <div className="pace-foot">
