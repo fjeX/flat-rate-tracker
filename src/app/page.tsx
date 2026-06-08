@@ -343,13 +343,21 @@ function Nav() {
       }}
     >
       <div className="max-w-[1180px] mx-auto px-7 flex items-center justify-between h-[66px] max-sm:h-[60px] max-sm:px-[18px]">
-        <Wordmark />
+        <Link href="/" className="no-underline">
+          <Wordmark />
+        </Link>
         <div className="flex gap-2.5 items-center">
           <Link
             href="/guest"
             className="hidden sm:inline-flex items-center gap-2 font-bold text-sm px-4 py-2 rounded-lg border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-white/[0.03] transition-colors whitespace-nowrap"
           >
             Try as guest
+          </Link>
+          <Link
+            href="/signin"
+            className="hidden sm:inline-flex items-center font-bold text-sm px-4 py-2 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors whitespace-nowrap"
+          >
+            Log in
           </Link>
           <Link
             href="/signup"
@@ -761,7 +769,9 @@ function Footer() {
   return (
     <footer className="border-t border-zinc-800 py-10">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start max-sm:gap-[18px]">
-        <Wordmark size={15} />
+        <Link href="/" className="no-underline">
+          <Wordmark size={15} />
+        </Link>
         <div className="flex gap-5">
           {[
             { label: "Features", href: "#features" },

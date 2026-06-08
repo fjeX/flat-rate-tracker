@@ -17,6 +17,7 @@ import { TodayCard } from "@/components/dashboard/TodayCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
+import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,6 +126,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="app-main" style={{ paddingBottom: 64 }}>
+      <GuestSyncEffect />
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* ── Greeting + Pace card ────────────────────────────── */}

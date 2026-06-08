@@ -6,11 +6,25 @@ import type { OpCodeDraft } from "@/components/forms/OpCodeModals";
 
 const STORAGE_KEY = "frt_guest";
 
-type GuestState = { entries: Entry[] };
+type GuestState = {
+  entries: Entry[];
+  opCodes: OpCode[];
+  timerStartTime: number | null;   // Date.now() ms timestamp when started, null if not running
+  timerAccumulated: number;        // ms accumulated before current start
+  timerRoId: string | null;        // ID of attached guest Entry
+  timerLineId: string | null;      // ID of the specific EntryOpCode line being timed
+};
 
 type GuestAction =
   | { type: "ADD"; entry: Entry }
-  | { type: "HYDRATE"; state: GuestState };
+  | { type: "ADD_OPCODE"; opCode: OpCode }
+  | { type: "DELETE_OPCODE"; id: string }
+  | { type: "HYDRATE"; state: GuestState }
+  | { type: "TIMER_START"; startTime: number }
+  | { type: "TIMER_PAUSE"; accumulated: number }
+  | { type: "TIMER_RESET" }
+  | { type: "TIMER_SET_RO"; roId: string | null; lineId: string | null }
+  | { type: "UPDATE_ENTRY_HOURS"; entryId: string; lineId: string; actualHours: number };
 
 const defaultSettings: UserSettings = {
   userId: "guest",
@@ -32,12 +46,46 @@ export const GUEST_SAMPLE_OPCODES: OpCode[] = [
   { id: "g-6", userId: "guest", code: "401-3", description: "Transmission Fluid Change", flagHours: 1.2, notes: "", sortOrder: 5, createdAt: "", subOpCodes: [] },
 ];
 
+const initialState: GuestState = {
+  entries: [],
+  opCodes: GUEST_SAMPLE_OPCODES,
+  timerStartTime: null,
+  timerAccumulated: 0,
+  timerRoId: null,
+  timerLineId: null,
+};
+
 function reducer(state: GuestState, action: GuestAction): GuestState {
   switch (action.type) {
     case "ADD":
       return { ...state, entries: [action.entry, ...state.entries] };
+    case "ADD_OPCODE":
+      return { ...state, opCodes: [...state.opCodes, action.opCode] };
+    case "DELETE_OPCODE":
+      return { ...state, opCodes: state.opCodes.filter((op) => op.id !== action.id) };
     case "HYDRATE":
       return action.state;
+    case "TIMER_START":
+      return { ...state, timerStartTime: action.startTime };
+    case "TIMER_PAUSE":
+      return { ...state, timerStartTime: null, timerAccumulated: action.accumulated };
+    case "TIMER_RESET":
+      return { ...state, timerStartTime: null, timerAccumulated: 0, timerRoId: null, timerLineId: null };
+    case "TIMER_SET_RO":
+      return { ...state, timerRoId: action.roId, timerLineId: action.lineId };
+    case "UPDATE_ENTRY_HOURS": {
+      const entries = state.entries.map((entry) => {
+        if (entry.id !== action.entryId) return entry;
+        return {
+          ...entry,
+          opCodes: entry.opCodes.map((line) => {
+            if (line.id !== action.lineId) return line;
+            return { ...line, actualHours: action.actualHours };
+          }),
+        };
+      });
+      return { ...state, entries };
+    }
     default:
       return state;
   }
@@ -45,20 +93,47 @@ function reducer(state: GuestState, action: GuestAction): GuestState {
 
 type GuestContextValue = {
   entries: Entry[];
+  opCodes: OpCode[];
   settings: UserSettings;
   addEntry: (input: NewEntry) => Entry;
   makeOpCode: (draft: OpCodeDraft) => OpCode;
+  addGuestOpCode: (draft: OpCodeDraft) => OpCode;
+  deleteGuestOpCode: (id: string) => void;
+  startGuestTimer: () => void;
+  pauseGuestTimer: () => void;
+  resetGuestTimer: () => void;
+  setGuestTimerRo: (roId: string | null, lineId: string | null) => void;
+  updateEntryHours: (entryId: string, lineId: string, actualHours: number) => void;
+  timerState: {
+    startTime: number | null;
+    accumulated: number;
+    roId: string | null;
+    lineId: string | null;
+  };
 };
 
 const GuestContext = createContext<GuestContextValue | null>(null);
 
 export function GuestStoreProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, { entries: [] });
+  const [state, dispatch] = useReducer(reducer, initialState);
 
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw) dispatch({ type: "HYDRATE", state: JSON.parse(raw) as GuestState });
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<GuestState>;
+        dispatch({
+          type: "HYDRATE",
+          state: {
+            entries: parsed.entries ?? [],
+            opCodes: parsed.opCodes ?? GUEST_SAMPLE_OPCODES,
+            timerStartTime: parsed.timerStartTime ?? null,
+            timerAccumulated: parsed.timerAccumulated ?? 0,
+            timerRoId: parsed.timerRoId ?? null,
+            timerLineId: parsed.timerLineId ?? null,
+          },
+        });
+      }
     } catch {}
   }, []);
 
@@ -111,8 +186,72 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
     };
   }
 
+  function addGuestOpCode(draft: OpCodeDraft): OpCode {
+    const opCode: OpCode = {
+      id: crypto.randomUUID(),
+      userId: "guest",
+      code: draft.code,
+      description: draft.description,
+      flagHours: draft.flagHours,
+      notes: draft.notes ?? "",
+      sortOrder: state.opCodes.length,
+      createdAt: new Date().toISOString(),
+      subOpCodes: [],
+    };
+    dispatch({ type: "ADD_OPCODE", opCode });
+    return opCode;
+  }
+
+  function deleteGuestOpCode(id: string): void {
+    dispatch({ type: "DELETE_OPCODE", id });
+  }
+
+  function startGuestTimer(): void {
+    dispatch({ type: "TIMER_START", startTime: Date.now() });
+  }
+
+  function pauseGuestTimer(): void {
+    const accumulated =
+      state.timerAccumulated +
+      (state.timerStartTime ? Date.now() - state.timerStartTime : 0);
+    dispatch({ type: "TIMER_PAUSE", accumulated });
+  }
+
+  function resetGuestTimer(): void {
+    dispatch({ type: "TIMER_RESET" });
+  }
+
+  function setGuestTimerRo(roId: string | null, lineId: string | null): void {
+    dispatch({ type: "TIMER_SET_RO", roId, lineId });
+  }
+
+  function updateEntryHours(entryId: string, lineId: string, actualHours: number): void {
+    dispatch({ type: "UPDATE_ENTRY_HOURS", entryId, lineId, actualHours });
+  }
+
   return (
-    <GuestContext.Provider value={{ entries: state.entries, settings: defaultSettings, addEntry, makeOpCode }}>
+    <GuestContext.Provider
+      value={{
+        entries: state.entries,
+        opCodes: state.opCodes,
+        settings: defaultSettings,
+        addEntry,
+        makeOpCode,
+        addGuestOpCode,
+        deleteGuestOpCode,
+        startGuestTimer,
+        pauseGuestTimer,
+        resetGuestTimer,
+        setGuestTimerRo,
+        updateEntryHours,
+        timerState: {
+          startTime: state.timerStartTime,
+          accumulated: state.timerAccumulated,
+          roId: state.timerRoId,
+          lineId: state.timerLineId,
+        },
+      }}
+    >
       {children}
     </GuestContext.Provider>
   );

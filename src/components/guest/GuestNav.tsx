@@ -7,6 +7,8 @@ const TABS = [
   { href: "/guest", label: "Dashboard", match: (p: string) => p === "/guest" },
   { href: "/guest/log", label: "Log RO", match: (p: string) => p.startsWith("/guest/log") },
   { href: "/guest/history", label: "History", match: (p: string) => p.startsWith("/guest/history") },
+  { href: "/guest/op-codes", label: "Op Codes", match: (p: string) => p.startsWith("/guest/op-codes") },
+  { href: "/guest/timer", label: "Timer", match: (p: string) => p.startsWith("/guest/timer") },
 ];
 
 export function GuestNav() {

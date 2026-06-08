@@ -9,7 +9,22 @@ export default async function SignUpPage({
   const { error } = await searchParams;
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4">
+      <div className="mb-8 flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5 no-underline group">
+          <div
+            className="w-[30px] h-[30px] rounded-lg bg-orange-600 p-1.5 grid grid-cols-3 items-end"
+            style={{ gap: "2px" }}
+          >
+            <span className="block w-full bg-white rounded-sm" style={{ height: 5 }} />
+            <span className="block w-full bg-white rounded-sm" style={{ height: 9 }} />
+            <span className="block w-full bg-white rounded-sm" style={{ height: 14 }} />
+          </div>
+          <span className="font-extrabold tracking-tight text-zinc-100 text-[15px] whitespace-nowrap group-hover:text-white transition-colors">
+            Flat Rate Tracker
+          </span>
+        </Link>
+      </div>
       <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-6">
         <h1 className="text-xl font-semibold mb-4">Create account</h1>
 
