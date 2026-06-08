@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useGuestStore } from "@/lib/guest/context";
 import { OpCodeFormModal, type OpCodeFormValues } from "@/components/op-codes/OpCodeFormModal";
+import type { OpCode } from "@/lib/types";
 
 export function GuestOpCodesView() {
-  const { opCodes, addGuestOpCode, deleteGuestOpCode } = useGuestStore();
+  const { opCodes, addGuestOpCode, editGuestOpCode, deleteGuestOpCode } = useGuestStore();
   const [search, setSearch] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<OpCode | null>(null);
   const [saving, setSaving] = useState(false);
 
   const visible = useMemo(() => {
@@ -30,7 +32,23 @@ export function GuestOpCodesView() {
         flagHours: values.flagHours,
         notes: values.notes,
       });
-      setModalOpen(false);
+      setAddOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEdit(values: OpCodeFormValues): Promise<void> {
+    if (!editTarget) return;
+    setSaving(true);
+    try {
+      editGuestOpCode(editTarget.id, {
+        code: values.code,
+        description: values.description,
+        flagHours: values.flagHours,
+        notes: values.notes,
+      });
+      setEditTarget(null);
     } finally {
       setSaving(false);
     }
@@ -56,7 +74,7 @@ export function GuestOpCodesView() {
         </div>
         <button
           type="button"
-          onClick={() => setModalOpen(true)}
+          onClick={() => setAddOpen(true)}
           className="flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500"
         >
           <Plus className="h-4 w-4" />
@@ -114,6 +132,14 @@ export function GuestOpCodesView() {
                 </span>
                 <button
                   type="button"
+                  onClick={() => setEditTarget(op)}
+                  aria-label={`Edit ${op.code}`}
+                  className="flex items-center justify-center rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleDelete(op.id, op.code)}
                   aria-label={`Delete ${op.code}`}
                   className="flex items-center justify-center rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
@@ -128,10 +154,36 @@ export function GuestOpCodesView() {
 
       {/* Add modal */}
       <OpCodeFormModal
-        open={modalOpen}
+        open={addOpen}
         mode="add"
-        onClose={() => setModalOpen(false)}
+        onClose={() => setAddOpen(false)}
         onSubmit={handleAdd}
+        isPending={saving}
+      />
+
+      {/* Edit modal */}
+      <OpCodeFormModal
+        open={editTarget !== null}
+        mode="edit"
+        initial={
+          editTarget
+            ? {
+                code: editTarget.code,
+                description: editTarget.description,
+                flagHours: editTarget.flagHours,
+                notes: editTarget.notes,
+                hasSubCodes: false,
+                subCodes: [],
+                removedSubIds: [],
+              }
+            : undefined
+        }
+        onClose={() => setEditTarget(null)}
+        onSubmit={handleEdit}
+        onDelete={() => {
+          if (editTarget) handleDelete(editTarget.id, editTarget.code);
+          setEditTarget(null);
+        }}
         isPending={saving}
       />
     </main>

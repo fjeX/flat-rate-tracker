@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useReducer } from "react";
 import type { Entry, NewEntry, OpCode, UserSettings } from "@/lib/types";
 import type { OpCodeDraft } from "@/components/forms/OpCodeModals";
+import { STARTER_OP_CODES } from "@/lib/starter-opcodes";
 
 const STORAGE_KEY = "frt_guest";
 
@@ -19,6 +20,7 @@ type GuestAction =
   | { type: "ADD"; entry: Entry }
   | { type: "ADD_OPCODE"; opCode: OpCode }
   | { type: "DELETE_OPCODE"; id: string }
+  | { type: "EDIT_OPCODE"; id: string; patch: Pick<OpCode, "code" | "description" | "flagHours" | "notes"> }
   | { type: "HYDRATE"; state: GuestState }
   | { type: "TIMER_START"; startTime: number }
   | { type: "TIMER_PAUSE"; accumulated: number }
@@ -37,14 +39,17 @@ const defaultSettings: UserSettings = {
   roTemplates: [],
 };
 
-export const GUEST_SAMPLE_OPCODES: OpCode[] = [
-  { id: "g-1", userId: "guest", code: "100-1", description: "Engine Oil & Filter Change", flagHours: 0.3, notes: "", sortOrder: 0, createdAt: "", subOpCodes: [] },
-  { id: "g-2", userId: "guest", code: "600-5", description: "Brake Pads & Rotors — Front", flagHours: 1.8, notes: "", sortOrder: 1, createdAt: "", subOpCodes: [] },
-  { id: "g-3", userId: "guest", code: "600-6", description: "Brake Pads & Rotors — Rear", flagHours: 1.5, notes: "", sortOrder: 2, createdAt: "", subOpCodes: [] },
-  { id: "g-4", userId: "guest", code: "320-1", description: "Coolant System Flush", flagHours: 0.8, notes: "", sortOrder: 3, createdAt: "", subOpCodes: [] },
-  { id: "g-5", userId: "guest", code: "440-2", description: "A/C Recharge & Inspection", flagHours: 1.0, notes: "", sortOrder: 4, createdAt: "", subOpCodes: [] },
-  { id: "g-6", userId: "guest", code: "401-3", description: "Transmission Fluid Change", flagHours: 1.2, notes: "", sortOrder: 5, createdAt: "", subOpCodes: [] },
-];
+export const GUEST_SAMPLE_OPCODES: OpCode[] = STARTER_OP_CODES.map((s, i) => ({
+  id: `g-${i + 1}`,
+  userId: "guest",
+  code: s.code,
+  description: s.description,
+  flagHours: s.flagHours,
+  notes: "",
+  sortOrder: i,
+  createdAt: "",
+  subOpCodes: [],
+}));
 
 const initialState: GuestState = {
   entries: [],
@@ -63,6 +68,13 @@ function reducer(state: GuestState, action: GuestAction): GuestState {
       return { ...state, opCodes: [...state.opCodes, action.opCode] };
     case "DELETE_OPCODE":
       return { ...state, opCodes: state.opCodes.filter((op) => op.id !== action.id) };
+    case "EDIT_OPCODE":
+      return {
+        ...state,
+        opCodes: state.opCodes.map((op) =>
+          op.id === action.id ? { ...op, ...action.patch } : op,
+        ),
+      };
     case "HYDRATE":
       return action.state;
     case "TIMER_START":
@@ -98,6 +110,7 @@ type GuestContextValue = {
   addEntry: (input: NewEntry) => Entry;
   makeOpCode: (draft: OpCodeDraft) => OpCode;
   addGuestOpCode: (draft: OpCodeDraft) => OpCode;
+  editGuestOpCode: (id: string, draft: OpCodeDraft) => void;
   deleteGuestOpCode: (id: string) => void;
   startGuestTimer: () => void;
   pauseGuestTimer: () => void;
@@ -202,6 +215,19 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
     return opCode;
   }
 
+  function editGuestOpCode(id: string, draft: OpCodeDraft): void {
+    dispatch({
+      type: "EDIT_OPCODE",
+      id,
+      patch: {
+        code: draft.code,
+        description: draft.description,
+        flagHours: draft.flagHours,
+        notes: draft.notes ?? "",
+      },
+    });
+  }
+
   function deleteGuestOpCode(id: string): void {
     dispatch({ type: "DELETE_OPCODE", id });
   }
@@ -238,6 +264,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         addEntry,
         makeOpCode,
         addGuestOpCode,
+        editGuestOpCode,
         deleteGuestOpCode,
         startGuestTimer,
         pauseGuestTimer,

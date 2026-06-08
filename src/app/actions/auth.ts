@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import * as db from "@/lib/db";
+import { STARTER_OP_CODES } from "@/lib/starter-opcodes";
 
 function toSigninWithError(message: string): never {
   redirect(`/signin?error=${encodeURIComponent(message)}`);
@@ -34,6 +36,19 @@ export async function signUp(formData: FormData) {
       toSignupWithError(error.message);
     }
   }
+
+  // Seed default op code library for the new account.
+  // Non-fatal — if this fails the user can add codes manually.
+  try {
+    for (const starter of STARTER_OP_CODES) {
+      await db.createOpCode(supabase, {
+        code: starter.code,
+        description: starter.description,
+        flagHours: starter.flagHours,
+        notes: "",
+      });
+    }
+  } catch { /* ignore seeding errors */ }
 
   // Local dev has email confirmation disabled, so the user is signed in
   // immediately. On phase-2+ with confirmation on, the user would land here
