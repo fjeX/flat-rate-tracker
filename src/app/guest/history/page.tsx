@@ -2,6 +2,7 @@
 
 import { useGuestStore } from "@/lib/guest/context";
 import { HistoryView } from "@/components/history/HistoryView";
+import { GuestRoDetailModal } from "@/components/guest/GuestRoDetailModal";
 import {
   isoDate,
   getPeriodForDate,
@@ -29,6 +30,9 @@ export default function GuestHistoryPage() {
       monthStart={startOfMonth(today)}
       monthEnd={endOfMonth(today)}
       weekStartDay={0}
+      renderDetail={(entry, onClose) => (
+        <GuestRoDetailModal entry={entry} onClose={onClose} />
+      )}
     />
   );
 }

@@ -26,7 +26,8 @@ type GuestAction =
   | { type: "TIMER_PAUSE"; accumulated: number }
   | { type: "TIMER_RESET" }
   | { type: "TIMER_SET_RO"; roId: string | null; lineId: string | null }
-  | { type: "UPDATE_ENTRY_HOURS"; entryId: string; lineId: string; actualHours: number };
+  | { type: "UPDATE_ENTRY_HOURS"; entryId: string; lineId: string; actualHours: number }
+  | { type: "DELETE_ENTRY"; id: string };
 
 const defaultSettings: UserSettings = {
   userId: "guest",
@@ -98,6 +99,8 @@ function reducer(state: GuestState, action: GuestAction): GuestState {
       });
       return { ...state, entries };
     }
+    case "DELETE_ENTRY":
+      return { ...state, entries: state.entries.filter((e) => e.id !== action.id) };
     default:
       return state;
   }
@@ -117,6 +120,7 @@ type GuestContextValue = {
   resetGuestTimer: () => void;
   setGuestTimerRo: (roId: string | null, lineId: string | null) => void;
   updateEntryHours: (entryId: string, lineId: string, actualHours: number) => void;
+  deleteGuestEntry: (id: string) => void;
   timerState: {
     startTime: number | null;
     accumulated: number;
@@ -255,6 +259,10 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
     dispatch({ type: "UPDATE_ENTRY_HOURS", entryId, lineId, actualHours });
   }
 
+  function deleteGuestEntry(id: string): void {
+    dispatch({ type: "DELETE_ENTRY", id });
+  }
+
   return (
     <GuestContext.Provider
       value={{
@@ -271,6 +279,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         resetGuestTimer,
         setGuestTimerRo,
         updateEntryHours,
+        deleteGuestEntry,
         timerState: {
           startTime: state.timerStartTime,
           accumulated: state.timerAccumulated,

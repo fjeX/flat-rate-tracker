@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useGuestStore } from "@/lib/guest/context";
 import { OpCodeFormModal, type OpCodeFormValues } from "@/components/op-codes/OpCodeFormModal";
+import { fmtHours } from "@/lib/stats";
 import type { OpCode } from "@/lib/types";
 
 export function GuestOpCodesView() {
@@ -119,33 +120,45 @@ export function GuestOpCodesView() {
             {visible.map((op) => (
               <li
                 key={op.id}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-zinc-900"
+                onClick={() => setEditTarget(op)}
+                className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2 cursor-pointer transition-colors hover:border-zinc-700 hover:bg-zinc-800/60"
               >
-                <span className="min-w-[80px] font-mono text-sm text-orange-400">
-                  {op.code}
-                </span>
-                <span className="flex-1 truncate text-sm text-zinc-200">
-                  {op.description}
-                </span>
-                <span className="shrink-0 text-sm tabular-nums text-zinc-400">
-                  {op.flagHours} hrs
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditTarget(op)}
-                  aria-label={`Edit ${op.code}`}
-                  className="flex items-center justify-center rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(op.id, op.code)}
-                  aria-label={`Delete ${op.code}`}
-                  className="flex items-center justify-center rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {/* Blank space where drag handle would be — keeps alignment identical to real app */}
+                <div className="h-8 w-8 shrink-0" aria-hidden="true" />
+
+                {/* Main content */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-sm font-semibold text-zinc-100">{op.code}</span>
+                    <span className="text-xs text-orange-400">{fmtHours(op.flagHours)}h</span>
+                  </div>
+                  {op.description && (
+                    <p className="truncate text-xs text-zinc-400">{op.description}</p>
+                  )}
+                  {op.notes && (
+                    <p className="truncate text-xs italic text-zinc-500">{op.notes}</p>
+                  )}
+                </div>
+
+                {/* Action buttons — stopPropagation so row click doesn't also fire */}
+                <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setEditTarget(op)}
+                    aria-label={`Edit ${op.code}`}
+                    className="cursor-pointer rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(op.id, op.code)}
+                    aria-label={`Delete ${op.code}`}
+                    className="cursor-pointer rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-300"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

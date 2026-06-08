@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useGuestStore } from "@/lib/guest/context";
 import {
@@ -12,14 +13,16 @@ import {
   formatPeriodLabel,
 } from "@/lib/periods";
 import { aggregateStats } from "@/lib/stats";
-import type { DailyClock } from "@/lib/types";
+import type { DailyClock, Entry } from "@/lib/types";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
+import { GuestRoDetailModal } from "@/components/guest/GuestRoDetailModal";
 
 const NO_CLOCKS: DailyClock[] = [];
 
 export default function GuestDashboard() {
   const { entries, settings } = useGuestStore();
+  const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
   const today = isoDate();
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
   const weekStart = startOfWeek(today);
@@ -33,6 +36,7 @@ export default function GuestDashboard() {
   const statsMonth = aggregateStats(entries, NO_CLOCKS, { start: monthStart, end: monthEnd });
 
   return (
+    <>
     <main className="mx-auto max-w-5xl space-y-6 p-4 pb-16">
       <div>
         <div className="text-xs uppercase tracking-wide text-zinc-500">Pay period</div>
@@ -50,6 +54,7 @@ export default function GuestDashboard() {
         <h2 className="mb-2 text-sm font-medium text-zinc-400">Recent ROs</h2>
         <RoList
           entries={entries.slice(0, 5)}
+          onRowClick={setDetailEntry}
           emptyState={
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center">
               <p className="text-sm text-zinc-400">No ROs logged yet.</p>
@@ -64,5 +69,9 @@ export default function GuestDashboard() {
         />
       </section>
     </main>
+    {detailEntry && (
+      <GuestRoDetailModal entry={detailEntry} onClose={() => setDetailEntry(null)} />
+    )}
+    </>
   );
 }

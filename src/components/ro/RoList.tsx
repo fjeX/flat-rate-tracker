@@ -21,10 +21,12 @@ export function RoList({
   entries,
   library = [],
   emptyState,
+  onRowClick,
 }: {
   entries: Entry[];
   library?: OpCode[];
   emptyState?: React.ReactNode;
+  onRowClick?: (entry: Entry) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
@@ -53,7 +55,7 @@ export function RoList({
               key={e.id}
               type="button"
               className="ro-row"
-              onClick={() => setOpenId(e.id)}
+              onClick={() => onRowClick ? onRowClick(e) : setOpenId(e.id)}
             >
               <div className="grow">
                 <div>
@@ -96,7 +98,7 @@ export function RoList({
         })}
       </div>
 
-      {openEntry && (
+      {!onRowClick && openEntry && (
         <RoDetailModal
           entry={openEntry}
           library={library}

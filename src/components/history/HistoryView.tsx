@@ -128,6 +128,7 @@ export function HistoryView({
   monthStart: monthStartProp,
   monthEnd: monthEndProp,
   weekStartDay,
+  renderDetail,
 }: {
   entries: Entry[];
   library: OpCode[];
@@ -140,6 +141,7 @@ export function HistoryView({
   monthStart: string;
   monthEnd: string;
   weekStartDay: 0 | 1;
+  renderDetail?: (entry: Entry, onClose: () => void) => React.ReactNode;
 }) {
   const [filter, setFilter] = useState<FilterKind>("period");
   const [sortBy, setSortBy] = useState<SortKind>("date");
@@ -307,11 +309,9 @@ export function HistoryView({
       )}
 
       {openEntry && (
-        <RoDetailModal
-          entry={openEntry}
-          library={library}
-          onClose={() => setOpenId(null)}
-        />
+        renderDetail
+          ? renderDetail(openEntry, () => setOpenId(null))
+          : <RoDetailModal entry={openEntry} library={library} onClose={() => setOpenId(null)} />
       )}
     </main>
   );
