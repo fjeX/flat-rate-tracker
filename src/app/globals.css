@@ -348,6 +348,92 @@ body {
 }
 .avg-foot .k { color: var(--fg-3); margin-right: 4px; }
 
+/* ── Averages — Roomier Classic redesign ────────────── */
+.r-tabbar {
+  display: inline-flex; gap: 4px;
+  background: var(--bg-2);
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+}
+.r-tab {
+  appearance: none; border: 0; background: transparent;
+  color: var(--fg-2); font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  transition: all 120ms; font-variant-numeric: tabular-nums;
+}
+.r-tab:hover { color: var(--fg-1); }
+.r-tab.active {
+  background: var(--bg-3); color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--bg-4);
+}
+.r-readout {
+  display: flex; align-items: center; padding: 6px 4px 0; min-height: 28px;
+}
+.r-readout-main {
+  display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums;
+}
+.r-readout-label {
+  color: var(--fg-2); font-size: 12px; font-weight: 600;
+  font-family: ui-monospace, Menlo, monospace;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.r-readout-value {
+  color: var(--fg-0); font-size: 34px; font-weight: 700; letter-spacing: -0.02em;
+}
+.r-readout-unit {
+  color: var(--fg-3); font-size: 11px; font-family: ui-monospace, Menlo, monospace;
+}
+.r-modewrap {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 0 2px;
+}
+.r-mode-toggle {
+  display: inline-flex; background: var(--bg-2); padding: 3px;
+  border-radius: 999px; border: 1px solid var(--line-soft);
+}
+.r-mode-btn {
+  appearance: none; border: 0; background: transparent;
+  font: inherit; font-size: 12px; font-weight: 600;
+  color: var(--fg-2); padding: 5px 11px; border-radius: 999px;
+  cursor: pointer; font-variant-numeric: tabular-nums; transition: all 120ms;
+}
+.r-mode-btn.on {
+  background: var(--bg-3); color: var(--fg-0);
+  box-shadow: inset 0 0 0 1px var(--bg-4);
+}
+.r-sub-toggle { display: inline-flex; gap: 6px; align-items: center; }
+.r-sub-btn {
+  appearance: none; border: 1px solid var(--line-soft);
+  background: var(--bg-2); color: var(--fg-2);
+  padding: 3px 8px; font: inherit; font-size: 10.5px; font-weight: 600;
+  border-radius: 999px; cursor: pointer; transition: all 120ms;
+}
+.r-sub-btn.on {
+  color: var(--brand);
+  border-color: color-mix(in oklab, var(--brand) 40%, transparent);
+  background: var(--brand-bg);
+}
+.r-chart-wrap { width: 100%; }
+.r-chart { width: 100%; display: block; }
+.r-footer {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 4px 0;
+  border-top: 1px solid var(--line-soft); margin-top: 2px;
+}
+.r-footer-stat {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.r-footer-num { color: var(--fg-0); font-weight: 700; font-size: 13px; }
+.r-footer-cap {
+  color: var(--fg-3); font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: 0.08em; font-family: ui-monospace, Menlo, monospace;
+}
+.r-footer-dot {
+  width: 3px; height: 3px; border-radius: 999px; background: var(--line); flex-shrink: 0;
+}
+
 /* ── Insight callout ─────────────────────────────────── */
 .insight {
   padding: 14px 16px;

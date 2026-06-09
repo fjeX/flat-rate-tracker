@@ -10,12 +10,16 @@ import { getPeriodForDate, addDays } from "@/lib/periods";
 // ---------------------------------------------------------------------------
 
 type TabId = "day" | "week" | "period" | "month";
+type Mode = "total" | "avg";
+type SubMode = "worked" | "all";
 
 type BarData = {
-  label: string;
-  value: number; // avg flag hours
+  label: string;       // short axis label (M, May 3)
+  longLabel: string;   // readout label (Mon, May 3)
+  subLabel?: string;   // secondary axis label (Wk 1 / Wk 2 for period tab)
+  value: number;
   isBest: boolean;
-  isCurrent: boolean; // today / this week / this period / this month
+  isCurrent: boolean;
 };
 
 type Props = {
@@ -34,15 +38,11 @@ type Props = {
 // Constants
 // ---------------------------------------------------------------------------
 
-const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
-// JS getDay(): 0=Sun,1=Mon,...,6=Sat
-// Display order: Mon(1),Tue(2),Wed(3),Thu(4),Fri(5),Sat(6),Sun(0)
-const DISPLAY_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-const DAY_NAMES_LONG = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // ---------------------------------------------------------------------------
-// Computation helpers
+// Helpers
 // ---------------------------------------------------------------------------
 
 function daysBetweenInclusive(start: string, end: string): number {
@@ -55,13 +55,19 @@ function daysInMonth(year: number, month1: number): number {
   return new Date(year, month1, 0).getDate();
 }
 
-/** Get ISO date string for day at offset from windowStart. */
-function dateAtOffset(windowStart: string, offset: number): string {
-  return addDays(windowStart, offset);
+function getWeekStart(date: string, weekStartDay: 0 | 1): string {
+  const dow = new Date(date + "T00:00:00").getDay();
+  const offset = weekStartDay === 0 ? dow : (dow === 0 ? 6 : dow - 1);
+  return addDays(date, -offset);
+}
+
+function inferSplitDay(periodStart: string): number {
+  const day = parseInt(periodStart.split("-")[2], 10);
+  return day > 1 ? day - 1 : 15;
 }
 
 // ---------------------------------------------------------------------------
-// Per-tab data computation
+// Compute bar data per tab
 // ---------------------------------------------------------------------------
 
 function computeDay(
@@ -69,21 +75,22 @@ function computeDay(
   windowStart: string,
   windowEnd: string,
   today: string,
-  avgMode: "all" | "worked",
+  mode: Mode,
+  subMode: SubMode,
   weekStartDay: 0 | 1,
 ): BarData[] {
   const displayOrder = weekStartDay === 0
-    ? [0, 1, 2, 3, 4, 5, 6]   // Sun-first
-    : [1, 2, 3, 4, 5, 6, 0];  // Mon-first
-  const labels = weekStartDay === 0
+    ? [0, 1, 2, 3, 4, 5, 6]
+    : [1, 2, 3, 4, 5, 6, 0];
+  const shortLabels = weekStartDay === 0
     ? ["S", "M", "T", "W", "T", "F", "S"]
     : ["M", "T", "W", "T", "F", "S", "S"];
 
   const totalByDow: number[] = new Array(7).fill(0);
-  const countByDow: number[] = new Array(7).fill(0);   // calendar days
-  const workedByDow: number[] = new Array(7).fill(0);  // distinct dates with entries
-
+  const countByDow: number[] = new Array(7).fill(0);
+  const workedByDow: number[] = new Array(7).fill(0);
   const workedDates = new Set<string>();
+
   for (const entry of entries) {
     if (entry.date < windowStart || entry.date > windowEnd) continue;
     workedDates.add(entry.date);
@@ -91,7 +98,7 @@ function computeDay(
 
   const totalDays = daysBetweenInclusive(windowStart, windowEnd);
   for (let i = 0; i < totalDays; i++) {
-    const d = dateAtOffset(windowStart, i);
+    const d = addDays(windowStart, i);
     const jsDay = new Date(d + "T00:00:00").getDay();
     countByDow[jsDay]++;
     if (workedDates.has(d)) workedByDow[jsDay]++;
@@ -103,7 +110,7 @@ function computeDay(
     totalByDow[jsDay] += entry.flagHours;
   }
 
-  const divisor = avgMode === "worked" ? workedByDow : countByDow;
+  const divisor = subMode === "worked" ? workedByDow : countByDow;
   const avgByDow = totalByDow.map((total, dow) =>
     divisor[dow] > 0 ? total / divisor[dow] : 0
   );
@@ -111,8 +118,9 @@ function computeDay(
   const todayDow = new Date(today + "T00:00:00").getDay();
 
   const bars: BarData[] = displayOrder.map((dow, idx) => ({
-    label: labels[idx],
-    value: avgByDow[dow],
+    label: shortLabels[idx],
+    longLabel: DAY_SHORT[dow],
+    value: mode === "total" ? totalByDow[dow] : avgByDow[dow],
     isBest: false,
     isCurrent: dow === todayDow,
   }));
@@ -120,20 +128,10 @@ function computeDay(
   const maxVal = Math.max(...bars.map((b) => b.value));
   if (maxVal > 0) {
     for (const bar of bars) {
-      if (bar.value === maxVal) {
-        bar.isBest = true;
-        break;
-      }
+      if (bar.value === maxVal) { bar.isBest = true; break; }
     }
   }
-
   return bars;
-}
-
-function getWeekStart(date: string, weekStartDay: 0 | 1): string {
-  const dow = new Date(date + "T00:00:00").getDay(); // 0=Sun
-  const offset = weekStartDay === 0 ? dow : (dow === 0 ? 6 : dow - 1);
-  return addDays(date, -offset);
 }
 
 function computeWeek(
@@ -142,8 +140,11 @@ function computeWeek(
   windowEnd: string,
   today: string,
   weekStartDay: 0 | 1,
+  mode: Mode,
+  subMode: SubMode,
 ): BarData[] {
   const weekTotals = new Map<string, number>();
+  const weekWorkedDates = new Map<string, Set<string>>();
   const weekSet = new Set<string>();
 
   const firstWeekStart = getWeekStart(windowStart, weekStartDay);
@@ -162,30 +163,41 @@ function computeWeek(
     if (entry.date < windowStart || entry.date > windowEnd) continue;
     const ws = getWeekStart(entry.date, weekStartDay);
     weekTotals.set(ws, (weekTotals.get(ws) ?? 0) + entry.flagHours);
+    if (!weekWorkedDates.has(ws)) weekWorkedDates.set(ws, new Set());
+    weekWorkedDates.get(ws)!.add(entry.date);
   }
 
   const currentWeekStart = getWeekStart(today, weekStartDay);
   const sortedWeeks = Array.from(weekSet).sort();
+
   const bars: BarData[] = sortedWeeks.map((ws) => {
     const [, m2, d2] = ws.split("-").map(Number);
-    return {
-      label: `${MONTHS_SHORT[m2 - 1]} ${d2}`,
-      value: weekTotals.get(ws) ?? 0,
-      isBest: false,
-      isCurrent: ws === currentWeekStart,
-    };
+    const dateLabel = `${MONTHS_SHORT[m2 - 1]} ${d2}`;
+    const total = weekTotals.get(ws) ?? 0;
+
+    let value: number;
+    if (mode === "total") {
+      value = total;
+    } else if (subMode === "worked") {
+      const workedDays = weekWorkedDates.get(ws)?.size ?? 0;
+      value = workedDays > 0 ? total / workedDays : 0;
+    } else {
+      const wEnd = addDays(ws, 6);
+      const effStart = ws < windowStart ? windowStart : ws;
+      const effEnd = wEnd > windowEnd ? windowEnd : wEnd;
+      const allDays = effEnd >= effStart ? daysBetweenInclusive(effStart, effEnd) : 0;
+      value = allDays > 0 ? total / allDays : 0;
+    }
+
+    return { label: dateLabel, longLabel: dateLabel, value, isBest: false, isCurrent: ws === currentWeekStart };
   });
 
   const maxVal = Math.max(...bars.map((b) => b.value), 0);
   if (maxVal > 0) {
     for (const bar of bars) {
-      if (bar.value === maxVal) {
-        bar.isBest = true;
-        break;
-      }
+      if (bar.value === maxVal) { bar.isBest = true; break; }
     }
   }
-
   return bars;
 }
 
@@ -195,8 +207,11 @@ function computePeriod(
   windowEnd: string,
   splitDay: number,
   today: string,
+  mode: Mode,
+  subMode: SubMode,
 ): BarData[] {
   const periodTotals = new Map<string, { total: number; start: string; end: string }>();
+  const periodWorkedDates = new Map<string, Set<string>>();
 
   for (const entry of entries) {
     if (entry.date < windowStart || entry.date > windowEnd) continue;
@@ -207,6 +222,8 @@ function computePeriod(
     } else {
       periodTotals.set(period.key, { total: entry.flagHours, start: period.start, end: period.end });
     }
+    if (!periodWorkedDates.has(period.key)) periodWorkedDates.set(period.key, new Set());
+    periodWorkedDates.get(period.key)!.add(entry.date);
   }
 
   let cursor = windowStart;
@@ -223,26 +240,34 @@ function computePeriod(
   const sorted = Array.from(periodTotals.entries())
     .sort(([, a], [, b]) => a.start.localeCompare(b.start));
 
-  const bars: BarData[] = sorted.map(([key, { total, start }]) => {
+  const bars: BarData[] = sorted.map(([key, { total, start, end }]) => {
     const [, m, d] = start.split("-").map(Number);
-    return {
-      label: `${MONTHS_SHORT[m - 1]} ${d}`,
-      value: total,
-      isBest: false,
-      isCurrent: key === currentPeriod.key,
-    };
+    const dateLabel = `${MONTHS_SHORT[m - 1]} ${d}`;
+
+    let value: number;
+    if (mode === "total") {
+      value = total;
+    } else if (subMode === "worked") {
+      const workedDays = periodWorkedDates.get(key)?.size ?? 0;
+      value = workedDays > 0 ? total / workedDays : 0;
+    } else {
+      const effStart = start < windowStart ? windowStart : start;
+      const effEnd = end > windowEnd ? windowEnd : end;
+      const allDays = effEnd >= effStart ? daysBetweenInclusive(effStart, effEnd) : 0;
+      value = allDays > 0 ? total / allDays : 0;
+    }
+
+    const startDay = parseInt(start.split("-")[2], 10);
+    const subLabel = startDay <= splitDay ? "Wk 1" : "Wk 2";
+    return { label: dateLabel, longLabel: dateLabel, subLabel, value, isBest: false, isCurrent: key === currentPeriod.key };
   });
 
   const maxVal = Math.max(...bars.map((b) => b.value), 0);
   if (maxVal > 0) {
     for (const bar of bars) {
-      if (bar.value === maxVal) {
-        bar.isBest = true;
-        break;
-      }
+      if (bar.value === maxVal) { bar.isBest = true; break; }
     }
   }
-
   return bars;
 }
 
@@ -251,7 +276,8 @@ function computeMonth(
   windowStart: string,
   windowEnd: string,
   today: string,
-  avgMode: "all" | "worked",
+  mode: Mode,
+  subMode: SubMode,
 ): BarData[] {
   const monthTotals = new Map<string, number>();
   const workedDaysByMonth = new Map<string, Set<string>>();
@@ -259,8 +285,7 @@ function computeMonth(
   const [startYear, startMonth] = windowStart.split("-").map(Number);
   const [endYear, endMonth] = windowEnd.split("-").map(Number);
 
-  let y = startYear;
-  let m = startMonth;
+  let y = startYear, m = startMonth;
   while (y < endYear || (y === endYear && m <= endMonth)) {
     const key = `${y}-${String(m).padStart(2, "0")}`;
     if (!monthTotals.has(key)) monthTotals.set(key, 0);
@@ -281,12 +306,19 @@ function computeMonth(
 
   const bars: BarData[] = sorted.map(([key, total]) => {
     const [y2, m2] = key.split("-").map(Number);
-    const divisor = avgMode === "worked"
-      ? (workedDaysByMonth.get(key)?.size ?? 0)
-      : daysInMonth(y2, m2);
+    let value: number;
+    if (mode === "total") {
+      value = total;
+    } else {
+      const divisor = subMode === "worked"
+        ? (workedDaysByMonth.get(key)?.size ?? 0)
+        : daysInMonth(y2, m2);
+      value = divisor > 0 ? total / divisor : 0;
+    }
     return {
       label: MONTHS_SHORT[m2 - 1],
-      value: divisor > 0 ? total / divisor : 0,
+      longLabel: MONTHS_SHORT[m2 - 1],
+      value,
       isBest: false,
       isCurrent: key === currentMonth,
     };
@@ -295,18 +327,14 @@ function computeMonth(
   const maxVal = Math.max(...bars.map((b) => b.value), 0);
   if (maxVal > 0) {
     for (const bar of bars) {
-      if (bar.value === maxVal) {
-        bar.isBest = true;
-        break;
-      }
+      if (bar.value === maxVal) { bar.isBest = true; break; }
     }
   }
-
   return bars;
 }
 
 // ---------------------------------------------------------------------------
-// Insight computation
+// Insight text
 // ---------------------------------------------------------------------------
 
 function computeInsight(
@@ -321,214 +349,192 @@ function computeInsight(
   }
 
   if (activeTab === "day") {
-    // Find best and worst non-zero days
     const withValues = bars.filter((b) => b.value > 0);
     if (withValues.length < 2) {
       const best = bars.find((b) => b.isBest);
-      if (best) {
-        const dayIdx = DAY_LABELS.indexOf(best.label);
-        const dayName = dayIdx >= 0 ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][dayIdx] : best.label;
-        return `Your best day of the week is ${dayName}, averaging ${fmtHours(best.value)}h.`;
-      }
+      if (best) return `Your best day of the week is ${best.longLabel}, averaging ${fmtHours(best.value)}h.`;
       return "Log more ROs to see insights here.";
     }
     const best = [...bars].sort((a, b) => b.value - a.value)[0];
     const worst = [...withValues].sort((a, b) => a.value - b.value)[0];
-    const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const bestIdx = DAY_LABELS.indexOf(best.label);
-    const worstIdx = dayLabels.indexOf(worst.label);
-    const bestName = bestIdx >= 0 ? dayLabels[bestIdx] : best.label;
-    const worstDow = bars.indexOf(worst);
-    const worstName = worstDow >= 0 ? dayLabels[worstDow] : worst.label;
-
     if (worst.value > 0) {
       const pct = Math.round(((best.value - worst.value) / worst.value) * 100);
-      if (pct >= 10) {
-        return `You average ${pct}% more hours on ${bestName} than ${worstName}.`;
-      }
+      if (pct >= 10) return `You average ${pct}% more hours on ${best.longLabel} than ${worst.longLabel}.`;
     }
-    return `Your best day of the week is ${bestName}, averaging ${fmtHours(best.value)}h.`;
+    return `Your best day of the week is ${best.longLabel}, averaging ${fmtHours(best.value)}h.`;
   }
 
   if (activeTab === "week" && bars.length >= 2) {
     const lastTwo = bars.slice(-2);
-    const prev = lastTwo[0].value;
-    const curr = lastTwo[1].value;
-    if (prev > 0 && curr > prev) {
-      const pct = Math.round(((curr - prev) / prev) * 100);
-      return `Your flag hours are up ${pct}% from last week.`;
-    }
-    if (prev > 0 && curr < prev) {
-      const pct = Math.round(((prev - curr) / prev) * 100);
-      return `Your flag hours are down ${pct}% from last week.`;
-    }
+    const prev = lastTwo[0].value, curr = lastTwo[1].value;
+    if (prev > 0 && curr > prev) return `Your flag hours are up ${Math.round(((curr - prev) / prev) * 100)}% from last week.`;
+    if (prev > 0 && curr < prev) return `Your flag hours are down ${Math.round(((prev - curr) / prev) * 100)}% from last week.`;
   }
 
   if (activeTab === "period" && bars.length >= 2) {
     const lastTwo = bars.slice(-2);
-    const prev = lastTwo[0].value;
-    const curr = lastTwo[1].value;
-    if (prev > 0 && curr > prev) {
-      const pct = Math.round(((curr - prev) / prev) * 100);
-      return `Your flag hours are up ${pct}% from last period.`;
-    }
-    if (prev > 0 && curr < prev) {
-      const pct = Math.round(((prev - curr) / prev) * 100);
-      return `Your flag hours are down ${pct}% from last period.`;
-    }
+    const prev = lastTwo[0].value, curr = lastTwo[1].value;
+    if (prev > 0 && curr > prev) return `Your flag hours are up ${Math.round(((curr - prev) / prev) * 100)}% from last period.`;
+    if (prev > 0 && curr < prev) return `Your flag hours are down ${Math.round(((prev - curr) / prev) * 100)}% from last period.`;
   }
 
   if (activeTab === "month" && bars.length >= 2) {
     const lastTwo = bars.slice(-2);
-    const prev = lastTwo[0].value;
-    const curr = lastTwo[1].value;
-    if (prev > 0 && curr > prev) {
-      const pct = Math.round(((curr - prev) / prev) * 100);
-      return `Your flag hours are up ${pct}% from last month.`;
-    }
-    if (prev > 0 && curr < prev) {
-      const pct = Math.round(((prev - curr) / prev) * 100);
-      return `Your flag hours are down ${pct}% from last month.`;
-    }
+    const prev = lastTwo[0].value, curr = lastTwo[1].value;
+    if (prev > 0 && curr > prev) return `Your flag hours are up ${Math.round(((curr - prev) / prev) * 100)}% from last month.`;
+    if (prev > 0 && curr < prev) return `Your flag hours are down ${Math.round(((prev - curr) / prev) * 100)}% from last month.`;
   }
 
-  // Fallback: show best bar info
   const best = bars.find((b) => b.isBest);
   if (best) {
     const unitNames: Record<TabId, string> = { day: "day", week: "week", period: "period", month: "month" };
-    return `Best ${unitNames[activeTab]}: ${best.label} with ${fmtHours(best.value)}h avg.`;
+    return `Best ${unitNames[activeTab]}: ${best.longLabel} with ${fmtHours(best.value)}h.`;
   }
 
   return "Log more ROs to see insights here.";
 }
 
 // ---------------------------------------------------------------------------
-// Footer text
+// SVG Bar Chart — Roomier Classic
 // ---------------------------------------------------------------------------
 
-function computeFooter(tab: TabId, bars: BarData[]): string {
-  const totalHours = bars.reduce((s, b) => s + b.value, 0);
-  const nonZero = bars.filter((b) => b.value > 0);
-  if (nonZero.length === 0) return "No data yet";
+const CHART_W = 358;
+const CHART_H = 130;
+const PAD_L = 4, PAD_R = 4, PAD_T = 6;
+const INNER_W = CHART_W - PAD_L - PAD_R;
 
-  const avg = totalHours / (tab === "day" ? 7 : bars.length);
-  const best = bars.find((b) => b.isBest);
+// Week and Period need extra bottom padding for two label rows
+function getPadB(tab: TabId) { return (tab === "week" || tab === "period") ? 42 : 26; }
 
-  const unitLabel = tab === "day" ? "day" : tab === "week" ? "week" : tab === "period" ? "period" : "month";
-  const bestLabel = best?.label ?? "—";
+function RoomierBarChart({
+  bars,
+  hover,
+  setHover,
+  tab,
+}: {
+  bars: BarData[];
+  hover: number | null;
+  setHover: (i: number | null) => void;
+  tab: TabId;
+}) {
+  const n = bars.length;
+  if (n === 0) return null;
 
-  return `Avg ${fmtHours(avg)}h/${unitLabel} · best ${unitLabel}: ${bestLabel}`;
-}
+  const PAD_B = getPadB(tab);
+  const INNER_H = CHART_H - PAD_T - PAD_B;
+  const baseline = CHART_H - PAD_B;
 
-// ---------------------------------------------------------------------------
-// SVG Bar Chart
-// ---------------------------------------------------------------------------
+  const maxVal = Math.max(...bars.map((b) => b.value), 0.01);
+  const slot = INNER_W / n;
+  const barW = Math.max(8, Math.min(slot * 0.70, 42));
 
-const CHART_W = 300;
-const CHART_H = 58;
-const BAR_AREA_H = 42;
-const LABEL_H = 14;
-const MIN_BAR_H = 2;
-
-function BarChart({ bars }: { bars: BarData[] }) {
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const count = bars.length;
-  if (count === 0) return null;
-
-  const maxVal = Math.max(...bars.map((b) => b.value), 0.1);
-  const barW = Math.max(8, Math.floor((CHART_W - (count - 1) * 6) / count));
-  const totalW = barW * count + Math.max(0, count - 1) * 6;
-  const offsetX = (CHART_W - totalW) / 2;
-
-  const showAllLabels = count <= 8;
-  const seenMonths = new Set<string>();
-  const labelVisible = bars.map((bar) => {
-    if (bar.isCurrent || bar.isBest) return true;
-    const month = bar.label.split(" ")[0];
-    if (!seenMonths.has(month)) { seenMonths.add(month); return true; }
-    return false;
-  });
-
-  const TOOLTIP_W = 50;
-  const TOOLTIP_H = 18;
+  // Month tab still uses sparse labels; others have custom logic per-bar
+  const labelEvery = Math.max(1, Math.ceil(n / 5));
 
   return (
-    <svg
-      viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-      width="100%"
-      style={{ display: "block", overflow: "visible" }}
-      aria-hidden="true"
-    >
-      {bars.map((bar, i) => {
-        const x = offsetX + i * (barW + 6);
-        const barH = bar.value > 0
-          ? Math.max(MIN_BAR_H, Math.round((bar.value / maxVal) * BAR_AREA_H))
-          : MIN_BAR_H;
-        const y = BAR_AREA_H - barH;
+    <div className="r-chart-wrap">
+      <svg
+        className="r-chart"
+        viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+        overflow="visible"
+        aria-hidden="true"
+        onMouseLeave={() => setHover(null)}
+        onTouchEnd={() => setHover(null)}
+      >
+        {/* Baseline */}
+        <line
+          x1={PAD_L} x2={CHART_W - PAD_R}
+          y1={baseline + 0.5} y2={baseline + 0.5}
+          stroke="var(--line)" strokeWidth="1"
+        />
 
-        const tooltipCenterX = x + barW / 2;
-        const tooltipX = Math.min(Math.max(tooltipCenterX - TOOLTIP_W / 2, 0), CHART_W - TOOLTIP_W);
-        const tooltipY = y - TOOLTIP_H - 4;
+        {bars.map((bar, i) => {
+          const cx = PAD_L + slot * (i + 0.5);
+          const h = Math.max(3, (bar.value / maxVal) * INNER_H);
+          const x = cx - barW / 2;
+          const y = baseline - h;
+          const isHover = hover === i;
+          const highlight = isHover || bar.isCurrent;
 
-        return (
-          <g
-            key={i}
-            onMouseEnter={() => setHoveredIdx(i)}
-            onMouseLeave={() => setHoveredIdx(null)}
-          >
-            <rect
-              x={x}
-              y={y}
-              width={barW}
-              height={barH}
-              rx={3}
-              fill={bar.isCurrent ? "var(--brand)" : "var(--bg-4)"}
-              style={
-                bar.isCurrent
-                  ? { filter: "drop-shadow(0 0 6px oklch(0.65 0.18 50 / 0.40))" }
-                  : undefined
-              }
-            />
-            {(showAllLabels || labelVisible[i]) && (
-              <text
-                x={x + barW / 2}
-                y={CHART_H - 1}
-                textAnchor="middle"
-                fontSize={9}
-                fill={bar.isCurrent ? "var(--brand)" : "var(--fg-3)"}
-                fontWeight={bar.isCurrent ? 600 : 400}
-              >
-                {bar.label}
-              </text>
-            )}
-            {hoveredIdx === i && (
-              <>
-                <rect
-                  x={tooltipX}
-                  y={tooltipY}
-                  width={TOOLTIP_W}
-                  height={TOOLTIP_H}
-                  rx={4}
-                  fill="var(--bg-3)"
-                  stroke="var(--line)"
-                  strokeWidth={1}
-                />
+          // ── Per-tab label logic ──────────────────────────────────
+          let primaryLabel: string | null = null;
+          let secondaryLabel: string | null = null;
+
+          if (tab === "day") {
+            // All 7 days, use 3-char long label
+            primaryLabel = bar.longLabel;
+
+          } else if (tab === "week") {
+            // Always show day number; show month abbrev only at month transitions
+            const [month, day] = bar.label.split(" ");
+            primaryLabel = day ?? bar.label;
+            const prevMonth = i > 0 ? bars[i - 1].label.split(" ")[0] : null;
+            if (month !== prevMonth) secondaryLabel = month;
+
+          } else if (tab === "period") {
+            // Always show period date; always show Wk 1 / Wk 2
+            primaryLabel = bar.label;
+            secondaryLabel = bar.subLabel ?? null;
+
+          } else {
+            // Month tab: sparse labels
+            const lastRegularIdx = Math.floor((n - 1) / labelEvery) * labelEvery;
+            const show = i % labelEvery === 0 || (i === n - 1 && n - 1 - lastRegularIdx >= 2);
+            if (show) primaryLabel = bar.label;
+          }
+
+          const labelFontSize = tab === "day" ? 10 : tab === "week" ? 9 : 11;
+
+          return (
+            <g key={i}>
+              {/* Touch / hover hit zone */}
+              <rect
+                x={PAD_L + slot * i} y={0} width={slot} height={baseline}
+                fill="transparent"
+                onMouseEnter={() => setHover(i)}
+                onTouchStart={() => setHover(i)}
+              />
+              {/* Bar — no glow, just color change on highlight */}
+              <rect
+                x={x} y={y} width={barW} height={h}
+                rx={bar.value > 0 ? Math.min(barW / 2, 6) : 0}
+                fill={highlight ? "var(--brand)" : "var(--bg-4)"}
+              />
+              {/* Primary axis label */}
+              {primaryLabel && (
                 <text
-                  x={tooltipX + TOOLTIP_W / 2}
-                  y={tooltipY + TOOLTIP_H / 2 + 3}
+                  x={cx} y={baseline + 14}
                   textAnchor="middle"
-                  fontSize={9}
-                  fill="var(--fg-0)"
+                  fontSize={labelFontSize}
+                  fontFamily="ui-monospace, Menlo, monospace"
+                  fill={bar.isCurrent ? "var(--brand)" : "var(--fg-3)"}
                   fontWeight={bar.isCurrent ? 600 : 400}
                 >
-                  {bar.label}: {fmtHours(bar.value)}h
+                  {primaryLabel}
                 </text>
-              </>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+              )}
+              {/* Secondary axis label (month transitions for week; Wk 1/2 for period) */}
+              {secondaryLabel && (
+                <text
+                  x={cx} y={baseline + 28}
+                  textAnchor="middle"
+                  fontSize={tab === "week" ? 8 : 9}
+                  fontFamily="ui-monospace, Menlo, monospace"
+                  fill="var(--fg-3)"
+                  opacity={0.65}
+                >
+                  {secondaryLabel}
+                </text>
+              )}
+              {/* Hover indicator dot */}
+              {isHover && bar.value > 0 && (
+                <circle cx={cx} cy={y - 7} r={2.2} fill="var(--brand)" />
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
@@ -536,65 +542,58 @@ function BarChart({ bars }: { bars: BarData[] }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-// We need splitDay for period computation — pass it as a prop or derive from periodStart/End.
-// Since we don't have it directly, we'll default to 15 (standard split).
-// The page could pass it, but the spec doesn't include it, so we infer from periodStart.
-
-function inferSplitDay(periodStart: string): number {
-  const day = parseInt(periodStart.split("-")[2], 10);
-  // P1 starts on day 1, P2 starts on day splitDay+1
-  // If start day is 1, this is P1, splitDay is unknown — use 15 as default
-  // If start day is > 1, this is P2, splitDay = start day - 1
-  return day > 1 ? day - 1 : 15;
-}
-
 export function AveragesChart({
   entries,
   today,
   periodStart,
-  periodEnd,
-  weekStart,
-  weekEnd,
-  monthStart,
-  monthEnd,
   weekStartDay,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("day");
-  const [avgMode, setAvgMode] = useState<"all" | "worked">("worked");
-  const [showInfo, setShowInfo] = useState(false);
+  const [mode, setMode] = useState<Mode>("total");
+  const [subMode, setSubMode] = useState<SubMode>("worked");
+  const [hover, setHover] = useState<number | null>(null);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem("frt:avg_mode");
-      if (stored === "all" || stored === "worked") setAvgMode(stored);
+      if (stored === "all" || stored === "worked") setSubMode(stored);
     } catch { /* ignore */ }
   }, []);
 
-  function toggleAvgMode(next: "all" | "worked") {
-    setAvgMode(next);
+  function handleSubMode(next: SubMode) {
+    setSubMode(next);
     try { localStorage.setItem("frt:avg_mode", next); } catch { /* ignore */ }
   }
 
-  const ninetyDaysAgo = addDays(today, -89);
-  const windowStart = ninetyDaysAgo;
+  const windowStart = addDays(today, -89);
   const windowEnd = today;
-
   const splitDay = inferSplitDay(periodStart);
 
   const bars: BarData[] = (() => {
     switch (activeTab) {
-      case "day":
-        return computeDay(entries, windowStart, windowEnd, today, avgMode, weekStartDay);
-      case "week":
-        return computeWeek(entries, windowStart, windowEnd, today, weekStartDay);
-      case "period":
-        return computePeriod(entries, windowStart, windowEnd, splitDay, today);
-      case "month":
-        return computeMonth(entries, windowStart, windowEnd, today, avgMode);
+      case "day":    return computeDay(entries, windowStart, windowEnd, today, mode, subMode, weekStartDay);
+      case "week":   return computeWeek(entries, windowStart, windowEnd, today, weekStartDay, mode, subMode);
+      case "period": return computePeriod(entries, windowStart, windowEnd, splitDay, today, mode, subMode);
+      case "month":  return computeMonth(entries, windowStart, windowEnd, today, mode, subMode);
     }
   })();
 
-  const footerText = computeFooter(activeTab, bars);
+  const bestIdx  = bars.findIndex((b) => b.isBest);
+  const currIdx  = bars.findIndex((b) => b.isCurrent);
+  const activeIdx = hover ?? (currIdx >= 0 ? currIdx : bestIdx >= 0 ? bestIdx : 0);
+  const activeBar = bars[activeIdx];
+
+  const unitLabel = mode === "total"
+    ? "total"
+    : subMode === "worked" ? "avg / worked day" : "avg / day";
+
+  const total90d = entries
+    .filter((e) => e.date >= windowStart && e.date <= windowEnd)
+    .reduce((s, e) => s + e.flagHours, 0);
+
+  const unitNames: Record<TabId, string> = { day: "day", week: "week", period: "period", month: "month" };
+  const bestBar = bars[bestIdx];
+
   const insightText = computeInsight(entries, windowStart, windowEnd, activeTab, bars);
 
   const tabs: { id: TabId; label: string }[] = [
@@ -604,154 +603,96 @@ export function AveragesChart({
     { id: "month", label: "Month" },
   ];
 
-  const showModeToggle = activeTab === "day" || activeTab === "month";
-
-  const infoText = activeTab === "day"
-    ? avgMode === "worked"
-      ? "Average flag hours per day of the week — only counting days you actually worked."
-      : "Average flag hours per day of the week — spread across all calendar days in the last 90 days."
-    : activeTab === "month"
-    ? avgMode === "worked"
-      ? "Average flag hours per day you worked, grouped by month."
-      : "Average flag hours per calendar day of each month (total ÷ days in month)."
-    : activeTab === "week"
-    ? "Total flag hours per calendar week."
-    : "Total flag hours per pay period.";
-
   return (
     <>
       <section>
-        <div className="section-title">Averages</div>
+        <div className="section-title">Flagged Hours</div>
         <div className="card padded">
-          {/* Tab row */}
-          <div className="avg-tabs">
-            {tabs.map((tab) => (
+          {/* HEADER — tabs only */}
+          <div className="r-tabbar" role="tablist">
+            {tabs.map((t) => (
               <button
-                key={tab.id}
-                className={`avg-tab${activeTab === tab.id ? " active" : ""}`}
-                onClick={() => setActiveTab(tab.id)}
+                key={t.id}
+                role="tab"
+                aria-selected={activeTab === t.id}
+                className={`r-tab${activeTab === t.id ? " active" : ""}`}
+                onClick={() => setActiveTab(t.id)}
                 type="button"
               >
-                {tab.label}
+                {t.label}
               </button>
             ))}
           </div>
 
-          {/* Mode toggle + info — only on day/month tabs */}
-          {showModeToggle && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <div style={{ display: "flex", gap: 4 }}>
+          {/* READOUT ROW — value always lives here, never over the bars */}
+          <div className="r-readout">
+            <div className="r-readout-main">
+              <span className="r-readout-label">
+                {activeBar?.longLabel ?? "—"}
+              </span>
+              <span className="r-readout-value">
+                {activeBar ? `${fmtHours(activeBar.value)}h` : "—"}
+              </span>
+              <span className="r-readout-unit">{unitLabel}</span>
+            </div>
+          </div>
+
+          {/* MODE ROW — Total/Avg pill; Worked/All only visible in Avg mode */}
+          <div className="r-modewrap">
+            <div className="r-mode-toggle" role="tablist" aria-label="Total or average">
+              <button
+                role="tab"
+                aria-selected={mode === "total"}
+                className={`r-mode-btn${mode === "total" ? " on" : ""}`}
+                onClick={() => setMode("total")}
+                type="button"
+              >
+                Total
+              </button>
+              <button
+                role="tab"
+                aria-selected={mode === "avg"}
+                className={`r-mode-btn${mode === "avg" ? " on" : ""}`}
+                onClick={() => setMode("avg")}
+                type="button"
+              >
+                Avg
+              </button>
+            </div>
+            {mode === "avg" && (
+              <div className="r-sub-toggle">
                 <button
+                  className={`r-sub-btn${subMode === "worked" ? " on" : ""}`}
+                  onClick={() => handleSubMode("worked")}
                   type="button"
-                  onClick={() => toggleAvgMode("worked")}
-                  style={{
-                    fontSize: 10,
-                    padding: "2px 8px",
-                    borderRadius: 20,
-                    border: "1px solid",
-                    cursor: "pointer",
-                    borderColor: avgMode === "worked" ? "var(--brand)" : "var(--line)",
-                    background: avgMode === "worked" ? "var(--brand-bg)" : "var(--bg-3)",
-                    color: avgMode === "worked" ? "var(--brand)" : "var(--fg-3)",
-                    fontWeight: avgMode === "worked" ? 600 : 400,
-                  }}
                 >
                   Worked days
                 </button>
                 <button
+                  className={`r-sub-btn${subMode === "all" ? " on" : ""}`}
+                  onClick={() => handleSubMode("all")}
                   type="button"
-                  onClick={() => toggleAvgMode("all")}
-                  style={{
-                    fontSize: 10,
-                    padding: "2px 8px",
-                    borderRadius: 20,
-                    border: "1px solid",
-                    cursor: "pointer",
-                    borderColor: avgMode === "all" ? "var(--brand)" : "var(--line)",
-                    background: avgMode === "all" ? "var(--brand-bg)" : "var(--bg-3)",
-                    color: avgMode === "all" ? "var(--brand)" : "var(--fg-3)",
-                    fontWeight: avgMode === "all" ? 600 : 400,
-                  }}
                 >
                   All days
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowInfo((v) => !v)}
-                aria-label="How is this calculated?"
-                style={{
-                  fontSize: 11,
-                  width: 16,
-                  height: 16,
-                  borderRadius: "50%",
-                  border: "1px solid var(--line)",
-                  background: showInfo ? "var(--brand-bg)" : "var(--bg-3)",
-                  color: showInfo ? "var(--brand)" : "var(--fg-3)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: 1,
-                  padding: 0,
-                  flexShrink: 0,
-                }}
-              >
-                i
-              </button>
-            </div>
-          )}
-          {!showModeToggle && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
-              <button
-                type="button"
-                onClick={() => setShowInfo((v) => !v)}
-                aria-label="How is this calculated?"
-                style={{
-                  fontSize: 11,
-                  width: 16,
-                  height: 16,
-                  borderRadius: "50%",
-                  border: "1px solid var(--line)",
-                  background: showInfo ? "var(--brand-bg)" : "var(--bg-3)",
-                  color: showInfo ? "var(--brand)" : "var(--fg-3)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: 1,
-                  padding: 0,
-                }}
-              >
-                i
-              </button>
-            </div>
-          )}
-
-          {/* Info tooltip */}
-          {showInfo && (
-            <p style={{
-              margin: "0 0 8px",
-              fontSize: 11.5,
-              color: "var(--fg-2)",
-              lineHeight: 1.5,
-              padding: "6px 10px",
-              background: "var(--bg-3)",
-              borderRadius: 6,
-              border: "1px solid var(--line-soft)",
-            }}>
-              {infoText}
-            </p>
-          )}
-
-          {/* Bar chart */}
-          <div style={{ padding: "2px 0 4px" }}>
-            <BarChart bars={bars} />
+            )}
           </div>
 
-          {/* Footer */}
-          <div className="avg-foot">
-            <span style={{ color: "var(--fg-2)", fontSize: 12 }}>{footerText}</span>
+          {/* CHART */}
+          <RoomierBarChart bars={bars} hover={hover} setHover={setHover} tab={activeTab} />
+
+          {/* FOOTER */}
+          <div className="r-footer">
+            <span className="r-footer-stat">
+              <span className="r-footer-num">{fmtHours(total90d)}h</span>
+              <span className="r-footer-cap">last 90d</span>
+            </span>
+            <span className="r-footer-dot" />
+            <span className="r-footer-stat">
+              <span className="r-footer-num">{bestBar?.longLabel ?? "—"}</span>
+              <span className="r-footer-cap">best {unitNames[activeTab]}</span>
+            </span>
           </div>
         </div>
       </section>
