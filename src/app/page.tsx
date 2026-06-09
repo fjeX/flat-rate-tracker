@@ -122,7 +122,7 @@ function PaceBar({
             {" "}flag hrs
           </span>
         </span>
-        <span className="font-mono text-zinc-500 text-sm whitespace-nowrap">goal {goal}</span>
+        <span className="font-mono text-zinc-500 text-sm whitespace-nowrap">Goal {goal}</span>
       </div>
       <div
         className="relative bg-zinc-800 rounded-full"
@@ -194,17 +194,8 @@ function ROForm() {
         <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-1.5">
           RO Number
         </label>
-        <div className="bg-[#1a1a1e] border border-zinc-800 rounded-[9px] px-3 py-2.5 flex items-center justify-between">
+        <div className="bg-[#1a1a1e] border border-zinc-800 rounded-[9px] px-3 py-2.5 flex items-center">
           <span className="font-mono font-semibold text-zinc-100 text-[15px]">48213</span>
-          <span className="flex items-center gap-0.5 h-5 px-1.5 border border-zinc-700 rounded-md">
-            {[false, false, true, false, true, false].map((thin, i) => (
-              <span
-                key={i}
-                className="block h-full rounded-[1px] bg-orange-500"
-                style={{ width: thin ? 1 : 2, opacity: thin ? 0.6 : 1 }}
-              />
-            ))}
-          </span>
         </div>
       </div>
       <div>
@@ -469,7 +460,7 @@ function PaceSection() {
               style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
             >
               One bar shows everything: how many flag hours you&apos;ve banked, your goal, and a{" "}
-              <strong className="text-zinc-200">today</strong> tick for exactly where you should be.
+              <strong className="text-zinc-200">today</strong>{" "}tick for exactly where you should be.
               Green means you&apos;re good. Color shifts the second you start slipping.
             </p>
           </Rv>
@@ -491,18 +482,18 @@ function HowItWorks() {
   const steps = [
     {
       n: "01",
-      t: "Log the repair order",
-      d: "RO number and op code — type it or scan the barcode. Two taps and you're onto the next one.",
+      t: "Keep your own books.",
+      d: "Most shops know techs don't track their own hours — and some count on it. When flagged time doesn't show up on your check, there's no record to push back with. FRT is that record.",
     },
     {
       n: "02",
-      t: "We bank your flag hours",
-      d: "Every RO rolls into your pay period total automatically. Your op code library fills in the hours.",
+      t: "Know before payday.",
+      d: "A live pace bar tracks where you stand against your pay period goal every time you log an RO. If you're slipping, you'll see it with time to fix it — not after the check is already cut.",
     },
     {
       n: "03",
-      t: "See if you're on pace",
-      d: "One glance at the pace bar tells you if you're going to make your check — before payday, not after.",
+      t: "Turn your work into leverage.",
+      d: "Over time, FRT builds a real picture of how you perform: efficiency rates, average flag hours, and the types of jobs you run. Numbers you can put in front of a service manager when it's time to talk about a raise — or find a better shop.",
     },
   ];
   return (
@@ -510,7 +501,7 @@ function HowItWorks() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <Rv>
           <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
-            How it works
+            Built for flat rate
           </span>
         </Rv>
         <Rv delay={60}>
@@ -518,7 +509,7 @@ function HowItWorks() {
             className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
             style={{ fontSize: 36 }}
           >
-            Three steps. That&apos;s the whole app.
+            You flag the hours. Make sure you get paid for them.
           </h2>
         </Rv>
         <div className="grid grid-cols-3 gap-5 mt-11 max-[900px]:grid-cols-1 max-[900px]:gap-7">
@@ -546,6 +537,8 @@ const featCards = [
       <div className="grid grid-cols-2 gap-2">
         <StatTile lab="Today" big="6.4" unit="h" sub={<span className="text-green-400">112%</span>} mini />
         <StatTile lab="Week" big="38.1" unit="h" sub={<span className="text-green-400">104%</span>} mini />
+        <StatTile lab="Pay Period" big="64.2" unit="h" sub={<span className="text-green-400">98%</span>} mini />
+        <StatTile lab="Month" big="142" unit="h" sub={<span className="text-green-400">101%</span>} mini />
       </div>
     ),
   },
@@ -558,7 +551,7 @@ const featCards = [
   {
     tag: "RO Logging",
     title: "Logged in two taps",
-    desc: "RO number plus op code. Scan a barcode for the RO, hit Save & New, and start the next one.",
+    desc: "RO number plus op code. Snap a photo of the repair order and the fields fill themselves — or type it by hand. Hit Save & New and start the next job.",
     visual: <ROForm />,
   },
   {
