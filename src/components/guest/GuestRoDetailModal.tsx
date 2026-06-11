@@ -135,7 +135,7 @@ function GuestLineRow({
     const trimmed = text.trim();
     if (!trimmed) return;
     const parsed = Number(trimmed);
-    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    if (!Number.isFinite(parsed) || parsed < 0) return;
     updateEntryHours(entryId, line.id, parsed);
   }
 

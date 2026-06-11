@@ -32,6 +32,7 @@ type Props = {
   monthStart: string;
   monthEnd: string;
   weekStartDay: 0 | 1;
+  splitDay: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -61,10 +62,6 @@ function getWeekStart(date: string, weekStartDay: 0 | 1): string {
   return addDays(date, -offset);
 }
 
-function inferSplitDay(periodStart: string): number {
-  const day = parseInt(periodStart.split("-")[2], 10);
-  return day > 1 ? day - 1 : 15;
-}
 
 // ---------------------------------------------------------------------------
 // Compute bar data per tab
@@ -547,6 +544,7 @@ export function AveragesChart({
   today,
   periodStart,
   weekStartDay,
+  splitDay,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("day");
   const [mode, setMode] = useState<Mode>("total");
@@ -567,7 +565,6 @@ export function AveragesChart({
 
   const windowStart = addDays(today, -89);
   const windowEnd = today;
-  const splitDay = inferSplitDay(periodStart);
 
   const bars: BarData[] = (() => {
     switch (activeTab) {

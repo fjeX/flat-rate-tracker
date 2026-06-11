@@ -8,6 +8,8 @@ export async function upsertDailyClockHoursAction(
   date: string,
   hours: number,
 ): Promise<void> {
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  if (!DATE_RE.test(date)) throw new Error("Invalid date format.");
   if (!Number.isFinite(hours) || hours < 0)
     throw new Error("Hours must be a non-negative number.");
 
@@ -15,5 +17,6 @@ export async function upsertDailyClockHoursAction(
   await db.upsertDailyClock(supabase, date, hours);
 
   revalidatePath("/");
+  revalidatePath("/history");
   revalidatePath("/pay-period");
 }

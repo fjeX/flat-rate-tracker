@@ -25,7 +25,7 @@ export function RoDetailModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+  const libraryById = useMemo(() => new Map(library.map((oc) => [oc.id, oc])), [library]);
   const totalActual = entry.opCodes.reduce(
     (s, oc) => s + (oc.actualHours ?? 0),
     0,

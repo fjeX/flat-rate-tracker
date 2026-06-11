@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
@@ -48,7 +48,7 @@ export function TimerSaveModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+  const libraryById = useMemo(() => new Map(library.map((oc) => [oc.id, oc])), [library]);
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     const valid =
       initialLineId && entry.opCodes.some((l) => l.id === initialLineId);

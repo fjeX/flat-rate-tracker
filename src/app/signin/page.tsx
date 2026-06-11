@@ -7,6 +7,11 @@ export default async function SignInPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const safeError = error && error.length <= 150 && !/https?:\/\/|<|>/.test(error)
+    ? error
+    : error
+    ? "Sign in failed. Please try again."
+    : null;
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4">
@@ -19,9 +24,9 @@ export default async function SignInPage({
       <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-6">
         <h1 className="text-xl font-semibold mb-4">Sign in</h1>
 
-        {error && (
+        {safeError && (
           <div className="mb-4 rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
-            {error}
+            {safeError}
           </div>
         )}
 
