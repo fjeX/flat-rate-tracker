@@ -260,6 +260,7 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          goal_hours: number
           period_overrides: Json
           ro_template: Json | null
           split_day: number
@@ -270,6 +271,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          goal_hours?: number
           period_overrides?: Json
           ro_template?: Json | null
           split_day?: number
@@ -280,6 +282,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          goal_hours?: number
           period_overrides?: Json
           ro_template?: Json | null
           split_day?: number
@@ -296,7 +299,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      reorder_op_codes: {
+        Args: {
+          updates: Json
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

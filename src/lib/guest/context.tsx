@@ -32,6 +32,7 @@ type GuestAction =
 const defaultSettings: UserSettings = {
   userId: "guest",
   splitDay: 15,
+  goalHours: 88,
   periodOverrides: {},
   timerRoId: null,
   timerStartTime: null,

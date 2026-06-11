@@ -11,6 +11,7 @@ function normaliseTemplates(raw: unknown): RoTemplate[] {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw as RoTemplate[];
   // Legacy: single object without id/name — wrap it transparently.
+  if (typeof raw !== "object" || raw === null || !("imageStoragePath" in raw)) return [];
   const t = raw as { imageStoragePath: string; regions: FieldRegion[] };
   return [{ id: "legacy", name: "Page 1", imageStoragePath: t.imageStoragePath, regions: t.regions }];
 }
@@ -19,6 +20,7 @@ function toSettings(row: SettingsRow): UserSettings {
   return {
     userId: row.user_id,
     splitDay: row.split_day,
+    goalHours: row.goal_hours,
     periodOverrides:
       (row.period_overrides as Record<string, PeriodOverride> | null) ?? {},
     timerRoId: row.timer_ro_id,
@@ -35,13 +37,27 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
     .from("user_settings")
     .select("*")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
   if (error) throw error;
+  if (!data) {
+    return {
+      userId,
+      splitDay: 15,
+      goalHours: 88,
+      periodOverrides: {},
+      timerRoId: null,
+      timerStartTime: null,
+      timerAccumulated: 0,
+      updatedAt: new Date().toISOString(),
+      roTemplates: [],
+    };
+  }
   return toSettings(data);
 }
 
 export type SettingsPatch = {
   splitDay?: number;
+  goalHours?: number;
   periodOverrides?: Record<string, PeriodOverride>;
   roTemplates?: RoTemplate[];
 };
@@ -55,6 +71,7 @@ export async function updateSettings(
     updated_at: new Date().toISOString(),
   };
   if (patch.splitDay !== undefined) update.split_day = patch.splitDay;
+  if (patch.goalHours !== undefined) update.goal_hours = patch.goalHours;
   if (patch.periodOverrides !== undefined)
     update.period_overrides = patch.periodOverrides;
   if (patch.roTemplates !== undefined)

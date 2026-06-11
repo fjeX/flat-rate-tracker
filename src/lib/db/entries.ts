@@ -59,6 +59,7 @@ export type ListEntriesFilter = {
   from?: string; // inclusive "YYYY-MM-DD"
   to?: string; // inclusive "YYYY-MM-DD"
   limit?: number;
+  offset?: number; // 0-indexed; used with limit for pagination
 };
 
 export async function listEntries(
@@ -73,7 +74,10 @@ export async function listEntries(
 
   if (filter.from) q = q.gte("date", filter.from);
   if (filter.to) q = q.lte("date", filter.to);
-  if (filter.limit) q = q.limit(filter.limit);
+  if (filter.limit !== undefined) {
+    const start = filter.offset ?? 0;
+    q = q.range(start, start + filter.limit - 1);
+  }
 
   const { data, error } = await q;
   if (error) throw error;

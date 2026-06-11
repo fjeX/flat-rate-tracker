@@ -1,9 +1,11 @@
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import {
   getPeriodForDate,
   getRangeForPeriodKey,
   isoDate,
+  isoDateInTz,
   type PeriodRange,
 } from "@/lib/periods";
 import { aggregateStats } from "@/lib/stats";
@@ -15,21 +17,27 @@ export default async function PayPeriodPage({
   searchParams: Promise<{ period?: string }>;
 }) {
   const supabase = await createClient();
-  const today = isoDate();
+  const cookieStore = await cookies();
+  const tz = cookieStore.get("frt_timezone")?.value;
+  const today = tz ? isoDateInTz(tz) : isoDate();
+
+  // Fetch entries from the last 3 years — covers any period a user would
+  // realistically browse without loading the full unbounded history.
+  const threeYearsAgo = new Date();
+  threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+  const fromDate = tz
+    ? isoDateInTz(tz, threeYearsAgo)
+    : isoDate(threeYearsAgo);
 
   const [settings, entries, clocks, paidList, library] = await Promise.all([
     db.getSettings(supabase),
-    db.listEntries(supabase),
+    db.listEntries(supabase, { from: fromDate }),
     db.listDailyClocks(supabase),
     db.listPaidPeriods(supabase),
     db.listOpCodes(supabase),
   ]);
 
-  const current = getPeriodForDate(
-    today,
-    settings.splitDay,
-    settings.periodOverrides,
-  );
+  const current = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
 
   // Periods to show in the dropdown: any with entries, paid hours, or an
   // explicit override, plus the current one so new users always see something.

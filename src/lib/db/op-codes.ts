@@ -131,15 +131,15 @@ export async function deleteOpCode(supabase: DbClient, id: string): Promise<void
 }
 
 // Reorder the library — callers pass op code ids in the new order.
+// Uses a single Postgres RPC instead of N parallel UPDATE round trips.
 export async function reorderOpCodes(
   supabase: DbClient,
   orderedIds: string[],
 ): Promise<void> {
-  await Promise.all(
-    orderedIds.map((id, index) =>
-      supabase.from("op_codes").update({ sort_order: index }).eq("id", id),
-    ),
-  );
+  if (orderedIds.length === 0) return;
+  const updates = orderedIds.map((id, index) => ({ id, sort_order: index }));
+  const { error } = await supabase.rpc("reorder_op_codes", { updates });
+  if (error) throw error;
 }
 
 // ── Sub op code (variant) operations ──────────────────────────────────────

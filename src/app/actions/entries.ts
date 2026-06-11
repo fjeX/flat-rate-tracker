@@ -7,14 +7,21 @@ import type { Entry, NewEntry, NewEntryOpCode } from "@/lib/types";
 
 // Create or update an entry. Returns the persisted entry so the client can
 // navigate / display success. Throws on validation or DB errors.
+export async function loadMoreEntries(offset: number): Promise<Entry[]> {
+  const supabase = await createClient();
+  return db.listEntries(supabase, { limit: 100, offset });
+}
+
 export async function saveEntry(
   input: NewEntry,
   entryId?: string,
 ): Promise<Entry> {
   // --- server-side validation -------------------------------------------
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
   const roNumber = input.roNumber.trim();
   if (!roNumber) throw new Error("RO number is required.");
   if (!input.date) throw new Error("Date is required.");
+  if (!DATE_RE.test(input.date)) throw new Error("Date must be in YYYY-MM-DD format.");
   if (input.opCodes.length === 0)
     throw new Error("Add at least one op code.");
   for (const line of input.opCodes) {

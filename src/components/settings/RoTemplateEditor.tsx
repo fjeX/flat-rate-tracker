@@ -231,17 +231,20 @@ export function RoTemplateEditor({
     setSaving(true);
     try {
       const id = initialTemplate?.id ?? crypto.randomUUID();
-      const storagePath = initialTemplate?.imageStoragePath ?? `${userId}/template_${id}`;
       const name = templateName.trim() || "Page 1";
+      // storagePath mirrors what the server will compute, so we can pass it to onClose.
+      const storagePath = initialTemplate?.imageStoragePath ?? `${userId}/template_${id}`;
 
-      if (imageFile) {
-        const { error } = await createClient()
-          .storage.from("ro-templates")
-          .upload(storagePath, imageFile, { upsert: true, contentType: imageFile.type || "image/jpeg" });
-        if (error) throw error;
+      const fd = new FormData();
+      fd.append("id", id);
+      fd.append("name", name);
+      if (imageFile) fd.append("image", imageFile);
+      if (initialTemplate?.imageStoragePath) {
+        fd.append("existingStoragePath", initialTemplate.imageStoragePath);
       }
+      fd.append("regions", JSON.stringify(regions));
 
-      await saveRoTemplateMetadata(id, name, storagePath, regions);
+      await saveRoTemplateMetadata(fd);
       onClose({ id, name, imageStoragePath: storagePath, regions });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Save failed.");

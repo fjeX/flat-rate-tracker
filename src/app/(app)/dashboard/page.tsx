@@ -38,8 +38,10 @@ function dayOfPeriod(periodStart: string, today: string, periodDays: number): nu
   return Math.min(Math.max(diff, 1), periodDays);
 }
 
-function greetingWord(): string {
-  const h = new Date().getHours();
+function greetingWord(tz?: string): string {
+  const h = tz
+    ? parseInt(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: tz }), 10)
+    : new Date().getHours();
   if (h < 12) return "Good morning";
   if (h < 17) return "Good afternoon";
   return "Good evening";
@@ -93,16 +95,16 @@ export default async function DashboardPage() {
   // ---------------------------------------------------------------------------
   // Pace bar calculations
   // ---------------------------------------------------------------------------
-  const GOAL_HOURS = 88;
+  const goalHours   = settings.goalHours;
   const periodDays  = daysBetween(period.start, period.end);
   const currentDay  = dayOfPeriod(period.start, today, periodDays);
   // Where the "today" tick sits on the bar (0–1)
   const daysLeft     = periodDays - currentDay;
   const paceTarget  = currentDay / periodDays;
   // How full the progress fill is (0–1, clamped to 1 for display)
-  const actualFill  = Math.min(statsPeriod.flagHours / GOAL_HOURS, 1);
+  const actualFill  = Math.min(statsPeriod.flagHours / goalHours, 1);
   // Expected hours at this point in the period
-  const expectedNow = (currentDay / periodDays) * GOAL_HOURS;
+  const expectedNow = (currentDay / periodDays) * goalHours;
   const paceRatio   = expectedNow > 0 ? statsPeriod.flagHours / expectedNow : null;
 
   // Pill: good ≥ 95% of pace, warn 80–95%, bad < 80%
@@ -135,7 +137,7 @@ export default async function DashboardPage() {
           <div className="greeting">
             <div className="avatar">{avatarLetter}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h2>{greetingWord()}, {displayName}</h2>
+              <h2>{greetingWord(tz)}, {displayName}</h2>
               <p>
                 {formatPeriodLabel(period)}
                 {" · "}
@@ -158,7 +160,7 @@ export default async function DashboardPage() {
               <span className="pace-now">
                 {fmtHours(statsPeriod.flagHours)}<span className="pace-unit"> flag hrs</span>
               </span>
-              <span className="pace-goal">Goal {GOAL_HOURS}</span>
+              <span className="pace-goal">Goal {goalHours}</span>
             </div>
             <div className="pace-track-wrap">
               <span className="pace-today-label" style={{ left: `${paceTarget * 100}%` }}>TODAY</span>
@@ -242,6 +244,7 @@ export default async function DashboardPage() {
           monthStart={monthStart}
           monthEnd={monthEnd}
           weekStartDay={weekStartDay}
+          splitDay={settings.splitDay}
         />
 
       </div>

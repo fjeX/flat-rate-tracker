@@ -94,6 +94,7 @@ export type PeriodOverride = { start: string; end: string };
 export type UserSettings = {
   userId: string;
   splitDay: number; // 1..30
+  goalHours: number; // flag hour target per pay period
   periodOverrides: Record<string, PeriodOverride>;
   timerRoId: string | null;
   timerStartTime: number | null; // epoch ms, null = paused or not running

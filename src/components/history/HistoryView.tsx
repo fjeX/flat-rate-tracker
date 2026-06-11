@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { loadMoreEntries } from "@/app/actions/entries";
 import { Search, X } from "lucide-react";
 import type { Entry, OpCode, UserSettings } from "@/lib/types";
 import {
@@ -31,8 +32,6 @@ const SORT_CHIPS: { kind: SortKind; label: string }[] = [
   { kind: "hours",     label: "Hours" },
   { kind: "ro_number", label: "RO #" },
 ];
-
-const GOAL_HOURS = 88;
 
 function getRange(
   kind: FilterKind,
@@ -118,6 +117,7 @@ function RoRow({
 
 export function HistoryView({
   entries,
+  hasMore: hasMoreProp = false,
   library,
   settings,
   today,
@@ -131,6 +131,7 @@ export function HistoryView({
   renderDetail,
 }: {
   entries: Entry[];
+  hasMore?: boolean;
   library: OpCode[];
   settings: UserSettings;
   today: string;
@@ -143,11 +144,25 @@ export function HistoryView({
   weekStartDay: 0 | 1;
   renderDetail?: (entry: Entry, onClose: () => void) => React.ReactNode;
 }) {
+  const [allEntries, setAllEntries] = useState(entries);
+  const [hasMore, setHasMore] = useState(hasMoreProp);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<FilterKind>("period");
   const [sortBy, setSortBy] = useState<SortKind>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    try {
+      const next = await loadMoreEntries(allEntries.length);
+      setAllEntries((prev) => [...prev, ...next]);
+      setHasMore(next.length === 100);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   function handleSortClick(kind: SortKind) {
     if (sortBy === kind) {
@@ -162,7 +177,7 @@ export function HistoryView({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return entries
+    return allEntries
       .filter((e) => {
         if (range && (e.date < range.start || e.date > range.end)) return false;
         if (q) {
@@ -185,24 +200,24 @@ export function HistoryView({
         }
         return sortDir === "desc" ? -cmp : cmp;
       });
-  }, [entries, range, search, sortBy, sortDir]);
+  }, [allEntries, range, search, sortBy, sortDir]);
 
   // Period flag hours for the chart header
   const periodFlagHours = useMemo(
     () =>
-      entries
+      allEntries
         .filter((e) => e.date >= periodStartProp && e.date <= periodEndProp)
         .reduce((s, e) => s + e.flagHours, 0),
-    [entries, periodStartProp, periodEndProp],
+    [allEntries, periodStartProp, periodEndProp],
   );
 
   // Entries scoped to chart's filter (not search-filtered, so chart always shows full picture)
   const chartEntries = useMemo(() => {
-    if (!range) return entries;
-    return entries.filter((e) => e.date >= range.start && e.date <= range.end);
-  }, [entries, range]);
+    if (!range) return allEntries;
+    return allEntries.filter((e) => e.date >= range.start && e.date <= range.end);
+  }, [allEntries, range]);
 
-  const openEntry = openId ? entries.find((e) => e.id === openId) ?? null : null;
+  const openEntry = openId ? allEntries.find((e) => e.id === openId) ?? null : null;
 
   return (
     <main className="app-main" style={{ paddingBottom: 80 }}>
@@ -253,7 +268,7 @@ export function HistoryView({
         monthStart={monthStartProp}
         monthEnd={monthEndProp}
         periodFlagHours={periodFlagHours}
-        goalHours={GOAL_HOURS}
+        goalHours={settings.goalHours}
       />
 
       {/* Search bar */}
@@ -305,6 +320,19 @@ export function HistoryView({
               onOpen={() => setOpenId(entry.id)}
             />
           ))}
+        </div>
+      )}
+
+      {hasMore && (
+        <div style={{ textAlign: "center", padding: "16px 0" }}>
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="filter-chip"
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
         </div>
       )}
 

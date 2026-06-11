@@ -66,6 +66,17 @@ export async function clearPeriodOverrideAction(
 // Settings screen actions
 // ---------------------------------------------------------------------------
 
+export async function setGoalHoursAction(goalHours: number): Promise<void> {
+  if (!Number.isInteger(goalHours) || goalHours < 1 || goalHours > 999) {
+    throw new Error("Goal hours must be a whole number between 1 and 999.");
+  }
+  const supabase = await createClient();
+  await db.updateSettings(supabase, { goalHours });
+  revalidatePath("/settings");
+  revalidatePath("/");
+  revalidatePath("/history");
+}
+
 export async function setSplitDayAction(splitDay: number): Promise<void> {
   if (!Number.isInteger(splitDay) || splitDay < 1 || splitDay > 30) {
     throw new Error("Split day must be an integer between 1 and 30.");
@@ -157,6 +168,14 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
 
   const supabase = await createClient();
   const userId = await db.getCurrentUserId(supabase);
+
+  // Validate all records before touching the DB — reduces risk of partial import.
+  for (const e of bundle.entries) {
+    if (!DATE_RE.test(e.date)) throw new Error(`Invalid date in entry RO#${e.roNumber}.`);
+  }
+  for (const c of bundle.dailyClocks) {
+    if (!DATE_RE.test(c.date)) throw new Error("Invalid date in clock record.");
+  }
 
   // Wipe existing data (entries cascade entry_op_codes via FK).
   await supabase.from("entries").delete().eq("user_id", userId);

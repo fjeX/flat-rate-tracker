@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { GoalHoursCard } from "@/components/settings/GoalHoursCard";
 import { SplitDayCard } from "@/components/settings/SplitDayCard";
 import { DataCard } from "@/components/settings/DataCard";
 import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
@@ -21,6 +22,7 @@ export default async function SettingsPage() {
       <h1 className="text-xl font-semibold text-zinc-100">Settings</h1>
       <TimezoneCard initialTimezone={timezone} />
       <QuickAddCard />
+      <GoalHoursCard initialGoalHours={settings.goalHours} />
       <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
       <RoTemplateCard userId={user!.id} initialTemplates={settings.roTemplates} />
       <DataCard />
