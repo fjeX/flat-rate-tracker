@@ -27,7 +27,7 @@ git log --oneline ORIG_HEAD..HEAD -- supabase/migrations/
 
 ### 2. Check for app code changes
 ```bash
-git log --oneline ORIG_HEAD..HEAD -- src/ Dockerfile package.json next.config.ts
+git log --oneline ORIG_HEAD..HEAD -- src/ Dockerfile package.json next.config.ts docker-compose.yml
 ```
 - **Output is empty** → no rebuild needed, you're done
 - **Output shows commits** → app code changed, rebuild the container:
@@ -99,6 +99,15 @@ Traefik is already running on this VM and owns ports 80 and 443. **Never add Cad
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are baked into the Next.js bundle at build time. Changing `.env` without rebuilding does nothing. Always rebuild after changing these vars.
 
 `NEXT_PUBLIC_SUPABASE_URL` must be `https://api.slimelab.cc`.
+
+### SUPABASE_INTERNAL_URL Is Runtime-Only
+
+`SUPABASE_INTERNAL_URL` (set in `.env`, passed through `docker-compose.yml` as a container env var) points server-side Supabase calls straight at Kong over the shared `proxy` Docker network — e.g. `http://supabase-kong:8000`. This skips DNS → Traefik → TLS for every query the app server makes.
+
+- It is read at **runtime**, not build time — changing it only needs `docker compose up -d` to recreate the container, no rebuild
+- If unset or empty, the app falls back to the public `NEXT_PUBLIC_SUPABASE_URL` (slower but works)
+- The browser always uses the public URL; this var affects Server Components, Server Actions, and the auth proxy only
+- The hostname must resolve on the `proxy` network — verify with `docker exec <app-container> wget -qO- http://supabase-kong:8000/auth/v1/health`
 
 ### Kong / Traefik Integration
 

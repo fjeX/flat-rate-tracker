@@ -4,6 +4,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./database.types";
+import { authCookieName, serverSupabaseUrl } from "./config";
 
 // Auth pages redirect logged-in users to the app. Guest routes allow anyone.
 const AUTH_PAGES = ["/signin", "/signup"];
@@ -15,9 +16,10 @@ export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serverSupabaseUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
+      cookieOptions: { name: authCookieName() },
       cookies: {
         getAll() {
           return request.cookies.getAll();

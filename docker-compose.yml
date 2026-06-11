@@ -6,6 +6,11 @@ services:
         - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
         - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
     restart: unless-stopped
+    environment:
+      # Server-side Supabase calls go straight to Kong over the proxy network
+      # instead of out through Traefik. Empty/unset falls back to the public
+      # NEXT_PUBLIC_SUPABASE_URL. Runtime var — no rebuild needed to change it.
+      - SUPABASE_INTERNAL_URL=${SUPABASE_INTERNAL_URL:-}
     networks:
       - proxy
     labels:
