@@ -3,12 +3,19 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Search, Trash2, X } from "lucide-react";
+import { Plus, Search, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
-import type { NewEntry, OpCode } from "@/lib/types";
+import type { NewEntry, OpCode, SubOpCode } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { saveEntry } from "@/app/actions/entries";
+import { createLibraryOpCode } from "@/app/actions/op-codes";
+import {
+  CustomOpCodeModal,
+  NewLibraryOpCodeModal,
+  type OpCodeDraft,
+} from "@/components/forms/OpCodeModals";
+import { SubOpCodePickerModal } from "@/components/forms/SubOpCodePickerModal";
 
 type QuickLine = {
   key: string;
@@ -17,10 +24,11 @@ type QuickLine = {
   customCode: string | null;
   customDescription: string | null;
   flagHours: number;
+  subOpCodeId: string | null;
 };
 
 export function QuickAddModal({
-  library,
+  library: initialLibrary,
   open,
   onClose,
 }: {
@@ -32,8 +40,13 @@ export function QuickAddModal({
 
   const [roNumber, setRoNumber] = useState("");
   const [lines, setLines] = useState<QuickLine[]>([]);
+  const [library, setLibrary] = useState<OpCode[]>(initialLibrary);
   const [search, setSearch] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [newLibraryOpen, setNewLibraryOpen] = useState(false);
+  const [newLibraryPending, setNewLibraryPending] = useState(false);
+  const [subPickerOc, setSubPickerOc] = useState<OpCode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
 
@@ -64,11 +77,16 @@ export function QuickAddModal({
     if (open) {
       setRoNumber("");
       setLines([]);
+      setLibrary(initialLibrary);
       setSearch("");
       setError(null);
       setPickerOpen(false);
+      setCustomOpen(false);
+      setNewLibraryOpen(false);
+      setSubPickerOc(null);
       setTimeout(() => roInputRef.current?.focus(), 60);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const filteredLibrary = useMemo(() => {
@@ -88,20 +106,63 @@ export function QuickAddModal({
 
   const totalFlag = lines.reduce((s, l) => s + (l.flagHours || 0), 0);
 
+  function buildLineFromLibrary(oc: OpCode, sub?: SubOpCode): QuickLine {
+    return {
+      key: crypto.randomUUID(),
+      opCodeId: oc.id,
+      custom: false,
+      customCode: null,
+      customDescription: null,
+      flagHours: sub ? sub.flagHours : oc.flagHours,
+      subOpCodeId: sub ? sub.id : null,
+    };
+  }
+
   function addFromLibrary(oc: OpCode) {
+    setSearch("");
+    setPickerOpen(false);
+    if (oc.subOpCodes.length > 0) {
+      // Pause and ask which sub op code was performed.
+      setSubPickerOc(oc);
+      return;
+    }
+    setLines((ls) => [...ls, buildLineFromLibrary(oc)]);
+  }
+
+  function confirmSubPick(sub: SubOpCode) {
+    if (!subPickerOc) return;
+    const oc = subPickerOc;
+    setSubPickerOc(null);
+    setLines((ls) => [...ls, buildLineFromLibrary(oc, sub)]);
+  }
+
+  function addCustomLine(draft: OpCodeDraft) {
     setLines((ls) => [
       ...ls,
       {
         key: crypto.randomUUID(),
-        opCodeId: oc.id,
-        custom: false,
-        customCode: null,
-        customDescription: null,
-        flagHours: oc.flagHours,
+        opCodeId: null,
+        custom: true,
+        customCode: draft.code,
+        customDescription: draft.description,
+        flagHours: draft.flagHours,
+        subOpCodeId: null,
       },
     ]);
+    setCustomOpen(false);
     setSearch("");
-    setPickerOpen(false);
+  }
+
+  async function addNewLibraryLine(draft: OpCodeDraft) {
+    setNewLibraryPending(true);
+    try {
+      const created = await createLibraryOpCode(draft);
+      setLibrary((l) => [...l, created]);
+      addFromLibrary(created);
+      setNewLibraryOpen(false);
+    } finally {
+      setNewLibraryPending(false);
+    }
   }
 
   function removeLine(key: string) {
@@ -114,12 +175,30 @@ export function QuickAddModal({
     );
   }
 
-  function lineLabel(line: QuickLine) {
+  function lineLabel(line: QuickLine): {
+    code: string;
+    description: string;
+    subCode: string | null;
+  } {
     if (line.custom) {
-      return { code: line.customCode ?? "", description: line.customDescription ?? "" };
+      return {
+        code: line.customCode ?? "",
+        description: line.customDescription ?? "",
+        subCode: null,
+      };
     }
     const ref = library.find((oc) => oc.id === line.opCodeId);
-    return { code: ref?.code ?? "", description: ref?.description ?? "" };
+    if (line.subOpCodeId && ref) {
+      const sub = ref.subOpCodes.find((s) => s.id === line.subOpCodeId);
+      if (sub) {
+        return { code: ref.code, description: sub.description, subCode: sub.code };
+      }
+    }
+    return {
+      code: ref?.code ?? "",
+      description: ref?.description ?? "",
+      subCode: null,
+    };
   }
 
   function handleSave() {
@@ -140,7 +219,7 @@ export function QuickAddModal({
             actualHours: null,
             notes: "",
             position: i,
-            subOpCodeId: null,
+            subOpCodeId: line.subOpCodeId,
           })),
         };
         await saveEntry(input);
@@ -152,8 +231,16 @@ export function QuickAddModal({
     });
   }
 
+  // While a child modal is stacked on top, the outer modal must ignore its
+  // own close triggers (Escape fires both modals' window listeners).
+  const childModalOpen = customOpen || newLibraryOpen || subPickerOc !== null;
+
   return (
-    <Modal open={open} onClose={onClose} title="Quick Add RO">
+    <Modal
+      open={open}
+      onClose={childModalOpen ? () => {} : onClose}
+      title="Quick Add RO"
+    >
       <div className="space-y-4">
 
         {/* RO Number */}
@@ -193,7 +280,9 @@ export function QuickAddModal({
                   className="flex items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-xs hover:border-orange-500/50 hover:bg-zinc-700"
                 >
                   <span className="font-mono text-orange-400">{oc.code}</span>
-                  <span className="text-zinc-500">{oc.flagHours}h</span>
+                  <span className="text-zinc-500">
+                    {oc.subOpCodes.length > 0 ? "→" : `${oc.flagHours}h`}
+                  </span>
                 </button>
               ))}
             </div>
@@ -242,22 +331,48 @@ export function QuickAddModal({
                         onClick={() => addFromLibrary(oc)}
                         className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800"
                       >
-                        <span>
+                        <span className="min-w-0">
                           <span className="font-mono text-sm text-orange-400">
                             {oc.code}
                           </span>
                           <span className="ml-2 text-xs text-zinc-500">
                             {oc.description}
                           </span>
+                          {oc.subOpCodes.length > 0 && (
+                            <span className="ml-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                              {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
+                            </span>
+                          )}
                         </span>
-                        <span className="text-xs text-zinc-400">
-                          {oc.flagHours}h
+                        <span className="flex-shrink-0 font-mono text-xs text-zinc-400">
+                          {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
                         </span>
                       </button>
                     </li>
                   ))
                 )}
               </ul>
+              <div className="border-t border-zinc-800 p-1">
+                <div className="px-2 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-zinc-600">
+                  Other
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setPickerOpen(false); setCustomOpen(true); }}
+                  className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Other op code (one-time)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPickerOpen(false); setNewLibraryOpen(true); }}
+                  className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Create new library op code
+                </button>
+              </div>
             </div>,
             document.body
           )}
@@ -272,7 +387,7 @@ export function QuickAddModal({
               </div>
               <ul>
                 {lines.map((line) => {
-                  const { code, description } = lineLabel(line);
+                  const { code, description, subCode } = lineLabel(line);
                   return (
                     <li
                       key={line.key}
@@ -280,9 +395,21 @@ export function QuickAddModal({
                     >
                       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
                         <div className="min-w-0">
-                          <span className="font-mono text-sm text-orange-400">
-                            {code}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-sm text-orange-400">
+                              {code}
+                            </span>
+                            {subCode && (
+                              <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-orange-400">
+                                {subCode}
+                              </span>
+                            )}
+                            {line.custom && (
+                              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                                Other
+                              </span>
+                            )}
+                          </div>
                           {description && (
                             <div className="truncate text-xs text-zinc-500">
                               {description}
@@ -352,6 +479,27 @@ export function QuickAddModal({
         </div>
 
       </div>
+
+      <CustomOpCodeModal
+        open={customOpen}
+        initialCode={search}
+        onAdd={addCustomLine}
+        onClose={() => setCustomOpen(false)}
+      />
+      <NewLibraryOpCodeModal
+        open={newLibraryOpen}
+        initialCode={search}
+        onSubmit={addNewLibraryLine}
+        onClose={() => setNewLibraryOpen(false)}
+        isPending={newLibraryPending}
+      />
+      {subPickerOc && (
+        <SubOpCodePickerModal
+          opCode={subPickerOc}
+          onSelect={confirmSubPick}
+          onClose={() => setSubPickerOc(null)}
+        />
+      )}
     </Modal>
   );
 }
