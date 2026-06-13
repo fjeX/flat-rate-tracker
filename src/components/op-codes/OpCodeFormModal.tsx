@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useId, useState } from "react";
+import { Plus, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 
 function HoursInput({
@@ -38,6 +38,93 @@ function HoursInput({
   );
 }
 
+// Chip-style tag editor: type a tag, Enter or comma commits it, × removes it.
+// `suggestions` are tags already used elsewhere in the library (for autocomplete).
+function TagInput({
+  tags,
+  onChange,
+  suggestions,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  suggestions: string[];
+}) {
+  const [raw, setRaw] = useState("");
+  const listId = useId();
+
+  function addTag(value: string) {
+    const tag = value.trim().replace(/,$/, "").trim();
+    if (!tag) return;
+    // Case-insensitive dedupe — don't add one we already have.
+    if (tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+      setRaw("");
+      return;
+    }
+    onChange([...tags, tag]);
+    setRaw("");
+  }
+
+  function removeTag(tag: string) {
+    onChange(tags.filter((t) => t !== tag));
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(raw);
+    } else if (e.key === "Backspace" && raw === "" && tags.length > 0) {
+      // Backspace on an empty box pops the last tag.
+      removeTag(tags[tags.length - 1]);
+    }
+  }
+
+  // Offer only tags not already applied.
+  const available = suggestions.filter(
+    (s) => !tags.some((t) => t.toLowerCase() === s.toLowerCase()),
+  );
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 focus-within:border-orange-500">
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="flex items-center gap-1 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200"
+        >
+          {tag}
+          <button
+            type="button"
+            onClick={() => removeTag(tag)}
+            aria-label={`Remove ${tag}`}
+            className="text-zinc-400 hover:text-red-300"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={raw}
+        list={listId}
+        onChange={(e) => {
+          const val = e.target.value;
+          // Commit when the user types a comma or picks a datalist suggestion.
+          if (val.endsWith(",")) addTag(val);
+          else setRaw(val);
+        }}
+        onKeyDown={onKeyDown}
+        onBlur={() => addTag(raw)}
+        placeholder={tags.length === 0 ? "Add tags…" : ""}
+        className="min-w-[6rem] flex-1 bg-transparent py-0.5 text-sm placeholder-zinc-600 focus:outline-none"
+      />
+      <datalist id={listId}>
+        {available.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
 export type SubCodeDraft = {
   draftKey: string; // local React key; crypto.randomUUID() for new, id for existing
   id?: string;      // undefined = not yet saved
@@ -51,6 +138,7 @@ export type OpCodeFormValues = {
   description: string;
   flagHours: number;
   notes: string;
+  tags: string[];
   hasSubCodes: boolean;
   subCodes: SubCodeDraft[];
   removedSubIds: string[]; // IDs to delete from DB on save
@@ -61,6 +149,7 @@ type Mode = "add" | "edit";
 function OpCodeFormBody({
   mode,
   initial,
+  allTags,
   onSubmit,
   onClose,
   onDelete,
@@ -68,6 +157,7 @@ function OpCodeFormBody({
 }: {
   mode: Mode;
   initial: OpCodeFormValues;
+  allTags: string[];
   onSubmit: (values: OpCodeFormValues) => Promise<void>;
   onClose: () => void;
   onDelete?: () => void;
@@ -159,6 +249,7 @@ function OpCodeFormBody({
         description: draft.description.trim(),
         flagHours: draft.flagHours,
         notes: draft.notes.trim(),
+        tags: draft.tags,
         hasSubCodes: draft.hasSubCodes,
         subCodes: draft.subCodes,
         removedSubIds: draft.removedSubIds,
@@ -222,6 +313,19 @@ function OpCodeFormBody({
             rows={2}
             placeholder="Part numbers, reminders, procedure notes…"
             className="mt-1 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-wide text-zinc-400">
+            Tags{" "}
+            <span className="font-normal normal-case text-zinc-600">
+              (optional — group repairs, e.g. Brakes, Warranty)
+            </span>
+          </span>
+          <TagInput
+            tags={draft.tags}
+            onChange={(tags) => setDraft({ ...draft, tags })}
+            suggestions={allTags}
           />
         </label>
       </div>
@@ -338,6 +442,7 @@ export function OpCodeFormModal({
   open,
   mode,
   initial,
+  allTags = [],
   onSubmit,
   onClose,
   onDelete,
@@ -346,6 +451,7 @@ export function OpCodeFormModal({
   open: boolean;
   mode: Mode;
   initial?: OpCodeFormValues;
+  allTags?: string[];
   onSubmit: (values: OpCodeFormValues) => Promise<void>;
   onClose: () => void;
   onDelete?: () => void;
@@ -357,6 +463,7 @@ export function OpCodeFormModal({
     description: "",
     flagHours: 0,
     notes: "",
+    tags: [],
     hasSubCodes: false,
     subCodes: [],
     removedSubIds: [],
@@ -367,6 +474,7 @@ export function OpCodeFormModal({
       <OpCodeFormBody
         mode={mode}
         initial={seeded}
+        allTags={allTags}
         onSubmit={onSubmit}
         onClose={onClose}
         onDelete={onDelete}

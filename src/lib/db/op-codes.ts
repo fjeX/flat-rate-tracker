@@ -27,6 +27,7 @@ function toOpCode(row: OpCodeRow, variants: OpCodeVariantRow[]): OpCode {
     description: row.description,
     flagHours: Number(row.flag_hours),
     notes: row.notes ?? "",
+    tags: row.tags ?? [],
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     subOpCodes: variants
@@ -99,6 +100,7 @@ export async function createOpCode(
       description: input.description,
       flag_hours: input.flagHours,
       ...(input.notes ? { notes: input.notes } : {}),
+      ...(input.tags ? { tags: input.tags } : {}),
       sort_order: sortOrder,
     })
     .select()
@@ -117,6 +119,7 @@ export async function updateOpCode(
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.flagHours !== undefined) update.flag_hours = patch.flagHours;
   if (patch.notes !== undefined) update.notes = patch.notes;
+  if (patch.tags !== undefined) update.tags = patch.tags;
 
   const { error } = await supabase
     .from("op_codes")

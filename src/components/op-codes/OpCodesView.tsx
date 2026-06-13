@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   closestCenter,
@@ -30,6 +30,8 @@ import {
   type OpCodeFormValues,
 } from "./OpCodeFormModal";
 import { OpCodeRow } from "./OpCodeRow";
+import { OpCodeBrowseBar } from "./OpCodeBrowseBar";
+import { useOpCodeBrowsing } from "./useOpCodeBrowsing";
 
 type ModalState =
   | { kind: "closed" }
@@ -40,11 +42,24 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
   const router = useRouter();
 
   const [items, setItems] = useState<OpCode[]>(library);
-  const [search, setSearch] = useState("");
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   const [saving, startSaving] = useTransition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [reorderError, setReorderError] = useState<string | null>(null);
+
+  const {
+    search,
+    setSearch,
+    sortBy,
+    sortDir,
+    handleSortClick,
+    selectedTags,
+    toggleTag,
+    clearTags,
+    allTags,
+    visible,
+    canReorder,
+  } = useOpCodeBrowsing(items);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -52,18 +67,6 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
-
-  const isSearching = search.trim() !== "";
-
-  const visible = useMemo(() => {
-    if (!isSearching) return items;
-    const q = search.trim().toLowerCase();
-    return items.filter(
-      (op) =>
-        op.code.toLowerCase().includes(q) ||
-        op.description.toLowerCase().includes(q),
-    );
-  }, [items, isSearching, search]);
 
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -101,6 +104,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
             description: values.description,
             flagHours: values.flagHours,
             notes: values.notes,
+            tags: values.tags,
             subCodes: values.hasSubCodes ? values.subCodes : [],
           });
           setItems((curr) => [...curr, created]);
@@ -123,6 +127,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
             description: values.description,
             flagHours: values.flagHours,
             notes: values.notes,
+            tags: values.tags,
             subCodes: values.hasSubCodes ? values.subCodes : [],
             removedSubIds: values.removedSubIds,
           });
@@ -171,6 +176,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       description: opCode.description,
       flagHours: opCode.flagHours,
       notes: opCode.notes,
+      tags: opCode.tags,
       hasSubCodes: opCode.subOpCodes.length > 0,
       subCodes: opCode.subOpCodes.map((s) => ({
         draftKey: s.id,
@@ -225,6 +231,17 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
         )}
       </div>
 
+      {/* Sort + tag filters */}
+      <OpCodeBrowseBar
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSortClick={handleSortClick}
+        allTags={allTags}
+        selectedTags={selectedTags}
+        onToggleTag={toggleTag}
+        onClearTags={clearTags}
+      />
+
       {reorderError && (
         <p className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
           {reorderError}
@@ -256,7 +273,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
                   <OpCodeRow
                     key={op.id}
                     opCode={op}
-                    isSearching={isSearching}
+                    reorderable={canReorder}
                     onEdit={(target) =>
                       setModal({ kind: "edit", opCode: target })
                     }
@@ -274,6 +291,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       <OpCodeFormModal
         open={modal.kind === "add"}
         mode="add"
+        allTags={allTags}
         onClose={() => setModal({ kind: "closed" })}
         onSubmit={submitAdd}
         isPending={saving}
@@ -281,6 +299,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       <OpCodeFormModal
         open={modal.kind === "edit"}
         mode="edit"
+        allTags={allTags}
         initial={modal.kind === "edit" ? editInitial(modal.opCode) : undefined}
         onClose={() => setModal({ kind: "closed" })}
         onSubmit={(values) =>

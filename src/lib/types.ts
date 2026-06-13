@@ -72,6 +72,7 @@ export type OpCode = {
   description: string;
   flagHours: number;
   notes: string;
+  tags: string[]; // freeform groupings, e.g. ["Brakes", "Warranty"]; empty when none
   sortOrder: number;
   createdAt: string;
   subOpCodes: SubOpCode[]; // empty array when none defined
@@ -125,6 +126,7 @@ export type NewOpCode = {
   description: string;
   flagHours: number;
   notes?: string;
+  tags?: string[];
   sortOrder?: number; // optional — appended to end of library if omitted
 };
 

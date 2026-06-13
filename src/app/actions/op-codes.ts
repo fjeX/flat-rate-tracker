@@ -10,6 +10,23 @@ function revalidateOpCodes() {
   revalidatePath("/op-codes");
 }
 
+// Clean up freeform tags: trim, drop blanks, and dedupe case-insensitively
+// (so "Brakes" and "brakes" don't both stick) while keeping the case as typed.
+function normalizeTags(tags: string[] | undefined): string[] {
+  if (!tags) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of tags) {
+    const tag = raw.trim();
+    if (!tag) continue;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+  }
+  return out;
+}
+
 // Sub code shape accepted by create/update actions.
 type SubCodeInput = {
   id?: string; // undefined = new (not yet in DB)
@@ -23,6 +40,7 @@ export async function createLibraryOpCode(input: {
   description: string;
   flagHours: number;
   notes?: string;
+  tags?: string[];
   subCodes?: SubCodeInput[];
 }): Promise<OpCode> {
   const code = input.code.trim();
@@ -36,6 +54,7 @@ export async function createLibraryOpCode(input: {
     description: input.description.trim(),
     flagHours: input.flagHours,
     notes: input.notes?.trim(),
+    tags: normalizeTags(input.tags),
   });
 
   if (input.subCodes && input.subCodes.length > 0) {
@@ -63,13 +82,14 @@ export async function updateLibraryOpCode(
     description?: string;
     flagHours?: number;
     notes?: string;
+    tags?: string[];
     subCodes?: SubCodeInput[];
     removedSubIds?: string[];
   },
 ): Promise<OpCode> {
   if (!id) throw new Error("Op code id is required.");
 
-  const clean: { code?: string; description?: string; flagHours?: number; notes?: string } = {};
+  const clean: { code?: string; description?: string; flagHours?: number; notes?: string; tags?: string[] } = {};
   if (patch.code !== undefined) {
     const code = patch.code.trim();
     if (!code) throw new Error("Op code is required.");
@@ -82,6 +102,7 @@ export async function updateLibraryOpCode(
     clean.flagHours = patch.flagHours;
   }
   if (patch.notes !== undefined) clean.notes = patch.notes.trim();
+  if (patch.tags !== undefined) clean.tags = normalizeTags(patch.tags);
 
   const supabase = await createClient();
   await db.updateOpCode(supabase, id, clean);

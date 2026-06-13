@@ -20,7 +20,7 @@ type GuestAction =
   | { type: "ADD"; entry: Entry }
   | { type: "ADD_OPCODE"; opCode: OpCode }
   | { type: "DELETE_OPCODE"; id: string }
-  | { type: "EDIT_OPCODE"; id: string; patch: Pick<OpCode, "code" | "description" | "flagHours" | "notes"> }
+  | { type: "EDIT_OPCODE"; id: string; patch: Pick<OpCode, "code" | "description" | "flagHours" | "notes" | "tags"> }
   | { type: "HYDRATE"; state: GuestState }
   | { type: "TIMER_START"; startTime: number }
   | { type: "TIMER_PAUSE"; accumulated: number }
@@ -41,6 +41,22 @@ const defaultSettings: UserSettings = {
   roTemplates: [],
 };
 
+// Demo tags so the guest library shows off grouping out of the box.
+const GUEST_SAMPLE_TAGS: Record<string, string[]> = {
+  OIL: ["Fluids", "Quick"],
+  DIAG: ["Diagnostics"],
+  INSP: ["Inspection", "Quick"],
+  "TIRE-ROT": ["Tires", "Quick"],
+  "ALN-4": ["Tires"],
+  "BRK-FR": ["Brakes"],
+  "BRK-RR": ["Brakes"],
+  "BRK-FL": ["Brakes", "Fluids"],
+  "AC-RCH": ["A/C"],
+  "COOL-FL": ["Fluids"],
+  "TRANS-FL": ["Fluids"],
+  "SUSP-STR": ["Suspension"],
+};
+
 export const GUEST_SAMPLE_OPCODES: OpCode[] = STARTER_OP_CODES.map((s, i) => ({
   id: `g-${i + 1}`,
   userId: "guest",
@@ -48,6 +64,7 @@ export const GUEST_SAMPLE_OPCODES: OpCode[] = STARTER_OP_CODES.map((s, i) => ({
   description: s.description,
   flagHours: s.flagHours,
   notes: "",
+  tags: GUEST_SAMPLE_TAGS[s.code] ?? [],
   sortOrder: i,
   createdAt: "",
   subOpCodes: [],
@@ -198,6 +215,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
       description: draft.description,
       flagHours: draft.flagHours,
       notes: draft.notes ?? "",
+      tags: draft.tags ?? [],
       sortOrder: 0,
       createdAt: new Date().toISOString(),
       subOpCodes: [],
@@ -212,6 +230,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
       description: draft.description,
       flagHours: draft.flagHours,
       notes: draft.notes ?? "",
+      tags: draft.tags ?? [],
       sortOrder: state.opCodes.length,
       createdAt: new Date().toISOString(),
       subOpCodes: [],
@@ -229,6 +248,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         description: draft.description,
         flagHours: draft.flagHours,
         notes: draft.notes ?? "",
+        tags: draft.tags ?? [],
       },
     });
   }

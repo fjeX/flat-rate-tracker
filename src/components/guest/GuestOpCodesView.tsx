@@ -1,28 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useGuestStore } from "@/lib/guest/context";
 import { OpCodeFormModal, type OpCodeFormValues } from "@/components/op-codes/OpCodeFormModal";
+import { OpCodeBrowseBar } from "@/components/op-codes/OpCodeBrowseBar";
+import { useOpCodeBrowsing } from "@/components/op-codes/useOpCodeBrowsing";
 import { fmtHours } from "@/lib/stats";
 import type { OpCode } from "@/lib/types";
 
 export function GuestOpCodesView() {
   const { opCodes, addGuestOpCode, editGuestOpCode, deleteGuestOpCode } = useGuestStore();
-  const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<OpCode | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return opCodes;
-    return opCodes.filter(
-      (op) =>
-        op.code.toLowerCase().includes(q) ||
-        op.description.toLowerCase().includes(q),
-    );
-  }, [opCodes, search]);
+  const {
+    search,
+    setSearch,
+    sortBy,
+    sortDir,
+    handleSortClick,
+    selectedTags,
+    toggleTag,
+    clearTags,
+    allTags,
+    visible,
+  } = useOpCodeBrowsing(opCodes);
 
   async function handleAdd(values: OpCodeFormValues): Promise<void> {
     setSaving(true);
@@ -32,6 +36,7 @@ export function GuestOpCodesView() {
         description: values.description,
         flagHours: values.flagHours,
         notes: values.notes,
+        tags: values.tags,
       });
       setAddOpen(false);
     } finally {
@@ -48,6 +53,7 @@ export function GuestOpCodesView() {
         description: values.description,
         flagHours: values.flagHours,
         notes: values.notes,
+        tags: values.tags,
       });
       setEditTarget(null);
     } finally {
@@ -105,6 +111,17 @@ export function GuestOpCodesView() {
         )}
       </div>
 
+      {/* Sort + tag filters */}
+      <OpCodeBrowseBar
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSortClick={handleSortClick}
+        allTags={allTags}
+        selectedTags={selectedTags}
+        onToggleTag={toggleTag}
+        onClearTags={clearTags}
+      />
+
       {/* List */}
       <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-1.5">
         {opCodes.length === 0 ? (
@@ -138,6 +155,18 @@ export function GuestOpCodesView() {
                   {op.notes && (
                     <p className="truncate text-xs italic text-zinc-500">{op.notes}</p>
                   )}
+                  {op.tags.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {op.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Action buttons — stopPropagation so row click doesn't also fire */}
@@ -169,6 +198,7 @@ export function GuestOpCodesView() {
       <OpCodeFormModal
         open={addOpen}
         mode="add"
+        allTags={allTags}
         onClose={() => setAddOpen(false)}
         onSubmit={handleAdd}
         isPending={saving}
@@ -178,6 +208,7 @@ export function GuestOpCodesView() {
       <OpCodeFormModal
         open={editTarget !== null}
         mode="edit"
+        allTags={allTags}
         initial={
           editTarget
             ? {
@@ -185,6 +216,7 @@ export function GuestOpCodesView() {
                 description: editTarget.description,
                 flagHours: editTarget.flagHours,
                 notes: editTarget.notes,
+                tags: editTarget.tags,
                 hasSubCodes: false,
                 subCodes: [],
                 removedSubIds: [],

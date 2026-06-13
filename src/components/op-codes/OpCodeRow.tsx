@@ -8,13 +8,13 @@ import { fmtHours } from "@/lib/stats";
 
 export function OpCodeRow({
   opCode,
-  isSearching,
+  reorderable,
   onEdit,
   onDelete,
   deleting,
 }: {
   opCode: OpCode;
-  isSearching: boolean;
+  reorderable: boolean;
   onEdit: (op: OpCode) => void;
   onDelete: (op: OpCode) => void;
   deleting: boolean;
@@ -26,7 +26,7 @@ export function OpCodeRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: opCode.id, disabled: isSearching });
+  } = useSortable({ id: opCode.id, disabled: !reorderable });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -42,7 +42,7 @@ export function OpCodeRow({
       onClick={() => onEdit(opCode)}
       className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2 cursor-pointer transition-colors hover:border-zinc-700 hover:bg-zinc-800/60"
     >
-      {isSearching ? (
+      {!reorderable ? (
         <div className="h-8 w-8 shrink-0" aria-hidden="true" />
       ) : (
         <div
@@ -78,6 +78,18 @@ export function OpCodeRow({
           <p className="truncate text-xs italic text-zinc-500">
             {opCode.notes}
           </p>
+        )}
+        {opCode.tags.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {opCode.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         )}
       </div>
 
