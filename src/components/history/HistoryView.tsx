@@ -121,12 +121,8 @@ export function HistoryView({
   library,
   settings,
   today,
-  periodStart: periodStartProp,
-  periodEnd: periodEndProp,
   weekStart: weekStartProp,
   weekEnd: weekEndProp,
-  monthStart: monthStartProp,
-  monthEnd: monthEndProp,
   weekStartDay,
   renderDetail,
 }: {
@@ -202,21 +198,6 @@ export function HistoryView({
       });
   }, [allEntries, range, search, sortBy, sortDir]);
 
-  // Period flag hours for the chart header
-  const periodFlagHours = useMemo(
-    () =>
-      allEntries
-        .filter((e) => e.date >= periodStartProp && e.date <= periodEndProp)
-        .reduce((s, e) => s + e.flagHours, 0),
-    [allEntries, periodStartProp, periodEndProp],
-  );
-
-  // Entries scoped to chart's filter (not search-filtered, so chart always shows full picture)
-  const chartEntries = useMemo(() => {
-    if (!range) return allEntries;
-    return allEntries.filter((e) => e.date >= range.start && e.date <= range.end);
-  }, [allEntries, range]);
-
   const openEntry = openId ? allEntries.find((e) => e.id === openId) ?? null : null;
 
   return (
@@ -256,19 +237,14 @@ export function HistoryView({
         })}
       </div>
 
-      {/* Bar chart */}
+      {/* Bar chart — mirrors the dashboard "Flagged Hours" chart */}
       <HistoryBarChart
-        entries={chartEntries}
+        entries={allEntries}
         filter={filter}
         today={today}
-        periodStart={periodStartProp}
-        periodEnd={periodEndProp}
         weekStart={weekStartProp}
         weekEnd={weekEndProp}
-        monthStart={monthStartProp}
-        monthEnd={monthEndProp}
-        periodFlagHours={periodFlagHours}
-        goalHours={settings.goalHours}
+        splitDay={settings.splitDay}
       />
 
       {/* Search bar */}
