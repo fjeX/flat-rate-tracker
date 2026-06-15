@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Camera, ChevronDown, ChevronUp, Plus, Search, Trash2, X } from "lucide-react";
-import type { Entry, NewEntry, NewEntryOpCode, OpCode, RoTemplate, SubOpCode } from "@/lib/types";
+import { Camera, ChevronDown, ChevronUp, Info, Plus, Search, Trash2, X } from "lucide-react";
+import type { Entry, NewEntry, NewEntryOpCode, OpCode, RoMatch, RoTemplate, SubOpCode } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
-import { saveEntry, deleteEntryAction } from "@/app/actions/entries";
+import { saveEntry, deleteEntryAction, findDuplicateRos } from "@/app/actions/entries";
 import { createLibraryOpCode } from "@/app/actions/op-codes";
 import {
   CustomOpCodeModal,
@@ -17,6 +17,7 @@ import {
 import { ScanRoButton } from "./ScanRoButton";
 import type { OcrResult } from "@/lib/ocr";
 import { SubOpCodePickerModal } from "./SubOpCodePickerModal";
+import { DuplicateRoDialog } from "./DuplicateRoDialog";
 
 const COMMON_MAKES = [
   "Acura", "Audi", "BMW", "Buick", "Cadillac", "Chevrolet", "Chrysler",
@@ -90,6 +91,12 @@ export function LogRoForm({
   const [savedRoNumber, setSavedRoNumber] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
   const [isDeleting, startDelete] = useTransition();
+
+  // Duplicate-RO prompt: when saving a NEW RO whose number already exists, we
+  // pause and ask the user (edit existing vs. log a separate repair).
+  const [dupMatches, setDupMatches] = useState<RoMatch[] | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+  const pendingAfterSave = useRef<(() => void) | undefined>(undefined);
 
   function handleDeleteRo() {
     if (!existingEntry) return;
@@ -323,7 +330,8 @@ export function LogRoForm({
     setTimeout(() => roInputRef.current?.focus(), 50);
   }
 
-  function handleSave(afterSave?: () => void) {
+  // The actual persist. No duplicate check here — callers gate that upstream.
+  function performSave(afterSave?: () => void) {
     setError(null);
     startTransition(async () => {
       try {
@@ -364,6 +372,50 @@ export function LogRoForm({
         setError(err instanceof Error ? err.message : "Failed to save.");
       }
     });
+  }
+
+  function handleSave(afterSave?: () => void) {
+    setError(null);
+    const ro = roNumber.trim();
+    // Edits and guest mode (in-memory onSave, no DB) skip the duplicate check.
+    // Empty RO# falls through too — performSave/server surfaces that error.
+    if (isEdit || onSave || !ro) {
+      performSave(afterSave);
+      return;
+    }
+    setIsChecking(true);
+    findDuplicateRos(ro)
+      .then((matches) => {
+        if (matches.length > 0) {
+          pendingAfterSave.current = afterSave;
+          setDupMatches(matches);
+        } else {
+          performSave(afterSave);
+        }
+      })
+      .catch(() => {
+        // Don't let a failed check block saving — just proceed.
+        performSave(afterSave);
+      })
+      .finally(() => setIsChecking(false));
+  }
+
+  function handleDupEdit(id: string) {
+    setDupMatches(null);
+    pendingAfterSave.current = undefined;
+    router.push(`/log?edit=${id}`);
+  }
+
+  function handleDupLogNew() {
+    const after = pendingAfterSave.current;
+    pendingAfterSave.current = undefined;
+    setDupMatches(null);
+    performSave(after);
+  }
+
+  function handleDupClose() {
+    pendingAfterSave.current = undefined;
+    setDupMatches(null);
   }
 
   function handleSaveAndNew() {
@@ -705,7 +757,7 @@ export function LogRoForm({
           <div className="step-num">3</div>
           <div className="step-title">
             Vehicle
-            <span className="optional-badge">optional</span>
+            <span className="optional-badge">recommended</span>
           </div>
           {vehicleSummary && !vehicleOpen && (
             <div className="step-summary">{vehicleSummary}</div>
@@ -715,6 +767,22 @@ export function LogRoForm({
 
         {vehicleOpen && (
           <div className="step-body">
+            <p style={{
+              display: "flex",
+              gap: 6,
+              alignItems: "flex-start",
+              fontSize: 11,
+              lineHeight: 1.45,
+              color: "var(--fg-3)",
+              marginBottom: 12,
+            }}>
+              <Info size={13} style={{ flexShrink: 0, marginTop: 1, color: "var(--brand)" }} />
+              <span>
+                Optional, but worth it — RO numbers get reused over time. The vehicle
+                is what tells repeat RO numbers apart later.
+              </span>
+            </p>
+
             <datalist id="make-options">
               {COMMON_MAKES.map((m) => (
                 <option key={m} value={m} />
@@ -892,7 +960,7 @@ export function LogRoForm({
             <button
               type="button"
               onClick={handleSaveAndNew}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isChecking}
               className="btn btn-ghost btn-sm"
             >
               Save & New
@@ -901,10 +969,10 @@ export function LogRoForm({
           <button
             type="button"
             onClick={() => handleSave()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isChecking}
             className="btn btn-primary btn-sm"
           >
-            {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Save RO"}
+            {isChecking ? "Checking…" : isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Save RO"}
           </button>
         </div>
       </div>
@@ -928,6 +996,15 @@ export function LogRoForm({
           opCode={subPickerOc}
           onSelect={confirmSubPick}
           onClose={() => setSubPickerOc(null)}
+        />
+      )}
+      {dupMatches && (
+        <DuplicateRoDialog
+          roNumber={roNumber.trim()}
+          matches={dupMatches}
+          onEdit={handleDupEdit}
+          onLogNew={handleDupLogNew}
+          onClose={handleDupClose}
         />
       )}
     </div>

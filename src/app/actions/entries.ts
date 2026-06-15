@@ -3,13 +3,32 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import type { Entry, NewEntry, NewEntryOpCode } from "@/lib/types";
+import type { Entry, NewEntry, NewEntryOpCode, RoMatch } from "@/lib/types";
 
 // Create or update an entry. Returns the persisted entry so the client can
 // navigate / display success. Throws on validation or DB errors.
 export async function loadMoreEntries(offset: number): Promise<Entry[]> {
   const supabase = await createClient();
   return db.listEntries(supabase, { limit: 100, offset });
+}
+
+// Find existing entries that already use this RO number. RO numbers are not
+// unique (shops recycle them), so before saving a new RO the form checks here
+// and, if there are matches, asks the user whether they meant to edit an
+// existing one or log a genuinely new repair under the same number.
+export async function findDuplicateRos(roNumber: string): Promise<RoMatch[]> {
+  const ro = roNumber.trim();
+  if (!ro) return [];
+  const supabase = await createClient();
+  const matches = await db.getEntriesByRoNumber(supabase, ro);
+  return matches.map((e) => ({
+    id: e.id,
+    date: e.date,
+    vehicleSummary: [e.vehicle.year, e.vehicle.make, e.vehicle.model]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(" "),
+  }));
 }
 
 export async function saveEntry(
@@ -36,11 +55,10 @@ export async function saveEntry(
 
   const supabase = await createClient();
 
-  // Unique-per-user RO# (case-insensitive). Excludes the entry being edited.
-  const existing = await db.getEntryByRoNumber(supabase, roNumber);
-  if (existing && existing.id !== entryId) {
-    throw new Error(`RO #${roNumber} already exists.`);
-  }
+  // RO numbers are intentionally NOT unique — shops recycle them, so the same
+  // number can be a different repair months later. Duplicate awareness lives in
+  // the client (findDuplicateRos + the duplicate-RO prompt); the server just
+  // persists what it's told.
 
   const normalized: NewEntry = {
     ...input,

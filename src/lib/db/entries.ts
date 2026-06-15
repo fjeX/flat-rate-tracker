@@ -97,18 +97,20 @@ export async function getEntry(
   return data ? toEntry(data) : null;
 }
 
-export async function getEntryByRoNumber(
+export async function getEntriesByRoNumber(
   supabase: DbClient,
   roNumber: string,
-): Promise<Entry | null> {
-  // Case-insensitive match — DB has a unique index on lower(ro_number).
+): Promise<Entry[]> {
+  // Case-insensitive match. RO numbers are NOT unique — shops recycle them over
+  // time — so this returns every entry sharing the number, newest-first.
   const { data, error } = await supabase
     .from("entries")
     .select("*, entry_op_codes(*)")
     .ilike("ro_number", roNumber)
-    .maybeSingle();
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
   if (error) throw error;
-  return data ? toEntry(data) : null;
+  return (data ?? []).map(toEntry);
 }
 
 // ------------------------------------------------------------------------

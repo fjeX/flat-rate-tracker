@@ -121,6 +121,14 @@ export type NewEntry = {
 
 export type EntryPatch = Partial<NewEntry>;
 
+// Slim summary of an existing entry that shares an RO number — used by the
+// duplicate-RO prompt to let the user tell repeat RO numbers apart.
+export type RoMatch = {
+  id: string;
+  date: string; // "YYYY-MM-DD"
+  vehicleSummary: string; // "2018 Toyota Camry", or "" when no vehicle was recorded
+};
+
 export type NewOpCode = {
   code: string;
   description: string;
