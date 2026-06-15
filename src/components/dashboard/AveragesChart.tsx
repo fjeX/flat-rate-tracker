@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Entry } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { getPeriodForDate, addDays } from "@/lib/periods";
@@ -9,7 +9,7 @@ import { getPeriodForDate, addDays } from "@/lib/periods";
 // Types
 // ---------------------------------------------------------------------------
 
-type TabId = "day" | "week" | "period" | "month";
+type TabId = "week" | "period" | "month";
 type Mode = "total" | "avg";
 type SubMode = "worked" | "all";
 
@@ -56,138 +56,66 @@ function daysInMonth(year: number, month1: number): number {
   return new Date(year, month1, 0).getDate();
 }
 
-function getWeekStart(date: string, weekStartDay: 0 | 1): string {
-  const dow = new Date(date + "T00:00:00").getDay();
-  const offset = weekStartDay === 0 ? dow : (dow === 0 ? 6 : dow - 1);
-  return addDays(date, -offset);
-}
-
-
 // ---------------------------------------------------------------------------
 // Compute bar data per tab
 // ---------------------------------------------------------------------------
 
-function computeDay(
+// Week tab — one bar per day of the *current* week (mirrors the History page).
+//   • Total: hours actually flagged that exact day (future days = 0).
+//   • Avg:   the average hours typically flagged on that weekday, computed over
+//            the 90-day window on a worked-days basis (days with no ROs don't
+//            drag the average down).
+function computeWeek(
   entries: Entry[],
+  weekStart: string,
+  weekEnd: string,
   windowStart: string,
   windowEnd: string,
   today: string,
   mode: Mode,
-  subMode: SubMode,
-  weekStartDay: 0 | 1,
 ): BarData[] {
-  const displayOrder = weekStartDay === 0
-    ? [0, 1, 2, 3, 4, 5, 6]
-    : [1, 2, 3, 4, 5, 6, 0];
-  const shortLabels = weekStartDay === 0
-    ? ["S", "M", "T", "W", "T", "F", "S"]
-    : ["M", "T", "W", "T", "F", "S", "S"];
-
+  // ── Avg source: day-of-week averages across the 90d window ──────────────
   const totalByDow: number[] = new Array(7).fill(0);
-  const countByDow: number[] = new Array(7).fill(0);
   const workedByDow: number[] = new Array(7).fill(0);
   const workedDates = new Set<string>();
 
   for (const entry of entries) {
     if (entry.date < windowStart || entry.date > windowEnd) continue;
-    workedDates.add(entry.date);
-  }
-
-  const totalDays = daysBetweenInclusive(windowStart, windowEnd);
-  for (let i = 0; i < totalDays; i++) {
-    const d = addDays(windowStart, i);
-    const jsDay = new Date(d + "T00:00:00").getDay();
-    countByDow[jsDay]++;
-    if (workedDates.has(d)) workedByDow[jsDay]++;
-  }
-
-  for (const entry of entries) {
-    if (entry.date < windowStart || entry.date > windowEnd) continue;
     const jsDay = new Date(entry.date + "T00:00:00").getDay();
     totalByDow[jsDay] += entry.flagHours;
+    workedDates.add(entry.date);
   }
-
-  const divisor = subMode === "worked" ? workedByDow : countByDow;
+  for (const d of workedDates) {
+    const jsDay = new Date(d + "T00:00:00").getDay();
+    workedByDow[jsDay]++;
+  }
   const avgByDow = totalByDow.map((total, dow) =>
-    divisor[dow] > 0 ? total / divisor[dow] : 0
+    workedByDow[dow] > 0 ? total / workedByDow[dow] : 0
   );
 
-  const todayDow = new Date(today + "T00:00:00").getDay();
-
-  const bars: BarData[] = displayOrder.map((dow, idx) => ({
-    label: shortLabels[idx],
-    longLabel: DAY_SHORT[dow],
-    value: mode === "total" ? totalByDow[dow] : avgByDow[dow],
-    isBest: false,
-    isCurrent: dow === todayDow,
-  }));
-
-  const maxVal = Math.max(...bars.map((b) => b.value));
-  if (maxVal > 0) {
-    for (const bar of bars) {
-      if (bar.value === maxVal) { bar.isBest = true; break; }
-    }
-  }
-  return bars;
-}
-
-function computeWeek(
-  entries: Entry[],
-  windowStart: string,
-  windowEnd: string,
-  today: string,
-  weekStartDay: 0 | 1,
-  mode: Mode,
-  subMode: SubMode,
-): BarData[] {
-  const weekTotals = new Map<string, number>();
-  const weekWorkedDates = new Map<string, Set<string>>();
-  const weekSet = new Set<string>();
-
-  const firstWeekStart = getWeekStart(windowStart, weekStartDay);
-
-  let cursor = firstWeekStart;
-  while (cursor <= windowEnd) {
-    const wEnd = addDays(cursor, 6);
-    if (wEnd >= windowStart) {
-      weekSet.add(cursor);
-      if (!weekTotals.has(cursor)) weekTotals.set(cursor, 0);
-    }
-    cursor = addDays(cursor, 7);
-  }
-
+  // ── Total source: this week's per-day totals ────────────────────────────
+  const totalByDate = new Map<string, number>();
   for (const entry of entries) {
-    if (entry.date < windowStart || entry.date > windowEnd) continue;
-    const ws = getWeekStart(entry.date, weekStartDay);
-    weekTotals.set(ws, (weekTotals.get(ws) ?? 0) + entry.flagHours);
-    if (!weekWorkedDates.has(ws)) weekWorkedDates.set(ws, new Set());
-    weekWorkedDates.get(ws)!.add(entry.date);
+    if (entry.date < weekStart || entry.date > weekEnd) continue;
+    totalByDate.set(entry.date, (totalByDate.get(entry.date) ?? 0) + entry.flagHours);
   }
 
-  const currentWeekStart = getWeekStart(today, weekStartDay);
-  const sortedWeeks = Array.from(weekSet).sort();
-
-  const bars: BarData[] = sortedWeeks.map((ws) => {
-    const [, m2, d2] = ws.split("-").map(Number);
-    const dateLabel = `${MONTHS_SHORT[m2 - 1]} ${d2}`;
-    const total = weekTotals.get(ws) ?? 0;
-
-    let value: number;
-    if (mode === "total") {
-      value = total;
-    } else if (subMode === "worked") {
-      const workedDays = weekWorkedDates.get(ws)?.size ?? 0;
-      value = workedDays > 0 ? total / workedDays : 0;
-    } else {
-      const wEnd = addDays(ws, 6);
-      const effStart = ws < windowStart ? windowStart : ws;
-      const effEnd = wEnd > windowEnd ? windowEnd : wEnd;
-      const allDays = effEnd >= effStart ? daysBetweenInclusive(effStart, effEnd) : 0;
-      value = allDays > 0 ? total / allDays : 0;
-    }
-
-    return { label: dateLabel, longLabel: dateLabel, value, isBest: false, isCurrent: ws === currentWeekStart };
-  });
+  const bars: BarData[] = [];
+  let d = weekStart;
+  while (d <= weekEnd) {
+    const jsDay = new Date(d + "T00:00:00").getDay();
+    const wd = DAY_SHORT[jsDay];
+    const [, m, day] = d.split("-").map(Number);
+    const value = mode === "total" ? (totalByDate.get(d) ?? 0) : avgByDow[jsDay];
+    bars.push({
+      label: wd,
+      longLabel: `${wd}, ${MONTHS_SHORT[m - 1]} ${day}`,
+      value,
+      isBest: false,
+      isCurrent: d === today,
+    });
+    d = addDays(d, 1);
+  }
 
   const maxVal = Math.max(...bars.map((b) => b.value), 0);
   if (maxVal > 0) {
@@ -340,32 +268,36 @@ function computeInsight(
   windowEnd: string,
   activeTab: TabId,
   bars: BarData[],
+  mode: Mode,
 ): string {
   if (entries.length === 0 || bars.every((b) => b.value === 0)) {
     return "Log more ROs to see insights here.";
   }
 
-  if (activeTab === "day") {
-    const withValues = bars.filter((b) => b.value > 0);
-    if (withValues.length < 2) {
-      const best = bars.find((b) => b.isBest);
-      if (best) return `Your best day of the week is ${best.longLabel}, averaging ${fmtHours(best.value)}h.`;
-      return "Log more ROs to see insights here.";
-    }
-    const best = [...bars].sort((a, b) => b.value - a.value)[0];
-    const worst = [...withValues].sort((a, b) => a.value - b.value)[0];
-    if (worst.value > 0) {
-      const pct = Math.round(((best.value - worst.value) / worst.value) * 100);
-      if (pct >= 10) return `You average ${pct}% more hours on ${best.longLabel} than ${worst.longLabel}.`;
-    }
-    return `Your best day of the week is ${best.longLabel}, averaging ${fmtHours(best.value)}h.`;
-  }
+  // Week tab = one bar per weekday of the current week.
+  if (activeTab === "week") {
+    const dayName = (b: BarData) => b.longLabel.split(",")[0]; // "Mon, May 3" -> "Mon"
 
-  if (activeTab === "week" && bars.length >= 2) {
-    const lastTwo = bars.slice(-2);
-    const prev = lastTwo[0].value, curr = lastTwo[1].value;
-    if (prev > 0 && curr > prev) return `Your flag hours are up ${Math.round(((curr - prev) / prev) * 100)}% from last week.`;
-    if (prev > 0 && curr < prev) return `Your flag hours are down ${Math.round(((prev - curr) / prev) * 100)}% from last week.`;
+    if (mode === "avg") {
+      const withValues = bars.filter((b) => b.value > 0);
+      if (withValues.length < 2) {
+        const best = bars.find((b) => b.isBest);
+        if (best) return `You typically flag the most on ${dayName(best)}, around ${fmtHours(best.value)}h.`;
+        return "Log more ROs to see insights here.";
+      }
+      const best = [...bars].sort((a, b) => b.value - a.value)[0];
+      const worst = [...withValues].sort((a, b) => a.value - b.value)[0];
+      if (worst.value > 0) {
+        const pct = Math.round(((best.value - worst.value) / worst.value) * 100);
+        if (pct >= 10) return `You typically flag ${pct}% more on ${dayName(best)} than ${dayName(worst)}.`;
+      }
+      return `You typically flag the most on ${dayName(best)}, around ${fmtHours(best.value)}h.`;
+    }
+
+    // Total mode — what's actually been flagged this week so far.
+    const best = bars.find((b) => b.isBest);
+    if (best) return `Best day this week: ${dayName(best)} with ${fmtHours(best.value)}h flagged.`;
+    return "Log more ROs to see insights here.";
   }
 
   if (activeTab === "period" && bars.length >= 2) {
@@ -384,7 +316,7 @@ function computeInsight(
 
   const best = bars.find((b) => b.isBest);
   if (best) {
-    const unitNames: Record<TabId, string> = { day: "day", week: "week", period: "period", month: "month" };
+    const unitNames: Record<TabId, string> = { week: "week", period: "period", month: "month" };
     return `Best ${unitNames[activeTab]}: ${best.longLabel} with ${fmtHours(best.value)}h.`;
   }
 
@@ -400,8 +332,8 @@ const CHART_H = 130;
 const PAD_L = 4, PAD_R = 4, PAD_T = 6;
 const INNER_W = CHART_W - PAD_L - PAD_R;
 
-// Week and Period need extra bottom padding for two label rows
-function getPadB(tab: TabId) { return (tab === "week" || tab === "period") ? 42 : 26; }
+// Period needs extra bottom padding for its two label rows (date + Wk 1/2)
+function getPadB(tab: TabId) { return tab === "period" ? 42 : 26; }
 
 function RoomierBarChart({
   bars,
@@ -457,16 +389,9 @@ function RoomierBarChart({
           let primaryLabel: string | null = null;
           let secondaryLabel: string | null = null;
 
-          if (tab === "day") {
-            // All 7 days, use 3-char long label
-            primaryLabel = bar.longLabel;
-
-          } else if (tab === "week") {
-            // Always show day number; show month abbrev only at month transitions
-            const [month, day] = bar.label.split(" ");
-            primaryLabel = day ?? bar.label;
-            const prevMonth = i > 0 ? bars[i - 1].label.split(" ")[0] : null;
-            if (month !== prevMonth) secondaryLabel = month;
+          if (tab === "week") {
+            // One bar per weekday of the current week — short weekday label
+            primaryLabel = bar.label;
 
           } else if (tab === "period") {
             // Always show period date; always show Wk 1 / Wk 2
@@ -480,7 +405,7 @@ function RoomierBarChart({
             if (show) primaryLabel = bar.label;
           }
 
-          const labelFontSize = tab === "day" ? 10 : tab === "week" ? 9 : 11;
+          const labelFontSize = tab === "week" ? 10 : 11;
 
           return (
             <g key={i}>
@@ -542,34 +467,24 @@ function RoomierBarChart({
 export function AveragesChart({
   entries,
   today,
-  periodStart,
-  weekStartDay,
+  weekStart,
+  weekEnd,
   splitDay,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<TabId>("day");
+  const [activeTab, setActiveTab] = useState<TabId>("week");
   const [mode, setMode] = useState<Mode>("total");
-  const [subMode, setSubMode] = useState<SubMode>("worked");
   const [hover, setHover] = useState<number | null>(null);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("frt:avg_mode");
-      if (stored === "all" || stored === "worked") setSubMode(stored);
-    } catch { /* ignore */ }
-  }, []);
-
-  function handleSubMode(next: SubMode) {
-    setSubMode(next);
-    try { localStorage.setItem("frt:avg_mode", next); } catch { /* ignore */ }
-  }
+  // Averages are always computed on a worked-days basis so days off don't drag
+  // the number down. The Worked/All toggle was removed.
+  const subMode: SubMode = "worked";
 
   const windowStart = addDays(today, -89);
   const windowEnd = today;
 
   const bars: BarData[] = (() => {
     switch (activeTab) {
-      case "day":    return computeDay(entries, windowStart, windowEnd, today, mode, subMode, weekStartDay);
-      case "week":   return computeWeek(entries, windowStart, windowEnd, today, weekStartDay, mode, subMode);
+      case "week":   return computeWeek(entries, weekStart, weekEnd, windowStart, windowEnd, today, mode);
       case "period": return computePeriod(entries, windowStart, windowEnd, splitDay, today, mode, subMode);
       case "month":  return computeMonth(entries, windowStart, windowEnd, today, mode, subMode);
     }
@@ -580,21 +495,18 @@ export function AveragesChart({
   const activeIdx = hover ?? (currIdx >= 0 ? currIdx : bestIdx >= 0 ? bestIdx : 0);
   const activeBar = bars[activeIdx];
 
-  const unitLabel = mode === "total"
-    ? "total"
-    : subMode === "worked" ? "avg / worked day" : "avg / day";
+  const unitLabel = mode === "total" ? "total" : "avg / day";
 
   const total90d = entries
     .filter((e) => e.date >= windowStart && e.date <= windowEnd)
     .reduce((s, e) => s + e.flagHours, 0);
 
-  const unitNames: Record<TabId, string> = { day: "day", week: "week", period: "period", month: "month" };
+  const unitNames: Record<TabId, string> = { week: "week", period: "period", month: "month" };
   const bestBar = bars[bestIdx];
 
-  const insightText = computeInsight(entries, windowStart, windowEnd, activeTab, bars);
+  const insightText = computeInsight(entries, windowStart, windowEnd, activeTab, bars, mode);
 
   const tabs: { id: TabId; label: string }[] = [
-    { id: "day", label: "Day" },
     { id: "week", label: "Week" },
     { id: "period", label: "Period" },
     { id: "month", label: "Month" },
@@ -656,24 +568,6 @@ export function AveragesChart({
                 Avg
               </button>
             </div>
-            {mode === "avg" && (
-              <div className="r-sub-toggle">
-                <button
-                  className={`r-sub-btn${subMode === "worked" ? " on" : ""}`}
-                  onClick={() => handleSubMode("worked")}
-                  type="button"
-                >
-                  Worked days
-                </button>
-                <button
-                  className={`r-sub-btn${subMode === "all" ? " on" : ""}`}
-                  onClick={() => handleSubMode("all")}
-                  type="button"
-                >
-                  All days
-                </button>
-              </div>
-            )}
           </div>
 
           {/* CHART */}
