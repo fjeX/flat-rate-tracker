@@ -363,7 +363,7 @@ function Hero() {
           <div className="inline-flex items-center gap-2.5">
             <span className="block w-5 h-0.5 bg-orange-600" />
             <span className="font-mono text-[13px] font-semibold tracking-[0.18em] uppercase text-orange-600 max-sm:text-[12px] max-sm:tracking-[0.12em]">
-              Built for flat rate techs
+              Built for the tech, not the shop
             </span>
           </div>
         </Rv>
@@ -373,7 +373,7 @@ function Hero() {
             className="font-extrabold leading-none tracking-tight text-zinc-50 text-balance mt-5 mb-0 max-sm:mt-4"
             style={{ fontSize: "clamp(33px, 5vw, 56px)", maxWidth: 840 }}
           >
-            Your whole pay period, on one screen.
+            Every RO you log makes you harder to short.
           </h1>
         </Rv>
 
@@ -382,8 +382,9 @@ function Hero() {
             className="text-zinc-400 leading-[1.55] mt-5 mb-0 max-sm:mt-4"
             style={{ fontSize: "clamp(16px, 2vw, 18px)", maxWidth: 520 }}
           >
-            Log your ROs, track flag hours against your pay period, and see your pace at a glance.
-            No spreadsheets, no guessing.
+            FRT turns your daily work into a record that compounds — proof you got paid right,
+            numbers that show your worth, and leverage that grows every single job. Start today;
+            thank yourself in a year.
           </p>
         </Rv>
 
@@ -492,8 +493,8 @@ function HowItWorks() {
     },
     {
       n: "03",
-      t: "Turn your work into leverage.",
-      d: "Over time, FRT builds a real picture of how you perform: efficiency rates, average flag hours, and the types of jobs you run. Numbers you can put in front of a service manager when it's time to talk about a raise — or find a better shop.",
+      t: "Build a record only you control.",
+      d: "Every RO you log builds a real picture of how you perform — efficiency rates, average flag hours, the jobs you run most. Yours to keep, no matter which shop you're standing in.",
     },
   ];
   return (
@@ -509,7 +510,7 @@ function HowItWorks() {
             className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
             style={{ fontSize: 36 }}
           >
-            You flag the hours. Make sure you get paid for them.
+            You flag the hours. Make sure you get paid for every one.
           </h2>
         </Rv>
         <div className="grid grid-cols-3 gap-5 mt-11 max-[900px]:grid-cols-1 max-[900px]:gap-7">
@@ -522,6 +523,44 @@ function HowItWorks() {
               <p className="text-zinc-400 leading-[1.55] m-0 text-[15px]">{s.d}</p>
             </Rv>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LongGame() {
+  return (
+    <section className="pb-24 max-[900px]:pb-[72px] max-sm:pb-14">
+      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
+        <div className="max-w-[680px]">
+          <Rv>
+            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
+              The long game
+            </span>
+          </Rv>
+          <Rv delay={60}>
+            <h2
+              className="font-extrabold tracking-tight text-zinc-50 text-balance mt-4 mb-0"
+              style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
+            >
+              Day one, it tracks a job. Year one, it tracks your career.
+            </h2>
+          </Rv>
+          <Rv delay={120}>
+            <p
+              className="text-zinc-400 leading-[1.6] mt-5 mb-0"
+              style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
+            >
+              Every RO you log is one more data point in the only record that&apos;s actually
+              yours. <strong className="text-zinc-200">Day one</strong>, it catches a shorted
+              check. <strong className="text-zinc-200">Month six</strong>, it shows your real
+              efficiency across every job type. <strong className="text-zinc-200">Year one</strong>,
+              it&apos;s the case you put on the service manager&apos;s desk when it&apos;s time to
+              talk money — or the proof you take to a better shop. Most techs throw that record
+              away every payday. You don&apos;t have to.
+            </p>
+          </Rv>
         </div>
       </div>
     </section>
@@ -721,7 +760,7 @@ function FinalCTA() {
             className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
             style={{ fontSize: "clamp(28px, 4.5vw, 46px)" }}
           >
-            Stop guessing. Start tracking.
+            Nobody&apos;s looking out for the tech. So we built the tool that does.
           </h2>
           <p
             className="text-zinc-400 leading-[1.55] mt-4 mb-8 mx-auto"
@@ -802,6 +841,7 @@ export default function LandingPage() {
         <Hero />
         <PaceSection />
         <HowItWorks />
+        <LongGame />
         <Features />
         <GuestMode />
         <FinalCTA />
