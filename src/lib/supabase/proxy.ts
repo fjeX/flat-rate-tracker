@@ -9,6 +9,10 @@ import { authCookieName, serverSupabaseUrl } from "./config";
 // Auth pages redirect logged-in users to the app. Guest routes allow anyone.
 const AUTH_PAGES = ["/signin", "/signup"];
 const GUEST_ROUTES = ["/guest"];
+// OAuth callback — hit before the user has a session, so it must pass through
+// unauthenticated. The handler at /auth/callback exchanges the code and sets
+// the auth cookies itself.
+const CALLBACK_ROUTES = ["/auth/"];
 // Public routes that don't require auth (landing page, etc.)
 const PUBLIC_ROUTES = ["/"];
 
@@ -46,9 +50,10 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
   const isGuestRoute = GUEST_ROUTES.some((p) => pathname.startsWith(p));
+  const isCallbackRoute = CALLBACK_ROUTES.some((p) => pathname.startsWith(p));
   const isPublicRoute = PUBLIC_ROUTES.some((p) => pathname === p);
 
-  if (!user && !isAuthPage && !isGuestRoute && !isPublicRoute) {
+  if (!user && !isAuthPage && !isGuestRoute && !isCallbackRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
     return NextResponse.redirect(url);

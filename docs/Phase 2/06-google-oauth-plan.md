@@ -1,6 +1,6 @@
 # Plan — Google OAuth (Sign in with Google)
 
-Status: **Planned, not started.** Liem will do the Google Cloud + VM Supabase config later, then the app-code side gets built.
+Status: **Steps 1–2 done (Google Cloud configured 2026-06-19; VM GoTrue env wired + `google: true` verified 2026-06-20).** Next: Step 3 (app code — built locally in the repo).
 
 ## Decisions locked
 
@@ -16,31 +16,46 @@ Status: **Planned, not started.** Liem will do the Google Cloud + VM Supabase co
 
 ## Build order
 
-### Step 1 — Google Cloud Console (one-time, browser)
+### Step 1 — Google Cloud Console (one-time, browser) ✅ DONE 2026-06-19
 
-- Create/reuse a project.
-- **OAuth consent screen** → User type: **External**.
-  - Multi-user requires clicking **"Publish app" → Production**. Testing mode caps at 100 manually-added test users and shows an "unverified" warning.
-  - Scopes: `email`, `profile`, `openid` only. Minimal scopes = no Google verification review needed.
-- **Credentials → Create OAuth Client ID → Web application**.
-  - Authorized redirect URI: `https://api.slimelab.cc/auth/v1/callback`
-  - Save the **Client ID** + **Client Secret**.
+- ~~Create/reuse a project.~~ Reused existing project **Flat Rate Tracker** (`flat-rate-tracker-499922`).
+- **OAuth consent screen** (now "Google Auth Platform") → User type: **External** ✅ (already set).
+  - ~~Multi-user requires clicking **"Publish app" → Production".~~ Publishing status flipped **Testing → In production** ✅.
+  - Scopes: none added — `email`/`profile`/`openid` are non-sensitive and requested at runtime by Supabase, so no verification review triggered ✅.
+- **Credentials → Create OAuth Client ID → Web application** ✅.
+  - Client name: `FRT Supabase Auth (Web)`.
+  - Authorized redirect URI: `https://api.slimelab.cc/auth/v1/callback` ✅.
+  - **Client ID:** `636340327659-1t9no7djiu8591keeoe1ac8ufbio4efd.apps.googleusercontent.com`
+  - **Client Secret:** stored in the VM `.env` only — **not committed here** (Google now hashes secrets and shows them once at creation; if lost, add a new secret on the client's detail page).
 
-### Step 2 — Supabase auth container on the VM
+> **Gotcha for next time:** Google no longer lets you view/download a client secret after creation — the one-time reveal is a JSON download. The original secret's download didn't persist (headless browser), so a fresh secret was generated and the dead original was disabled + deleted. Only one enabled secret exists now.
 
-- Add to the supabase-stack env:
-  - `GOTRUE_EXTERNAL_GOOGLE_ENABLED=true`
-  - `GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=...`
-  - `GOTRUE_EXTERNAL_GOOGLE_SECRET=...`
-  - `GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://api.slimelab.cc/auth/v1/callback`
-- Confirm `GOTRUE_URI_ALLOW_LIST` includes both:
-  - `https://tracker.slimelab.cc/auth/callback`
-  - `http://localhost:3000/auth/callback` (local dev)
-- Confirm `GOTRUE_SECURITY_MANUAL_LINKING_ENABLED` is **not** forcing manual mode (auto-link is the default).
-- `cd ~/docker/flat-rate-tracker/supabase-stack && docker compose up -d` (auth side only — **no app rebuild needed**).
-- Smoke test: `curl https://api.slimelab.cc/auth/v1/settings` → should show `"google": true` under external providers.
+### Step 2 — Supabase auth container on the VM ✅ DONE 2026-06-20
 
-### Step 3 — App code (build after Steps 1–2)
+How it actually wired up on this VM (self-hosted Supabase layout):
+
+- Real values live in `supabase-stack/.env`; `docker-compose.yml` maps them into the GoTrue
+  `auth` service via `${...}` references. So Step 2 touched **both** files.
+- **`.env`** — appended (secret kept on the VM only, never committed):
+  - `GOOGLE_ENABLED=true`
+  - `GOOGLE_CLIENT_ID=636340327659-1t9no7djiu8591keeoe1ac8ufbio4efd.apps.googleusercontent.com`
+  - `GOOGLE_SECRET=...` (in VM `.env`)
+  - `GOOGLE_REDIRECT_URI=https://api.slimelab.cc/auth/v1/callback`
+  - `ADDITIONAL_REDIRECT_URLS=https://tracker.slimelab.cc/auth/callback,http://localhost:3000/auth/callback`
+    (this feeds `GOTRUE_URI_ALLOW_LIST`). ⚠️ Note: these are the **app** callback URLs the browser
+    is redirected to — *not* the Google→GoTrue `api.slimelab.cc/auth/v1/callback` redirect URI.
+- **`docker-compose.yml`** — added to the `auth` env block, right after `GOTRUE_SMS_AUTOCONFIRM`:
+  - `GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${GOOGLE_ENABLED}`
+  - `GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}`
+  - `GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_SECRET}`
+  - `GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}`
+- `GOTRUE_SECURITY_MANUAL_LINKING_ENABLED` left unset → auto-link by verified email is the default ✅.
+- Recreated auth only: `docker compose up -d auth` → `supabase-auth Up (healthy)`, clean logs.
+- Smoke test: `curl https://api.slimelab.cc/auth/v1/settings` → `"google": true` ✅.
+- Backups `.env.bak` / `docker-compose.yml.bak` remain in `supabase-stack/`; delete once end-to-end
+  sign-in is verified after Step 3.
+
+### Step 3 — App code (build after Steps 1–2) ⬅️ NEXT (built locally in the repo, not on the VM)
 
 Three small pieces:
 

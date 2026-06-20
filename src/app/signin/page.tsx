@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signIn } from "@/app/actions/auth";
+import { GoogleButton } from "@/components/auth/google-button";
 
 export default async function SignInPage({
   searchParams,
@@ -58,6 +59,14 @@ export default async function SignInPage({
             Sign in
           </button>
         </form>
+
+        <div className="my-4 flex items-center gap-3">
+          <div className="h-px flex-1 bg-zinc-800" />
+          <span className="text-xs text-zinc-500">or</span>
+          <div className="h-px flex-1 bg-zinc-800" />
+        </div>
+
+        <GoogleButton />
 
         <p className="mt-4 text-sm text-zinc-400">
           No account?{" "}

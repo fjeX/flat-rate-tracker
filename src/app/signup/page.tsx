@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signUp } from "@/app/actions/auth";
+import { GoogleButton } from "@/components/auth/google-button";
 
 export default async function SignUpPage({
   searchParams,
@@ -57,6 +58,14 @@ export default async function SignUpPage({
             Create account
           </button>
         </form>
+
+        <div className="my-4 flex items-center gap-3">
+          <div className="h-px flex-1 bg-zinc-800" />
+          <span className="text-xs text-zinc-500">or</span>
+          <div className="h-px flex-1 bg-zinc-800" />
+        </div>
+
+        <GoogleButton />
 
         <p className="mt-4 text-sm text-zinc-400">
           Already have an account?{" "}
