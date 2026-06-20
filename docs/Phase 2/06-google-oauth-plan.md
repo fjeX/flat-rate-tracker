@@ -1,6 +1,6 @@
 # Plan — Google OAuth (Sign in with Google)
 
-Status: **Steps 1–2 done (Google Cloud configured 2026-06-19; VM GoTrue env wired + `google: true` verified 2026-06-20).** Next: Step 3 (app code — built locally in the repo).
+Status: **✅ COMPLETE (2026-06-20).** All three steps done and live sign-in verified working on `tracker.slimelab.cc`. Google Cloud configured → VM GoTrue env wired (`google: true`) → app code (callback route, button, idempotent seeding) deployed and tested.
 
 ## Decisions locked
 
@@ -55,7 +55,7 @@ How it actually wired up on this VM (self-hosted Supabase layout):
 - Backups `.env.bak` / `docker-compose.yml.bak` remain in `supabase-stack/`; delete once end-to-end
   sign-in is verified after Step 3.
 
-### Step 3 — App code (build after Steps 1–2) ⬅️ NEXT (built locally in the repo, not on the VM)
+### Step 3 — App code ✅ DONE 2026-06-20 (built in repo, deployed to VM, live-tested OK)
 
 Three small pieces:
 
