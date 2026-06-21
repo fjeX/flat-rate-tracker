@@ -145,6 +145,52 @@ body {
   .app-tabs { padding: 2px 16px; top: 81px; }
 }
 
+/* ── Bottom tab bar (mobile thumb nav, Phase 3) ──────────
+   Desktop keeps the top .app-tabs; below 900px those hide and this
+   fixed thumb bar takes over. Sized for one-handed, gloved use. */
+.bottom-nav { display: none; }
+.header-mobile-only { display: none; }
+
+@media (max-width: 899px) {
+  .app-tabs { display: none; }
+  .header-mobile-only { display: inline-flex; }
+
+  /* Keep content + bottom-anchored UI clear of the fixed bar */
+  body { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+  .pip { bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .save-bar { bottom: calc(72px + env(safe-area-inset-bottom)); }
+
+  .bottom-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: flex; align-items: stretch;
+    background: rgba(10, 10, 12, 0.92);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+.bottom-tab {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px;
+  padding: 8px 4px 7px;
+  min-height: 54px;
+  color: var(--fg-3);
+  text-decoration: none;
+  transition: color 120ms, transform 90ms ease;
+}
+.bottom-tab:active { transform: scale(0.94); }
+.bottom-tab.active { color: var(--brand); }
+.bottom-tab-icon { position: relative; display: grid; place-items: center; }
+.bottom-tab-label { font-size: 10.5px; font-weight: 550; letter-spacing: 0.01em; }
+.bottom-running-dot {
+  position: absolute; top: -2px; right: -4px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--good);
+  animation: pulse-good 1.6s ease-in-out infinite;
+}
+
 /* ── Cards ───────────────────────────────────────────── */
 .card {
   background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
@@ -225,6 +271,7 @@ body {
   margin-top: 6px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 3px;
 }
 .stat .stat-delta.good { color: var(--good); }
+.stat .stat-delta.warn { color: var(--warn); }
 .stat .stat-delta.bad  { color: var(--bad); }
 .stat .stat-delta.neutral { color: var(--fg-3); }
 .stat.featured {
@@ -235,6 +282,29 @@ body {
 }
 .stat.featured .stat-label { color: oklch(0.85 0.10 60); }
 .stat.featured .stat-value { color: var(--brand); }
+
+/* ── Efficiency status accents (Phase 2) ─────────────────
+   Thin coloured top edge + tinted value, driven by efficiencyTier().
+   Tiles with no clocked hours have no tier → stay neutral. Placed after
+   .featured so the status colour wins on the value number. */
+.stat.eff-good, .stat.eff-warn, .stat.eff-bad { overflow: hidden; }
+.stat.eff-good::before, .stat.eff-warn::before, .stat.eff-bad::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+}
+.stat.eff-good::before { background: var(--good); }
+.stat.eff-warn::before { background: var(--warn); }
+.stat.eff-bad::before  { background: var(--bad); }
+.stat.eff-good { border-color: color-mix(in oklab, var(--good) 32%, var(--line)); }
+.stat.eff-warn { border-color: color-mix(in oklab, var(--warn) 32%, var(--line)); }
+.stat.eff-bad  { border-color: color-mix(in oklab, var(--bad) 32%, var(--line)); }
+.stat.eff-good .stat-value { color: var(--good); }
+.stat.eff-warn .stat-value { color: var(--warn); }
+.stat.eff-bad  .stat-value { color: var(--bad); }
+
+/* ── Today = hero tile ───────────────────────────────────
+   The orange "now" anchor reads bigger than the context tiles. */
+.stat.today-card .stat-value { font-size: 34px; }
+.stat.today-card .stat-value .unit { font-size: 16px; }
 
 /* ── Pace bar ────────────────────────────────────────── */
 .pace {
@@ -927,6 +997,55 @@ body {
   50%      { box-shadow: 0 0 0 6px oklch(0.78 0.16 150 / 0); }
 }
 
+/* ===================================================================
+   Motion pack (Phase 1) — entrance, tactile feedback, chart grow-in
+   Tasteful + subtle. Everything here is neutralised under
+   prefers-reduced-motion (see the guard at the very bottom of the file).
+   =================================================================== */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pace-grow {
+  from { width: 0; }
+}
+@keyframes bar-rise {
+  from { transform: scaleY(0); }
+}
+
+/* — Dashboard stat tiles stagger in on load — */
+.stat { animation: fade-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.stat-grid .stat:nth-child(1) { animation-delay: 0ms; }
+.stat-grid .stat:nth-child(2) { animation-delay: 45ms; }
+.stat-grid .stat:nth-child(3) { animation-delay: 90ms; }
+.stat-grid .stat:nth-child(4) { animation-delay: 135ms; }
+
+/* — Pace bar fills from empty on load — */
+.pace-fill { animation: pace-grow 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* — Chart bars rise from their baseline — */
+.r-chart rect {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: bar-rise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.period-bars .bar {
+  transform-origin: bottom;
+  animation: bar-rise 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* — Tactile press feedback on interactive elements (touch-friendly) — */
+.btn, .opc-chip, .filter-chip, .avg-tab, .r-tab, .r-mode-btn, .r-sub-btn, .opc-quick .opc-chip {
+  transition: transform 90ms ease, background 120ms, border-color 120ms, color 120ms, filter 120ms;
+}
+.btn:active, .opc-chip:active, .filter-chip:active,
+.avg-tab:active, .r-tab:active, .r-mode-btn:active, .r-sub-btn:active {
+  transform: scale(0.96);
+}
+.btn-primary:active { transform: scale(0.96); filter: brightness(0.98); }
+.ro-row:active, .history-ro-row:active { background: var(--bg-4); }
+
 /* ── Utilities ───────────────────────────────────────── */
 .no-scrollbar {
   -ms-overflow-style: none;
@@ -958,4 +1077,14 @@ a { color: inherit; }
 }
 .theme-light body {
   background: var(--bg-0);
+}
+
+/* ── Reduced motion — honour the OS setting; kill all motion ────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

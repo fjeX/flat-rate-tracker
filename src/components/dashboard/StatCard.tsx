@@ -1,5 +1,6 @@
 import type { Stats } from "@/lib/stats";
-import { fmtHours, fmtPct } from "@/lib/stats";
+import { fmtHours, fmtPct, efficiencyTier } from "@/lib/stats";
+import { CountUp } from "./CountUp";
 
 export function StatCard({
   label,
@@ -11,16 +12,15 @@ export function StatCard({
   highlighted?: boolean;
 }) {
   const eff = stats.efficiency;
-  const effGood = eff !== null && eff >= 1.0;
-  const effBad  = eff !== null && eff < 0.85;
+  const tier = efficiencyTier(eff);
 
   return (
-    <div className={`stat${highlighted ? " featured" : ""}`}>
+    <div className={`stat${highlighted ? " featured" : ""}${tier ? ` eff-${tier}` : ""}`}>
       <div className="stat-label">{label}</div>
       <div className="stat-value tabular">
-        {fmtHours(stats.flagHours)}<span className="unit">h</span>
+        <CountUp value={stats.flagHours} /><span className="unit">h</span>
       </div>
-      <div className={`stat-delta${effGood ? " good" : effBad ? " bad" : " neutral"}`}>
+      <div className={`stat-delta ${tier ?? "neutral"}`}>
         {eff !== null ? `${fmtPct(eff)} eff` : `${fmtHours(stats.clockedHours)}h clocked`}
       </div>
     </div>

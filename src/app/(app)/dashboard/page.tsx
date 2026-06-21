@@ -12,12 +12,13 @@ import {
   startOfMonth,
   startOfWeek,
 } from "@/lib/periods";
-import { aggregateStats, fmtHours, fmtPct } from "@/lib/stats";
+import { aggregateStats, fmtPct } from "@/lib/stats";
 import { TodayCard } from "@/components/dashboard/TodayCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
+import { CountUp } from "@/components/dashboard/CountUp";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -158,7 +159,7 @@ export default async function DashboardPage() {
             </div>
             <div className="pace-values">
               <span className="pace-now">
-                {fmtHours(statsPeriod.flagHours)}<span className="pace-unit"> flag hrs</span>
+                <CountUp value={statsPeriod.flagHours} /><span className="pace-unit"> flag hrs</span>
               </span>
               <span className="pace-goal">Goal {goalHours}</span>
             </div>

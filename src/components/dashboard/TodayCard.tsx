@@ -3,10 +3,11 @@
 import { useEffect, useState, useTransition } from "react";
 import { Plus } from "lucide-react";
 import { upsertDailyClockHoursAction } from "@/app/actions/daily-clock";
-import { computeEfficiency, fmtHours, fmtPct } from "@/lib/stats";
+import { computeEfficiency, fmtPct } from "@/lib/stats";
 import type { Stats } from "@/lib/stats";
 import type { OpCode } from "@/lib/types";
 import { QuickAddModal } from "./QuickAddModal";
+import { CountUp } from "./CountUp";
 
 const QUICK_ADD_KEY = "frt:quick_add_enabled";
 
@@ -88,7 +89,7 @@ export function TodayCard({
               <div>
                 <div className="stat-label">Today · Flag</div>
                 <div className="stat-value tabular">
-                  {fmtHours(stats.flagHours)}<span className="unit">h</span>
+                  <CountUp value={stats.flagHours} /><span className="unit">h</span>
                 </div>
               </div>
               <div style={{
@@ -110,7 +111,7 @@ export function TodayCard({
           <>
             <div className="stat-label">Today · Flag</div>
             <div className="stat-value tabular">
-              {fmtHours(stats.flagHours)}<span className="unit">h</span>
+              <CountUp value={stats.flagHours} /><span className="unit">h</span>
             </div>
           </>
         )}

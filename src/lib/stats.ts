@@ -59,3 +59,17 @@ export function fmtPct(n: number | null): string {
   if (n === null) return "—";
   return `${Math.round(n)}%`;
 }
+
+/**
+ * Maps an efficiency ratio (flag ÷ clock) to a status tier for colour-coding.
+ * Thresholds mirror the dashboard pace bar: ≥95% on pace, 80–94% slightly
+ * behind, <80% behind. Returns null when efficiency is unknown (no clock).
+ */
+export type EfficiencyTier = "good" | "warn" | "bad";
+
+export function efficiencyTier(eff: number | null): EfficiencyTier | null {
+  if (eff === null) return null;
+  if (eff >= 0.95) return "good";
+  if (eff >= 0.8) return "warn";
+  return "bad";
+}
