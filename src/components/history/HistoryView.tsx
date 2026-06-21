@@ -141,7 +141,11 @@ export function HistoryView({
   weekStartDay: 0 | 1;
   renderDetail?: (entry: Entry, onClose: () => void) => React.ReactNode;
 }) {
-  const [allEntries, setAllEntries] = useState(entries);
+  // `entries` comes from the live store. In guest mode it hydrates from
+  // sessionStorage in an effect AFTER first render, so freezing it into state
+  // here would strand the page on the empty initial value. Keep `entries` live
+  // and track paginated ("load more") rows separately.
+  const [extraEntries, setExtraEntries] = useState<Entry[]>([]);
   const [hasMore, setHasMore] = useState(hasMoreProp);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<FilterKind>("period");
@@ -150,11 +154,16 @@ export function HistoryView({
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const allEntries = useMemo(
+    () => [...entries, ...extraEntries],
+    [entries, extraEntries],
+  );
+
   async function handleLoadMore() {
     setLoadingMore(true);
     try {
       const next = await loadMoreEntries(allEntries.length);
-      setAllEntries((prev) => [...prev, ...next]);
+      setExtraEntries((prev) => [...prev, ...next]);
       setHasMore(next.length === 100);
     } finally {
       setLoadingMore(false);
