@@ -17,11 +17,13 @@ import type { DailyClock, Entry } from "@/lib/types";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
 import { GuestRoDetailModal } from "@/components/guest/GuestRoDetailModal";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ClipboardList } from "lucide-react";
 
 const NO_CLOCKS: DailyClock[] = [];
 
 export default function GuestDashboard() {
-  const { entries, settings } = useGuestStore();
+  const { entries, opCodes, settings } = useGuestStore();
   const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
   const today = isoDate();
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
@@ -54,16 +56,20 @@ export default function GuestDashboard() {
         <h2 className="mb-2 text-sm font-medium text-zinc-400">Recent ROs</h2>
         <RoList
           entries={entries.slice(0, 5)}
+          library={opCodes}
           onRowClick={setDetailEntry}
           emptyState={
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center">
-              <p className="text-sm text-zinc-400">No ROs logged yet.</p>
-              <Link
-                href="/guest/log"
-                className="mt-2 inline-block text-sm font-medium text-orange-400 hover:text-orange-300"
-              >
-                Log your first RO →
-              </Link>
+            <div className="card flush">
+              <EmptyState
+                icon={<ClipboardList size={22} />}
+                title="No ROs logged yet"
+                description="Log your first repair order to see your flag hours add up."
+                action={
+                  <Link href="/guest/log" className="btn btn-primary btn-sm">
+                    Log your first RO →
+                  </Link>
+                }
+              />
             </div>
           }
         />

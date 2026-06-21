@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { ClipboardList } from "lucide-react";
 import type { Entry, OpCode } from "@/lib/types";
 import { formatDateShort } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { RoDetailModal } from "./RoDetailModal";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 // Resolve a line's display code using either its custom fields or a
 // reference from the library.
@@ -36,8 +38,12 @@ export function RoList({
     return emptyState ? (
       <>{emptyState}</>
     ) : (
-      <div className="card padded" style={{ textAlign: "center" }}>
-        <p style={{ fontSize: "0.875rem" }}>No ROs in this range.</p>
+      <div className="card flush">
+        <EmptyState
+          icon={<ClipboardList size={22} />}
+          title="No ROs in this range"
+          description="Nothing logged here yet."
+        />
       </div>
     );
   }

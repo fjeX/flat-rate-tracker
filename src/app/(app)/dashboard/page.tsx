@@ -19,6 +19,8 @@ import { RoList } from "@/components/ro/RoList";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
 import { CountUp } from "@/components/dashboard/CountUp";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ClipboardList } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -211,24 +213,16 @@ export default async function DashboardPage() {
               entries={recentEntries}
               library={library}
               emptyState={
-                <div style={{ padding: "24px 16px", textAlign: "center" }}>
-                  <p style={{ margin: 0, fontSize: 13.5, color: "var(--fg-2)" }}>
-                    No ROs logged yet.
-                  </p>
-                  <Link
-                    href="/log"
-                    style={{
-                      display: "inline-block",
-                      marginTop: 10,
-                      fontSize: 13,
-                      fontWeight: 550,
-                      color: "var(--brand)",
-                      textDecoration: "none",
-                    }}
-                  >
-                    Log your first RO →
-                  </Link>
-                </div>
+                <EmptyState
+                  icon={<ClipboardList size={22} />}
+                  title="No ROs logged yet"
+                  description="Log your first repair order to start tracking flag hours and pace."
+                  action={
+                    <Link href="/log" className="btn btn-primary btn-sm">
+                      Log your first RO →
+                    </Link>
+                  }
+                />
               }
             />
           </div>

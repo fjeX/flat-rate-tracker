@@ -13,14 +13,14 @@ import {
 } from "@/lib/periods";
 
 export default function GuestHistoryPage() {
-  const { entries, settings } = useGuestStore();
+  const { entries, opCodes, settings } = useGuestStore();
   const today = isoDate();
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
 
   return (
     <HistoryView
       entries={entries}
-      library={[]}
+      library={opCodes}
       settings={settings}
       today={today}
       periodStart={period.start}

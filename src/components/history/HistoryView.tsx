@@ -13,6 +13,7 @@ import {
 } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { HistoryBarChart } from "./HistoryBarChart";
 
 type FilterKind = "today" | "week" | "period" | "month" | "all";
@@ -283,8 +284,16 @@ export function HistoryView({
 
       {/* Flat RO list */}
       {filtered.length === 0 ? (
-        <div className="card padded" style={{ textAlign: "center", marginTop: 12 }}>
-          <p style={{ fontSize: "0.875rem", color: "var(--fg-3)", margin: 0 }}>No ROs in this range.</p>
+        <div className="card flush" style={{ marginTop: 12 }}>
+          <EmptyState
+            icon={<Search size={22} />}
+            title="No ROs in this range"
+            description={
+              search.trim()
+                ? "No matches — try a different search."
+                : "Pick another range above, or log an RO to fill this in."
+            }
+          />
         </div>
       ) : (
         <div className="card flush" style={{ marginTop: 12 }}>
