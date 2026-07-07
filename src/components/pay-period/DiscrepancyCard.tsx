@@ -64,22 +64,22 @@ export function DiscrepancyCard({
 
   const diffColor =
     verdict === "missing"
-      ? "text-red-400"
+      ? "text-[var(--bad)]"
       : verdict === "over"
-        ? "text-yellow-400"
+        ? "text-[var(--warn)]"
         : verdict === "match"
-          ? "text-green-400"
-          : "text-zinc-500";
+          ? "text-[var(--good)]"
+          : "text-[var(--fg-3)]";
 
   return (
-    <section className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-      <h2 className="text-sm font-medium text-zinc-100">
+    <section className="card padded-lg space-y-3">
+      <h2 className="text-sm font-medium">
         Pay Discrepancy Check
       </h2>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="block">
-          <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+          <span className="field-label">
             Actual paid flag hrs
           </span>
           <input
@@ -96,19 +96,19 @@ export function DiscrepancyCard({
               }
             }}
             placeholder="—"
-            className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-lg font-semibold focus:border-orange-500 focus:outline-none"
+            className="input mt-1 text-lg font-semibold"
           />
         </label>
-        <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-zinc-500">
+        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
+          <div className="field-label">
             Logged flag hrs
           </div>
-          <div className="mt-1 text-lg font-semibold text-zinc-300">
+          <div className="mt-1 text-lg font-semibold text-[var(--fg-1)]">
             {fmtHours(logged)}h
           </div>
         </div>
-        <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-zinc-500">
+        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
+          <div className="field-label">
             Difference
           </div>
           <div className={`mt-1 text-lg font-semibold ${diffColor}`}>
@@ -119,18 +119,18 @@ export function DiscrepancyCard({
         </div>
       </div>
 
-      {error && <p className="text-xs text-red-300">{error}</p>}
+      {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
       {!error && isPending && (
-        <p className="text-xs text-zinc-500">Saving…</p>
+        <p className="text-xs text-[var(--fg-3)]">Saving…</p>
       )}
       {!error && !isPending && dirty && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-[var(--fg-3)]">
           Press enter or click away to save
         </p>
       )}
 
       {verdict === "missing" && diff !== null && (
-        <div className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+        <div className="rounded-md border border-[color-mix(in_oklab,var(--bad)_30%,transparent)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
           Missing {fmtHours(-diff)} hours. Review the RO list below — use the
           logged ROs as proof when you talk to your service manager.
         </div>

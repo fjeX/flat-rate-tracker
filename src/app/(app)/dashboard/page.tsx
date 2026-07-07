@@ -18,8 +18,10 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
-import { CountUp } from "@/components/dashboard/CountUp";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { EntranceGrid } from "@/components/ui/EntranceGrid";
+import { PaceRing } from "@/components/ui/PaceRing";
+import { RollingNumber } from "@/components/ui/RollingNumber";
 import { ClipboardList } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -41,13 +43,22 @@ function dayOfPeriod(periodStart: string, today: string, periodDays: number): nu
   return Math.min(Math.max(diff, 1), periodDays);
 }
 
-function greetingWord(tz?: string): string {
-  const h = tz
-    ? parseInt(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: tz }), 10)
-    : new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
+function formatTodayHeading(today: string): string {
+  return new Date(today + "T00:00:00").toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,7 +73,6 @@ export default async function DashboardPage() {
   const email = user?.email ?? "";
   const firstName = user?.user_metadata?.first_name as string | undefined;
   const avatarLetter = firstName?.charAt(0).toUpperCase() || email.charAt(0).toUpperCase() || "?";
-  const displayName = firstName?.trim() || email.split("@")[0] || "there";
 
   // Date ranges
   const cookieStore = await cookies();
@@ -95,6 +105,16 @@ export default async function DashboardPage() {
   const todaysClock  = clocks.find((c) => c.date === today);
   const recentEntries = entries.slice(0, 5);
 
+  // Today's status line — entries are already sorted date desc, created_at
+  // desc, so the first match for today's date is the most recently logged one.
+  const lastEntryToday = entries.find((e) => e.date === today);
+  const todayStatusLine =
+    statsToday.roCount > 0
+      ? `${statsToday.roCount} RO${statsToday.roCount === 1 ? "" : "s"} logged${
+          lastEntryToday ? ` · last one ${timeAgo(lastEntryToday.createdAt)}` : ""
+        }`
+      : "Nothing logged yet today";
+
   // ---------------------------------------------------------------------------
   // Pace bar calculations
   // ---------------------------------------------------------------------------
@@ -113,18 +133,23 @@ export default async function DashboardPage() {
   // Pill: good ≥ 95% of pace, warn 80–95%, bad < 80%
   let pillClass = "";
   let pillLabel = "On pace";
+  let ringTier: "good" | "warn" | "bad" | null = null;
   if (paceRatio === null) {
     pillClass = "neutral";
     pillLabel = "No data";
+    ringTier = null;
   } else if (paceRatio >= 0.95) {
     pillClass = "";      // default pill = good
     pillLabel = "On pace";
+    ringTier = "good";
   } else if (paceRatio >= 0.80) {
     pillClass = "warn";
     pillLabel = "Slightly behind";
+    ringTier = "warn";
   } else {
     pillClass = "bad";
     pillLabel = "Behind pace";
+    ringTier = "bad";
   }
 
   // pace-fill colour: brand for normal progress
@@ -140,43 +165,49 @@ export default async function DashboardPage() {
           <div className="greeting">
             <div className="avatar">{avatarLetter}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h2>{greetingWord(tz)}, {displayName}</h2>
-              <p>
-                {formatPeriodLabel(period)}
-                {" · "}
-                Day {currentDay} of {periodDays}
-              </p>
+              <h1>{formatTodayHeading(today)}</h1>
+              <p>{todayStatusLine}</p>
             </div>
             <span className={`pill${pillClass ? " " + pillClass : ""}`}>
               {pillLabel}
             </span>
           </div>
           <div style={{ height: 1, background: "var(--line)", margin: "0 16px" }} />
-          <div className="pace">
+          <EntranceGrid className="pace" animationName="pace-grow">
             <div className="pace-head">
               <span className="title">
                 Pay Period Pace
                 <span className="pace-head-meta"> · {daysLeft} {daysLeft === 1 ? "day" : "days"} left</span>
               </span>
             </div>
-            <div className="pace-values">
-              <span className="pace-now">
-                <CountUp value={statsPeriod.flagHours} /><span className="pace-unit"> flag hrs</span>
-              </span>
-              <span className="pace-goal">Goal {goalHours}</span>
-            </div>
-            <div className="pace-track-wrap">
-              <span className="pace-today-label" style={{ left: `${paceTarget * 100}%` }}>TODAY</span>
-              <div className="pace-track">
-                <div
-                  className={paceFillClass}
-                  style={{ width: `${actualFill * 100}%` }}
-                />
-              </div>
-              <div
-                className="pace-target"
-                style={{ left: `${paceTarget * 100}%` }}
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <PaceRing
+                value={actualFill}
+                size={64}
+                tier={ringTier}
+                label={`${Math.round(actualFill * 100)}%`}
               />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="pace-values">
+                  <span className="pace-now">
+                    <RollingNumber value={statsPeriod.flagHours} decimals={1} /><span className="pace-unit"> flag hrs</span>
+                  </span>
+                  <span className="pace-goal">Goal {goalHours}</span>
+                </div>
+                <div className="pace-track-wrap">
+                  <span className="pace-today-label" style={{ left: `${paceTarget * 100}%` }}>TODAY</span>
+                  <div className="pace-track">
+                    <div
+                      className={paceFillClass}
+                      style={{ width: `${actualFill * 100}%` }}
+                    />
+                  </div>
+                  <div
+                    className="pace-target"
+                    style={{ left: `${paceTarget * 100}%` }}
+                  />
+                </div>
+              </div>
             </div>
             <div className="pace-foot">
               <span>{formatPeriodLabel(period)}</span>
@@ -186,11 +217,11 @@ export default async function DashboardPage() {
                   : `Day ${currentDay} / ${periodDays}`}
               </span>
             </div>
-          </div>
+          </EntranceGrid>
         </div>
 
         {/* ── Stat tiles ──────────────────────────────────────── */}
-        <div className="stat-grid">
+        <EntranceGrid className="stat-grid">
           <TodayCard
             date={today}
             stats={statsToday}
@@ -200,7 +231,7 @@ export default async function DashboardPage() {
           <StatCard label="This Week"      stats={statsWeek} />
           <StatCard label="Pay Period"     stats={statsPeriod} />
           <StatCard label="This Month"     stats={statsMonth} />
-        </div>
+        </EntranceGrid>
 
         {/* ── Recent ROs ──────────────────────────────────────── */}
         <section>
@@ -215,11 +246,11 @@ export default async function DashboardPage() {
               emptyState={
                 <EmptyState
                   icon={<ClipboardList size={22} />}
-                  title="No ROs logged yet"
-                  description="Log your first repair order to start tracking flag hours and pace."
+                  title="No ROs yet"
+                  description="Every RO you flag here builds your pace and your record."
                   action={
                     <Link href="/log" className="btn btn-primary btn-sm">
-                      Log your first RO →
+                      Log an RO →
                     </Link>
                   }
                 />

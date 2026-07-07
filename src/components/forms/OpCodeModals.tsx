@@ -18,42 +18,56 @@ export type OpCodeDraft = {
 function OpCodeFields({
   draft,
   onChange,
+  errorId,
+  invalid,
+  idPrefix = "opc",
 }: {
   draft: OpCodeDraft;
   onChange: (d: OpCodeDraft) => void;
+  errorId?: string;
+  invalid?: boolean;
+  idPrefix?: string;
 }) {
   return (
     <div className="space-y-3">
-      <label className="block">
-        <span className="text-xs uppercase tracking-wide text-zinc-400">
-          Code
+      <label className="block" htmlFor={`${idPrefix}-code`}>
+        <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
+          Code <span aria-hidden="true">*</span>
+          <span className="sr-only"> (required)</span>
         </span>
         <input
+          id={`${idPrefix}-code`}
           type="text"
           value={draft.code}
           onChange={(e) => onChange({ ...draft, code: e.target.value })}
           autoFocus
-          className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none"
+          required
+          aria-required="true"
+          aria-invalid={invalid}
+          aria-describedby={errorId}
+          className="mt-1 input font-mono"
         />
       </label>
-      <label className="block">
-        <span className="text-xs uppercase tracking-wide text-zinc-400">
+      <label className="block" htmlFor={`${idPrefix}-description`}>
+        <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
           Description
         </span>
         <input
+          id={`${idPrefix}-description`}
           type="text"
           value={draft.description}
           onChange={(e) =>
             onChange({ ...draft, description: e.target.value })
           }
-          className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+          className="mt-1 input"
         />
       </label>
-      <label className="block">
-        <span className="text-xs uppercase tracking-wide text-zinc-400">
+      <label className="block" htmlFor={`${idPrefix}-flag-hours`}>
+        <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
           Flag hours
         </span>
         <input
+          id={`${idPrefix}-flag-hours`}
           type="number"
           min={0}
           step={0.1}
@@ -64,7 +78,8 @@ function OpCodeFields({
               flagHours: e.target.value === "" ? 0 : Number(e.target.value),
             })
           }
-          className="mt-1 w-32 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+          aria-describedby={errorId}
+          className="mt-1 w-32 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
         />
       </label>
     </div>
@@ -112,23 +127,23 @@ function CustomOpCodeBody({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-[var(--fg-2)]">
         This won&apos;t be saved to your library. It&apos;s attached to this RO
         only.
       </p>
-      <OpCodeFields draft={draft} onChange={setDraft} />
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      <OpCodeFields draft={draft} onChange={setDraft} idPrefix="custom-opc" errorId={error ? "custom-opc-error" : undefined} invalid={Boolean(error)} />
+      {error && <p id="custom-opc-error" role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
       <div className="flex justify-end gap-2 pt-2">
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+          className="btn btn-ghost"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500"
+          className="btn btn-primary"
         >
           Add to RO
         </button>
@@ -201,24 +216,24 @@ function NewLibraryBody({
 
   return (
     <form onSubmit={handle} className="space-y-4">
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-[var(--fg-2)]">
         This will be saved to your library and added to this RO.
       </p>
-      <OpCodeFields draft={draft} onChange={setDraft} />
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      <OpCodeFields draft={draft} onChange={setDraft} idPrefix="new-lib-opc" errorId={error ? "new-lib-opc-error" : undefined} invalid={Boolean(error)} />
+      {error && <p id="new-lib-opc-error" role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
       <div className="flex justify-end gap-2 pt-2">
         <button
           type="button"
           onClick={onClose}
           disabled={isPending}
-          className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+          className="btn btn-ghost"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
+          className="btn btn-primary"
         >
           {isPending ? "Saving…" : "Save & add"}
         </button>

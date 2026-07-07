@@ -10,11 +10,15 @@ import type { FieldId, FieldRegion, RoTemplate } from "@/lib/types";
 
 type FieldCfg = { label: string; desc: string; color: string; border: string; bg: string };
 
+// Field boxes are categorical (4 distinct hues to tell regions apart on an
+// image overlay), not semantic status colors. roNumber/vehicle/vin map onto
+// the closest brand/info/good tokens; opCodes stays raw purple since the
+// design system has no purple token and a 4th distinct hue is needed here.
 const FIELDS: Record<FieldId, FieldCfg> = {
-  roNumber: { label: "RO Number",           desc: "The repair order number",       color: "text-orange-400", border: "border-orange-400", bg: "bg-orange-400/25" },
-  vehicle:  { label: "Year / Make / Model", desc: "Vehicle info line",             color: "text-blue-400",   border: "border-blue-400",   bg: "bg-blue-400/25"   },
-  vin:      { label: "VIN",                 desc: "17-character VIN",              color: "text-green-400",  border: "border-green-400",  bg: "bg-green-400/25"  },
-  opCodes:  { label: "Op Codes",            desc: "Area containing the op codes",  color: "text-purple-400", border: "border-purple-400", bg: "bg-purple-400/25" },
+  roNumber: { label: "RO Number",           desc: "The repair order number",       color: "text-[var(--brand)]", border: "border-[var(--brand)]", bg: "bg-[var(--brand)]/25" },
+  vehicle:  { label: "Year / Make / Model", desc: "Vehicle info line",             color: "text-[var(--info)]",  border: "border-[var(--info)]",  bg: "bg-[var(--info)]/25"  },
+  vin:      { label: "VIN",                 desc: "17-character VIN",              color: "text-[var(--good)]",  border: "border-[var(--good)]",  bg: "bg-[var(--good)]/25"  },
+  opCodes:  { label: "Op Codes",            desc: "Area containing the op codes",  color: "text-purple-400",     border: "border-purple-400",     bg: "bg-purple-400/25"     },
 };
 
 const FIELD_ORDER: FieldId[] = ["roNumber", "vehicle", "vin", "opCodes"];
@@ -259,20 +263,20 @@ export function RoTemplateEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-4 pt-8">
-      <div className="relative flex w-full max-w-4xl flex-col gap-5 rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+      <div className="card relative flex w-full max-w-4xl flex-col gap-5 p-6">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-100">RO Template Setup</h2>
-            <p className="mt-0.5 text-sm text-zinc-400">
+            <h2 className="text-lg font-semibold text-[var(--fg-0)]">RO Template Setup</h2>
+            <p className="mt-0.5 text-sm text-[var(--fg-2)]">
               Upload a sample RO, pick a field, then drag on the image to mark where it appears.
               The scanner will only read those regions — much more accurate than scanning the whole page.
             </p>
           </div>
           <button
             onClick={() => onClose()}
-            className="rounded p-1 text-zinc-400 hover:text-zinc-100"
+            className="relative rounded p-1 text-[var(--fg-2)] hover:text-[var(--fg-0)] after:absolute after:-inset-2.5 after:content-['']"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -281,13 +285,14 @@ export function RoTemplateEditor({
 
         {/* Template name */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-400">Template name</label>
+          <label htmlFor="template-name" className="mb-1 block text-xs font-medium text-[var(--fg-2)]">Template name</label>
           <input
+            id="template-name"
             type="text"
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
             placeholder="e.g. Page 1, Page 2, Walk-around…"
-            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:outline-none"
+            className="input"
           />
         </div>
 
@@ -301,10 +306,11 @@ export function RoTemplateEditor({
               <button
                 key={field}
                 onClick={() => setActiveField(field)}
-                className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-all
+                aria-pressed={active}
+                className={`flex items-center gap-1.5 rounded-md border px-3 py-2.5 text-sm font-medium transition-all
                   ${active
                     ? `${cfg.border} ${cfg.bg} ${cfg.color}`
-                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                    : "border-[var(--line)] text-[var(--fg-2)] hover:border-[var(--fg-3)] hover:text-[var(--fg-1)]"
                   }`}
               >
                 {mapped && <CheckCircle className="h-3.5 w-3.5" />}
@@ -316,24 +322,25 @@ export function RoTemplateEditor({
 
         {/* Image area */}
         {!imageObjectUrl ? (
-          <div
-            className="flex min-h-56 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500"
+          <button
+            type="button"
+            className="flex min-h-56 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-[var(--line)] hover:border-[var(--fg-3)]"
             onClick={() => fileInputRef.current?.click()}
           >
             {loadingImg ? (
-              <Loader2 className="h-7 w-7 animate-spin text-zinc-400" />
+              <Loader2 className="h-7 w-7 animate-spin text-[var(--fg-2)]" />
             ) : (
               <>
-                <Upload className="h-7 w-7 text-zinc-500" />
-                <p className="text-sm text-zinc-400">Upload a photo of your shop&apos;s RO</p>
-                <p className="text-xs text-zinc-500">JPEG · PNG · WEBP</p>
+                <Upload className="h-7 w-7 text-[var(--fg-3)]" />
+                <p className="text-sm text-[var(--fg-2)]">Upload a photo of your shop&apos;s RO</p>
+                <p className="text-xs text-[var(--fg-3)]">JPEG · PNG · WEBP</p>
               </>
             )}
-          </div>
+          </button>
         ) : (
           <div
             ref={containerRef}
-            className="relative select-none overflow-hidden rounded-lg border border-zinc-700"
+            className="relative select-none overflow-hidden rounded-lg border border-[var(--line)]"
             style={{ touchAction: "none", cursor: "crosshair" }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -352,7 +359,7 @@ export function RoTemplateEditor({
             {/* Existing boxes */}
             {regions.map((r) => {
               const cfg = FIELDS[r.field];
-              const cornerBase = "absolute h-3 w-3 rounded-sm border border-zinc-600 bg-white";
+              const cornerBase = "absolute h-3 w-3 rounded-sm border border-[var(--fg-3)] bg-white";
               return (
                 <div
                   key={r.field}
@@ -361,7 +368,7 @@ export function RoTemplateEditor({
                 >
                   {/* Label */}
                   <div
-                    className={`pointer-events-none absolute -top-6 left-0 whitespace-nowrap rounded-sm bg-zinc-900/90 px-1 py-0.5 text-[10px] font-semibold ${cfg.color}`}
+                    className={`pointer-events-none absolute -top-6 left-0 whitespace-nowrap rounded-sm bg-[var(--bg-1)]/90 px-1 py-0.5 text-[10px] font-semibold ${cfg.color}`}
                   >
                     {cfg.label}
                   </div>
@@ -372,7 +379,8 @@ export function RoTemplateEditor({
                   <div className={`${cornerBase} -bottom-1.5 -right-1.5 cursor-se-resize`} />
                   {/* Delete button */}
                   <button
-                    className="absolute -right-2.5 -top-2.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white hover:bg-red-500"
+                    className="absolute -right-2.5 -top-2.5 z-10 flex h-5 w-5 items-center justify-center rounded-full text-white after:absolute after:-inset-1.5 after:content-['']"
+                    style={{ background: "var(--bad)" }}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -398,11 +406,11 @@ export function RoTemplateEditor({
 
         {/* Hints + image change link */}
         {imageObjectUrl && (
-          <p className="text-xs text-zinc-500">
-            Pick a field above, then <strong className="text-zinc-400">drag</strong> on the image to draw a box.
+          <p className="text-xs text-[var(--fg-3)]">
+            Pick a field above, then <strong className="text-[var(--fg-2)]">drag</strong> on the image to draw a box.
             Drag a box to move it · drag its corners to resize it · red ✕ to delete.{" "}
             <button
-              className="underline hover:text-zinc-200"
+              className="underline hover:text-[var(--fg-1)]"
               onClick={() => fileInputRef.current?.click()}
             >
               Change image
@@ -410,10 +418,13 @@ export function RoTemplateEditor({
           </p>
         )}
 
+        <label htmlFor="ro-template-file" className="sr-only">Upload RO template image</label>
         <input
           ref={fileInputRef}
+          id="ro-template-file"
           type="file"
           accept="image/jpeg,image/png,image/webp"
+          aria-describedby={errorMsg ? "ro-template-error" : undefined}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -423,27 +434,32 @@ export function RoTemplateEditor({
         />
 
         {errorMsg && (
-          <p className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+          <p
+            id="ro-template-error"
+            role="alert"
+            className="rounded-[var(--radius-sm)] border px-3 py-2 text-sm"
+            style={{ borderColor: "color-mix(in oklab, var(--bad) 30%, var(--line))", background: "var(--bad-bg)", color: "var(--bad)" }}
+          >
             {errorMsg}
           </p>
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 border-t border-zinc-800 pt-4">
-          <p className="text-sm text-zinc-500">
+        <div className="flex items-center justify-between gap-3 border-t border-[var(--line)] pt-4">
+          <p className="text-sm text-[var(--fg-3)]">
             {regions.length} / {FIELD_ORDER.length} fields mapped
           </p>
           <div className="flex gap-3">
             <button
               onClick={() => onClose()}
-              className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+              className="btn"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={!canSave}
-              className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-60"
+              className="btn btn-primary"
             >
               {saving ? "Saving…" : "Save Template"}
             </button>

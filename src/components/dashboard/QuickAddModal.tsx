@@ -16,6 +16,7 @@ import {
   type OpCodeDraft,
 } from "@/components/forms/OpCodeModals";
 import { SubOpCodePickerModal } from "@/components/forms/SubOpCodePickerModal";
+import { tap } from "@/lib/haptics";
 
 type QuickLine = {
   key: string;
@@ -223,6 +224,7 @@ export function QuickAddModal({
           })),
         };
         await saveEntry(input);
+        tap();
         onClose();
         router.refresh();
       } catch (err) {
@@ -245,12 +247,13 @@ export function QuickAddModal({
 
         {/* RO Number */}
         <div>
-          <div className="mb-1.5 text-xs uppercase tracking-wide text-zinc-500">
+          <label htmlFor="quick-add-ro-number" className="mb-1.5 block text-xs uppercase tracking-wide text-[var(--fg-3)]">
             RO Number
-          </div>
-          <div className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 focus-within:border-orange-500">
-            <span className="text-lg font-bold text-zinc-500">#</span>
+          </label>
+          <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 focus-within:border-[var(--brand)]">
+            <span className="text-lg font-bold text-[var(--fg-3)]" aria-hidden="true">#</span>
             <input
+              id="quick-add-ro-number"
               ref={roInputRef}
               type="text"
               value={roNumber}
@@ -258,14 +261,17 @@ export function QuickAddModal({
               inputMode="numeric"
               placeholder="12345"
               autoComplete="off"
-              className="flex-1 bg-transparent text-lg font-semibold text-zinc-100 placeholder-zinc-600 focus:outline-none"
+              required
+              aria-required="true"
+              aria-describedby={error ? "quick-add-error" : undefined}
+              className="flex-1 bg-transparent text-lg font-semibold text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
             />
           </div>
         </div>
 
         {/* Op Codes */}
         <div>
-          <div className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+          <div className="mb-2 text-xs uppercase tracking-wide text-[var(--fg-3)]">
             Op Codes
           </div>
 
@@ -277,10 +283,10 @@ export function QuickAddModal({
                   key={oc.id}
                   type="button"
                   onClick={() => addFromLibrary(oc)}
-                  className="flex items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-xs hover:border-orange-500/50 hover:bg-zinc-700"
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--bg-3)] px-2.5 py-1 text-xs hover:border-[var(--brand-soft)] hover:bg-[var(--bg-4)]"
                 >
-                  <span className="font-mono text-orange-400">{oc.code}</span>
-                  <span className="text-zinc-500">
+                  <span className="font-mono text-[var(--brand)]">{oc.code}</span>
+                  <span className="text-[var(--fg-3)]">
                     {oc.subOpCodes.length > 0 ? "→" : `${oc.flagHours}h`}
                   </span>
                 </button>
@@ -290,21 +296,23 @@ export function QuickAddModal({
 
           {/* Search picker */}
           <div ref={pickerRef}>
-            <div className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 focus-within:border-orange-500/50">
-              <Search className="h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
+            <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-2)] px-3 focus-within:border-[var(--brand-soft)]">
+              <Search className="h-3.5 w-3.5 flex-shrink-0 text-[var(--fg-3)]" />
+              <label htmlFor="quick-add-search" className="sr-only">Search op codes</label>
               <input
+                id="quick-add-search"
                 type="text"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPickerOpen(true); }}
                 onFocus={() => setPickerOpen(true)}
                 placeholder="Search op codes…"
-                className="w-full bg-transparent py-2 text-sm placeholder-zinc-500 focus:outline-none"
+                className="w-full bg-transparent py-2 text-sm placeholder-[var(--fg-3)] focus:outline-none"
               />
               {search && (
                 <button
                   type="button"
                   onClick={() => { setSearch(""); setPickerOpen(false); }}
-                  className="text-zinc-500 hover:text-zinc-300"
+                  className="relative text-[var(--fg-3)] hover:text-[var(--fg-1)] after:absolute after:-inset-2 after:content-['']"
                   aria-label="Clear search"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -316,11 +324,11 @@ export function QuickAddModal({
             <div
               ref={dropdownRef}
               style={{ position: "fixed", top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, zIndex: 9999 }}
-              className="rounded-md border border-zinc-700 bg-zinc-900 shadow-xl"
+              className="rounded-md border border-[var(--line)] bg-[var(--bg-2)] shadow-xl"
             >
               <ul className="max-h-48 overflow-y-auto">
                 {filteredLibrary.length === 0 ? (
-                  <li className="px-3 py-2 text-xs text-zinc-500">
+                  <li className="px-3 py-2 text-xs text-[var(--fg-3)]">
                     No matches in your library.
                   </li>
                 ) : (
@@ -329,22 +337,22 @@ export function QuickAddModal({
                       <button
                         type="button"
                         onClick={() => addFromLibrary(oc)}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800"
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)]"
                       >
                         <span className="min-w-0">
-                          <span className="font-mono text-sm text-orange-400">
+                          <span className="font-mono text-sm text-[var(--brand)]">
                             {oc.code}
                           </span>
-                          <span className="ml-2 text-xs text-zinc-500">
+                          <span className="ml-2 text-xs text-[var(--fg-3)]">
                             {oc.description}
                           </span>
                           {oc.subOpCodes.length > 0 && (
-                            <span className="ml-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                            <span className="ml-1.5 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
                               {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
                             </span>
                           )}
                         </span>
-                        <span className="flex-shrink-0 font-mono text-xs text-zinc-400">
+                        <span className="flex-shrink-0 font-mono text-xs text-[var(--fg-2)]">
                           {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
                         </span>
                       </button>
@@ -352,14 +360,14 @@ export function QuickAddModal({
                   ))
                 )}
               </ul>
-              <div className="border-t border-zinc-800 p-1">
-                <div className="px-2 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-zinc-600">
+              <div className="border-t border-[var(--line)] p-1">
+                <div className="px-2 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
                   Other
                 </div>
                 <button
                   type="button"
                   onClick={() => { setPickerOpen(false); setCustomOpen(true); }}
-                  className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+                  className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Other op code (one-time)
@@ -367,7 +375,7 @@ export function QuickAddModal({
                 <button
                   type="button"
                   onClick={() => { setPickerOpen(false); setNewLibraryOpen(true); }}
-                  className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+                  className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Create new library op code
@@ -379,8 +387,8 @@ export function QuickAddModal({
 
           {/* Lines table */}
           {lines.length > 0 && (
-            <div className="mt-3 rounded-md border border-zinc-800">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
+            <div className="mt-3 rounded-md border border-[var(--line)]">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] bg-[var(--bg-1)] px-3 py-1.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
                 <div>Op code</div>
                 <div className="w-16 text-right">Flag hrs</div>
                 <div className="w-6" />
@@ -391,27 +399,27 @@ export function QuickAddModal({
                   return (
                     <li
                       key={line.key}
-                      className="border-b border-zinc-800 px-3 py-2 last:border-b-0"
+                      className="border-b border-[var(--line)] px-3 py-2 last:border-b-0"
                     >
                       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-sm text-orange-400">
+                            <span className="font-mono text-sm text-[var(--brand)]">
                               {code}
                             </span>
                             {subCode && (
-                              <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-orange-400">
+                              <span className="rounded bg-[var(--brand-bg)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--brand)]">
                                 {subCode}
                               </span>
                             )}
                             {line.custom && (
-                              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                              <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
                                 Other
                               </span>
                             )}
                           </div>
                           {description && (
-                            <div className="truncate text-xs text-zinc-500">
+                            <div className="truncate text-xs text-[var(--fg-3)]">
                               {description}
                             </div>
                           )}
@@ -428,7 +436,8 @@ export function QuickAddModal({
                                 e.target.value === "" ? 0 : Number(e.target.value),
                               )
                             }
-                            className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-right font-mono text-sm text-zinc-100 placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+                            aria-label={`Flag hours for ${code || "op code line"}`}
+                            className="w-full rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1 text-right font-mono text-sm text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:border-[var(--brand)] focus:outline-none"
                             placeholder="0"
                           />
                         </div>
@@ -436,7 +445,7 @@ export function QuickAddModal({
                           type="button"
                           onClick={() => removeLine(line.key)}
                           aria-label="Remove line"
-                          className="rounded p-1 text-zinc-600 hover:text-red-400"
+                          className="relative rounded p-1 text-[var(--fg-3)] hover:text-[var(--bad)] after:absolute after:-inset-2 after:content-['']"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -445,8 +454,8 @@ export function QuickAddModal({
                   );
                 })}
               </ul>
-              <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-zinc-800 bg-zinc-950 px-3 py-2 text-sm">
-                <div className="text-zinc-400">Total</div>
+              <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+                <div className="text-[var(--fg-2)]">Total</div>
                 <div className="w-16 text-right font-mono font-medium">
                   {fmtHours(totalFlag)}h
                 </div>
@@ -457,14 +466,14 @@ export function QuickAddModal({
         </div>
 
         {/* Error */}
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && <p id="quick-add-error" role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+            className="btn"
           >
             Cancel
           </button>
@@ -472,7 +481,7 @@ export function QuickAddModal({
             type="button"
             onClick={handleSave}
             disabled={isSubmitting || !roNumber.trim()}
-            className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-primary"
           >
             {isSubmitting ? "Saving…" : "Save RO"}
           </button>

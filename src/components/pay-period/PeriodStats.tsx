@@ -1,5 +1,6 @@
 import type { Stats } from "@/lib/stats";
 import { fmtHours, fmtPct } from "@/lib/stats";
+import { EntranceGrid } from "@/components/ui/EntranceGrid";
 
 function Cell({
   label,
@@ -11,34 +12,16 @@ function Cell({
   highlighted?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-xl border p-3 ${
-        highlighted
-          ? "border-orange-900/60 bg-gradient-to-br from-orange-950/60 to-red-950/40"
-          : "border-zinc-800 bg-zinc-900"
-      }`}
-    >
-      <div
-        className={`text-[10px] uppercase tracking-wide ${
-          highlighted ? "text-orange-300/80" : "text-zinc-500"
-        }`}
-      >
-        {label}
-      </div>
-      <div
-        className={`mt-1 text-xl font-semibold ${
-          highlighted ? "text-orange-300" : "text-zinc-100"
-        }`}
-      >
-        {value}
-      </div>
+    <div className={`stat${highlighted ? " featured" : ""}`}>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value tabular">{value}</div>
     </div>
   );
 }
 
 export function PeriodStats({ stats }: { stats: Stats }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <EntranceGrid className="stat-grid">
       <Cell label="ROs" value={String(stats.roCount)} />
       <Cell
         label="Flag hrs"
@@ -47,6 +30,6 @@ export function PeriodStats({ stats }: { stats: Stats }) {
       />
       <Cell label="Clocked hrs" value={`${fmtHours(stats.clockedHours)}h`} />
       <Cell label="Efficiency" value={fmtPct(stats.efficiency)} />
-    </div>
+    </EntranceGrid>
   );
 }

@@ -212,6 +212,7 @@ export function HistoryView({
 
   return (
     <main className="app-main" style={{ paddingBottom: 80 }}>
+      <h1 className="sr-only">History</h1>
       {/* Filter chips */}
       <div className="filter-row">
         {CHIPS.map((chip) => (

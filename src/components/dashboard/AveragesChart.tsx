@@ -570,8 +570,11 @@ export function AveragesChart({
             </div>
           </div>
 
-          {/* CHART */}
-          <RoomierBarChart bars={bars} hover={hover} setHover={setHover} tab={activeTab} />
+          {/* CHART — keyed by tab+mode so bar-rise replays on a user-initiated
+              tab/mode switch (new data by intent) but NOT when an unrelated
+              parent re-render (e.g. a dashboard quick-add refresh) just
+              updates bar heights for the same view. */}
+          <RoomierBarChart key={`${activeTab}-${mode}`} bars={bars} hover={hover} setHover={setHover} tab={activeTab} />
 
           {/* FOOTER */}
           <div className="r-footer">
@@ -603,7 +606,7 @@ export function AveragesChart({
             marginBottom: 6,
           }}
         >
-          💡 Insight
+          Insight
         </div>
         <p style={{ margin: 0, fontSize: 14, color: "var(--fg-1)", lineHeight: 1.5 }}>
           {insightText}

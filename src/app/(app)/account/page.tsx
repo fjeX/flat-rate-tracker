@@ -18,7 +18,7 @@ export default async function AccountPage() {
   return (
     <main className="app-main" style={{ paddingBottom: 64 }}>
       <div style={{ marginBottom: 20 }}>
-        <div className="section-title" style={{ marginBottom: 4 }}>Account</div>
+        <h1 className="section-title" style={{ marginBottom: 4 }}>Account</h1>
         <p style={{ margin: 0, fontSize: 13.5, color: "var(--fg-2)" }}>
           Manage your profile, email, password, and display preferences.
         </p>

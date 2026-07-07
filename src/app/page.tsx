@@ -74,9 +74,9 @@ function Wordmark({ size = 17 }: { size?: number }) {
 
 function Pill({ state }: { state: "green" | "amber" | "red" }) {
   const map = {
-    green: { cls: "bg-green-500/15 text-green-400", label: "On pace" },
-    amber: { cls: "bg-amber-500/15 text-amber-400", label: "Slightly behind" },
-    red: { cls: "bg-red-500/15 text-red-400", label: "Behind pace" },
+    green: { cls: "bg-[var(--good-bg)] text-[var(--good)]", label: "On pace" },
+    amber: { cls: "bg-[var(--warn-bg)] text-[var(--warn)]", label: "Slightly behind" },
+    red: { cls: "bg-[var(--bad-bg)] text-[var(--bad)]", label: "Behind pace" },
   };
   const m = map[state];
   return (
@@ -105,41 +105,41 @@ function PaceBar({
   compact?: boolean;
 }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-[14px] p-[18px]">
+    <div className="card p-[18px]">
       <div className="flex items-center justify-between mb-3.5">
-        <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-zinc-500">
+        <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)]">
           Pay Period Pace{compact ? "" : " · 9 days left"}
         </span>
         <Pill state={state} />
       </div>
       <div className="flex items-baseline justify-between mb-3">
         <span
-          className="font-mono font-bold text-zinc-50 whitespace-nowrap"
+          className="font-mono font-bold text-[var(--fg-0)] whitespace-nowrap"
           style={{ fontSize: compact ? 18 : 22 }}
         >
           {now}
-          <span className="text-zinc-500 ml-0.5" style={{ fontSize: compact ? 12 : 14 }}>
+          <span className="text-[var(--fg-3)] ml-0.5" style={{ fontSize: compact ? 12 : 14 }}>
             {" "}flag hrs
           </span>
         </span>
-        <span className="font-mono text-zinc-500 text-sm whitespace-nowrap">Goal {goal}</span>
+        <span className="font-mono text-[var(--fg-3)] text-sm whitespace-nowrap">Goal {goal}</span>
       </div>
       <div
-        className="relative bg-zinc-800 rounded-full"
+        className="relative bg-[var(--bg-3)] rounded-full"
         style={{ height: compact ? 12 : 14 }}
       >
         <div
           className="absolute inset-y-0 left-0 rounded-full"
           style={{
             width: `${pct}%`,
-            background: "linear-gradient(90deg, #ea580c, #f97316)",
+            background: "linear-gradient(90deg, var(--brand-strong), var(--brand))",
           }}
         />
         <div
-          className="absolute -top-[5px] -bottom-[5px] w-0.5 bg-zinc-300"
+          className="absolute -top-[5px] -bottom-[5px] w-0.5 bg-[var(--fg-1)]"
           style={{ left: `${todayPct}%` }}
         >
-          <span className="absolute -top-4 left-1/2 -translate-x-1/2 font-mono text-[8px] tracking-[0.1em] text-zinc-400 whitespace-nowrap">
+          <span className="absolute -top-4 left-1/2 -translate-x-1/2 font-mono text-[8px] tracking-[0.1em] text-[var(--fg-2)] whitespace-nowrap">
             TODAY
           </span>
         </div>
@@ -162,13 +162,13 @@ function StatTile({
   mini?: boolean;
 }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
-      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-2">{lab}</div>
-      <div className="font-mono font-bold text-zinc-50 leading-none" style={{ fontSize: mini ? 22 : 26 }}>
+    <div className="card rounded-[var(--radius)] p-3.5">
+      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-2">{lab}</div>
+      <div className="font-mono font-bold text-[var(--fg-0)] leading-none" style={{ fontSize: mini ? 22 : 26 }}>
         {big}
-        <span className="text-[13px] text-zinc-500 ml-0.5">{unit}</span>
+        <span className="text-[13px] text-[var(--fg-3)] ml-0.5">{unit}</span>
       </div>
-      {sub && <div className="font-mono text-[11px] text-zinc-400 mt-1.5">{sub}</div>}
+      {sub && <div className="font-mono text-[11px] text-[var(--fg-2)] mt-1.5">{sub}</div>}
     </div>
   );
 }
@@ -179,7 +179,7 @@ function BarChart({ bars, height }: { bars: number[]; height: number }) {
       {bars.map((h, i) => (
         <div
           key={i}
-          className={`flex-1 rounded-t-sm ${h > 78 ? "bg-orange-600" : "bg-zinc-700"}`}
+          className={`flex-1 rounded-t-sm ${h > 78 ? "bg-[var(--brand-strong)]" : "bg-[var(--bg-4)]"}`}
           style={{ height: `${h}%` }}
         />
       ))}
@@ -191,27 +191,27 @@ function ROForm() {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-1.5">
+        <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
           RO Number
         </label>
-        <div className="bg-[#1a1a1e] border border-zinc-800 rounded-[9px] px-3 py-2.5 flex items-center">
-          <span className="font-mono font-semibold text-zinc-100 text-[15px]">48213</span>
+        <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[9px] px-3 py-2.5 flex items-center">
+          <span className="font-mono font-semibold text-[var(--fg-0)] text-[15px]">48213</span>
         </div>
       </div>
       <div>
-        <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-1.5">
+        <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
           Op Code
         </label>
-        <div className="bg-[#1a1a1e] border border-zinc-800 rounded-[9px] px-3 py-2.5 flex items-center gap-2.5">
-          <span className="font-mono font-semibold text-zinc-100 text-[15px]">BRK-FR</span>
-          <span className="font-mono text-[11px] text-zinc-500">Front brake job · 2.4 hrs</span>
+        <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[9px] px-3 py-2.5 flex items-center gap-2.5">
+          <span className="font-mono font-semibold text-[var(--fg-0)] text-[15px]">BRK-FR</span>
+          <span className="font-mono text-[11px] text-[var(--fg-3)]">Front brake job · 2.4 hrs</span>
         </div>
       </div>
       <div className="flex gap-2 mt-0.5">
-        <button className="font-bold text-[13px] px-3.5 py-2 rounded-lg bg-orange-600 text-white whitespace-nowrap cursor-default">
+        <button className="btn btn-primary text-[13px] px-3.5 py-2 whitespace-nowrap cursor-default">
           Save &amp; New
         </button>
-        <button className="font-bold text-[13px] px-3.5 py-2 rounded-lg border border-zinc-700 text-zinc-200 whitespace-nowrap cursor-default">
+        <button className="btn text-[13px] px-3.5 py-2 whitespace-nowrap cursor-default">
           Save
         </button>
       </div>
@@ -221,16 +221,16 @@ function ROForm() {
 
 function OpCodeList() {
   return (
-    <div className="flex flex-col gap-px bg-zinc-800 border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="flex flex-col gap-px bg-[var(--line)] border border-[var(--line)] rounded-xl overflow-hidden">
       {/* BRK — expanded */}
       <div
-        className="grid items-center gap-2.5 px-3 py-2.5 bg-zinc-900"
+        className="grid items-center gap-2.5 px-3 py-2.5 bg-[var(--bg-2)]"
         style={{ gridTemplateColumns: "16px 64px 1fr auto" }}
       >
-        <span className="text-[10px] text-zinc-500">▾</span>
-        <span className="font-mono font-semibold text-[12px] text-zinc-100">BRK</span>
-        <span className="text-[13px] font-semibold text-zinc-300">Brake Job</span>
-        <span className="font-mono text-[12px] text-zinc-400">—</span>
+        <span className="text-[10px] text-[var(--fg-3)]">▾</span>
+        <span className="font-mono font-semibold text-[12px] text-[var(--fg-0)]">BRK</span>
+        <span className="text-[13px] font-semibold text-[var(--fg-1)]">Brake Job</span>
+        <span className="font-mono text-[12px] text-[var(--fg-2)]">—</span>
       </div>
       {[
         { code: "BRK-FR", desc: "Front", hrs: "2.4" },
@@ -239,23 +239,23 @@ function OpCodeList() {
       ].map((row) => (
         <div
           key={row.code}
-          className="grid items-center gap-2.5 py-2.5 bg-[#1a1a1e]"
+          className="grid items-center gap-2.5 py-2.5 bg-[var(--bg-1)]"
           style={{ gridTemplateColumns: "64px 1fr auto", paddingLeft: 36, paddingRight: 13 }}
         >
-          <span className="font-mono font-semibold text-[12px] text-orange-500">{row.code}</span>
-          <span className="text-[13px] text-zinc-300">{row.desc}</span>
-          <span className="font-mono text-[12px] text-zinc-400">{row.hrs}</span>
+          <span className="font-mono font-semibold text-[12px] text-[var(--brand)]">{row.code}</span>
+          <span className="text-[13px] text-[var(--fg-1)]">{row.desc}</span>
+          <span className="font-mono text-[12px] text-[var(--fg-2)]">{row.hrs}</span>
         </div>
       ))}
       {/* SUSP — collapsed */}
       <div
-        className="grid items-center gap-2.5 px-3 py-2.5 bg-zinc-900 opacity-90"
+        className="grid items-center gap-2.5 px-3 py-2.5 bg-[var(--bg-2)] opacity-90"
         style={{ gridTemplateColumns: "16px 64px 1fr auto" }}
       >
-        <span className="text-[10px] text-zinc-500">▸</span>
-        <span className="font-mono font-semibold text-[12px] text-zinc-100">SUSP</span>
-        <span className="text-[13px] font-semibold text-zinc-300">Suspension</span>
-        <span className="font-mono text-[12px] text-zinc-400">3 sub-codes</span>
+        <span className="text-[10px] text-[var(--fg-3)]">▸</span>
+        <span className="font-mono font-semibold text-[12px] text-[var(--fg-0)]">SUSP</span>
+        <span className="text-[13px] font-semibold text-[var(--fg-1)]">Suspension</span>
+        <span className="font-mono text-[12px] text-[var(--fg-2)]">3 sub-codes</span>
       </div>
     </div>
   );
@@ -269,22 +269,22 @@ function DiscrepancyCard() {
         { label: "You clocked", value: "66.5", unit: "hrs" },
       ].map((row) => (
         <div key={row.label} className="flex items-baseline justify-between">
-          <span className="font-mono text-[12px] tracking-[0.05em] text-zinc-400">{row.label}</span>
-          <span className="font-mono font-bold text-[18px] text-zinc-100">
+          <span className="font-mono text-[12px] tracking-[0.05em] text-[var(--fg-2)]">{row.label}</span>
+          <span className="font-mono font-bold text-[18px] text-[var(--fg-0)]">
             {row.value}{" "}
-            <span className="text-[11px] text-zinc-500 font-normal">{row.unit}</span>
+            <span className="text-[11px] text-[var(--fg-3)] font-normal">{row.unit}</span>
           </span>
         </div>
       ))}
-      <div className="h-px bg-zinc-800 my-0.5" />
+      <div className="h-px bg-[var(--line)] my-0.5" />
       <div className="flex items-baseline justify-between">
-        <span className="font-mono text-[12px] tracking-[0.05em] text-zinc-300">Discrepancy</span>
-        <span className="font-mono font-bold text-[18px] text-amber-400">
+        <span className="font-mono text-[12px] tracking-[0.05em] text-[var(--fg-1)]">Discrepancy</span>
+        <span className="font-mono font-bold text-[18px] text-[var(--warn)]">
           −2.3{" "}
-          <span className="text-[11px] text-zinc-500 font-normal">hrs</span>
+          <span className="text-[11px] text-[var(--fg-3)] font-normal">hrs</span>
         </span>
       </div>
-      <p className="font-mono text-[11px] text-zinc-500 leading-relaxed pt-0.5">
+      <p className="font-mono text-[11px] text-[var(--fg-3)] leading-relaxed pt-0.5">
         3 ROs may be missing hours — check before payday.
       </p>
     </div>
@@ -302,12 +302,12 @@ function HistoryRows() {
       {rows.map((r, i) => (
         <div
           key={i}
-          className="grid items-center gap-2.5 px-3 py-2 bg-[#1a1a1e] border border-zinc-800 rounded-[9px]"
+          className="grid items-center gap-2.5 px-3 py-2 bg-[var(--bg-1)] border border-[var(--line)] rounded-[9px]"
           style={{ gridTemplateColumns: "70px 1fr auto" }}
         >
-          <span className="font-mono font-semibold text-[12px] text-orange-500">{r.code}</span>
-          <span className="font-mono text-[12px] text-zinc-100">{r.hrs} hrs</span>
-          <span className="font-mono text-[11px] text-zinc-500">{r.t}</span>
+          <span className="font-mono font-semibold text-[12px] text-[var(--brand)]">{r.code}</span>
+          <span className="font-mono text-[12px] text-[var(--fg-0)]">{r.hrs} hrs</span>
+          <span className="font-mono text-[11px] text-[var(--fg-3)]">{r.t}</span>
         </div>
       ))}
     </div>
@@ -319,9 +319,9 @@ function HistoryRows() {
 function Nav() {
   return (
     <nav
-      className="sticky top-0 z-50 border-b border-zinc-800"
+      className="sticky top-0 z-50 border-b border-[var(--line)]"
       style={{
-        background: "color-mix(in srgb, #09090b 82%, transparent)",
+        background: "color-mix(in srgb, var(--bg-0) 82%, transparent)",
         backdropFilter: "blur(12px)",
       }}
     >
@@ -330,22 +330,16 @@ function Nav() {
           <Wordmark />
         </Link>
         <div className="flex gap-2.5 items-center">
-          <Link
-            href="/guest"
-            className="hidden sm:inline-flex items-center gap-2 font-bold text-sm px-4 py-2 rounded-lg border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-white/[0.03] transition-colors whitespace-nowrap"
-          >
+          <Link href="/guest" className="hidden sm:inline-flex btn btn-ghost">
             Try as guest
           </Link>
           <Link
             href="/signin"
-            className="hidden sm:inline-flex items-center font-bold text-sm px-4 py-2 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors whitespace-nowrap"
+            className="hidden sm:inline-flex items-center font-bold text-sm px-4 py-2 rounded-lg text-[var(--fg-2)] hover:text-[var(--fg-0)] transition-colors whitespace-nowrap"
           >
             Log in
           </Link>
-          <Link
-            href="/signup"
-            className="inline-flex items-center font-bold text-sm px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-500 transition-colors whitespace-nowrap"
-          >
+          <Link href="/signup" className="btn btn-primary">
             Create free account
           </Link>
         </div>
@@ -361,8 +355,8 @@ function Hero() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex flex-col gap-0">
         <Rv>
           <div className="inline-flex items-center gap-2.5">
-            <span className="block w-5 h-0.5 bg-orange-600" />
-            <span className="font-mono text-[13px] font-semibold tracking-[0.18em] uppercase text-orange-600 max-sm:text-[12px] max-sm:tracking-[0.12em]">
+            <span className="block w-5 h-0.5 bg-[var(--brand-strong)]" />
+            <span className="font-mono text-[13px] font-semibold tracking-[0.18em] uppercase text-[var(--brand-strong)] max-sm:text-[12px] max-sm:tracking-[0.12em]">
               Built for the tech, not the shop
             </span>
           </div>
@@ -370,7 +364,7 @@ function Hero() {
 
         <Rv delay={60}>
           <h1
-            className="font-extrabold leading-none tracking-tight text-zinc-50 text-balance mt-5 mb-0 max-sm:mt-4"
+            className="font-extrabold leading-none tracking-tight text-[var(--fg-0)] text-balance mt-5 mb-0 max-sm:mt-4"
             style={{ fontSize: "clamp(33px, 5vw, 56px)", maxWidth: 840 }}
           >
             Every RO you log makes you harder to short.
@@ -379,7 +373,7 @@ function Hero() {
 
         <Rv delay={120}>
           <p
-            className="text-zinc-400 leading-[1.55] mt-5 mb-0 max-sm:mt-4"
+            className="text-[var(--fg-2)] leading-[1.55] mt-5 mb-0 max-sm:mt-4"
             style={{ fontSize: "clamp(16px, 2vw, 18px)", maxWidth: 520 }}
           >
             FRT turns your daily work into a record that compounds — proof you got paid right,
@@ -390,21 +384,15 @@ function Hero() {
 
         <Rv delay={180}>
           <div className="flex gap-3 flex-wrap mt-7 max-sm:mt-6 max-sm:flex-col max-sm:items-stretch">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] bg-orange-600 text-white hover:bg-orange-500 transition-colors active:translate-y-px max-sm:justify-center"
-            >
+            <Link href="/signup" className="btn btn-primary btn-lg max-sm:justify-center">
               Create free account
             </Link>
-            <Link
-              href="/guest"
-              className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-white/[0.03] transition-colors active:translate-y-px max-sm:justify-center"
-            >
+            <Link href="/guest" className="btn btn-lg max-sm:justify-center">
               Try it first{" "}
-              <span className="font-mono text-orange-500">— no account →</span>
+              <span className="font-mono text-[var(--brand)]">— no account →</span>
             </Link>
           </div>
-          <p className="font-mono text-[12px] text-zinc-500 mt-5 max-sm:mt-[18px]">
+          <p className="font-mono text-[12px] text-[var(--fg-3)] mt-5 max-sm:mt-[18px]">
             Free to start · Works on your phone in the bay
           </p>
         </Rv>
@@ -412,19 +400,19 @@ function Hero() {
         {/* Dashboard mock */}
         <Rv delay={120} className="flex flex-col gap-3 mt-8 max-sm:mt-6">
           <div className="grid grid-cols-4 gap-2.5 max-sm:grid-cols-2">
-            <StatTile lab="Today" big="6.4" unit="hrs" sub={<span className="text-green-400">112% eff</span>} />
-            <StatTile lab="This Week" big="38.1" unit="hrs" sub={<span className="text-green-400">104% eff</span>} />
-            <StatTile lab="Pay Period" big="64.2" unit="hrs" sub={<span className="text-green-400">98% eff</span>} />
-            <StatTile lab="This Month" big="142" unit="hrs" sub={<span className="text-green-400">101% eff</span>} />
+            <StatTile lab="Today" big="6.4" unit="hrs" sub={<span className="text-[var(--good)]">112% eff</span>} />
+            <StatTile lab="This Week" big="38.1" unit="hrs" sub={<span className="text-[var(--good)]">104% eff</span>} />
+            <StatTile lab="Pay Period" big="64.2" unit="hrs" sub={<span className="text-[var(--good)]">98% eff</span>} />
+            <StatTile lab="This Month" big="142" unit="hrs" sub={<span className="text-[var(--good)]">101% eff</span>} />
           </div>
           <div
             className="grid gap-3 max-sm:grid-cols-1"
             style={{ gridTemplateColumns: "1.25fr 1fr" }}
           >
             <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" />
-            <div className="bg-zinc-900 border border-zinc-800 rounded-[14px] p-[18px] flex flex-col">
+            <div className="card p-[18px] flex flex-col">
               <div className="flex items-center justify-between mb-3.5">
-                <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-zinc-500">
+                <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)]">
                   Flag hrs · 14 days
                 </span>
               </div>
@@ -443,13 +431,13 @@ function PaceSection() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div className="max-w-[620px]">
           <Rv>
-            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
+            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--fg-3)]">
               Pay Period Pace
             </span>
           </Rv>
           <Rv delay={60}>
             <h2
-              className="font-extrabold tracking-tight text-zinc-50 text-balance mt-4 mb-0"
+              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-4 mb-0"
               style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
             >
               See your pace at a glance.
@@ -457,11 +445,11 @@ function PaceSection() {
           </Rv>
           <Rv delay={120}>
             <p
-              className="text-zinc-400 leading-[1.55] mt-4 mb-0"
+              className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-0"
               style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
             >
               One bar shows everything: how many flag hours you&apos;ve banked, your goal, and a{" "}
-              <strong className="text-zinc-200">today</strong>{" "}tick for exactly where you should be.
+              <strong className="text-[var(--fg-1)]">today</strong>{" "}tick for exactly where you should be.
               Green means you&apos;re good. Color shifts the second you start slipping.
             </p>
           </Rv>
@@ -501,13 +489,13 @@ function HowItWorks() {
     <section className="pb-24 max-[900px]:pb-[72px] max-sm:pb-14">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <Rv>
-          <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
+          <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--fg-3)]">
             Built for flat rate
           </span>
         </Rv>
         <Rv delay={60}>
           <h2
-            className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
+            className="font-extrabold tracking-tight text-[var(--fg-0)] mt-3.5 mb-0"
             style={{ fontSize: 36 }}
           >
             You flag the hours. Make sure you get paid for every one.
@@ -515,12 +503,12 @@ function HowItWorks() {
         </Rv>
         <div className="grid grid-cols-3 gap-5 mt-11 max-[900px]:grid-cols-1 max-[900px]:gap-7">
           {steps.map((s, i) => (
-            <Rv key={s.n} delay={i * 90} className="pt-6 border-t-2 border-zinc-800">
-              <div className="font-mono font-bold text-[13px] text-orange-600 tracking-[0.1em]">
+            <Rv key={s.n} delay={i * 90} className="pt-6 border-t-2 border-[var(--line)]">
+              <div className="font-mono font-bold text-[13px] text-[var(--brand-strong)] tracking-[0.1em]">
                 {s.n}
               </div>
-              <h3 className="text-[21px] font-bold mt-3 mb-2 text-zinc-50 tracking-tight">{s.t}</h3>
-              <p className="text-zinc-400 leading-[1.55] m-0 text-[15px]">{s.d}</p>
+              <h3 className="text-[21px] font-bold mt-3 mb-2 text-[var(--fg-0)] tracking-tight">{s.t}</h3>
+              <p className="text-[var(--fg-2)] leading-[1.55] m-0 text-[15px]">{s.d}</p>
             </Rv>
           ))}
         </div>
@@ -535,13 +523,13 @@ function LongGame() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div className="max-w-[680px]">
           <Rv>
-            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
+            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--fg-3)]">
               The long game
             </span>
           </Rv>
           <Rv delay={60}>
             <h2
-              className="font-extrabold tracking-tight text-zinc-50 text-balance mt-4 mb-0"
+              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-4 mb-0"
               style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
             >
               Day one, it tracks a job. Year one, it tracks your career.
@@ -549,13 +537,13 @@ function LongGame() {
           </Rv>
           <Rv delay={120}>
             <p
-              className="text-zinc-400 leading-[1.6] mt-5 mb-0"
+              className="text-[var(--fg-2)] leading-[1.6] mt-5 mb-0"
               style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
             >
               Every RO you log is one more data point in the only record that&apos;s actually
-              yours. <strong className="text-zinc-200">Day one</strong>, it catches a shorted
-              check. <strong className="text-zinc-200">Month six</strong>, it shows your real
-              efficiency across every job type. <strong className="text-zinc-200">Year one</strong>,
+              yours. <strong className="text-[var(--fg-1)]">Day one</strong>, it catches a shorted
+              check. <strong className="text-[var(--fg-1)]">Month six</strong>, it shows your real
+              efficiency across every job type. <strong className="text-[var(--fg-1)]">Year one</strong>,
               it&apos;s the case you put on the service manager&apos;s desk when it&apos;s time to
               talk money — or the proof you take to a better shop. Most techs throw that record
               away every payday. You don&apos;t have to.
@@ -574,10 +562,10 @@ const featCards = [
     desc: "Today, this week, pay period, this month — flag hours, clocked hours, and efficiency. No estimates.",
     visual: (
       <div className="grid grid-cols-2 gap-2">
-        <StatTile lab="Today" big="6.4" unit="h" sub={<span className="text-green-400">112%</span>} mini />
-        <StatTile lab="Week" big="38.1" unit="h" sub={<span className="text-green-400">104%</span>} mini />
-        <StatTile lab="Pay Period" big="64.2" unit="h" sub={<span className="text-green-400">98%</span>} mini />
-        <StatTile lab="Month" big="142" unit="h" sub={<span className="text-green-400">101%</span>} mini />
+        <StatTile lab="Today" big="6.4" unit="h" sub={<span className="text-[var(--good)]">112%</span>} mini />
+        <StatTile lab="Week" big="38.1" unit="h" sub={<span className="text-[var(--good)]">104%</span>} mini />
+        <StatTile lab="Pay Period" big="64.2" unit="h" sub={<span className="text-[var(--good)]">98%</span>} mini />
+        <StatTile lab="Month" big="142" unit="h" sub={<span className="text-[var(--good)]">101%</span>} mini />
       </div>
     ),
   },
@@ -624,13 +612,13 @@ function Features() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div className="max-w-[620px]">
           <Rv>
-            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-zinc-500">
+            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--fg-3)]">
               Everything you track
             </span>
           </Rv>
           <Rv delay={60}>
             <h2
-              className="font-extrabold tracking-tight text-zinc-50 text-balance mt-4 mb-0"
+              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-4 mb-0"
               style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
             >
               Made for the bay, not the boardroom.
@@ -643,15 +631,15 @@ function Features() {
             <Rv
               key={f.tag}
               delay={(i % 3) * 80}
-              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-[22px] flex flex-col hover:border-zinc-700 hover:-translate-y-0.5 transition-all duration-200"
+              className="card rounded-2xl p-[22px] flex flex-col hover:border-[var(--brand-soft)] hover:-translate-y-0.5 transition-all duration-200"
             >
-              <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-orange-600">
+              <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--brand-strong)]">
                 {f.tag}
               </span>
-              <h3 className="text-[19px] font-bold mt-2 mb-1.5 text-zinc-50 tracking-tight">
+              <h3 className="text-[19px] font-bold mt-2 mb-1.5 text-[var(--fg-0)] tracking-tight">
                 {f.title}
               </h3>
-              <p className="text-zinc-400 text-sm leading-[1.5] mb-[18px]">{f.desc}</p>
+              <p className="text-[var(--fg-2)] text-sm leading-[1.5] mb-[18px]">{f.desc}</p>
               <div className="mt-auto">{f.visual}</div>
             </Rv>
           ))}
@@ -663,7 +651,7 @@ function Features() {
 
 function GuestMode() {
   return (
-    <section className="py-[88px] bg-zinc-900 border-t border-b border-zinc-800 max-sm:py-14">
+    <section className="py-[88px] bg-[var(--bg-1)] border-t border-b border-[var(--line)] max-sm:py-14">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div
           className="grid gap-12 max-[900px]:grid-cols-1 max-[900px]:gap-8"
@@ -671,13 +659,13 @@ function GuestMode() {
         >
           <div>
             <Rv>
-              <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-orange-600">
+              <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--brand-strong)]">
                 Guest mode
               </span>
             </Rv>
             <Rv delay={60}>
               <h2
-                className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
+                className="font-extrabold tracking-tight text-[var(--fg-0)] mt-3.5 mb-0"
                 style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
               >
                 No account? No problem.
@@ -685,7 +673,7 @@ function GuestMode() {
             </Rv>
             <Rv delay={120}>
               <p
-                className="text-zinc-400 leading-[1.55] mt-4 mb-7 max-sm:mb-6"
+                className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-7 max-sm:mb-6"
                 style={{ fontSize: "clamp(16px, 1.8vw, 17px)", maxWidth: 440 }}
               >
                 Log ROs, check your stats, watch your pace — the whole app, no signup. Your data
@@ -693,24 +681,18 @@ function GuestMode() {
               </p>
             </Rv>
             <Rv delay={180}>
-              <Link
-                href="/guest"
-                className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] bg-orange-600 text-white hover:bg-orange-500 transition-colors max-sm:w-full max-sm:justify-center"
-              >
+              <Link href="/guest" className="btn btn-primary btn-lg max-sm:w-full max-sm:justify-center">
                 Try it first — no account needed
               </Link>
             </Rv>
           </div>
 
-          <Rv
-            delay={120}
-            className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6"
-          >
+          <Rv delay={120} className="card rounded-2xl p-6">
             <div className="flex items-center gap-2.5 mb-[18px] flex-wrap">
-              <span className="font-mono text-[11px] font-bold tracking-[0.08em] uppercase text-orange-600 bg-orange-600/10 px-2.5 py-1.5 rounded-full whitespace-nowrap">
+              <span className="font-mono text-[11px] font-bold tracking-[0.08em] uppercase text-[var(--brand)] bg-[var(--brand-bg)] px-2.5 py-1.5 rounded-full whitespace-nowrap">
                 ● Guest session
               </span>
-              <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-zinc-500 ml-auto">
+              <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)] ml-auto">
                 saved locally
               </span>
             </div>
@@ -721,15 +703,15 @@ function GuestMode() {
                 "Op code library & history",
                 "Job timer with PiP mode",
               ].map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-sm text-zinc-300">
-                  <span className="w-[18px] h-[18px] rounded-full bg-green-500/15 text-green-400 grid place-items-center text-[11px] flex-shrink-0 mt-px">
+                <li key={item} className="flex items-start gap-2.5 text-sm text-[var(--fg-1)]">
+                  <span className="w-[18px] h-[18px] rounded-full bg-[var(--good-bg)] text-[var(--good)] grid place-items-center text-[11px] flex-shrink-0 mt-px">
                     ✓
                   </span>
                   {item}
                 </li>
               ))}
             </ul>
-            <p className="font-mono text-[11px] text-zinc-500 mt-[18px] leading-relaxed">
+            <p className="font-mono text-[11px] text-[var(--fg-3)] mt-[18px] leading-relaxed">
               Nothing leaves your phone until you create an account — then it all syncs over.
             </p>
           </Rv>
@@ -741,49 +723,47 @@ function GuestMode() {
 
 function FinalCTA() {
   return (
-    <section className="py-24 max-sm:py-16">
+    <section className="py-24 max-sm:py-16 border-t border-[var(--line)]">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
-        <Rv
-          className="rounded-[22px] text-center"
-          style={{
-            padding: "clamp(34px, 5vw, 60px) clamp(20px, 5vw, 60px)",
-            background:
-              "linear-gradient(135deg, color-mix(in srgb, #ea580c 16%, #131316), #131316)",
-            border:
-              "1px solid color-mix(in srgb, #ea580c 30%, #27272a)",
-          }}
-        >
-          <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-orange-600">
-            Flat Rate Tracker
-          </span>
-          <h2
-            className="font-extrabold tracking-tight text-zinc-50 mt-3.5 mb-0"
-            style={{ fontSize: "clamp(28px, 4.5vw, 46px)" }}
-          >
-            Nobody&apos;s looking out for the tech. So we built the tool that does.
-          </h2>
-          <p
-            className="text-zinc-400 leading-[1.55] mt-4 mb-8 mx-auto"
-            style={{ fontSize: "clamp(16px, 1.8vw, 18px)", maxWidth: 480 }}
-          >
-            Set up in under a minute. See exactly where your pay period stands by your next RO.
-          </p>
-          <div className="flex gap-3 justify-center flex-wrap max-sm:flex-col max-sm:items-stretch">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] bg-orange-600 text-white hover:bg-orange-500 transition-colors active:translate-y-px max-sm:justify-center"
+        <div className="max-w-[620px]">
+          <Rv>
+            <div className="inline-flex items-center gap-2.5">
+              <span className="block w-5 h-0.5 bg-[var(--brand-strong)]" />
+              <span className="font-mono text-[12px] font-semibold tracking-[0.18em] uppercase text-[var(--brand-strong)]">
+                Flat Rate Tracker
+              </span>
+            </div>
+          </Rv>
+          <Rv delay={60}>
+            <h2
+              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-4 mb-0"
+              style={{ fontSize: "clamp(28px, 4vw, 44px)" }}
             >
-              Create free account
-            </Link>
-            <Link
-              href="/guest"
-              className="inline-flex items-center gap-2 font-bold text-[15px] px-5 py-3.5 rounded-[9px] border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-white/[0.03] transition-colors active:translate-y-px max-sm:justify-center"
+              Nobody&apos;s looking out for the tech. So we built the tool that does.
+            </h2>
+          </Rv>
+          <Rv delay={120}>
+            <p
+              className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-0"
+              style={{ fontSize: "clamp(16px, 1.8vw, 18px)", maxWidth: 480 }}
             >
-              Try it first{" "}
-              <span className="font-mono text-orange-500">— no account →</span>
-            </Link>
-          </div>
-        </Rv>
+              Set up in under a minute. See exactly where your pay period stands by your next RO.
+            </p>
+          </Rv>
+          <Rv delay={180}>
+            <div className="flex items-center gap-5 flex-wrap mt-7 max-sm:mt-6">
+              <Link href="/signup" className="btn btn-primary btn-lg max-sm:justify-center">
+                Create free account
+              </Link>
+              <Link
+                href="/guest"
+                className="font-mono text-sm text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors no-underline"
+              >
+                Try it first — no account →
+              </Link>
+            </div>
+          </Rv>
+        </div>
       </div>
     </section>
   );
@@ -791,7 +771,7 @@ function FinalCTA() {
 
 function Footer() {
   return (
-    <footer className="border-t border-zinc-800 py-10">
+    <footer className="border-t border-[var(--line)] py-10">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start max-sm:gap-[18px]">
         <Link href="/" className="no-underline">
           <Wordmark size={15} />
@@ -805,13 +785,13 @@ function Footer() {
             <Link
               key={l.label}
               href={l.href}
-              className="font-mono text-sm text-zinc-500 hover:text-zinc-300 transition-colors whitespace-nowrap no-underline"
+              className="font-mono text-sm text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors whitespace-nowrap no-underline"
             >
               {l.label}
             </Link>
           ))}
         </div>
-        <span className="font-mono text-[12px] text-zinc-500">© 2026 Flat Rate Tracker</span>
+        <span className="font-mono text-[12px] text-[var(--fg-3)]">© 2026 Flat Rate Tracker</span>
       </div>
     </footer>
   );
@@ -836,7 +816,7 @@ export default function LandingPage() {
           }
         }
       `}</style>
-      <div id="lp" className="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-orange-600 selection:text-white">
+      <div id="lp" className="min-h-screen selection:bg-[var(--brand)] selection:text-[oklch(0.18_0.04_50)]">
         <Nav />
         <Hero />
         <PaceSection />

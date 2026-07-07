@@ -67,11 +67,13 @@ export function ClockedHoursInput({
               }
             }}
             placeholder="0"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "clocked-hours-error" : undefined}
             className="input mono tabular"
             style={{ width: 120, marginTop: 6 }}
           />
         </label>
-        {error && <p style={{ marginTop: 4, fontSize: 12, color: "var(--bad)" }}>{error}</p>}
+        {error && <p id="clocked-hours-error" role="alert" style={{ marginTop: 4, fontSize: 12, color: "var(--bad)" }}>{error}</p>}
         {!error && isPending && (
           <p style={{ marginTop: 4, fontSize: 12, color: "var(--fg-3)" }}>Saving…</p>
         )}

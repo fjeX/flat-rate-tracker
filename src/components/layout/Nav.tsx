@@ -30,7 +30,7 @@ export function Nav({ timerRunning = false }: { timerRunning?: boolean }) {
 
   return (
     <>
-      <nav className="app-tabs">
+      <nav className="app-tabs" aria-label="Primary">
         {TABS.map((tab) => {
           const active = tab.match(pathname);
           const showDot = tab.href === "/timer" && timerRunning;

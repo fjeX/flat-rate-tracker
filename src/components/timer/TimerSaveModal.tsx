@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { saveTimerToLineAction } from "@/app/actions/timer";
+import { tap } from "@/lib/haptics";
 
 function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -77,6 +78,7 @@ export function TimerSaveModal({
     startPending(async () => {
       try {
         await saveTimerToLineAction(selected.id, hours);
+        tap();
         onClose();
         router.refresh();
       } catch (err) {
@@ -88,18 +90,20 @@ export function TimerSaveModal({
   return (
     <Modal open onClose={onClose} title={`Save ${formatElapsed(elapsedMs)} to RO #${entry.roNumber}`}>
       <div className="space-y-4">
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-[var(--fg-3)]">
           Pick which op code this time should be attached to. The elapsed time
           will be saved as that line&apos;s actual hours
           ({fmtHours(hours)}h), replacing any existing value.
         </p>
 
         {entry.opCodes.length === 0 ? (
-          <p className="rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-sm text-amber-200">
+          <p className="rounded-md border border-[var(--warn)]/30 bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
             This RO has no op codes. Edit it first to add one.
           </p>
         ) : (
-          <ul className="divide-y divide-zinc-800 rounded-md border border-zinc-800">
+          <fieldset className="rounded-md border border-[var(--line)]">
+          <legend className="sr-only">Op code to save time to</legend>
+          <ul className="divide-y divide-[var(--line-soft)]">
             {entry.opCodes.map((line) => {
               const { code, description } = lineLabel(line, libraryById);
               const active = line.id === selectedId;
@@ -107,7 +111,7 @@ export function TimerSaveModal({
                 <li key={line.id}>
                   <label
                     className={`flex cursor-pointer items-start gap-3 px-3 py-2.5 text-sm ${
-                      active ? "bg-orange-950/30" : "hover:bg-zinc-800/40"
+                      active ? "bg-[var(--brand-bg)]" : "hover:bg-[var(--bg-3)]/40"
                     }`}
                   >
                     <input
@@ -115,28 +119,28 @@ export function TimerSaveModal({
                       name="timer-save-line"
                       checked={active}
                       onChange={() => setSelectedId(line.id)}
-                      className="mt-1 h-4 w-4 accent-orange-500"
+                      className="mt-1 h-4 w-4 accent-[var(--brand)]"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
-                        <span className="font-mono text-sm text-orange-400">
+                        <span className="font-mono text-sm text-[var(--brand)]">
                           {code}
                         </span>
                         {line.custom && (
-                          <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                          <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
                             Other
                           </span>
                         )}
-                        <span className="ml-auto text-xs text-zinc-500">
+                        <span className="ml-auto text-xs text-[var(--fg-3)]">
                           Flag {fmtHours(line.flagHours)}h
                         </span>
                       </div>
                       {description && (
-                        <div className="truncate text-xs text-zinc-500">
+                        <div className="truncate text-xs text-[var(--fg-3)]">
                           {description}
                         </div>
                       )}
-                      <div className="mt-0.5 text-xs text-zinc-400">
+                      <div className="mt-0.5 text-xs text-[var(--fg-2)]">
                         Current actual:{" "}
                         {line.actualHours === null
                           ? "—"
@@ -148,16 +152,17 @@ export function TimerSaveModal({
               );
             })}
           </ul>
+          </fieldset>
         )}
 
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
             onClick={onClose}
             disabled={pending}
-            className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+            className="btn"
           >
             Cancel
           </button>
@@ -165,7 +170,7 @@ export function TimerSaveModal({
             type="button"
             onClick={handleSave}
             disabled={pending || !selected}
-            className="inline-flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
+            className="btn btn-primary"
           >
             {pending ? "Saving…" : "Save"}
           </button>

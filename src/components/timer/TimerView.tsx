@@ -23,6 +23,8 @@ import { TimerSaveModal } from "./TimerSaveModal";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { Modal } from "@/components/ui/Modal";
 import { LogRoForm } from "@/components/forms/LogRoForm";
+import { RollingNumber } from "@/components/ui/RollingNumber";
+import { tap } from "@/lib/haptics";
 
 type TimerState = {
   roId: string | null;
@@ -181,18 +183,19 @@ export function TimerView({
       <h1 className="text-xl font-semibold">Timer</h1>
 
       {/* Timer card */}
-      <div className="rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-6 text-center">
+      <div className="card p-6 text-center">
         <StatusBadge status={status} />
-        <div className="mt-3 font-mono text-5xl font-semibold tabular-nums text-zinc-100 sm:text-6xl">
-          {formatElapsed(elapsedMs)}
-        </div>
+        <RollingNumber
+          value={formatElapsed(elapsedMs)}
+          className="mt-3 text-5xl font-semibold text-[var(--fg-0)] sm:text-6xl"
+        />
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           {running ? (
             <button
               type="button"
-              onClick={() => run(() => pauseTimerAction())}
+              onClick={() => { tap(); run(() => pauseTimerAction()); }}
               disabled={pending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
+              className="btn btn-primary"
             >
               <Pause className="h-4 w-4" />
               Pause
@@ -200,9 +203,9 @@ export function TimerView({
           ) : (
             <button
               type="button"
-              onClick={() => run(() => startTimerAction())}
+              onClick={() => { tap(); run(() => startTimerAction()); }}
               disabled={pending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--good-strong)] px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50"
             >
               <Play className="h-4 w-4" />
               {status === "PAUSED" ? "Resume" : "Start"}
@@ -212,18 +215,18 @@ export function TimerView({
             type="button"
             onClick={handleReset}
             disabled={pending || status === "READY"}
-            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+            className="btn"
           >
             <RotateCcw className="h-4 w-4" />
             Reset
           </button>
         </div>
-        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+        {error && <p className="mt-3 text-sm text-[var(--bad)]">{error}</p>}
       </div>
 
       {/* Attached RO */}
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-        <h2 className="text-xs uppercase tracking-wide text-zinc-500">
+      <section className="card p-4">
+        <h2 className="text-xs uppercase tracking-wide text-[var(--fg-3)]">
           Attached RO
         </h2>
         {attachedEntry ? (
@@ -233,27 +236,27 @@ export function TimerView({
                 <button
                   type="button"
                   onClick={() => setDetailEntry(attachedEntry)}
-                  className="font-mono text-sm text-orange-400 hover:underline"
+                  className="font-mono text-sm text-[var(--brand)] hover:underline"
                 >
                   #{attachedEntry.roNumber}
                 </button>
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-[var(--fg-3)]">
                   {formatDateShort(attachedEntry.date)}
                 </span>
               </div>
               <VehicleLine entry={attachedEntry} />
               {attachedEntry.opCodes.length > 1 && (
                 <div className="mt-1 flex items-center gap-1.5 text-xs">
-                  <span className="text-zinc-500">Line:</span>
+                  <span className="text-[var(--fg-3)]">Line:</span>
                   {preselectedLine ? (
                     <>
-                      <span className="font-mono text-orange-300">
+                      <span className="font-mono text-[var(--brand)]">
                         {getLineLabel(preselectedLine).code}
                       </span>
                       <button
                         type="button"
                         onClick={() => setLinePickEntry(attachedEntry)}
-                        className="text-zinc-500 hover:text-zinc-300"
+                        className="text-[var(--fg-3)] hover:text-[var(--fg-1)]"
                       >
                         Change
                       </button>
@@ -262,7 +265,7 @@ export function TimerView({
                     <button
                       type="button"
                       onClick={() => setLinePickEntry(attachedEntry)}
-                      className="text-zinc-400 hover:text-zinc-200"
+                      className="text-[var(--fg-2)] hover:text-[var(--fg-1)]"
                     >
                       Pick a line →
                     </button>
@@ -275,7 +278,7 @@ export function TimerView({
                 type="button"
                 onClick={() => setSaveOpen(true)}
                 disabled={!canSave || pending}
-                className="inline-flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
+                className="btn btn-primary"
                 title={
                   !canSave && elapsedMs === 0
                     ? "Start the timer first"
@@ -289,7 +292,7 @@ export function TimerView({
                 type="button"
                 onClick={handleClearRo}
                 disabled={pending}
-                className="rounded-md border border-zinc-800 p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-50"
+                className="rounded-md border border-[var(--line)] p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] disabled:opacity-50"
                 aria-label="Clear attached RO"
                 title="Clear attached RO"
               >
@@ -298,7 +301,7 @@ export function TimerView({
             </div>
           </div>
         ) : (
-          <p className="mt-2 text-sm text-zinc-400">
+          <p className="mt-2 text-sm text-[var(--fg-2)]">
             No RO attached. Pick one from the list below to track time against
             it.
           </p>
@@ -308,11 +311,11 @@ export function TimerView({
       {/* Recent ROs */}
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-400">Recent ROs</h2>
+          <h2 className="text-sm font-medium text-[var(--fg-2)]">Recent ROs</h2>
           <button
             type="button"
             onClick={() => setLogRoOpen(true)}
-            className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+            className="btn btn-sm"
           >
             <Plus className="h-3.5 w-3.5" />
             Log RO
@@ -355,10 +358,10 @@ export function TimerView({
           title={`RO #${linePickEntry.roNumber} — Pick a line`}
         >
           <div className="space-y-3">
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-[var(--fg-2)]">
               Which line do you want to track time for?
             </p>
-            <ul className="divide-y divide-zinc-800 rounded-md border border-zinc-800">
+            <ul className="divide-y divide-[var(--line-soft)] rounded-[var(--radius-sm)] border border-[var(--line)]">
               {linePickEntry.opCodes.map((line) => {
                 const { code, description } = getLineLabel(line);
                 return (
@@ -366,24 +369,24 @@ export function TimerView({
                     <button
                       type="button"
                       onClick={() => handleLineConfirm(line.id, linePickEntry)}
-                      className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-zinc-800/40"
+                      className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
                     >
                       <div className="min-w-0 flex-1">
-                        <span className="font-mono text-sm text-orange-400">
+                        <span className="font-mono text-sm text-[var(--brand)]">
                           {code}
                         </span>
                         {line.custom && (
-                          <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                          <span className="ml-2 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
                             Other
                           </span>
                         )}
                         {description && (
-                          <div className="truncate text-xs text-zinc-500">
+                          <div className="truncate text-xs text-[var(--fg-3)]">
                             {description}
                           </div>
                         )}
                       </div>
-                      <span className="shrink-0 text-xs text-zinc-400">
+                      <span className="shrink-0 text-xs text-[var(--fg-2)]">
                         {fmtHours(line.flagHours)}h
                       </span>
                     </button>
@@ -397,13 +400,13 @@ export function TimerView({
 
       {/* Log RO full-screen overlay */}
       {logRoOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/90 px-4 py-3 backdrop-blur">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-0)]">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg-0)]/90 px-4 py-3 backdrop-blur">
             <h2 className="text-base font-semibold">Log New RO</h2>
             <button
               type="button"
               onClick={() => setLogRoOpen(false)}
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+              className="rounded p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
               aria-label="Close"
             >
               <X className="h-5 w-5" />
@@ -425,9 +428,9 @@ export function TimerView({
 
 function StatusBadge({ status }: { status: "READY" | "RUNNING" | "PAUSED" }) {
   const styles: Record<typeof status, string> = {
-    READY: "border-zinc-700 bg-zinc-800/60 text-zinc-300",
-    RUNNING: "border-green-700/60 bg-green-950/60 text-green-300",
-    PAUSED: "border-amber-700/60 bg-amber-950/60 text-amber-300",
+    READY: "border-[var(--line)] bg-[var(--bg-3)] text-[var(--fg-2)]",
+    RUNNING: "border-[var(--good)]/30 bg-[var(--good-bg)] text-[var(--good)]",
+    PAUSED: "border-[var(--warn)]/30 bg-[var(--warn-bg)] text-[var(--warn)]",
   };
   return (
     <span
@@ -435,8 +438,8 @@ function StatusBadge({ status }: { status: "READY" | "RUNNING" | "PAUSED" }) {
     >
       {status === "RUNNING" && (
         <span className="relative inline-flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-400" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--good)] opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--good)]" />
         </span>
       )}
       {status}
@@ -451,7 +454,7 @@ function VehicleLine({ entry }: { entry: Entry }) {
     .trim();
   if (!label) return null;
   return (
-    <div className="mt-0.5 truncate text-xs text-zinc-400">{label}</div>
+    <div className="mt-0.5 truncate text-xs text-[var(--fg-2)]">{label}</div>
   );
 }
 
@@ -470,13 +473,13 @@ function RecentRoList({
 }) {
   if (entries.length === 0) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center">
-        <p className="text-sm text-zinc-400">No ROs yet. Log one first.</p>
+      <div className="card p-6 text-center">
+        <p className="text-sm text-[var(--fg-2)]">The timer clocks against an RO — log one first.</p>
       </div>
     );
   }
   return (
-    <ul className="divide-y divide-zinc-800 rounded-xl border border-zinc-800 bg-zinc-900">
+    <ul className="card divide-y divide-[var(--line-soft)]">
       {entries.map((e) => {
         const isAttached = e.id === attachedId;
         const canAttach = !disabled && !isAttached;
@@ -495,7 +498,7 @@ function RecentRoList({
               }
               className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors ${
                 disabled ? "opacity-50" : ""
-              } ${canAttach ? "cursor-pointer hover:bg-zinc-800/60" : "cursor-default"}`}
+              } ${canAttach ? "cursor-pointer hover:bg-[var(--bg-3)]" : "cursor-default"}`}
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -505,26 +508,26 @@ function RecentRoList({
                       ev.stopPropagation();
                       onOpenDetail(e);
                     }}
-                    className="font-mono text-sm text-orange-400 hover:underline"
+                    className="font-mono text-sm text-[var(--brand)] hover:underline"
                   >
                     #{e.roNumber}
                   </button>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-[var(--fg-3)]">
                     {formatDateShort(e.date)}
                   </span>
                   {isAttached && (
-                    <span className="rounded-full border border-orange-700/60 bg-orange-950/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-orange-300">
+                    <span className="pill brand uppercase tracking-wide text-[10px]">
                       Attached
                     </span>
                   )}
                 </div>
                 {vehicle && (
-                  <div className="mt-0.5 truncate text-xs text-zinc-400">
+                  <div className="mt-0.5 truncate text-xs text-[var(--fg-2)]">
                     {vehicle}
                   </div>
                 )}
               </div>
-              <span className="shrink-0 text-sm font-medium text-zinc-100">
+              <span className="shrink-0 text-sm font-medium text-[var(--fg-0)]">
                 {fmtHours(e.flagHours)}h
               </span>
             </div>

@@ -18,6 +18,7 @@ import { ScanRoButton } from "./ScanRoButton";
 import type { OcrResult } from "@/lib/ocr";
 import { SubOpCodePickerModal } from "./SubOpCodePickerModal";
 import { DuplicateRoDialog } from "./DuplicateRoDialog";
+import { tap } from "@/lib/haptics";
 
 const COMMON_MAKES = [
   "Acura", "Audi", "BMW", "Buick", "Cadillac", "Chevrolet", "Chrysler",
@@ -363,6 +364,7 @@ export function LogRoForm({
         } else {
           await saveEntry(input, existingEntry?.id);
         }
+        tap();
         if (afterSave) {
           afterSave();
         } else {
@@ -430,7 +432,7 @@ export function LogRoForm({
   const vehicleSummary = [year, make, model].filter(Boolean).join(" ");
 
   return (
-    <div className="mx-auto max-w-xl p-4 pb-32">
+    <main className="mx-auto max-w-xl p-4 pb-32">
 
       {/* ---- Save & New confirmation ---- */}
       {savedRoNumber && (
@@ -448,13 +450,17 @@ export function LogRoForm({
       )}
 
       {/* ---- Section title ---- */}
+      <h1 className="sr-only">{isEdit ? `Edit RO #${existingEntry!.roNumber}` : "New repair order"}</h1>
       <div className="section-title" style={{ marginBottom: 16 }}>
-        <span>{isEdit ? `Edit RO #${existingEntry!.roNumber}` : "New repair order"}</span>
+        <span aria-hidden="true">{isEdit ? `Edit RO #${existingEntry!.roNumber}` : "New repair order"}</span>
+        <label htmlFor="ro-date" className="sr-only">Date</label>
         <input
+          id="ro-date"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
+          aria-required="true"
           style={{
             background: "transparent",
             border: "none",
@@ -489,14 +495,19 @@ export function LogRoForm({
           <div className="step-summary">required</div>
         </div>
         <div className="step-body">
+          <label htmlFor="ro-number" className="sr-only">RO number</label>
           <div className="ro-hero">
-            <span className="hash">#</span>
+            <span className="hash" aria-hidden="true">#</span>
             <input
+              id="ro-number"
               ref={roInputRef}
               type="text"
               value={roNumber}
               onChange={(e) => setRoNumber(e.target.value)}
               required
+              aria-required="true"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "ro-save-error" : undefined}
               inputMode="numeric"
               placeholder="12345"
             />
@@ -521,7 +532,9 @@ export function LogRoForm({
             <span className="icon">
               <Search size={15} />
             </span>
+            <label htmlFor="opc-search" className="sr-only">Search or add op code</label>
             <input
+              id="opc-search"
               type="text"
               value={search}
               onChange={(e) => {
@@ -692,6 +705,7 @@ export function LogRoForm({
                       }
                       className="opc-hours-input"
                       title="Flag hours"
+                      aria-label={`Flag hours for ${code || "op code line"}`}
                       placeholder="flag"
                     />
                     <input
@@ -706,6 +720,7 @@ export function LogRoForm({
                       }
                       className="opc-hours-input"
                       title="Actual hours"
+                      aria-label={`Actual hours for ${code || "op code line"}`}
                       placeholder="act"
                     />
                     <button
@@ -753,7 +768,13 @@ export function LogRoForm({
 
       {/* ---- Step 3: Vehicle (collapsible) ---- */}
       <div className={`step-card${vehicleOpen ? " active" : " collapsed"}`}>
-        <div className="step-head" onClick={() => setVehicleOpen((v) => !v)}>
+        <button
+          type="button"
+          className="step-head"
+          onClick={() => setVehicleOpen((v) => !v)}
+          aria-expanded={vehicleOpen}
+          aria-controls="vehicle-step-body"
+        >
           <div className="step-num">3</div>
           <div className="step-title">
             Vehicle
@@ -763,10 +784,10 @@ export function LogRoForm({
             <div className="step-summary">{vehicleSummary}</div>
           )}
           {vehicleOpen ? <ChevronUp size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} />}
-        </div>
+        </button>
 
         {vehicleOpen && (
-          <div className="step-body">
+          <div className="step-body" id="vehicle-step-body">
             <p style={{
               display: "flex",
               gap: 6,
@@ -791,8 +812,9 @@ export function LogRoForm({
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
               <div>
-                <label className="field-label">Year</label>
+                <label className="field-label" htmlFor="ro-year">Year</label>
                 <input
+                  id="ro-year"
                   type="text"
                   value={year}
                   onChange={(e) => setYear(e.target.value)}
@@ -804,7 +826,7 @@ export function LogRoForm({
               </div>
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <label className="field-label" style={{ margin: 0 }}>Make</label>
+                  <label className="field-label" htmlFor="ro-make" style={{ margin: 0 }}>Make</label>
                   {!isEdit && (
                     <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                       <input
@@ -820,6 +842,7 @@ export function LogRoForm({
                   )}
                 </div>
                 <input
+                  id="ro-make"
                   type="text"
                   list="make-options"
                   value={make}
@@ -839,8 +862,9 @@ export function LogRoForm({
                 )}
               </div>
               <div>
-                <label className="field-label">Model</label>
+                <label className="field-label" htmlFor="ro-model">Model</label>
                 <input
+                  id="ro-model"
                   type="text"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
@@ -853,8 +877,9 @@ export function LogRoForm({
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
-                <label className="field-label">VIN</label>
+                <label className="field-label" htmlFor="ro-vin">VIN</label>
                 <input
+                  id="ro-vin"
                   type="text"
                   value={vin}
                   onChange={(e) => setVin(e.target.value.toUpperCase())}
@@ -868,8 +893,9 @@ export function LogRoForm({
                 />
               </div>
               <div>
-                <label className="field-label">Mileage</label>
+                <label className="field-label" htmlFor="ro-mileage">Mileage</label>
                 <input
+                  id="ro-mileage"
                   type="text"
                   inputMode="numeric"
                   value={mileage}
@@ -886,7 +912,13 @@ export function LogRoForm({
 
       {/* ---- Step 4: Notes (collapsible) ---- */}
       <div className={`step-card${notesOpen ? " active" : " collapsed"}`}>
-        <div className="step-head" onClick={() => setNotesOpen((v) => !v)}>
+        <button
+          type="button"
+          className="step-head"
+          onClick={() => setNotesOpen((v) => !v)}
+          aria-expanded={notesOpen}
+          aria-controls="notes-step-body"
+        >
           <div className="step-num">4</div>
           <div className="step-title">
             Notes
@@ -898,11 +930,13 @@ export function LogRoForm({
             </div>
           )}
           {notesOpen ? <ChevronUp size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} />}
-        </div>
+        </button>
 
         {notesOpen && (
-          <div className="step-body">
+          <div className="step-body" id="notes-step-body">
+            <label htmlFor="ro-notes" className="sr-only">Notes</label>
             <textarea
+              id="ro-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
@@ -916,15 +950,19 @@ export function LogRoForm({
 
       {/* ---- Error ---- */}
       {error && (
-        <div style={{
-          borderRadius: 8,
-          border: "1px solid color-mix(in oklab, var(--bad) 40%, transparent)",
-          background: "color-mix(in oklab, var(--bad) 10%, transparent)",
-          padding: "8px 12px",
-          fontSize: 13,
-          color: "var(--bad)",
-          marginBottom: 12,
-        }}>
+        <div
+          id="ro-save-error"
+          role="alert"
+          style={{
+            borderRadius: 8,
+            border: "1px solid color-mix(in oklab, var(--bad) 40%, transparent)",
+            background: "color-mix(in oklab, var(--bad) 10%, transparent)",
+            padding: "8px 12px",
+            fontSize: 13,
+            color: "var(--bad)",
+            marginBottom: 12,
+          }}
+        >
           {error}
         </div>
       )}
@@ -1007,6 +1045,6 @@ export function LogRoForm({
           onClose={handleDupClose}
         />
       )}
-    </div>
+    </main>
   );
 }

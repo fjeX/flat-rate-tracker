@@ -195,14 +195,14 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Op Codes</h1>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-[var(--fg-2)]">
             Your personal library. Drag to reorder.
           </p>
         </div>
         <button
           type="button"
           onClick={() => setModal({ kind: "add" })}
-          className="flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500"
+          className="btn btn-primary"
         >
           <Plus className="h-4 w-4" />
           <span>Add</span>
@@ -210,21 +210,21 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-3">
-        <Search className="h-4 w-4 text-zinc-500" />
+      <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3">
+        <Search className="h-4 w-4 text-[var(--fg-2)]" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search code or description"
-          className="w-full bg-transparent py-2 text-sm placeholder-zinc-600 focus:outline-none"
+          className="w-full bg-transparent py-2 text-sm placeholder-[var(--fg-3)] focus:outline-none"
         />
         {search && (
           <button
             type="button"
             onClick={() => setSearch("")}
             aria-label="Clear search"
-            className="text-zinc-500 hover:text-zinc-300"
+            className="text-[var(--fg-2)] hover:text-[var(--fg-1)]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -243,19 +243,19 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
       />
 
       {reorderError && (
-        <p className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+        <p className="rounded-md border border-[color-mix(in_oklab,var(--bad)_40%,transparent)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--bad)]">
           {reorderError}
         </p>
       )}
 
       {/* List */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-1.5">
+      <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--bg-1)] p-1.5">
         {items.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-zinc-500">
+          <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
             No op codes yet. Add one to get started.
           </p>
         ) : visible.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-zinc-500">
+          <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
             No op codes match.
           </p>
         ) : (

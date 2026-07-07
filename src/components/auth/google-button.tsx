@@ -39,13 +39,13 @@ export function GoogleButton() {
         type="button"
         onClick={signInWithGoogle}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-700 bg-white px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <GoogleIcon />
         {loading ? "Redirecting…" : "Continue with Google"}
       </button>
       {error && (
-        <p className="mt-2 text-sm text-red-300">{error}</p>
+        <p className="mt-2 text-sm text-[var(--bad)]">{error}</p>
       )}
     </div>
   );

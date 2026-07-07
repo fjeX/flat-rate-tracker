@@ -136,7 +136,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
 
       {/* ── Profile ─────────────────────────────────────────── */}
       <section>
-        <div className="section-title">Profile</div>
+        <h2 className="section-title">Profile</h2>
         <div className="card padded-lg">
           <form onSubmit={handleProfileSubmit}>
             <div
@@ -193,7 +193,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
 
       {/* ── Email ────────────────────────────────────────────── */}
       <section>
-        <div className="section-title">Email Address</div>
+        <h2 className="section-title">Email Address</h2>
         <div className="card padded-lg">
           <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--fg-2)" }}>
             Current:{" "}
@@ -232,7 +232,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
 
       {/* ── Password ─────────────────────────────────────────── */}
       <section>
-        <div className="section-title">Password</div>
+        <h2 className="section-title">Password</h2>
         <div className="card padded-lg">
           <form onSubmit={handlePasswordSubmit}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -286,7 +286,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
 
       {/* ── Preferences ──────────────────────────────────────── */}
       <section>
-        <div className="section-title">Preferences</div>
+        <h2 className="section-title">Preferences</h2>
         <div className="card padded-lg">
           <p className="field-label" style={{ marginBottom: 12 }}>
             Week Starts On
@@ -329,7 +329,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
 
       {/* ── Theme ────────────────────────────────────────────── */}
       <section>
-        <div className="section-title">Appearance</div>
+        <h2 className="section-title">Appearance</h2>
         <div className="card padded-lg">
           <p className="field-label" style={{ marginBottom: 12 }}>
             Color Theme

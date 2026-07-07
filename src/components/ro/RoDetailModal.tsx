@@ -35,7 +35,7 @@ export function RoDetailModal({
   return (
     <Modal open onClose={onClose} title={`RO #${entry.roNumber}`}>
       <div className="space-y-4">
-        <div className="text-xs text-zinc-500">
+        <div className="text-xs text-[var(--fg-3)]">
           <div>{formatDateLong(entry.date)}</div>
           <div className="mt-0.5">
             Logged{" "}
@@ -54,8 +54,8 @@ export function RoDetailModal({
           mileage={entry.vehicle.mileage}
         />
 
-        <div className="rounded-md border border-zinc-800">
-          <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
+        <div className="rounded-md border border-[var(--line)]">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] bg-[var(--bg-1)] px-3 py-1.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
             <div>Op code</div>
             <div className="w-16 text-right">Flag</div>
             <div className="w-20 text-right">Actual</div>
@@ -71,12 +71,12 @@ export function RoDetailModal({
               />
             ))}
           </ul>
-          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-zinc-800 bg-zinc-950 px-3 py-2 text-sm">
-            <div className="text-zinc-400">Total</div>
+          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+            <div className="text-[var(--fg-2)]">Total</div>
             <div className="w-16 text-right font-medium">
               {fmtHours(entry.flagHours)}h
             </div>
-            <div className="w-20 text-right text-zinc-400">
+            <div className="w-20 text-right text-[var(--fg-2)]">
               {hasAnyActual ? `${fmtHours(totalActual)}h` : "—"}
             </div>
           </div>
@@ -90,11 +90,11 @@ export function RoDetailModal({
         />
 
         {entry.notes && (
-          <div className="rounded-md border border-zinc-800 bg-zinc-950 p-3">
-            <div className="mb-1 text-xs uppercase tracking-wide text-zinc-500">
+          <div className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-3">
+            <div className="mb-1 text-xs uppercase tracking-wide text-[var(--fg-3)]">
               Notes
             </div>
-            <p className="whitespace-pre-wrap text-sm text-zinc-200">
+            <p className="whitespace-pre-wrap text-sm text-[var(--fg-1)]">
               {entry.notes}
             </p>
           </div>
@@ -113,15 +113,16 @@ const DESC_CHAR_LIMIT = 80;
 function ExpandableDescription({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   if (text.length <= DESC_CHAR_LIMIT) {
-    return <div className="text-xs text-zinc-500">{text}</div>;
+    return <div className="text-xs text-[var(--fg-3)]">{text}</div>;
   }
   return (
-    <div className="text-xs text-zinc-500">
+    <div className="text-xs text-[var(--fg-3)]">
       {expanded ? text : text.slice(0, DESC_CHAR_LIMIT) + "…"}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
-        className="ml-1 text-orange-400 hover:text-orange-300 focus:outline-none"
+        aria-expanded={expanded}
+        className="relative ml-1 py-2.5 text-[var(--brand)] hover:opacity-80 focus:outline-none"
       >
         {expanded ? "less" : "more"}
       </button>
@@ -148,14 +149,14 @@ function VehicleLine({
   if (!label && !vin && !mileage) return null;
   return (
     <div className="space-y-0.5">
-      {label && <div className="text-sm text-zinc-300">{label}</div>}
+      {label && <div className="text-sm text-[var(--fg-1)]">{label}</div>}
       {vin && (
-        <div className="font-mono text-xs text-zinc-500">
+        <div className="font-mono text-xs text-[var(--fg-3)]">
           VIN: {vin}
         </div>
       )}
       {mileage && (
-        <div className="text-xs text-zinc-500">
+        <div className="text-xs text-[var(--fg-3)]">
           Mileage: {mileage}
         </div>
       )}
@@ -234,17 +235,17 @@ function LineRow({
   }
 
   return (
-    <li className="border-b border-zinc-800 px-3 py-2 last:border-b-0">
+    <li className="border-b border-[var(--line)] px-3 py-2 last:border-b-0">
       <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
         <div className="min-w-0">
-          <span className="font-mono text-sm text-orange-400">{code}</span>
+          <span className="font-mono text-sm text-[var(--brand)]">{code}</span>
           {subRef && (
-            <span className="ml-2 rounded bg-orange-950/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-orange-400">
+            <span className="ml-2 rounded bg-[var(--brand-bg)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--brand)]">
               {subRef.code}
             </span>
           )}
           {line.custom && (
-            <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+            <span className="ml-2 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
               Other
             </span>
           )}
@@ -269,7 +270,10 @@ function LineRow({
             }}
             placeholder="—"
             disabled={saving || deleting}
-            className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-right font-mono text-sm text-zinc-100 placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+            aria-label={`Actual hours for ${code}`}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? `line-error-${line.id}` : undefined}
+            className="w-full rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1 text-right font-mono text-sm text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:border-[var(--brand)] focus:outline-none"
           />
         </div>
         <button
@@ -277,14 +281,14 @@ function LineRow({
           onClick={handleDelete}
           disabled={deleting || isOnly}
           aria-label="Remove line"
-          className="rounded p-1 text-zinc-600 hover:text-red-400 disabled:opacity-30"
+          className="relative rounded p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
-      {error && <div className="mt-1 text-[10px] text-red-300">{error}</div>}
+      {error && <div id={`line-error-${line.id}`} role="alert" className="mt-1 text-[10px] text-[var(--bad)]">{error}</div>}
       {line.notes && (
-        <p className="mt-1.5 text-xs text-zinc-500 italic">{line.notes}</p>
+        <p className="mt-1.5 text-xs text-[var(--fg-3)] italic">{line.notes}</p>
       )}
     </li>
   );
@@ -373,25 +377,25 @@ function AddOpCodePicker({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-zinc-700 py-2 text-xs text-zinc-500 hover:border-orange-500/50 hover:text-zinc-300"
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-[var(--line)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
         >
           <Plus className="h-3.5 w-3.5" />
           Add op code
         </button>
       ) : subPickOc ? (
         // Sub op code selection step
-        <div className="rounded-md border border-zinc-700 bg-zinc-900">
-          <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
+        <div className="rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
+          <div className="flex items-center gap-2 border-b border-[var(--line)] px-3 py-2">
             <button
               type="button"
               onClick={() => setSubPickOc(null)}
-              className="text-xs text-zinc-500 hover:text-zinc-300"
+              className="py-2.5 text-xs text-[var(--fg-3)] hover:text-[var(--fg-1)]"
             >
               ← Back
             </button>
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-[var(--fg-2)]">
               Sub op code for{" "}
-              <span className="font-mono text-orange-400">{subPickOc.code}</span>
+              <span className="font-mono text-[var(--brand)]">{subPickOc.code}</span>
             </span>
           </div>
           <ul className="max-h-48 overflow-y-auto">
@@ -401,48 +405,51 @@ function AddOpCodePicker({
                   type="button"
                   disabled={pending}
                   onClick={() => addLine(subPickOc, sub.id)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800 disabled:opacity-50"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)] disabled:opacity-50"
                 >
                   <span>
-                    <span className="font-mono text-sm text-orange-400">{sub.code}</span>
+                    <span className="font-mono text-sm text-[var(--brand)]">{sub.code}</span>
                     {sub.description && (
-                      <span className="ml-2 text-xs text-zinc-400">{sub.description}</span>
+                      <span className="ml-2 text-xs text-[var(--fg-2)]">{sub.description}</span>
                     )}
                   </span>
-                  <span className="text-xs text-zinc-400">{sub.flagHours}h</span>
+                  <span className="text-xs text-[var(--fg-2)]">{sub.flagHours}h</span>
                 </button>
               </li>
             ))}
           </ul>
           {error && (
-            <div className="border-t border-zinc-800 px-3 py-1.5 text-xs text-red-300">
+            <div className="border-t border-[var(--line)] px-3 py-1.5 text-xs text-[var(--bad)]">
               {error}
             </div>
           )}
         </div>
       ) : (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900">
+        <div className="rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
           <div className="flex items-center gap-2 px-3">
-            <Search className="h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
+            <Search className="h-3.5 w-3.5 flex-shrink-0 text-[var(--fg-3)]" />
+            <label htmlFor="ro-detail-add-search" className="sr-only">Search op codes</label>
             <input
+              id="ro-detail-add-search"
               autoFocus
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search op codes…"
-              className="w-full bg-transparent py-2 text-sm placeholder-zinc-500 focus:outline-none"
+              className="w-full bg-transparent py-2 text-sm placeholder-[var(--fg-3)] focus:outline-none"
             />
             <button
               type="button"
               onClick={() => { setOpen(false); setSearch(""); }}
-              className="text-zinc-500 hover:text-zinc-300"
+              aria-label="Close op code search"
+              className="relative text-[var(--fg-3)] hover:text-[var(--fg-1)] after:absolute after:-inset-2 after:content-['']"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-          <ul className="max-h-48 overflow-y-auto border-t border-zinc-800">
+          <ul className="max-h-48 overflow-y-auto border-t border-[var(--line)]">
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-xs text-zinc-500">No matches.</li>
+              <li className="px-3 py-2 text-xs text-[var(--fg-3)]">No matches.</li>
             ) : (
               filtered.map((oc) => (
                 <li key={oc.id}>
@@ -450,13 +457,13 @@ function AddOpCodePicker({
                     type="button"
                     disabled={pending}
                     onClick={() => handleOpCodeClick(oc)}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-800 disabled:opacity-50"
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)] disabled:opacity-50"
                   >
                     <span>
-                      <span className="font-mono text-sm text-orange-400">{oc.code}</span>
-                      <span className="ml-2 text-xs text-zinc-500">{oc.description}</span>
+                      <span className="font-mono text-sm text-[var(--brand)]">{oc.code}</span>
+                      <span className="ml-2 text-xs text-[var(--fg-3)]">{oc.description}</span>
                     </span>
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-[var(--fg-2)]">
                       {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
                     </span>
                   </button>
@@ -465,7 +472,7 @@ function AddOpCodePicker({
             )}
           </ul>
           {error && (
-            <div className="border-t border-zinc-800 px-3 py-1.5 text-xs text-red-300">
+            <div className="border-t border-[var(--line)] px-3 py-1.5 text-xs text-[var(--bad)]">
               {error}
             </div>
           )}
@@ -505,14 +512,14 @@ function Footer({
   return (
     <div className="space-y-2">
       {error && (
-        <p className="text-sm text-red-300">{error}</p>
+        <p role="alert" className="text-sm text-[var(--bad)]">{error}</p>
       )}
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={handleDelete}
           disabled={deleting}
-          className="inline-flex items-center gap-1.5 rounded-md border border-red-900/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-md border border-[var(--bad)]/40 px-3 py-2 text-sm text-[var(--bad)] hover:bg-[var(--bad-bg)] disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" />
           {deleting ? "Deleting…" : "Delete"}
@@ -521,13 +528,13 @@ function Footer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+            className="rounded-md border border-[var(--line)] px-3 py-2 text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
           >
             Close
           </button>
           <Link
             href={`/log?edit=${entryId}`}
-            className="inline-flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500"
+            className="btn btn-primary"
           >
             <Pencil className="h-4 w-4" />
             Edit RO

@@ -8,18 +8,24 @@ function HoursInput({
   value,
   onChange,
   className,
+  ariaLabel,
+  id,
 }: {
   value: number;
   onChange: (val: number) => void;
   className?: string;
+  ariaLabel?: string;
+  id?: string;
 }) {
   const [raw, setRaw] = useState(String(value));
 
   return (
     <input
+      id={id}
       type="text"
       inputMode="decimal"
       value={raw}
+      aria-label={ariaLabel}
       onChange={(e) => {
         const str = e.target.value;
         if (!/^[0-9]*\.?[0-9]*$/.test(str)) return;
@@ -84,18 +90,18 @@ function TagInput({
   );
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 focus-within:border-orange-500">
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1.5 focus-within:border-[var(--brand)]">
       {tags.map((tag) => (
         <span
           key={tag}
-          className="flex items-center gap-1 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200"
+          className="flex items-center gap-1 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-xs text-[var(--fg-1)]"
         >
           {tag}
           <button
             type="button"
             onClick={() => removeTag(tag)}
             aria-label={`Remove ${tag}`}
-            className="text-zinc-400 hover:text-red-300"
+            className="text-[var(--fg-2)] hover:text-[var(--bad)]"
           >
             <X className="h-3 w-3" />
           </button>
@@ -114,7 +120,7 @@ function TagInput({
         onKeyDown={onKeyDown}
         onBlur={() => addTag(raw)}
         placeholder={tags.length === 0 ? "Add tags…" : ""}
-        className="min-w-[6rem] flex-1 bg-transparent py-0.5 text-sm placeholder-zinc-600 focus:outline-none"
+        className="min-w-[6rem] flex-1 bg-transparent py-0.5 text-sm placeholder-[var(--fg-3)] focus:outline-none"
       />
       <datalist id={listId}>
         {available.map((s) => (
@@ -262,34 +268,40 @@ function OpCodeFormBody({
   return (
     <form onSubmit={handle} className="space-y-4">
       <div className="space-y-3">
-        <label className="block">
-          <span className="text-xs uppercase tracking-wide text-zinc-400">
-            Code
+        <label className="block" htmlFor="opc-form-code">
+          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
+            Code <span aria-hidden="true">*</span>
+            <span className="sr-only"> (required)</span>
           </span>
           <input
+            id="opc-form-code"
             type="text"
             value={draft.code}
             onChange={(e) => setDraft({ ...draft, code: e.target.value })}
             autoFocus
-            className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none"
+            required
+            aria-required="true"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "opc-form-error" : undefined}
+            className="mt-1 input font-mono"
           />
         </label>
         <label className="block">
-          <span className="text-xs uppercase tracking-wide text-zinc-400">
+          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
             Description
           </span>
           <input
             type="text"
             value={draft.description}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-            className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="mt-1 input"
           />
         </label>
         <label className="block">
-          <span className="text-xs uppercase tracking-wide text-zinc-400">
+          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
             Flag hours
             {draft.hasSubCodes && (
-              <span className="ml-2 font-normal normal-case text-zinc-600">
+              <span className="ml-2 font-normal normal-case text-[var(--fg-3)]">
                 (set per sub op code — kept for reference)
               </span>
             )}
@@ -297,13 +309,13 @@ function OpCodeFormBody({
           <HoursInput
             value={draft.flagHours}
             onChange={(val) => setDraft({ ...draft, flagHours: val })}
-            className="mt-1 w-32 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="mt-1 w-32 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
           />
         </label>
         <label className="block">
-          <span className="text-xs uppercase tracking-wide text-zinc-400">
+          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
             Notes{" "}
-            <span className="font-normal normal-case text-zinc-600">
+            <span className="font-normal normal-case text-[var(--fg-3)]">
               (optional)
             </span>
           </span>
@@ -312,13 +324,13 @@ function OpCodeFormBody({
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
             rows={2}
             placeholder="Part numbers, reminders, procedure notes…"
-            className="mt-1 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm placeholder-zinc-600 focus:border-orange-500 focus:outline-none"
+            className="mt-1 w-full resize-y input placeholder-[var(--fg-3)]"
           />
         </label>
         <label className="block">
-          <span className="text-xs uppercase tracking-wide text-zinc-400">
+          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
             Tags{" "}
-            <span className="font-normal normal-case text-zinc-600">
+            <span className="font-normal normal-case text-[var(--fg-3)]">
               (optional — group repairs, e.g. Brakes, Warranty)
             </span>
           </span>
@@ -331,15 +343,15 @@ function OpCodeFormBody({
       </div>
 
       {/* Sub op codes */}
-      <div className="rounded-md border border-zinc-800 bg-zinc-900/50 p-3 space-y-3">
+      <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-2)] p-3 space-y-3">
         <label className="flex items-center gap-3 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={draft.hasSubCodes}
             onChange={(e) => toggleSubCodes(e.target.checked)}
-            className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 accent-orange-500"
+            className="h-4 w-4 rounded border-[var(--line)] bg-[var(--bg-3)] accent-[var(--brand)]"
           />
-          <span className="text-sm text-zinc-300">This op code has sub op codes</span>
+          <span className="text-sm text-[var(--fg-1)]">This op code has sub op codes</span>
         </label>
 
         {draft.hasSubCodes && (
@@ -347,9 +359,9 @@ function OpCodeFormBody({
             {/* Column header */}
             {draft.subCodes.length > 0 && (
               <div className="grid grid-cols-[100px_1fr_72px_32px] gap-2 px-1">
-                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Code</span>
-                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Description</span>
-                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Flag hrs</span>
+                <span className="text-[10px] uppercase tracking-wide text-[var(--fg-2)]">Code</span>
+                <span className="text-[10px] uppercase tracking-wide text-[var(--fg-2)]">Description</span>
+                <span className="text-[10px] uppercase tracking-wide text-[var(--fg-2)]">Flag hrs</span>
                 <span />
               </div>
             )}
@@ -364,25 +376,30 @@ function OpCodeFormBody({
                   value={sub.code}
                   onChange={(e) => updateSubCode(sub.draftKey, { code: e.target.value })}
                   placeholder="R1"
-                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm font-mono focus:border-orange-500 focus:outline-none"
+                  aria-label="Sub op code"
+                  required
+                  aria-required="true"
+                  className="rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1.5 text-sm font-mono text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
                 />
                 <input
                   type="text"
                   value={sub.description}
                   onChange={(e) => updateSubCode(sub.draftKey, { description: e.target.value })}
                   placeholder="Description…"
-                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+                  aria-label="Sub op code description"
+                  className="rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
                 />
                 <HoursInput
                   value={sub.flagHours}
                   onChange={(val) => updateSubCode(sub.draftKey, { flagHours: val })}
-                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+                  ariaLabel="Sub op code flag hours"
+                  className="rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => removeSubCode(sub.draftKey)}
                   aria-label="Remove sub op code"
-                  className="flex items-center justify-center rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+                  className="flex items-center justify-center rounded p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -392,7 +409,7 @@ function OpCodeFormBody({
             <button
               type="button"
               onClick={addSubCode}
-              className="flex items-center gap-1.5 rounded-md border border-dashed border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-orange-500/50 hover:text-zinc-200"
+              className="flex items-center gap-1.5 rounded-md border border-dashed border-[var(--line)] px-3 py-1.5 text-xs text-[var(--fg-2)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
             >
               <Plus className="h-3.5 w-3.5" />
               Add sub op code
@@ -401,7 +418,7 @@ function OpCodeFormBody({
         )}
       </div>
 
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      {error && <p id="opc-form-error" role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
 
       <div className="flex items-center justify-between gap-2 pt-2">
         <div>
@@ -410,7 +427,12 @@ function OpCodeFormBody({
               type="button"
               onClick={onDelete}
               disabled={isPending}
-              className="rounded-md border border-red-900/60 px-3 py-2 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+              className="btn"
+              style={{
+                color: "var(--bad)",
+                borderColor: "color-mix(in oklab, var(--bad) 40%, transparent)",
+                background: "transparent",
+              }}
             >
               Delete
             </button>
@@ -421,14 +443,14 @@ function OpCodeFormBody({
           type="button"
           onClick={onClose}
           disabled={isPending}
-          className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+          className="btn btn-ghost"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
+          className="btn btn-primary"
         >
           {isPending ? "Saving…" : mode === "add" ? "Save" : "Save changes"}
         </button>

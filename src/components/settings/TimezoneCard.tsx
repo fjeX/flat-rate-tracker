@@ -18,6 +18,7 @@ export function TimezoneCard({ initialTimezone }: { initialTimezone: string }) {
   const router = useRouter();
   const [tz, setTz] = useState(initialTimezone);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -29,31 +30,41 @@ export function TimezoneCard({ initialTimezone }: { initialTimezone: string }) {
 
   function save(next: string) {
     setSaved(false);
+    setError(null);
     setTz(next);
     startTransition(async () => {
-      await setTimezoneAction(next);
-      setSaved(true);
-      router.refresh();
-      setTimeout(() => setSaved(false), 3000);
+      try {
+        await setTimezoneAction(next);
+        setSaved(true);
+        router.refresh();
+        setTimeout(() => setSaved(false), 3000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't save — check your connection and try again.");
+      }
     });
   }
 
   const isInList = TIMEZONES.some((t) => t.value === tz);
 
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-      <h2 className="mb-1 text-base font-semibold text-zinc-100">Timezone</h2>
-      <p className="mb-4 text-sm text-zinc-400">
+    <section className="card padded-lg">
+      <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>Timezone</h2>
+      <p className="mb-4 text-sm" style={{ color: "var(--fg-2)" }}>
         Sets what &ldquo;today&rdquo; means for your dashboard. If your ROs disappear partway through your shift, set this to your local timezone.
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
+        <label className="field-label" htmlFor="timezone-select">
+          Timezone
+        </label>
         <select
+          id="timezone-select"
           value={isInList ? tz : ""}
           onChange={(e) => save(e.target.value)}
           disabled={pending}
-          className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none disabled:opacity-50"
-          style={{ minWidth: 200 }}
+          aria-describedby={error ? "timezone-error" : undefined}
+          className="input flex-1"
+          style={{ minWidth: 200, padding: "6px 12px" }}
         >
           {!isInList && tz && (
             <option value="">{tz}</option>
@@ -69,16 +80,22 @@ export function TimezoneCard({ initialTimezone }: { initialTimezone: string }) {
           type="button"
           disabled={pending}
           onClick={() => save(Intl.DateTimeFormat().resolvedOptions().timeZone)}
-          className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100 disabled:opacity-50"
+          className="btn btn-sm"
         >
           Auto-detect
         </button>
       </div>
 
+      {error && (
+        <p id="timezone-error" role="alert" className="mt-2 text-xs" style={{ color: "var(--bad)" }}>
+          {error}
+        </p>
+      )}
+
       {tz && (
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-2 text-xs" style={{ color: "var(--fg-3)" }}>
           Current: {tz}
-          {saved && <span className="ml-2 text-green-400">✓ Saved</span>}
+          {saved && <span className="ml-2" style={{ color: "var(--good)" }}>✓ Saved</span>}
         </p>
       )}
     </section>

@@ -240,7 +240,7 @@ export function HistoryBarChart({
   if (n === 0) {
     return (
       <section>
-        <div className="section-title">Flagged Hours</div>
+        <h2 className="section-title">Flagged Hours</h2>
         <div className="card padded">
           <div className="r-readout">
             <div className="r-readout-main">
@@ -255,7 +255,7 @@ export function HistoryBarChart({
               justifyContent: "center", color: "var(--fg-3)", fontSize: 12,
             }}
           >
-            No data yet
+            Nothing flagged in this range
           </div>
         </div>
       </section>
@@ -285,8 +285,10 @@ export function HistoryBarChart({
           </div>
         </div>
 
-        {/* CHART */}
-        <div className="r-chart-wrap">
+        {/* CHART — keyed by filter so bar-rise replays on a user-initiated
+            filter switch (new data by intent) but not on an unrelated parent
+            re-render with the same filter. */}
+        <div className="r-chart-wrap" key={filter}>
           <svg
             className="r-chart"
             viewBox={`0 0 ${CHART_W} ${CHART_H}`}

@@ -18,15 +18,33 @@ export default async function SettingsPage() {
   const timezone = cookieStore.get("frt_timezone")?.value ?? "";
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-      <h1 className="text-xl font-semibold text-zinc-100">Settings</h1>
-      <TimezoneCard initialTimezone={timezone} />
-      <QuickAddCard />
-      <GoalHoursCard initialGoalHours={settings.goalHours} />
-      <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
-      <RoTemplateCard userId={user!.id} initialTemplates={settings.roTemplates} />
-      <DataCard />
-      <DangerZoneCard />
-    </div>
+    <main className="mx-auto max-w-2xl px-4 py-6">
+      <h1 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>Settings</h1>
+
+      <section className="mt-6">
+        <h2 className="section-title">Tracking</h2>
+        <div className="space-y-6">
+          <GoalHoursCard initialGoalHours={settings.goalHours} />
+          <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
+          <TimezoneCard initialTimezone={timezone} />
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="section-title">Logging</h2>
+        <div className="space-y-6">
+          <QuickAddCard />
+          <RoTemplateCard userId={user!.id} initialTemplates={settings.roTemplates} />
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="section-title">Data</h2>
+        <div className="space-y-6">
+          <DataCard />
+          <DangerZoneCard />
+        </div>
+      </section>
+    </main>
   );
 }

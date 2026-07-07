@@ -77,12 +77,12 @@ export function GuestOpCodesView() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Op Codes</h1>
-          <p className="text-xs text-zinc-500">Your guest library. Changes are saved for this session.</p>
+          <p className="text-xs text-[var(--fg-2)]">Your guest library. Changes are saved for this session.</p>
         </div>
         <button
           type="button"
           onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-500"
+          className="btn btn-primary"
         >
           <Plus className="h-4 w-4" />
           <span>Add</span>
@@ -90,21 +90,21 @@ export function GuestOpCodesView() {
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-3">
-        <Search className="h-4 w-4 text-zinc-500" />
+      <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3">
+        <Search className="h-4 w-4 text-[var(--fg-2)]" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search code or description"
-          className="w-full bg-transparent py-2 text-sm placeholder-zinc-600 focus:outline-none"
+          className="w-full bg-transparent py-2 text-sm placeholder-[var(--fg-3)] focus:outline-none"
         />
         {search && (
           <button
             type="button"
             onClick={() => setSearch("")}
             aria-label="Clear search"
-            className="text-zinc-500 hover:text-zinc-300"
+            className="text-[var(--fg-2)] hover:text-[var(--fg-1)]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -123,13 +123,13 @@ export function GuestOpCodesView() {
       />
 
       {/* List */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-1.5">
+      <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--bg-1)] p-1.5">
         {opCodes.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-zinc-500">
+          <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
             No op codes yet. Add one to get started.
           </p>
         ) : visible.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-zinc-500">
+          <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
             No op codes match.
           </p>
         ) : (
@@ -137,8 +137,17 @@ export function GuestOpCodesView() {
             {visible.map((op) => (
               <li
                 key={op.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setEditTarget(op)}
-                className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2 cursor-pointer transition-colors hover:border-zinc-700 hover:bg-zinc-800/60"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setEditTarget(op);
+                  }
+                }}
+                aria-label={`Edit ${op.code}`}
+                className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-2)] px-2 py-2 cursor-pointer transition-colors hover:border-[var(--line)] hover:bg-[var(--bg-3)]"
               >
                 {/* Blank space where drag handle would be — keeps alignment identical to real app */}
                 <div className="h-8 w-8 shrink-0" aria-hidden="true" />
@@ -146,21 +155,21 @@ export function GuestOpCodesView() {
                 {/* Main content */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="font-mono text-sm font-semibold text-zinc-100">{op.code}</span>
-                    <span className="text-xs text-orange-400">{fmtHours(op.flagHours)}h</span>
+                    <span className="font-mono text-sm font-semibold text-[var(--fg-0)]">{op.code}</span>
+                    <span className="text-xs text-[var(--brand)]">{fmtHours(op.flagHours)}h</span>
                   </div>
                   {op.description && (
-                    <p className="truncate text-xs text-zinc-400">{op.description}</p>
+                    <p className="truncate text-xs text-[var(--fg-2)]">{op.description}</p>
                   )}
                   {op.notes && (
-                    <p className="truncate text-xs italic text-zinc-500">{op.notes}</p>
+                    <p className="truncate text-xs italic text-[var(--fg-2)]">{op.notes}</p>
                   )}
                   {op.tags.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {op.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                          className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] text-[var(--fg-2)]"
                         >
                           {tag}
                         </span>
@@ -175,7 +184,7 @@ export function GuestOpCodesView() {
                     type="button"
                     onClick={() => setEditTarget(op)}
                     aria-label={`Edit ${op.code}`}
-                    className="cursor-pointer rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                    className="cursor-pointer rounded p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
@@ -183,7 +192,7 @@ export function GuestOpCodesView() {
                     type="button"
                     onClick={() => handleDelete(op.id, op.code)}
                     aria-label={`Delete ${op.code}`}
-                    className="cursor-pointer rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-300"
+                    className="cursor-pointer rounded p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

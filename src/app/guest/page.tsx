@@ -18,6 +18,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
 import { GuestRoDetailModal } from "@/components/guest/GuestRoDetailModal";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { EntranceGrid } from "@/components/ui/EntranceGrid";
 import { ClipboardList } from "lucide-react";
 
 const NO_CLOCKS: DailyClock[] = [];
@@ -39,21 +40,22 @@ export default function GuestDashboard() {
 
   return (
     <>
-    <main className="mx-auto max-w-5xl space-y-6 p-4 pb-16">
-      <div>
-        <div className="text-xs uppercase tracking-wide text-zinc-500">Pay period</div>
+    <main className="app-main" style={{ maxWidth: 1080 }}>
+      <h1 className="sr-only">Dashboard</h1>
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-wide text-[var(--fg-3)]">Pay period</div>
         <div className="text-lg font-semibold">{formatPeriodLabel(period)}</div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <EntranceGrid className="stat-grid mb-6">
         <StatCard label="Today" stats={statsToday} />
         <StatCard label="This Week" stats={statsWeek} />
         <StatCard label="Pay Period" stats={statsPeriod} highlighted />
         <StatCard label="This Month" stats={statsMonth} />
-      </div>
+      </EntranceGrid>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-zinc-400">Recent ROs</h2>
+        <h2 className="mb-2 text-sm font-medium text-[var(--fg-2)]">Recent ROs</h2>
         <RoList
           entries={entries.slice(0, 5)}
           library={opCodes}
@@ -62,8 +64,8 @@ export default function GuestDashboard() {
             <div className="card flush">
               <EmptyState
                 icon={<ClipboardList size={22} />}
-                title="No ROs logged yet"
-                description="Log your first repair order to see your flag hours add up."
+                title="Nothing on the books"
+                description="Log your first RO and the flag hours start counting."
                 action={
                   <Link href="/guest/log" className="btn btn-primary btn-sm">
                     Log your first RO →

@@ -39,8 +39,17 @@ export function OpCodeRow({
       ref={setNodeRef}
       style={style}
       {...attributes}
+      role="button"
+      tabIndex={0}
       onClick={() => onEdit(opCode)}
-      className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2 cursor-pointer transition-colors hover:border-zinc-700 hover:bg-zinc-800/60"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEdit(opCode);
+        }
+      }}
+      aria-label={`Edit ${opCode.code}`}
+      className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-2)] px-2 py-2 cursor-pointer transition-colors hover:border-[var(--line)] hover:bg-[var(--bg-3)]"
     >
       {!reorderable ? (
         <div className="h-8 w-8 shrink-0" aria-hidden="true" />
@@ -48,7 +57,7 @@ export function OpCodeRow({
         <div
           {...listeners}
           onClick={(e) => e.stopPropagation()}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 cursor-grab active:cursor-grabbing hover:text-zinc-300"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-[var(--fg-2)] cursor-grab active:cursor-grabbing hover:text-[var(--fg-1)]"
           aria-label="Drag to reorder"
         >
           <GripVertical className="h-4 w-4" />
@@ -57,25 +66,25 @@ export function OpCodeRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="font-mono text-sm font-semibold text-zinc-100">
+          <span className="font-mono text-sm font-semibold text-[var(--fg-0)]">
             {opCode.code}
           </span>
-          <span className="text-xs text-orange-400">
+          <span className="text-xs text-[var(--brand)]">
             {fmtHours(opCode.flagHours)}h
           </span>
           {opCode.subOpCodes.length > 0 && (
-            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+            <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
               {opCode.subOpCodes.length} sub{opCode.subOpCodes.length !== 1 ? "s" : ""}
             </span>
           )}
         </div>
         {opCode.description && (
-          <p className="truncate text-xs text-zinc-400">
+          <p className="truncate text-xs text-[var(--fg-2)]">
             {opCode.description}
           </p>
         )}
         {opCode.notes && (
-          <p className="truncate text-xs italic text-zinc-500">
+          <p className="truncate text-xs italic text-[var(--fg-2)]">
             {opCode.notes}
           </p>
         )}
@@ -84,7 +93,7 @@ export function OpCodeRow({
             {opCode.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] text-[var(--fg-2)]"
               >
                 {tag}
               </span>
@@ -98,7 +107,7 @@ export function OpCodeRow({
           type="button"
           onClick={() => onEdit(opCode)}
           aria-label={`Edit ${opCode.code}`}
-          className="cursor-pointer rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          className="relative cursor-pointer rounded p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] after:absolute after:-inset-1.5 after:content-['']"
         >
           <Pencil className="h-4 w-4" />
         </button>
@@ -107,7 +116,7 @@ export function OpCodeRow({
           onClick={() => onDelete(opCode)}
           disabled={deleting}
           aria-label={`Delete ${opCode.code}`}
-          className="cursor-pointer rounded p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-300 disabled:opacity-50"
+          className="relative cursor-pointer rounded p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)] disabled:opacity-50 after:absolute after:-inset-1.5 after:content-['']"
         >
           <Trash2 className="h-4 w-4" />
         </button>

@@ -60,15 +60,15 @@ export function PayPeriodView({
     <main className="mx-auto max-w-5xl space-y-4 p-4 pb-16">
       <h1 className="text-xl font-semibold">Pay Period</h1>
 
-      <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+      <div className="card padded space-y-3">
         <label className="block">
-          <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+          <span className="field-label">
             Period
           </span>
           <select
             value={selected.key}
             onChange={(e) => pickPeriod(e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="input mt-1 text-sm"
           >
             {availablePeriods.map((p) => (
               <option key={p.key} value={p.key}>
@@ -82,7 +82,7 @@ export function PayPeriodView({
           <button
             type="button"
             onClick={() => setOverrideOpen(true)}
-            className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+            className="btn btn-sm btn-ghost"
           >
             {hasOverride ? "Edit custom dates" : "Set custom dates"}
           </button>
@@ -91,14 +91,14 @@ export function PayPeriodView({
               type="button"
               onClick={resetOverride}
               disabled={resetting}
-              className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              className="btn btn-sm btn-ghost"
             >
               {resetting ? "Resetting…" : "Reset to default"}
             </button>
           )}
         </div>
         {resetError && (
-          <p className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+          <p className="rounded-md border border-[color-mix(in_oklab,var(--bad)_30%,transparent)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--bad)]">
             {resetError}
           </p>
         )}
@@ -114,15 +114,15 @@ export function PayPeriodView({
       />
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-zinc-400">
+        <h2 className="mb-2 text-sm font-medium text-[var(--fg-2)]">
           ROs in this period
         </h2>
         <RoList
           entries={entries}
           library={library}
           emptyState={
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center">
-              <p className="text-sm text-zinc-400">
+            <div className="card p-6 text-center">
+              <p className="text-sm text-[var(--fg-2)]">
                 No ROs in this period.
               </p>
             </div>

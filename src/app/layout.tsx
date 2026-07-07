@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -26,7 +27,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${plexSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
         <script

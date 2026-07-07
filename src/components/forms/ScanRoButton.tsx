@@ -240,12 +240,12 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
           type="button"
           onClick={handleScanClick}
           disabled={status === "loading"}
-          className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-60"
+          className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-3)] px-3 py-2 text-sm text-[var(--fg-1)] hover:bg-[var(--bg-4)] disabled:opacity-60"
         >
           {status === "loading" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Camera className="h-4 w-4 text-orange-400" />
+            <Camera className="h-4 w-4 text-[var(--brand)]" />
           )}
           {status === "loading" ? "Scanning…" : "Scan RO"}
         </button>
@@ -287,13 +287,13 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
 
       {/* Template picker — shown only when user has multiple templates */}
       {pickerOpen && (
-        <div className="w-full rounded-md border border-zinc-700 bg-zinc-900 p-2 shadow-lg">
+        <div className="w-full rounded-md border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-lg">
           <div className="mb-1.5 flex items-center justify-between">
-            <p className="text-xs font-medium text-zinc-400">Which template?</p>
+            <p className="text-xs font-medium text-[var(--fg-2)]">Which template?</p>
             <button
               type="button"
               onClick={() => setPickerOpen(false)}
-              className="rounded p-0.5 text-zinc-500 hover:text-zinc-300"
+              className="rounded p-0.5 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
               aria-label="Close picker"
             >
               <X className="h-3.5 w-3.5" />
@@ -305,7 +305,7 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
                 key={t.id}
                 type="button"
                 onClick={() => handlePickTemplate(t)}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-700"
+                className="w-full rounded-md border border-[var(--line)] bg-[var(--bg-3)] px-3 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-4)]"
               >
                 {t.name}
               </button>
@@ -315,13 +315,13 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
       )}
 
       {status === "success" && summary && (
-        <p className="flex items-center gap-1 text-xs text-green-400">
+        <p className="flex items-center gap-1 text-xs text-[var(--good)]">
           <CheckCircle className="h-3 w-3 flex-shrink-0" />
           {summary}
         </p>
       )}
       {status === "error" && (
-        <p className="text-xs text-red-400">
+        <p className="text-xs text-[var(--bad)]">
           {summary ?? "Scan failed — fill in manually."}
         </p>
       )}
@@ -332,22 +332,22 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
           <button
             type="button"
             onClick={() => setShowDebug((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
+            className="inline-flex items-center gap-1 text-xs text-[var(--fg-3)] hover:text-[var(--fg-1)]"
           >
             {showDebug ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             {showDebug ? "Hide details" : "Scan details"}
           </button>
 
           {showDebug && (
-            <div className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-left">
+            <div className="mt-1 w-full rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-3 text-left">
               <div className="space-y-2">
                 {debugRegions.map((r) => {
                   const { icon, label } = getRegionStatus(r);
                   return (
                     <div key={r.field} className="flex flex-col gap-0.5">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-zinc-300">{FIELD_LABELS[r.field]}</span>
-                        <span className={`flex items-center gap-1 text-xs ${icon === "success" ? "text-green-400" : icon === "partial" ? "text-yellow-400" : "text-zinc-500"}`}>
+                        <span className="text-xs font-medium text-[var(--fg-1)]">{FIELD_LABELS[r.field]}</span>
+                        <span className={`flex items-center gap-1 text-xs ${icon === "success" ? "text-[var(--good)]" : icon === "partial" ? "text-[var(--warn)]" : "text-[var(--fg-3)]"}`}>
                           {icon === "success" && <CheckCircle className="h-3 w-3 flex-shrink-0" />}
                           {icon === "partial" && <AlertTriangle className="h-3 w-3 flex-shrink-0" />}
                           {icon === "none"    && <X className="h-3 w-3 flex-shrink-0" />}
@@ -355,7 +355,7 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
                         </span>
                       </div>
                       {r.rawText && (
-                        <p className="truncate text-xs text-zinc-600">
+                        <p className="truncate text-xs text-[var(--fg-3)]">
                           Scanned: {r.rawText.replace(/\n/g, " ")}
                         </p>
                       )}

@@ -15,70 +15,64 @@ export default async function SignInPage({
     : null;
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4">
+    <main className="min-h-screen flex flex-col items-center justify-center p-4">
       <div className="mb-8">
         <Link href="/" className="no-underline">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/frt-logo.png" alt="Flat Rate Tracker" style={{ height: 100, width: "auto" }} />
         </Link>
       </div>
-      <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+      <div className="card w-full max-w-sm p-6">
         <h1 className="text-xl font-semibold mb-4">Sign in</h1>
 
         {safeError && (
-          <div className="mb-4 rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+          <div role="alert" className="mb-4 rounded-[var(--radius-sm)] border border-[var(--bad)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
             {safeError}
           </div>
         )}
 
         <form action={signIn} className="space-y-3">
           <label className="block">
-            <span className="text-sm text-zinc-400">Email</span>
+            <span className="text-sm text-[var(--fg-2)]">Email</span>
             <input
               name="email"
               type="email"
               required
               autoComplete="email"
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              className="input mt-1"
             />
           </label>
           <label className="block">
-            <span className="text-sm text-zinc-400">Password</span>
+            <span className="text-sm text-[var(--fg-2)]">Password</span>
             <input
               name="password"
               type="password"
               required
               autoComplete="current-password"
-              className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              className="input mt-1"
             />
           </label>
-          <button
-            type="submit"
-            className="w-full rounded-md bg-orange-600 hover:bg-orange-500 px-3 py-2 text-sm font-medium transition-colors"
-          >
+          <button type="submit" className="btn btn-primary btn-block">
             Sign in
           </button>
         </form>
 
         <div className="my-4 flex items-center gap-3">
-          <div className="h-px flex-1 bg-zinc-800" />
-          <span className="text-xs text-zinc-500">or</span>
-          <div className="h-px flex-1 bg-zinc-800" />
+          <div className="h-px flex-1 bg-[var(--line)]" />
+          <span className="text-xs text-[var(--fg-3)]">or</span>
+          <div className="h-px flex-1 bg-[var(--line)]" />
         </div>
 
         <GoogleButton />
 
-        <p className="mt-4 text-sm text-zinc-400">
+        <p className="mt-4 text-sm text-[var(--fg-2)]">
           No account?{" "}
-          <Link href="/signup" className="text-orange-400 hover:text-orange-300">
+          <Link href="/signup" className="text-[var(--brand)] hover:opacity-80">
             Create one
           </Link>
         </p>
-        <div className="mt-3 border-t border-zinc-800 pt-3">
-          <Link
-            href="/guest"
-            className="block w-full rounded-md border border-zinc-700 px-3 py-2 text-center text-sm text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
-          >
+        <div className="mt-3 border-t border-[var(--line)] pt-3">
+          <Link href="/guest" className="btn btn-ghost btn-block">
             Try as Guest
           </Link>
         </div>

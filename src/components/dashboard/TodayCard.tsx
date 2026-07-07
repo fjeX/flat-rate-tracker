@@ -7,7 +7,7 @@ import { computeEfficiency, fmtPct } from "@/lib/stats";
 import type { Stats } from "@/lib/stats";
 import type { OpCode } from "@/lib/types";
 import { QuickAddModal } from "./QuickAddModal";
-import { CountUp } from "./CountUp";
+import { RollingNumber } from "@/components/ui/RollingNumber";
 
 const QUICK_ADD_KEY = "frt:quick_add_enabled";
 
@@ -89,7 +89,7 @@ export function TodayCard({
               <div>
                 <div className="stat-label">Today · Flag</div>
                 <div className="stat-value tabular">
-                  <CountUp value={stats.flagHours} /><span className="unit">h</span>
+                  <RollingNumber value={stats.flagHours} decimals={1} /><span className="unit">h</span>
                 </div>
               </div>
               <div style={{
@@ -111,7 +111,7 @@ export function TodayCard({
           <>
             <div className="stat-label">Today · Flag</div>
             <div className="stat-value tabular">
-              <CountUp value={stats.flagHours} /><span className="unit">h</span>
+              <RollingNumber value={stats.flagHours} decimals={1} /><span className="unit">h</span>
             </div>
           </>
         )}
