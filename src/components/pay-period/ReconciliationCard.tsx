@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { fmtMoney, hasAnyRate, type RateMap } from "@/lib/earnings";
@@ -96,7 +97,7 @@ function ReconLineRow({
             {status === "short" ? "Short" : "Pending"}
           </span>
         </div>
-        <div className="mt-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+        <div className="mt-0.5 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
           Flag {fmtHours(line.flagHours)}h
         </div>
         {error && <p className="mt-1 text-xs text-[var(--bad)]">{error}</p>}
@@ -144,6 +145,7 @@ export function ReconciliationCard({
   entryIdsWithPhotos?: Set<string>;
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -226,32 +228,54 @@ export function ReconciliationCard({
 
   return (
     <section className="card padded-lg space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
         <h2 className="text-sm font-medium">Pay Reconciliation</h2>
-        {pendingRows.length > 0 && (
+        <span className="flex items-center gap-2 text-[var(--fg-3)]">
+          {!open && summary.shortedHours > 0 && (
+            <span className="mono text-sm font-medium tabular-nums text-[var(--bad)]">
+              {fmtHours(summary.shortedHours)}h short
+            </span>
+          )}
+          {open ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </span>
+      </button>
+
+      {open && (
+      <div className="space-y-3 border-t border-[var(--line)] pt-3">
+      {pendingRows.length > 0 && (
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={markAllPaid}
             disabled={markingAll}
-            className="btn btn-sm btn-ghost"
+            className="btn btn-sm btn-ghost min-h-11"
           >
             {markingAll ? "Marking…" : "Mark all remaining as paid in full"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
           <div className="field-label">Shorted hrs</div>
           <div
-            className={`mt-1 text-lg font-semibold ${summary.shortedHours > 0 ? "text-[var(--bad)]" : "text-[var(--fg-1)]"}`}
+            className={`mono mt-1 text-base font-semibold tabular-nums ${summary.shortedHours > 0 ? "text-[var(--bad)]" : "text-[var(--fg-1)]"}`}
           >
             {fmtHours(summary.shortedHours)}h
           </div>
         </div>
         <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
           <div className="field-label">Pending lines</div>
-          <div className="mt-1 text-lg font-semibold text-[var(--fg-1)]">
+          <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--fg-1)]">
             {summary.pendingCount}
           </div>
         </div>
@@ -259,7 +283,7 @@ export function ReconciliationCard({
           <div className="rounded-[var(--radius-sm)] border border-[color-mix(in_oklab,var(--bad)_30%,transparent)] bg-[var(--bad-bg)] px-3 py-2">
             <div className="field-label">Left on the table</div>
             <div
-              className={`mt-1 text-lg font-semibold ${dollars > 0 ? "text-[var(--bad)]" : "text-[var(--fg-1)]"}`}
+              className={`mono mt-1 text-base font-semibold tabular-nums ${dollars > 0 ? "text-[var(--bad)]" : "text-[var(--fg-1)]"}`}
             >
               {fmtMoney(dollars)}
             </div>
@@ -314,7 +338,7 @@ export function ReconciliationCard({
               <button
                 type="button"
                 onClick={copyDisputeText}
-                className="btn btn-sm btn-ghost"
+                className="btn btn-sm btn-ghost min-h-11"
               >
                 {copied ? "Copied ✓" : "Copy text"}
               </button>
@@ -322,7 +346,7 @@ export function ReconciliationCard({
                 <button
                   type="button"
                   onClick={openPrintView}
-                  className="btn btn-sm btn-primary"
+                  className="btn btn-sm btn-primary min-h-11"
                 >
                   Print / PDF
                 </button>
@@ -333,6 +357,8 @@ export function ReconciliationCard({
             <p className="mt-1 text-xs text-[var(--bad)]">{copyError}</p>
           )}
         </div>
+      )}
+      </div>
       )}
     </section>
   );

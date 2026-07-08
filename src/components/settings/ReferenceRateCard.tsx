@@ -97,7 +97,7 @@ export function ReferenceRateCard({
             aria-invalid={invalid}
             aria-describedby={error ? "referenceRate-error" : undefined}
             placeholder="—"
-            className="input w-24 text-right"
+            className="input mono w-24 text-right tabular-nums"
           />
           <span className="text-xs" style={{ color: "var(--fg-3)" }}>
             /hr

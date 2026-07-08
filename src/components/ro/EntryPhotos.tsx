@@ -136,7 +136,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
               type="button"
               onClick={() => setViewerId(photo.id)}
               aria-label={`View photo captured ${formatCaptured(photo.capturedAt)}`}
-              className="relative h-16 w-16 overflow-hidden rounded-md border border-[var(--line)] bg-[var(--bg-3)]"
+              className="relative h-16 w-16 overflow-hidden rounded-md border border-[var(--line)] bg-[var(--bg-3)] transition-colors hover:border-[var(--brand-soft)]"
             >
               {urls[photo.id] ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -159,7 +159,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="grid h-16 w-16 place-items-center rounded-md border border-dashed border-[var(--line)] text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)] disabled:opacity-50"
+              className="grid h-16 w-16 place-items-center rounded-md border border-dashed border-[var(--line)] text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Attach a photo"
             >
               {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
@@ -174,7 +174,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
         </p>
       )}
       {atCap && (
-        <p className="mt-2 text-[10px] text-[var(--fg-3)]">
+        <p className="mt-2 text-[11px] text-[var(--fg-3)]">
           Maximum {MAX_PHOTOS_PER_ENTRY} photos per RO.
         </p>
       )}
@@ -215,8 +215,10 @@ function PhotoViewer({
   url: string | undefined;
   capturedAt: string;
   onClose: () => void;
-  onDelete: () => void;
+  onDelete: () => void | Promise<void>;
 }) {
+  const [deleting, startDelete] = useTransition();
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -233,21 +235,21 @@ function PhotoViewer({
       role="dialog"
       aria-modal="true"
       aria-label="Photo viewer"
-      className="fixed inset-0 z-[60] flex flex-col bg-black/90"
+      className="fixed inset-0 z-[60] flex flex-col bg-[var(--overlay-scrim)]"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div className="flex items-center justify-between px-4 py-3">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wide text-white/50">Photographed</div>
-          <div className="truncate text-sm font-medium text-white">{formatCaptured(capturedAt)}</div>
+          <div className="text-[11px] uppercase tracking-wide text-[var(--overlay-fg)]/50">Photographed</div>
+          <div className="truncate text-sm font-medium text-[var(--overlay-fg)]">{formatCaptured(capturedAt)}</div>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close photo"
-          className="grid h-11 w-11 place-items-center rounded text-white/80 hover:bg-white/10 hover:text-white"
+          className="grid h-11 w-11 place-items-center rounded text-[var(--overlay-fg)]/80 hover:bg-[var(--overlay-fg)]/10 hover:text-[var(--overlay-fg)]"
         >
           <X className="h-5 w-5" />
         </button>
@@ -262,18 +264,19 @@ function PhotoViewer({
             className="max-h-full max-w-full object-contain"
           />
         ) : (
-          <Loader2 className="h-6 w-6 animate-spin text-white/60" />
+          <Loader2 className="h-6 w-6 animate-spin text-[var(--overlay-fg)]/60" />
         )}
       </div>
 
       <div className="flex items-center justify-center px-4 py-3">
         <button
           type="button"
-          onClick={onDelete}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-white/20 px-4 py-2 text-sm text-white/90 hover:bg-white/10"
+          onClick={() => startDelete(async () => { await onDelete(); })}
+          disabled={deleting}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[var(--overlay-fg)]/20 px-4 py-2 text-sm text-[var(--overlay-fg)]/90 hover:bg-[var(--overlay-fg)]/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" />
-          Delete photo
+          {deleting ? "Deleting…" : "Delete photo"}
         </button>
       </div>
     </div>

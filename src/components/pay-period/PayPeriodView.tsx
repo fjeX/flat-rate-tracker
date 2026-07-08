@@ -159,15 +159,6 @@ export function PayPeriodView({
         unflaggedTime={unflaggedTime}
       />
 
-      <WageCheckCard result={wageCheck} referenceRate={referenceRate} />
-
-      <SpiffsCard
-        key={`spiffs-${selected.key}`}
-        bonuses={bonuses}
-        flagPay={earnings}
-        defaultDate={bonusDefaultDate}
-      />
-
       <DiscrepancyCard
         key={selected.key}
         periodKey={selected.key}
@@ -185,6 +176,15 @@ export function PayPeriodView({
         techName={techName}
         entryIdsWithPhotos={entryIdsWithPhotos}
       />
+
+      <SpiffsCard
+        key={`spiffs-${selected.key}`}
+        bonuses={bonuses}
+        flagPay={earnings}
+        defaultDate={bonusDefaultDate}
+      />
+
+      <WageCheckCard result={wageCheck} referenceRate={referenceRate} />
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-[var(--fg-2)]">

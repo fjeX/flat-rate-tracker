@@ -134,7 +134,7 @@ export function VehicleFields({
             alignItems: "flex-start",
             fontSize: 11,
             lineHeight: 1.45,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             marginBottom: 12,
           }}>
             <Info size={13} style={{ flexShrink: 0, marginTop: 1, color: "var(--brand)" }} />
@@ -168,14 +168,14 @@ export function VehicleFields({
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                 <label className="field-label" htmlFor="ro-make" style={{ margin: 0 }}>Make</label>
                 {!isEdit && (
-                  <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                  <label className="hit-expand" style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                     <input
                       type="checkbox"
                       checked={autoFill}
                       onChange={(e) => handleAutoFillToggle(e.target.checked)}
                       style={{ accentColor: "var(--brand)", width: 11, height: 11 }}
                     />
-                    <span style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-3)" }}>
+                    <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-3)" }}>
                       Auto
                     </span>
                   </label>
@@ -196,7 +196,7 @@ export function VehicleFields({
                 }}
               />
               {autoFill && make && (
-                <p style={{ marginTop: 2, fontSize: 10, color: "var(--brand)" }}>
+                <p style={{ marginTop: 2, fontSize: 11, color: "var(--brand)" }}>
                   ✓ Saved — new ROs pre-fill with {make}
                 </p>
               )}
@@ -282,6 +282,7 @@ export function VehicleFields({
               <button
                 type="button"
                 onClick={undoDecode}
+                className="hit-expand"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",

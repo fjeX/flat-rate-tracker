@@ -58,6 +58,18 @@ Note: `--brand` has no `-bg`-only pairing issue, but every semantic pair
 and an `/0.18–0.20` alpha "bg" token. `--brand` is the odd one out with three
 steps (`brand`, `brand-strong`, `brand-soft`, `brand-bg`) instead of two.
 
+### Overlay scrim (full-bleed lightbox)
+
+| Token | Value | Purpose |
+|---|---|---|
+| `--overlay-scrim` | `rgba(0,0,0,0.92)` | Near-black backdrop behind the full-screen photo viewer (`EntryPhotos` PhotoViewer) |
+| `--overlay-fg` | `#fff` | Foreground text/icon color on top of that scrim |
+
+Defined in **both** `:root` and `.theme-light` with **identical** values — a
+photo lightbox is deliberately dark in either theme, so these are named (not
+theme-flipped) to make that intent explicit rather than hardcoding `bg-black/90`
++ `text-white` at the point of use.
+
 ### Backwards-compat aliases
 
 ```css

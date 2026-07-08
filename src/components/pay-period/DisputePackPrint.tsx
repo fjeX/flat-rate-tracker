@@ -172,6 +172,9 @@ const CSS = `
   color: #fff;
   border-color: #111;
 }
+.dp-btn:hover:not(:disabled) { background: #f0f0f0; }
+.dp-btn-primary:hover:not(:disabled) { background: #333; }
+.dp-btn:focus-visible { outline: 2px solid #111; outline-offset: 2px; }
 .dp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .dp-sheet {
   max-width: 800px;
@@ -185,11 +188,11 @@ const CSS = `
   line-height: 1.5;
 }
 .dp-header { border-bottom: 2px solid #111; padding-bottom: 16px; margin-bottom: 24px; }
-.dp-header h1 { font-size: 22px; font-weight: 700; margin: 0 0 12px; letter-spacing: -0.01em; }
+.dp-header h1 { font-size: 20px; font-weight: 700; margin: 0 0 12px; letter-spacing: -0.01em; }
 .dp-meta { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0; }
 .dp-meta div { display: flex; flex-direction: column; }
 .dp-meta dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #666; }
-.dp-meta dd { margin: 0; font-size: 15px; font-weight: 600; }
+.dp-meta dd { margin: 0; font-size: 16px; font-weight: 600; }
 .dp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .dp-table th, .dp-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e2e2e2; vertical-align: top; }
 .dp-table thead th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #555; border-bottom: 1.5px solid #111; }
@@ -199,7 +202,7 @@ const CSS = `
 .dp-total-label { text-align: right; }
 .dp-footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e2e2e2; font-size: 12px; color: #444; }
 .dp-footer p { margin: 4px 0; }
-.dp-empty { font-size: 15px; color: #444; }
+.dp-empty { font-size: 16px; color: #444; }
 
 @media print {
   .dp-root { background: #fff; padding: 0; }

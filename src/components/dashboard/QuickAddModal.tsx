@@ -260,9 +260,9 @@ export function QuickAddModal({
             role="tab"
             aria-selected={mode === m}
             onClick={() => setMode(m)}
-            className={`rounded px-3 py-1.5 text-sm font-medium ${
+            className={`rounded px-3 py-3 text-sm font-medium ${
               mode === m
-                ? "bg-[var(--brand-bg)] text-[var(--brand)]"
+                ? "bg-[var(--bg-3)] text-[var(--fg-0)] shadow-[inset_0_0_0_1px_var(--bg-4)]"
                 : "text-[var(--fg-2)] hover:text-[var(--fg-1)]"
             }`}
           >
@@ -281,8 +281,8 @@ export function QuickAddModal({
           <label htmlFor="quick-add-ro-number" className="mb-1.5 block text-xs uppercase tracking-wide text-[var(--fg-3)]">
             RO Number
           </label>
-          <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 focus-within:border-[var(--brand)]">
-            <span className="text-lg font-bold text-[var(--fg-3)]" aria-hidden="true">#</span>
+          <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)]">
+            <span className="text-base font-bold text-[var(--fg-3)]" aria-hidden="true">#</span>
             <input
               id="quick-add-ro-number"
               ref={roInputRef}
@@ -295,7 +295,7 @@ export function QuickAddModal({
               required
               aria-required="true"
               aria-describedby={error ? "quick-add-error" : undefined}
-              className="flex-1 bg-transparent text-lg font-semibold text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
+              className="mono flex-1 bg-transparent text-base font-semibold tabular-nums text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
             />
           </div>
         </div>
@@ -327,7 +327,7 @@ export function QuickAddModal({
 
           {/* Search picker */}
           <div ref={pickerRef}>
-            <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-2)] px-3 focus-within:border-[var(--brand-soft)]">
+            <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-2)] px-3 focus-within:border-[var(--brand-soft)] focus-within:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)]">
               <Search className="h-3.5 w-3.5 flex-shrink-0 text-[var(--fg-3)]" />
               <label htmlFor="quick-add-search" className="sr-only">Search op codes</label>
               <input
@@ -378,7 +378,7 @@ export function QuickAddModal({
                             {oc.description}
                           </span>
                           {oc.subOpCodes.length > 0 && (
-                            <span className="ml-1.5 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+                            <span className="ml-1.5 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
                               {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
                             </span>
                           )}
@@ -392,7 +392,7 @@ export function QuickAddModal({
                 )}
               </ul>
               <div className="border-t border-[var(--line)] p-1">
-                <div className="px-2 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+                <div className="px-2 pb-0.5 pt-1 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
                   Other
                 </div>
                 <button
@@ -419,7 +419,7 @@ export function QuickAddModal({
           {/* Lines table */}
           {lines.length > 0 && (
             <div className="mt-3 rounded-md border border-[var(--line)]">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] bg-[var(--bg-1)] px-3 py-1.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] bg-[var(--bg-1)] px-3 py-1.5 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
                 <div>Op code</div>
                 <div className="w-16 text-right">Flag hrs</div>
                 <div className="w-6" />
@@ -439,12 +439,12 @@ export function QuickAddModal({
                               {code}
                             </span>
                             {subCode && (
-                              <span className="rounded bg-[var(--brand-bg)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--brand)]">
+                              <span className="rounded bg-[var(--brand-bg)] px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-[var(--brand)]">
                                 {subCode}
                               </span>
                             )}
                             {line.custom && (
-                              <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+                              <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
                                 Other
                               </span>
                             )}
@@ -468,7 +468,7 @@ export function QuickAddModal({
                               )
                             }
                             aria-label={`Flag hours for ${code || "op code line"}`}
-                            className="w-full rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1 text-right font-mono text-sm text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:border-[var(--brand)] focus:outline-none"
+                            className="w-full rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1 text-right font-mono text-sm tabular-nums text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)] focus:outline-none"
                             placeholder="0"
                           />
                         </div>
@@ -476,7 +476,7 @@ export function QuickAddModal({
                           type="button"
                           onClick={() => removeLine(line.key)}
                           aria-label="Remove line"
-                          className="relative rounded p-1 text-[var(--fg-3)] hover:text-[var(--bad)] after:absolute after:-inset-2 after:content-['']"
+                          className="relative rounded p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>

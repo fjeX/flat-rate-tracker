@@ -32,7 +32,7 @@ function StatCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
       <div className="field-label">{label}</div>
-      <div className="mt-1 text-lg font-semibold tabular-nums text-[var(--fg-1)]">
+      <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--fg-1)]">
         {value}
       </div>
     </div>
@@ -90,7 +90,7 @@ export function WageCheckCard({
           {result.hourly !== null ? (
             <div>
               <div className="field-label">Effective hourly this period</div>
-              <div className="mt-0.5 text-2xl font-semibold tabular-nums text-[var(--fg-0)]">
+              <div className="mono mt-0.5 text-[20px] font-semibold tabular-nums text-[var(--fg-0)]">
                 {fmtRate(result.hourly)}
                 <span className="text-base font-normal text-[var(--fg-3)]">
                   /hr
@@ -248,7 +248,7 @@ export function WageCheckCard({
                 .
               </p>
             </div>
-            <p className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-[13px] text-[var(--fg-3)]">
+            <p className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-[13px] text-[var(--fg-2)]">
               This tool presents numbers from your own records for your
               information. It does not provide legal advice or reach any legal
               conclusion. For guidance on your specific situation, consult a

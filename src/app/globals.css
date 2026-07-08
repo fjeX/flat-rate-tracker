@@ -45,6 +45,12 @@
   --radius-sm: 10px;
   --shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.35);
 
+  /* overlay scrim — full-bleed photo lightbox needs a near-black scrim in BOTH
+     themes; these are named (not theme-flipped) precisely so light theme keeps
+     the same dark backdrop. See .theme-light for the intentionally-equal copy. */
+  --overlay-scrim: rgba(0,0,0,0.92);
+  --overlay-fg: #fff;
+
   /* backwards-compat for existing Tailwind usage */
   --background: #0a0a0c;
   --foreground: #f5f5f4;
@@ -371,6 +377,19 @@ body {
 .pace-forecast-proj { font-size: 13px; font-weight: 500; color: var(--fg-1); }
 .pace-forecast-req { font-size: 12px; line-height: 1.4; color: var(--fg-3); }
 
+/* Period earnings row under the pace bar — its own dollars read, not a reuse of
+   the forecast projection lines it sits beside. */
+.pace-earnings {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 2px;
+}
+.pace-earnings .label { font-size: 13px; color: var(--fg-2); }
+.pace-earnings .val {
+  font-size: 13px; font-weight: 600; color: var(--good);
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Averages — Roomier Classic redesign ────────────── */
 .r-tabbar {
   display: inline-flex; gap: 4px;
@@ -650,7 +669,9 @@ button.step-head {
 .opc-line .grow { flex: 1; min-width: 0; }
 .opc-hours-input {
   width: 64px;
-  padding: 6px 8px;
+  /* The most-tapped control in the app — pad to a ~44px rendered height so it's
+     an easy hit target on mobile without shrinking the visual field width. */
+  padding: 13px 8px;
   font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
   font-size: 13px;
   background: var(--bg-1);
@@ -673,6 +694,34 @@ button.step-head {
   position: absolute;
   inset: -8px;
 }
+
+/* Reusable invisible hit-area expander for small controls where real padding
+   would wreck visual density (same trick as .opc-line .remove::after). The host
+   element must not already be absolutely positioned. */
+.hit-expand { position: relative; }
+.hit-expand::after { content: ""; position: absolute; inset: -13px; }
+
+/* Search-clear X inside the op-code search field — invisible ::after expands the
+   tap area to ~44px without moving the 14px glyph (mirrors .opc-line .remove). */
+.opc-clear {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--fg-3); transition: color 120ms, transform 90ms ease;
+}
+.opc-clear:hover { color: var(--fg-1); }
+.opc-clear:active { transform: translateY(-50%) scale(0.96); }
+.opc-clear::after { content: ""; position: absolute; inset: -12px; }
+
+/* Dropdown "Close" text button — same hit-area expansion + hover shift. */
+.opc-dropdown-close {
+  position: relative;
+  font-size: 11px; color: var(--fg-3);
+  background: transparent; border: none; cursor: pointer;
+  transition: color 120ms;
+}
+.opc-dropdown-close:hover { color: var(--fg-1); }
+.opc-dropdown-close::after { content: ""; position: absolute; inset: -12px; }
 
 .opc-quick {
   display: flex; flex-wrap: wrap; gap: 6px;
@@ -993,11 +1042,13 @@ button.step-head {
 }
 
 /* — Tactile press feedback on interactive elements (touch-friendly) — */
-.btn, .opc-chip, .filter-chip, .r-tab, .r-mode-btn, .r-sub-btn, .opc-quick .opc-chip {
+.btn, .opc-chip, .filter-chip, .r-tab, .r-mode-btn, .r-sub-btn, .opc-quick .opc-chip,
+.opc-dropdown-item, .opc-line .remove {
   transition: transform 90ms ease, background 120ms, border-color 120ms, color 120ms, filter 120ms;
 }
 .btn:active, .opc-chip:active, .filter-chip:active,
-.r-tab:active, .r-mode-btn:active, .r-sub-btn:active {
+.r-tab:active, .r-mode-btn:active, .r-sub-btn:active,
+.opc-dropdown-item:active, .opc-line .remove:active {
   transform: scale(0.96);
 }
 .btn-primary:active { transform: scale(0.96); filter: brightness(0.98); }
@@ -1128,6 +1179,11 @@ a { color: inherit; }
   --info-bg:     oklch(0.90 0.08 230 / 0.15);
 
   --shadow-card: 0 1px 0 rgba(255,255,255,0.3) inset, 0 8px 24px rgba(0,0,0,0.12);
+
+  /* Intentionally identical to :root — a photo lightbox stays dark in light
+     mode. Named tokens document that this is deliberate, not an oversight. */
+  --overlay-scrim: rgba(0,0,0,0.92);
+  --overlay-fg: #fff;
 
   --background: #d3cec7;
   --foreground: #1a1816;

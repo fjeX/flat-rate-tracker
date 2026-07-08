@@ -126,7 +126,7 @@ export function PayRatesCard({
                   }}
                   aria-invalid={invalid}
                   placeholder="—"
-                  className="input w-24 text-right"
+                  className="input mono w-24 text-right tabular-nums"
                 />
                 <span className="text-xs" style={{ color: "var(--fg-3)" }}>/hr</span>
               </div>

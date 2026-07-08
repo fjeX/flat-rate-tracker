@@ -99,8 +99,8 @@ export function BonusForm({
         >
           Amount
         </label>
-        <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 focus-within:border-[var(--brand)]">
-          <span className="text-lg font-bold text-[var(--fg-3)]" aria-hidden="true">
+        <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)]">
+          <span className="text-base font-bold text-[var(--fg-3)]" aria-hidden="true">
             $
           </span>
           <input
@@ -117,7 +117,7 @@ export function BonusForm({
             required
             aria-required="true"
             aria-describedby={error ? "bonus-error" : undefined}
-            className="flex-1 bg-transparent text-lg font-semibold text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
+            className="mono flex-1 bg-transparent text-base font-semibold tabular-nums text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
           />
         </div>
       </div>
@@ -137,7 +137,7 @@ export function BonusForm({
                 role="radio"
                 aria-checked={active}
                 onClick={() => setCategory(c)}
-                className={`rounded-md border px-3 py-1.5 text-sm ${
+                className={`rounded-md border px-3 py-2.5 text-sm ${
                   active
                     ? "border-[var(--brand)] bg-[var(--brand-bg)] text-[var(--brand)]"
                     : "border-[var(--line)] bg-[var(--bg-3)] text-[var(--fg-2)] hover:border-[var(--brand-soft)]"
@@ -284,7 +284,7 @@ function RoLinkPicker({
             type="button"
             onClick={() => onChange(null)}
             aria-label="Unlink RO"
-            className="relative text-[var(--fg-3)] hover:text-[var(--bad)] after:absolute after:-inset-2 after:content-['']"
+            className="relative text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -309,7 +309,7 @@ function RoLinkPicker({
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close RO picker"
-              className="relative hover:text-[var(--fg-1)] after:absolute after:-inset-2 after:content-['']"
+              className="relative transition-transform hover:text-[var(--fg-1)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
             >
               <X className="h-3.5 w-3.5" />
             </button>

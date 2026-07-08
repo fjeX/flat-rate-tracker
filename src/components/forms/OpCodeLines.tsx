@@ -131,18 +131,7 @@ export function OpCodeLines({
               <button
                 type="button"
                 onClick={() => setSearch("")}
-                style={{
-                  position: "absolute",
-                  right: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--fg-3)",
-                  display: "flex",
-                  alignItems: "center",
-                }}
+                className="opc-clear"
                 aria-label="Clear"
               >
                 <X size={14} />
@@ -172,7 +161,7 @@ export function OpCodeLines({
                           {oc.subOpCodes.length > 0 && (
                             <span style={{
                               marginLeft: 6,
-                              fontSize: 10,
+                              fontSize: 11,
                               letterSpacing: "0.06em",
                               textTransform: "uppercase",
                               color: "var(--fg-3)",
@@ -220,7 +209,7 @@ export function OpCodeLines({
                   <button
                     type="button"
                     onClick={() => setPickerOpen(false)}
-                    style={{ fontSize: 11, color: "var(--fg-3)", background: "transparent", border: "none", cursor: "pointer" }}
+                    className="opc-dropdown-close"
                   >
                     Close
                   </button>
@@ -245,7 +234,7 @@ export function OpCodeLines({
                         <span className="opc-code">{code}</span>
                         {subCode && (
                           <span style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             letterSpacing: "0.06em",
                             textTransform: "uppercase",
                             color: "var(--brand)",
@@ -258,7 +247,7 @@ export function OpCodeLines({
                         )}
                         {line.custom && (
                           <span style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             letterSpacing: "0.06em",
                             textTransform: "uppercase",
                             color: "var(--fg-3)",

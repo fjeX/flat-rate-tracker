@@ -8,7 +8,7 @@
 // the note here heads off "my check is bigger than flagged pay" confusion.
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Link2, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Link2, Pencil, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import type { Bonus } from "@/lib/types";
 import { fmtMoney } from "@/lib/earnings";
@@ -27,6 +27,7 @@ export function SpiffsCard({
   defaultDate?: string; // seeds new-bonus date to the period (defaults to today in form)
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Bonus | null>(null);
 
@@ -35,12 +36,34 @@ export function SpiffsCard({
 
   return (
     <section className="card padded space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
         <h2 className="text-sm font-medium text-[var(--fg-2)]">Spiffs &amp; Bonuses</h2>
+        <span className="flex items-center gap-2 text-[var(--fg-3)]">
+          {!open && bonuses.length > 0 && (
+            <span className="font-mono text-sm font-medium tabular-nums text-[var(--good)]">
+              {fmtMoney(bonusTotal)}
+            </span>
+          )}
+          {open ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </span>
+      </button>
+
+      {open && (
+      <div className="space-y-3 border-t border-[var(--line)] pt-3">
+      <div className="flex justify-end">
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="btn btn-sm btn-primary"
+          className="btn btn-sm btn-ghost min-h-11"
         >
           <Plus className="h-3.5 w-3.5" />
           Add
@@ -85,7 +108,7 @@ export function SpiffsCard({
                     type="button"
                     onClick={() => setEditing(b)}
                     aria-label="Edit bonus"
-                    className="relative rounded p-1 text-[var(--fg-3)] hover:text-[var(--fg-1)] after:absolute after:-inset-1.5 after:content-['']"
+                    className="relative rounded p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--fg-1)] active:scale-[0.96] after:absolute after:-inset-1.5 after:content-['']"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -119,6 +142,8 @@ export function SpiffsCard({
         Spiffs aren&apos;t part of hours reconciliation — they show in dollar
         totals only.
       </p>
+      </div>
+      )}
 
       {adding && (
         <Modal open onClose={() => setAdding(false)} title="Add spiff / bonus">
@@ -167,7 +192,7 @@ function DeleteButton({
       onClick={handle}
       disabled={pending}
       aria-label="Delete bonus"
-      className="relative rounded p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-40 after:absolute after:-inset-1.5 after:content-['']"
+      className="relative rounded p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 after:absolute after:-inset-1.5 after:content-['']"
     >
       <Trash2 className="h-3.5 w-3.5" />
     </button>

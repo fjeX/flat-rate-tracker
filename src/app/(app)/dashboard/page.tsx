@@ -256,12 +256,9 @@ export default async function DashboardPage() {
               </div>
             )}
             {showMoney && (
-              <div
-                className="pace-forecast"
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}
-              >
-                <span style={{ color: "var(--fg-2)", fontSize: 13 }}>Period earnings</span>
-                <span style={{ color: "var(--good)", fontWeight: 600 }}>{fmtMoney(periodDollars)}</span>
+              <div className="pace-earnings">
+                <span className="label">Period earnings</span>
+                <span className="val">{fmtMoney(periodDollars)}</span>
               </div>
             )}
             <div className="pace-foot">
