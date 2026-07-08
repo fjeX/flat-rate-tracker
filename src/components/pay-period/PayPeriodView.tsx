@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Entry, OpCode } from "@/lib/types";
+import type { Bonus, Entry, OpCode } from "@/lib/types";
 import type { PeriodRange } from "@/lib/periods";
 import type { Stats } from "@/lib/stats";
 import {
@@ -18,6 +18,7 @@ import { DiscrepancyCard } from "./DiscrepancyCard";
 import { ReconciliationCard } from "./ReconciliationCard";
 import { PeriodOverrideModal } from "./PeriodOverrideModal";
 import { PeriodStats } from "./PeriodStats";
+import { SpiffsCard } from "./SpiffsCard";
 
 export function PayPeriodView({
   availablePeriods,
@@ -29,6 +30,10 @@ export function PayPeriodView({
   entries,
   library,
   rates = {},
+  techName = null,
+  entryIdsWithPhotos,
+  bonuses = [],
+  bonusDefaultDate,
 }: {
   availablePeriods: PeriodRange[];
   currentKey: string;
@@ -39,6 +44,10 @@ export function PayPeriodView({
   entries: Entry[];
   library: OpCode[];
   rates?: RateMap;
+  techName?: string | null;
+  entryIdsWithPhotos?: Set<string>;
+  bonuses?: Bonus[];
+  bonusDefaultDate?: string;
 }) {
   const router = useRouter();
   // Dollars are additive: null when no rates are priced, so PeriodStats/RoList
@@ -120,6 +129,13 @@ export function PayPeriodView({
 
       <PeriodStats stats={stats} earnings={earnings} warrantyLoss={warrantyLoss} />
 
+      <SpiffsCard
+        key={`spiffs-${selected.key}`}
+        bonuses={bonuses}
+        flagPay={earnings}
+        defaultDate={bonusDefaultDate}
+      />
+
       <DiscrepancyCard
         key={selected.key}
         periodKey={selected.key}
@@ -132,6 +148,10 @@ export function PayPeriodView({
         entries={entries}
         library={library}
         rates={rates}
+        periodKey={selected.key}
+        periodLabel={formatPeriodLabel(selected)}
+        techName={techName}
+        entryIdsWithPhotos={entryIdsWithPhotos}
       />
 
       <section>

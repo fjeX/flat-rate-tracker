@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { EntryPhotos } from "@/components/ro/EntryPhotos";
+import { LinkedSpiffs } from "@/components/bonuses/LinkedSpiffs";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { formatDateLong } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
@@ -116,6 +117,9 @@ export function RoDetailModal({
 
         {/* Photo evidence — thumbnails, attach, full-screen viewer. */}
         <EntryPhotos entryId={entry.id} />
+
+        {/* Spiffs/bonuses attached to this RO (read-only). */}
+        <LinkedSpiffs entryId={entry.id} />
 
         <Footer entryId={entry.id} onClose={onClose} />
       </div>

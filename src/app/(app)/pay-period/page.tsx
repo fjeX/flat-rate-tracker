@@ -10,6 +10,7 @@ import {
 } from "@/lib/periods";
 import { aggregateStats } from "@/lib/stats";
 import { ratesToMap } from "@/lib/earnings";
+import { filterBonusesInRange } from "@/lib/bonuses";
 import { PayPeriodView } from "@/components/pay-period/PayPeriodView";
 
 export default async function PayPeriodPage({
@@ -30,14 +31,33 @@ export default async function PayPeriodPage({
     ? isoDateInTz(tz, threeYearsAgo)
     : isoDate(threeYearsAgo);
 
-  const [settings, entries, clocks, paidList, library, laborRates] = await Promise.all([
+  const [
+    settings,
+    entries,
+    clocks,
+    paidList,
+    library,
+    laborRates,
+    photoEntryIds,
+    allBonuses,
+    { data: userData },
+  ] = await Promise.all([
     db.getSettings(supabase),
     db.listEntries(supabase, { from: fromDate }),
     db.listDailyClocks(supabase),
     db.listPaidPeriods(supabase),
     db.listOpCodes(supabase),
     db.listLaborRates(supabase),
+    db.listEntryIdsWithPhotos(supabase),
+    db.listBonuses(supabase),
+    supabase.auth.getUser(),
   ]);
+
+  const firstName =
+    (userData.user?.user_metadata?.first_name as string | undefined) ?? "";
+  const lastName =
+    (userData.user?.user_metadata?.last_name as string | undefined) ?? "";
+  const techName = `${firstName} ${lastName}`.trim() || null;
 
   const current = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
 
@@ -79,6 +99,16 @@ export default async function PayPeriodPage({
     paidList.find((p) => p.periodKey === selected.key)?.paidFlagHours ?? null;
   const hasOverride = Boolean(settings.periodOverrides[selected.key]);
 
+  const periodBonuses = filterBonusesInRange(
+    allBonuses,
+    selected.start,
+    selected.end,
+  );
+  // Seed the "add spiff" date to today when today falls in the viewed period,
+  // otherwise to the period's last day so the new spiff lands where it's visible.
+  const bonusDefaultDate =
+    today >= selected.start && today <= selected.end ? today : selected.end;
+
   return (
     <PayPeriodView
       availablePeriods={availablePeriods}
@@ -90,6 +120,10 @@ export default async function PayPeriodPage({
       entries={periodEntries}
       library={library}
       rates={ratesToMap(laborRates)}
+      techName={techName}
+      entryIdsWithPhotos={new Set(photoEntryIds)}
+      bonuses={periodBonuses}
+      bonusDefaultDate={bonusDefaultDate}
     />
   );
 }

@@ -90,6 +90,37 @@ export type EntryPhoto = {
   byteSize: number;
 };
 
+// A spiff / bonus: money paid outside flag hours. Dollar-denominated natively,
+// so it needs no labor rates to be meaningful. `entryId` optionally links it to
+// the RO it came from (a menu-sale spiff belongs to a specific job); the link is
+// ON DELETE SET NULL — deleting the RO keeps the spiff, since the money was paid.
+export type BonusCategory = "spiff" | "bonus" | "holiday" | "other";
+
+export type Bonus = {
+  id: string;
+  userId: string;
+  date: string; // "YYYY-MM-DD"
+  amount: number;
+  category: BonusCategory;
+  source: string | null; // free text: "tire spiff", "CSI"
+  note: string | null;
+  entryId: string | null; // optional RO link
+  createdAt: string;
+  updatedAt: string;
+};
+
+// Input for creating/updating a bonus — omits server-controlled fields.
+export type NewBonus = {
+  date: string;
+  amount: number;
+  category: BonusCategory;
+  source?: string | null;
+  note?: string | null;
+  entryId?: string | null;
+};
+
+export type BonusPatch = Partial<NewBonus>;
+
 export type SubOpCode = {
   id: string;
   opCodeId: string;

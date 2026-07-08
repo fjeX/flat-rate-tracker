@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import type { Entry, EntryPhoto, OpCode, DailyClock, PaidPeriod, PeriodOverride } from "@/lib/types";
+import type { Bonus, Entry, EntryPhoto, OpCode, DailyClock, PaidPeriod, PeriodOverride } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -120,13 +120,14 @@ export async function setTimezoneAction(tz: string): Promise<void> {
 
 export async function exportDataAction(): Promise<string> {
   const supabase = await createClient();
-  const [settings, entries, opCodes, dailyClocks, paidPeriods, entryPhotos] = await Promise.all([
+  const [settings, entries, opCodes, dailyClocks, paidPeriods, entryPhotos, bonuses] = await Promise.all([
     db.getSettings(supabase),
     db.listEntries(supabase),
     db.listOpCodes(supabase),
     db.listDailyClocks(supabase),
     db.listPaidPeriods(supabase),
     db.listAllEntryPhotos(supabase),
+    db.listBonuses(supabase),
   ]);
 
   return JSON.stringify(
@@ -145,6 +146,9 @@ export async function exportDataAction(): Promise<string> {
       // in the private ro-photos bucket and are NOT included in this JSON backup —
       // restoring photos would need a separate media export (follow-up: zip export).
       entryPhotos,
+      // Spiffs/bonuses — real dollar data, fully restored on import (unlike photo
+      // metadata, which has no binary to restore).
+      bonuses,
     },
     null,
     2,
@@ -165,6 +169,8 @@ export type ImportBundle = {
   paidPeriods: PaidPeriod[];
   // Photo metadata only — binaries aren't in the backup, so import ignores this.
   entryPhotos?: EntryPhoto[];
+  // Spiffs/bonuses — optional (older backups predate the feature); restored fully.
+  bonuses?: Bonus[];
 };
 
 export async function importDataAction(bundle: ImportBundle): Promise<void> {
@@ -183,6 +189,10 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
   for (const c of bundle.dailyClocks) {
     if (!DATE_RE.test(c.date)) throw new Error("Invalid date in clock record.");
   }
+  const bonuses = bundle.bonuses ?? [];
+  for (const b of bonuses) {
+    if (!DATE_RE.test(b.date)) throw new Error("Invalid date in bonus record.");
+  }
 
   // Wipe existing data (entries cascade entry_op_codes + entry_photos via FK).
   // Photo binaries don't cascade — purge storage objects before dropping rows.
@@ -190,6 +200,10 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
   if (oldPhotoPaths.length > 0) {
     await supabase.storage.from("ro-photos").remove(oldPhotoPaths);
   }
+  // Delete bonuses before entries: the entry_id FK is ON DELETE SET NULL, so
+  // dropping entries would orphan bonus rows (link nulled, row kept) rather than
+  // remove them. Explicit delete keeps the import a clean replace.
+  await supabase.from("bonuses").delete().eq("user_id", userId);
   await supabase.from("entries").delete().eq("user_id", userId);
   await supabase.from("op_codes").delete().eq("user_id", userId);
   await supabase.from("daily_clock_hours").delete().eq("user_id", userId);
@@ -249,6 +263,26 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
     }
   }
 
+  // Bonuses after entries — entry_id references entries(id), and imported entries
+  // keep their original ids, so any RO link round-trips intact.
+  if (bonuses.length > 0) {
+    const { error } = await supabase.from("bonuses").insert(
+      bonuses.map((b) => ({
+        id: b.id,
+        user_id: userId,
+        date: b.date,
+        amount: b.amount,
+        category: b.category,
+        source: b.source,
+        note: b.note,
+        entry_id: b.entryId,
+        created_at: b.createdAt,
+        updated_at: b.updatedAt,
+      })),
+    );
+    if (error) throw error;
+  }
+
   if (bundle.dailyClocks.length > 0) {
     const { error } = await supabase.from("daily_clock_hours").insert(
       bundle.dailyClocks.map((c) => ({
@@ -294,6 +328,7 @@ export async function clearAllDataAction(): Promise<void> {
     await supabase.storage.from("ro-photos").remove(photoPaths);
   }
 
+  await supabase.from("bonuses").delete().eq("user_id", userId);
   await supabase.from("entries").delete().eq("user_id", userId);
   await supabase.from("op_codes").delete().eq("user_id", userId);
   await supabase.from("daily_clock_hours").delete().eq("user_id", userId);

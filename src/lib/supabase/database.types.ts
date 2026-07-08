@@ -63,6 +63,53 @@ export type Database = {
         }
         Relationships: []
       }
+      bonuses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          date: string
+          entry_id: string | null
+          id: string
+          note: string | null
+          source: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          category: string
+          created_at?: string
+          date: string
+          entry_id?: string | null
+          id?: string
+          note?: string | null
+          source?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          entry_id?: string | null
+          id?: string
+          note?: string | null
+          source?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonuses_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_clock_hours: {
         Row: {
           date: string

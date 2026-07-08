@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
@@ -10,6 +10,8 @@ import {
   unreconciledLines,
   shortfallDollars,
 } from "@/lib/reconcile";
+import { buildDisputePack, formatDisputePackText } from "@/lib/dispute-pack";
+import { getExportedAt, recordExport } from "@/lib/dispute-exports";
 import { setLinePaidHoursAction } from "@/app/actions/entries";
 
 // Resolve a line's display label the same way RoList does — library code,
@@ -128,14 +130,30 @@ export function ReconciliationCard({
   entries,
   library = [],
   rates = {},
+  periodKey,
+  periodLabel = "",
+  techName = null,
+  entryIdsWithPhotos,
 }: {
   entries: Entry[];
   library?: OpCode[];
   rates?: RateMap;
+  periodKey?: string;
+  periodLabel?: string;
+  techName?: string | null;
+  entryIdsWithPhotos?: Set<string>;
 }) {
   const router = useRouter();
   const [markingAll, setMarkingAll] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  // Breadcrumb of the last export for this period (localStorage). Read after
+  // mount to avoid an SSR/CSR mismatch on the "Exported …" hint.
+  const [exportedAt, setExportedAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (periodKey) setExportedAt(getExportedAt(periodKey));
+  }, [periodKey]);
 
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
   const summary = reconcileEntries(entries);
@@ -145,6 +163,50 @@ export function ReconciliationCard({
 
   // Every line still pending (null paid_hours) — the "mark all paid" targets.
   const pendingRows = rows.filter((r) => r.status === "pending");
+
+  // Export surface only appears once there's an actual dispute to raise.
+  const canExport = summary.shortLineCount > 0;
+
+  function markExported() {
+    if (!periodKey) return;
+    recordExport(periodKey);
+    setExportedAt(getExportedAt(periodKey));
+  }
+
+  async function copyDisputeText() {
+    setCopyError(null);
+    const pack = buildDisputePack({
+      entries,
+      periodLabel,
+      library,
+      rates,
+      techName,
+      generatedDate: new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }),
+      entryIdsWithPhotos,
+    });
+    try {
+      await navigator.clipboard.writeText(formatDisputePackText(pack));
+      setCopied(true);
+      markExported();
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyError("Couldn't copy — long-press to select the text instead.");
+    }
+  }
+
+  function openPrintView() {
+    if (!periodKey) return;
+    markExported();
+    window.open(
+      `/pay-period/dispute-pack?period=${encodeURIComponent(periodKey)}`,
+      "_blank",
+      "noopener",
+    );
+  }
 
   async function markAllPaid() {
     if (pendingRows.length === 0) return;
@@ -224,6 +286,54 @@ export function ReconciliationCard({
       )}
 
       {markError && <p className="text-xs text-[var(--bad)]">{markError}</p>}
+
+      {canExport && (
+        <div className="border-t border-[var(--line)] pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium text-[var(--fg-1)]">
+                Export discrepancies
+              </div>
+              <div className="text-[11px] text-[var(--fg-3)]">
+                Flagged vs. paid variance report for {periodLabel || "this period"}
+                {exportedAt && (
+                  <>
+                    {" · "}
+                    <span className="text-[var(--fg-2)]">
+                      Exported{" "}
+                      {new Date(exportedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={copyDisputeText}
+                className="btn btn-sm btn-ghost"
+              >
+                {copied ? "Copied ✓" : "Copy text"}
+              </button>
+              {periodKey && (
+                <button
+                  type="button"
+                  onClick={openPrintView}
+                  className="btn btn-sm btn-primary"
+                >
+                  Print / PDF
+                </button>
+              )}
+            </div>
+          </div>
+          {copyError && (
+            <p className="mt-1 text-xs text-[var(--bad)]">{copyError}</p>
+          )}
+        </div>
+      )}
     </section>
   );
 }

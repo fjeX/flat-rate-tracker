@@ -16,7 +16,10 @@ import {
   type OpCodeDraft,
 } from "@/components/forms/OpCodeModals";
 import { SubOpCodePickerModal } from "@/components/forms/SubOpCodePickerModal";
+import { BonusForm } from "@/components/bonuses/BonusForm";
 import { tap } from "@/lib/haptics";
+
+type QuickAddMode = "ro" | "spiff";
 
 type QuickLine = {
   key: string;
@@ -39,6 +42,9 @@ export function QuickAddModal({
 }) {
   const router = useRouter();
 
+  // Second mode: log a spiff/bonus without leaving the quick-add flow. Spiffs
+  // get logged in the moment or never, so the fast path is one tab away.
+  const [mode, setMode] = useState<QuickAddMode>("ro");
   const [roNumber, setRoNumber] = useState("");
   const [lines, setLines] = useState<QuickLine[]>([]);
   const [library, setLibrary] = useState<OpCode[]>(initialLibrary);
@@ -76,6 +82,7 @@ export function QuickAddModal({
 
   useEffect(() => {
     if (open) {
+      setMode("ro");
       setRoNumber("");
       setLines([]);
       setLibrary(initialLibrary);
@@ -242,8 +249,31 @@ export function QuickAddModal({
     <Modal
       open={open}
       onClose={childModalOpen ? () => {} : onClose}
-      title="Quick Add RO"
+      title="Quick Add"
     >
+      {/* Mode tabs — RO vs. Spiff/Bonus */}
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-1" role="tablist" aria-label="Quick add mode">
+        {(["ro", "spiff"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => setMode(m)}
+            className={`rounded px-3 py-1.5 text-sm font-medium ${
+              mode === m
+                ? "bg-[var(--brand-bg)] text-[var(--brand)]"
+                : "text-[var(--fg-2)] hover:text-[var(--fg-1)]"
+            }`}
+          >
+            {m === "ro" ? "RO" : "Spiff"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "spiff" ? (
+        <BonusForm onSaved={onClose} onCancel={onClose} />
+      ) : (
       <div className="space-y-4">
 
         {/* RO Number */}
@@ -489,6 +519,7 @@ export function QuickAddModal({
         </div>
 
       </div>
+      )}
 
       <CustomOpCodeModal
         open={customOpen}
