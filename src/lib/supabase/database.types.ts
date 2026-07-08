@@ -141,6 +141,7 @@ export type Database = {
           labor_type: string | null
           notes: string
           op_code_id: string | null
+          paid_hours: number | null
           position: number
           sub_op_code_id: string | null
         }
@@ -155,6 +156,7 @@ export type Database = {
           labor_type?: string | null
           notes?: string
           op_code_id?: string | null
+          paid_hours?: number | null
           position?: number
           sub_op_code_id?: string | null
         }
@@ -169,6 +171,7 @@ export type Database = {
           labor_type?: string | null
           notes?: string
           op_code_id?: string | null
+          paid_hours?: number | null
           position?: number
           sub_op_code_id?: string | null
         }
@@ -192,6 +195,44 @@ export type Database = {
             columns: ["sub_op_code_id"]
             isOneToOne: false
             referencedRelation: "op_code_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entry_photos: {
+        Row: {
+          byte_size: number
+          captured_at: string
+          created_at: string
+          entry_id: string
+          id: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          byte_size?: number
+          captured_at?: string
+          created_at?: string
+          entry_id: string
+          id?: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          byte_size?: number
+          captured_at?: string
+          created_at?: string
+          entry_id?: string
+          id?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entry_photos_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "entries"
             referencedColumns: ["id"]
           },
         ]

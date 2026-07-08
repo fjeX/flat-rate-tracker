@@ -89,6 +89,12 @@ export async function deleteEntryLineAction(lineId: string): Promise<void> {
 
 export async function deleteEntryAction(id: string): Promise<void> {
   const supabase = await createClient();
+  // Storage objects do NOT cascade when the entry (and its entry_photos rows)
+  // are deleted — purge them explicitly first so the bucket keeps no orphans.
+  const photoPaths = await db.listEntryPhotoPaths(supabase, id);
+  if (photoPaths.length > 0) {
+    await supabase.storage.from("ro-photos").remove(photoPaths);
+  }
   await db.deleteEntry(supabase, id);
   revalidatePath("/");
   revalidatePath("/history");
@@ -117,6 +123,26 @@ export async function setLineActualHoursAction(
 ): Promise<void> {
   const supabase = await createClient();
   await db.setLineActualHours(supabase, lineId, actualHours);
+  revalidatePath("/");
+  revalidatePath("/history");
+  revalidatePath("/pay-period");
+}
+
+// Record (or clear) the flag hours the shop actually paid on a single RO line.
+// null clears it back to "not yet reconciled". Mirrors setLineActualHoursAction.
+export async function setLinePaidHoursAction(
+  lineId: string,
+  paidHours: number | null,
+): Promise<void> {
+  if (!lineId) throw new Error("Line ID is required.");
+  if (
+    paidHours !== null &&
+    (!Number.isFinite(paidHours) || paidHours < 0)
+  ) {
+    throw new Error("Paid hours must be a non-negative number.");
+  }
+  const supabase = await createClient();
+  await db.setLinePaidHours(supabase, lineId, paidHours);
   revalidatePath("/");
   revalidatePath("/history");
   revalidatePath("/pay-period");

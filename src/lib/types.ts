@@ -58,6 +58,11 @@ export type EntryOpCode = {
   position: number;
   subOpCodeId: string | null; // reference to a sub op code (variant), null if none selected
   laborType: LaborType | null; // null = untyped (historical); earnings fall back to customer_pay rate
+  // Flag hours the shop ACTUALLY paid on this job. null = not yet reconciled.
+  // Written by the pay-period reconciliation UI, never by the log form (which
+  // only passes it through on edit). Optional so line literals that predate the
+  // reconciliation feature still typecheck; the DB mapper always populates it.
+  paidHours?: number | null;
 };
 
 export type Entry = {
@@ -71,6 +76,18 @@ export type Entry = {
   opCodes: EntryOpCode[];
   flagHours: number; // denormalized sum of opCodes[].flagHours (DB trigger keeps this current)
   notes: string;
+};
+
+// A photographic record attached to an entry (RO ticket photo). captured_at is
+// server-set and immutable — it's the integrity anchor the viewer displays.
+// The binary lives in the private `ro-photos` storage bucket; only the path is
+// stored here. Signed URLs are minted on demand, never persisted.
+export type EntryPhoto = {
+  id: string;
+  entryId: string;
+  storagePath: string;
+  capturedAt: string; // ISO timestamp — never editable
+  byteSize: number;
 };
 
 export type SubOpCode = {

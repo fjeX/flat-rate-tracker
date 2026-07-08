@@ -47,6 +47,7 @@ export function LogRoForm({
     notesOpen, setNotesOpen, notes, setNotes, isDeleting, isSubmitting, isChecking,
     dupMatches, handleDeleteRo, handleSaveAndNew, handleSave, handleDupEdit,
     handleDupLogNew, handleDupClose, laborTypeEnabled: laborTypeShown,
+    photosEnabled, photoAttached, handlePhotoCaptured, clearCapturedPhoto,
   } = useLogRoForm({
     initialOpCodes, existingEntry, onSave, onCreateOpCode, redirectTo,
     defaultLaborType, laborTypeEnabled,
@@ -100,6 +101,9 @@ export function LogRoForm({
           library={library}
           templates={roTemplates ?? []}
           onResult={handleScanResult}
+          onPhotoCaptured={photosEnabled ? handlePhotoCaptured : undefined}
+          photoAttached={photosEnabled && photoAttached}
+          onPhotoRemove={photosEnabled ? clearCapturedPhoto : undefined}
         />
       )}
 

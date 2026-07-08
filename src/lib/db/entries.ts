@@ -26,6 +26,8 @@ function toEntryOpCode(row: EntryOpCodeRow): EntryOpCode {
     position: row.position,
     subOpCodeId: row.sub_op_code_id ?? null,
     laborType: (row.labor_type as LaborType | null) ?? null,
+    // numeric(5,2) comes back as a string through PostgREST — wrap in Number().
+    paidHours: row.paid_hours === null ? null : Number(row.paid_hours),
   };
 }
 
@@ -139,6 +141,11 @@ function toLineInsert(
   if (line.subOpCodeId) insert.sub_op_code_id = line.subOpCodeId;
   // Same guard for labor_type: omit when null so inserts still work pre-migration.
   if (line.laborType) insert.labor_type = line.laborType;
+  // Same guard for paid_hours: only set when reconciled, so inserts don't 500
+  // against a DB that hasn't run the paid_hours migration yet.
+  if (line.paidHours !== undefined && line.paidHours !== null) {
+    insert.paid_hours = line.paidHours;
+  }
   return insert;
 }
 
@@ -336,6 +343,22 @@ export async function setLineActualHours(
   const { error } = await supabase
     .from("entry_op_codes")
     .update({ actual_hours: actualHours })
+    .eq("id", lineId);
+  if (error) throw error;
+}
+
+// Update just a single line's paid_hours — used by the pay-period reconciliation
+// UI's "blur to save" input and its "mark all paid" action. paid_hours is
+// deliberately NOT a form-owned column (see toLineUpdate), so this direct write
+// is the ONLY path that touches it — an RO edit in the log form leaves it alone.
+export async function setLinePaidHours(
+  supabase: DbClient,
+  lineId: string,
+  paidHours: number | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from("entry_op_codes")
+    .update({ paid_hours: paidHours })
     .eq("id", lineId);
   if (error) throw error;
 }

@@ -74,8 +74,13 @@ export function DataCard() {
     <>
       <section className="card padded-lg">
         <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>Data</h2>
-        <p className="mb-5 text-sm" style={{ color: "var(--fg-2)" }}>
+        <p className="mb-2 text-sm" style={{ color: "var(--fg-2)" }}>
           Export a full backup or restore from a previous one.
+        </p>
+        <p className="mb-5 text-xs" style={{ color: "var(--fg-3)" }}>
+          Note: RO photo image files aren&apos;t included in the JSON backup — only
+          their metadata. Photos stay in secure storage and can&apos;t be restored
+          from this file.
         </p>
 
         <div className="flex flex-wrap gap-3">

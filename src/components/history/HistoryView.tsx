@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { loadMoreEntries } from "@/app/actions/entries";
-import { Search, X } from "lucide-react";
+import { Camera, Search, X } from "lucide-react";
 import type { Entry, OpCode, UserSettings } from "@/lib/types";
 import {
   endOfMonth,
@@ -84,10 +84,12 @@ function RoRow({
   entry,
   today,
   onOpen,
+  hasPhoto = false,
 }: {
   entry: Entry;
   today: string;
   onOpen: () => void;
+  hasPhoto?: boolean;
 }) {
   const vehicle = [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model]
     .filter(Boolean)
@@ -105,6 +107,13 @@ function RoRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
           <span className="history-ro-num">#{entry.roNumber}</span>
+          {hasPhoto && (
+            <Camera
+              size={13}
+              aria-label="Has photo"
+              style={{ color: "var(--fg-3)", flexShrink: 0, alignSelf: "center" }}
+            />
+          )}
         </div>
         <div className="history-ro-meta">{dateLine}</div>
         {vehicle && <div className="history-ro-vehicle">{vehicle}</div>}
@@ -128,6 +137,7 @@ export function HistoryView({
   weekStartDay,
   renderDetail,
   rates = {},
+  entryIdsWithPhotos,
 }: {
   entries: Entry[];
   hasMore?: boolean;
@@ -143,6 +153,9 @@ export function HistoryView({
   weekStartDay: 0 | 1;
   renderDetail?: (entry: Entry, onClose: () => void) => React.ReactNode;
   rates?: RateMap;
+  // Entry ids that have at least one attached photo — drives the camera icon.
+  // Absent in guest mode (no photo storage).
+  entryIdsWithPhotos?: Set<string>;
 }) {
   // `entries` comes from the live store. In guest mode it hydrates from
   // sessionStorage in an effect AFTER first render, so freezing it into state
@@ -316,6 +329,7 @@ export function HistoryView({
               entry={entry}
               today={today}
               onOpen={() => setOpenId(entry.id)}
+              hasPhoto={entryIdsWithPhotos?.has(entry.id) ?? false}
             />
           ))}
         </div>

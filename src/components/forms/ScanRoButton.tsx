@@ -10,6 +10,9 @@ type Props = {
   library: OpCode[];
   templates: RoTemplate[];
   onResult: (result: OcrResult) => void;
+  // Called with the raw captured file so the form can retain it as evidence and
+  // upload it when the RO is saved. Omitted in guest mode (no photo storage).
+  onPhotoCaptured?: (blob: Blob) => void;
 };
 
 type Status = "idle" | "loading" | "success" | "error";
@@ -74,7 +77,7 @@ function getRegionStatus(r: RegionDebug): RegionStatus {
   return { icon: "none", label: "Not detected" };
 }
 
-export function ScanRoButton({ library, templates, onResult }: Props) {
+export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   // Holds the template selected for the current scan (set before opening file picker).
   const activeTemplateRef = useRef<RoTemplate | null>(null);
@@ -112,6 +115,9 @@ export function ScanRoButton({ library, templates, onResult }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    // Retain the captured photo as evidence regardless of OCR outcome — even a
+    // failed scan is a photo worth keeping. The form uploads it on save.
+    onPhotoCaptured?.(file);
     setStatus("loading");
     setSummary(null);
     setDebugRegions(null);

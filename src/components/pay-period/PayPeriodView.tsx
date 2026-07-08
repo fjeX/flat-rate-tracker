@@ -15,6 +15,7 @@ import { formatPeriodLabel } from "@/lib/periods";
 import { clearPeriodOverrideAction } from "@/app/actions/settings";
 import { RoList } from "@/components/ro/RoList";
 import { DiscrepancyCard } from "./DiscrepancyCard";
+import { ReconciliationCard } from "./ReconciliationCard";
 import { PeriodOverrideModal } from "./PeriodOverrideModal";
 import { PeriodStats } from "./PeriodStats";
 
@@ -124,6 +125,13 @@ export function PayPeriodView({
         periodKey={selected.key}
         stats={stats}
         initialPaid={paidFlagHours}
+      />
+
+      <ReconciliationCard
+        key={`recon-${selected.key}`}
+        entries={entries}
+        library={library}
+        rates={rates}
       />
 
       <section>

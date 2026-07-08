@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createEntry, updateEntry } from "./entries";
+import { createEntry, updateEntry, getEntry, setLinePaidHours } from "./entries";
 import type { DbClient } from "./_client";
 import type { NewEntry } from "@/lib/types";
 
@@ -48,6 +48,7 @@ const LINE_DEFAULTS: Row = {
   position: 0,
   sub_op_code_id: null,
   labor_type: null,
+  paid_hours: null,
 };
 
 class FakeStore {
@@ -382,5 +383,39 @@ describe("updateEntry (diff-based line reconciliation)", () => {
     });
     expect(afterTypeChange.opCodes[0].laborType).toBe("internal");
     expect(afterTypeChange.opCodes[0].id).toBe(line.id); // UPDATEd in place
+  });
+
+  it("keeps paid_hours through a full reconcile → form-edit round-trip", async () => {
+    const store = new FakeStore();
+    const supabase = makeFakeDb(store);
+
+    const created = await createEntry(supabase, newEntry());
+    const line = created.opCodes[0];
+    expect(line.paidHours).toBeNull();
+
+    // Reconcile: the pay-period UI records the shop paid 1.5h on this line.
+    await setLinePaidHours(supabase, line.id, 1.5);
+    const reconciled = await getEntry(supabase, created.id);
+    expect(reconciled!.opCodes[0].paidHours).toBe(1.5);
+
+    // Now the tech edits the RO in the log form (changes only the notes). The
+    // form re-sends the line carrying paidHours back through the patch — exactly
+    // what useLogRoForm does. paid_hours must survive.
+    const rline = reconciled!.opCodes[0];
+    const afterEdit = await updateEntry(supabase, created.id, {
+      notes: "changed the vehicle notes",
+      opCodes: [
+        {
+          id: rline.id, opCodeId: rline.opCodeId, custom: rline.custom,
+          customCode: rline.customCode, customDescription: rline.customDescription,
+          flagHours: rline.flagHours, actualHours: rline.actualHours, notes: rline.notes,
+          position: 0, subOpCodeId: rline.subOpCodeId, laborType: rline.laborType,
+          paidHours: rline.paidHours,
+        },
+      ],
+    });
+    expect(afterEdit.notes).toBe("changed the vehicle notes");
+    expect(afterEdit.opCodes[0].paidHours).toBe(1.5);
+    expect(afterEdit.opCodes[0].id).toBe(rline.id);
   });
 });

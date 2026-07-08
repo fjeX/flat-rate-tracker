@@ -5,6 +5,7 @@ import { useMemo, useRef, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { EntryPhotos } from "@/components/ro/EntryPhotos";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { formatDateLong } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
@@ -112,6 +113,9 @@ export function RoDetailModal({
             </p>
           </div>
         )}
+
+        {/* Photo evidence — thumbnails, attach, full-screen viewer. */}
+        <EntryPhotos entryId={entry.id} />
 
         <Footer entryId={entry.id} onClose={onClose} />
       </div>

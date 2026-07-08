@@ -21,6 +21,8 @@ import type {
 import { isoDate } from "@/lib/periods";
 import { saveEntry, deleteEntryAction, findDuplicateRos } from "@/app/actions/entries";
 import { createLibraryOpCode } from "@/app/actions/op-codes";
+import { uploadEntryPhoto } from "@/app/actions/entry-photos";
+import { downscaleImage } from "@/lib/image";
 import type { OpCodeDraft } from "./OpCodeModals";
 import type { OcrResult } from "@/lib/ocr";
 import { decodeVin, isValidVin } from "@/lib/vin";
@@ -43,6 +45,11 @@ function linesFromEntry(entry: Entry | undefined): LineDraft[] {
     position: oc.position,
     subOpCodeId: oc.subOpCodeId,
     laborType: oc.laborType,
+    // Carry reconciliation data through edit mode. Without this, saving an RO
+    // edit would drop paid_hours from the NewEntryOpCode and — even though the
+    // diff-based update no longer deletes-and-reinserts — the value would fall
+    // out of the round-trip. Pure pass-through: the form never edits it.
+    paidHours: oc.paidHours ?? null,
   }));
 }
 
@@ -99,6 +106,30 @@ export function useLogRoForm({
   const [savedRoNumber, setSavedRoNumber] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
   const [isDeleting, startDelete] = useTransition();
+
+  // Photo evidence is only stored for authenticated users — guest mode (in-memory
+  // onSave) can't hold binaries, so the scan flow never wires photo capture there.
+  const photosEnabled = !onSave;
+  // A scanned RO photo held in form state until the entry is saved, then uploaded
+  // and linked. Kept regardless of OCR outcome — even a failed scan is evidence.
+  const [capturedPhoto, setCapturedPhoto] = useState<Blob | null>(null);
+
+  function handlePhotoCaptured(blob: Blob) {
+    setCapturedPhoto(blob);
+  }
+
+  // Compress + upload the retained photo for a freshly-saved entry. Non-blocking:
+  // a failed upload must not fail the save (the RO is already persisted).
+  async function uploadCapturedPhoto(entryId: string, blob: Blob) {
+    try {
+      const compressed = await downscaleImage(blob);
+      const fd = new FormData();
+      fd.append("photo", compressed, "ro.jpg");
+      await uploadEntryPhoto(entryId, fd);
+    } catch {
+      // Swallow — the entry saved fine; the photo just didn't attach.
+    }
+  }
 
   // Duplicate-RO prompt: when saving a NEW RO whose number already exists, we
   // pause and ask the user (edit existing vs. log a separate repair).
@@ -199,6 +230,7 @@ export function useLogRoForm({
       position: lines.length,
       subOpCodeId: sub ? sub.id : null,
       laborType: defaultLaborType,
+      paidHours: null, // brand-new line: not yet reconciled
     };
   }
 
@@ -235,6 +267,7 @@ export function useLogRoForm({
         position: ls.length,
         subOpCodeId: null,
         laborType: defaultLaborType,
+        paidHours: null,
       },
     ]);
     setCustomOpen(false);
@@ -303,6 +336,7 @@ export function useLogRoForm({
           position: lines.length,
           subOpCodeId: null,
           laborType: defaultLaborType,
+          paidHours: null,
         }];
       });
       if (newLines.length > 0) setLines((ls) => [...ls, ...newLines]);
@@ -324,6 +358,7 @@ export function useLogRoForm({
     setError(null);
     setVehicleOpen(false);
     setNotesOpen(false);
+    setCapturedPhoto(null);
     setTimeout(() => roInputRef.current?.focus(), 50);
   }
 
@@ -355,12 +390,19 @@ export function useLogRoForm({
             position: i,
             subOpCodeId: line.subOpCodeId,
             laborType: line.laborType,
+            paidHours: line.paidHours ?? null, // pass-through so edits never wipe it
           })),
         };
         if (onSave) {
           await onSave(input);
         } else {
-          await saveEntry(input, existingEntry?.id);
+          const saved = await saveEntry(input, existingEntry?.id);
+          // Attach the scanned photo now that the entry has an id. Only new-RO
+          // saves carry a capturedPhoto (the scan banner is hidden in edit mode).
+          if (photosEnabled && capturedPhoto) {
+            await uploadCapturedPhoto(saved.id, capturedPhoto);
+            setCapturedPhoto(null);
+          }
         }
         tap();
         if (afterSave) {
@@ -478,6 +520,11 @@ export function useLogRoForm({
     removeLine,
     // scan / ocr
     handleScanResult,
+    // photo evidence
+    photosEnabled,
+    photoAttached: capturedPhoto !== null,
+    handlePhotoCaptured,
+    clearCapturedPhoto: () => setCapturedPhoto(null),
     // save
     handleSave,
     handleSaveAndNew,

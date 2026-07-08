@@ -8,6 +8,7 @@
 
 export * from "./_client";
 export * from "./entries";
+export * from "./entry-photos";
 export * from "./op-codes";
 export * from "./labor-rates";
 export * from "./settings";

@@ -212,6 +212,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         position: i,
         subOpCodeId: oc.subOpCodeId ?? null,
         laborType: oc.laborType ?? null,
+        paidHours: oc.paidHours ?? null,
       })),
       flagHours: input.opCodes.reduce((s, oc) => s + (oc.flagHours || 0), 0),
     };

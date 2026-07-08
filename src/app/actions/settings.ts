@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import type { Entry, OpCode, DailyClock, PaidPeriod, PeriodOverride } from "@/lib/types";
+import type { Entry, EntryPhoto, OpCode, DailyClock, PaidPeriod, PeriodOverride } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -120,12 +120,13 @@ export async function setTimezoneAction(tz: string): Promise<void> {
 
 export async function exportDataAction(): Promise<string> {
   const supabase = await createClient();
-  const [settings, entries, opCodes, dailyClocks, paidPeriods] = await Promise.all([
+  const [settings, entries, opCodes, dailyClocks, paidPeriods, entryPhotos] = await Promise.all([
     db.getSettings(supabase),
     db.listEntries(supabase),
     db.listOpCodes(supabase),
     db.listDailyClocks(supabase),
     db.listPaidPeriods(supabase),
+    db.listAllEntryPhotos(supabase),
   ]);
 
   return JSON.stringify(
@@ -140,6 +141,10 @@ export async function exportDataAction(): Promise<string> {
       opCodes,
       dailyClocks,
       paidPeriods,
+      // Photo METADATA only (paths + capture timestamps). The image binaries live
+      // in the private ro-photos bucket and are NOT included in this JSON backup —
+      // restoring photos would need a separate media export (follow-up: zip export).
+      entryPhotos,
     },
     null,
     2,
@@ -158,6 +163,8 @@ export type ImportBundle = {
   opCodes: OpCode[];
   dailyClocks: DailyClock[];
   paidPeriods: PaidPeriod[];
+  // Photo metadata only — binaries aren't in the backup, so import ignores this.
+  entryPhotos?: EntryPhoto[];
 };
 
 export async function importDataAction(bundle: ImportBundle): Promise<void> {
@@ -177,7 +184,12 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
     if (!DATE_RE.test(c.date)) throw new Error("Invalid date in clock record.");
   }
 
-  // Wipe existing data (entries cascade entry_op_codes via FK).
+  // Wipe existing data (entries cascade entry_op_codes + entry_photos via FK).
+  // Photo binaries don't cascade — purge storage objects before dropping rows.
+  const oldPhotoPaths = await db.listAllUserPhotoPaths(supabase);
+  if (oldPhotoPaths.length > 0) {
+    await supabase.storage.from("ro-photos").remove(oldPhotoPaths);
+  }
   await supabase.from("entries").delete().eq("user_id", userId);
   await supabase.from("op_codes").delete().eq("user_id", userId);
   await supabase.from("daily_clock_hours").delete().eq("user_id", userId);
@@ -274,6 +286,13 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
 export async function clearAllDataAction(): Promise<void> {
   const supabase = await createClient();
   const userId = await db.getCurrentUserId(supabase);
+
+  // Purge photo storage objects first — deleting entries cascades the DB rows,
+  // but Supabase storage doesn't cascade, so paths would otherwise be orphaned.
+  const photoPaths = await db.listAllUserPhotoPaths(supabase);
+  if (photoPaths.length > 0) {
+    await supabase.storage.from("ro-photos").remove(photoPaths);
+  }
 
   await supabase.from("entries").delete().eq("user_id", userId);
   await supabase.from("op_codes").delete().eq("user_id", userId);
