@@ -29,6 +29,10 @@ function toSettings(row: SettingsRow): UserSettings {
     updatedAt: row.updated_at,
     roTemplates: normaliseTemplates(row.ro_template),
     defaultLaborType: (row.default_labor_type as LaborType | null) ?? null,
+    referenceHourlyRate:
+      row.reference_hourly_rate === null
+        ? null
+        : Number(row.reference_hourly_rate),
   };
 }
 
@@ -52,6 +56,7 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
       updatedAt: new Date().toISOString(),
       roTemplates: [],
       defaultLaborType: null,
+      referenceHourlyRate: null,
     };
   }
   return toSettings(data);
@@ -63,6 +68,7 @@ export type SettingsPatch = {
   periodOverrides?: Record<string, PeriodOverride>;
   roTemplates?: RoTemplate[];
   defaultLaborType?: LaborType | null;
+  referenceHourlyRate?: number | null;
 };
 
 export async function updateSettings(
@@ -81,6 +87,8 @@ export async function updateSettings(
     update.ro_template = patch.roTemplates.length > 0 ? patch.roTemplates : null;
   if (patch.defaultLaborType !== undefined)
     update.default_labor_type = patch.defaultLaborType;
+  if (patch.referenceHourlyRate !== undefined)
+    update.reference_hourly_rate = patch.referenceHourlyRate;
 
   const { data, error } = await supabase
     .from("user_settings")

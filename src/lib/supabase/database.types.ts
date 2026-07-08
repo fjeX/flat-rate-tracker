@@ -411,6 +411,7 @@ export type Database = {
           default_labor_type: string | null
           goal_hours: number
           period_overrides: Json
+          reference_hourly_rate: number | null
           ro_template: Json | null
           split_day: number
           timer_accumulated: number
@@ -423,6 +424,7 @@ export type Database = {
           default_labor_type?: string | null
           goal_hours?: number
           period_overrides?: Json
+          reference_hourly_rate?: number | null
           ro_template?: Json | null
           split_day?: number
           timer_accumulated?: number
@@ -435,6 +437,7 @@ export type Database = {
           default_labor_type?: string | null
           goal_hours?: number
           period_overrides?: Json
+          reference_hourly_rate?: number | null
           ro_template?: Json | null
           split_day?: number
           timer_accumulated?: number

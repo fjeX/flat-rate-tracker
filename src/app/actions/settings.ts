@@ -77,6 +77,24 @@ export async function setGoalHoursAction(goalHours: number): Promise<void> {
   revalidatePath("/history");
 }
 
+// The user-entered reference hourly rate for the pay-period Pay Check-Up.
+// null clears it (no comparison shown). This is NOT a statutory figure — it's
+// whatever number the user chooses to measure their effective pay against.
+export async function setReferenceRateAction(
+  rate: number | null,
+): Promise<void> {
+  if (
+    rate !== null &&
+    (!Number.isFinite(rate) || rate < 0 || rate > 9999)
+  ) {
+    throw new Error("Reference rate must be a number between 0 and 9999.");
+  }
+  const supabase = await createClient();
+  await db.updateSettings(supabase, { referenceHourlyRate: rate });
+  revalidatePath("/settings");
+  revalidatePath("/pay-period");
+}
+
 export async function setSplitDayAction(splitDay: number): Promise<void> {
   if (!Number.isInteger(splitDay) || splitDay < 1 || splitDay > 30) {
     throw new Error("Split day must be an integer between 1 and 30.");

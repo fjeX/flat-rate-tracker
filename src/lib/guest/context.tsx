@@ -44,6 +44,7 @@ const defaultSettings: UserSettings = {
   updatedAt: new Date().toISOString(),
   roTemplates: [],
   defaultLaborType: null,
+  referenceHourlyRate: null,
 };
 
 // Demo tags so the guest library shows off grouping out of the box.

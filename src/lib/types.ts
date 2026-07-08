@@ -170,6 +170,10 @@ export type UserSettings = {
   updatedAt: string;
   roTemplates: RoTemplate[];
   defaultLaborType: LaborType | null; // seeds the per-line selector in the log form; null = no default
+  // User-entered reference hourly rate (e.g. their local minimum wage) for the
+  // pay-period Pay Check-Up comparison. null = unset (no comparison shown). We do
+  // NOT store a statutory figure — wage floors change yearly and vary by locale.
+  referenceHourlyRate: number | null;
 };
 
 // ------------------------------------------------------------------------

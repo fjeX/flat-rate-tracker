@@ -124,6 +124,8 @@ export default async function PayPeriodPage({
       entryIdsWithPhotos={new Set(photoEntryIds)}
       bonuses={periodBonuses}
       bonusDefaultDate={bonusDefaultDate}
+      clocks={clocks}
+      referenceRate={settings.referenceHourlyRate}
     />
   );
 }

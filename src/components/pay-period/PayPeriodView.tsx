@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Bonus, Entry, OpCode } from "@/lib/types";
+import type { Bonus, DailyClock, Entry, OpCode } from "@/lib/types";
 import type { PeriodRange } from "@/lib/periods";
 import type { Stats } from "@/lib/stats";
 import {
@@ -11,6 +11,11 @@ import {
   warrantyLoss as computeWarrantyLoss,
   type RateMap,
 } from "@/lib/earnings";
+import {
+  clockFlagGap,
+  effectiveHourly,
+  unflaggedTimeValue,
+} from "@/lib/wage-check";
 import { formatPeriodLabel } from "@/lib/periods";
 import { clearPeriodOverrideAction } from "@/app/actions/settings";
 import { RoList } from "@/components/ro/RoList";
@@ -19,6 +24,7 @@ import { ReconciliationCard } from "./ReconciliationCard";
 import { PeriodOverrideModal } from "./PeriodOverrideModal";
 import { PeriodStats } from "./PeriodStats";
 import { SpiffsCard } from "./SpiffsCard";
+import { WageCheckCard } from "./WageCheckCard";
 
 export function PayPeriodView({
   availablePeriods,
@@ -34,6 +40,8 @@ export function PayPeriodView({
   entryIdsWithPhotos,
   bonuses = [],
   bonusDefaultDate,
+  clocks = [],
+  referenceRate = null,
 }: {
   availablePeriods: PeriodRange[];
   currentKey: string;
@@ -48,6 +56,8 @@ export function PayPeriodView({
   entryIdsWithPhotos?: Set<string>;
   bonuses?: Bonus[];
   bonusDefaultDate?: string;
+  clocks?: DailyClock[];
+  referenceRate?: number | null;
 }) {
   const router = useRouter();
   // Dollars are additive: null when no rates are priced, so PeriodStats/RoList
@@ -55,6 +65,21 @@ export function PayPeriodView({
   const showMoney = hasAnyRate(rates);
   const earnings = showMoney ? periodEarnings(entries, rates) : null;
   const warrantyLoss = showMoney ? computeWarrantyLoss(entries, rates) : null;
+
+  // Pay Check-Up math. effectiveHourly re-filters to the range defensively, so
+  // passing period-scoped entries/bonuses plus the full clock list is fine.
+  const wageCheck = effectiveHourly(entries, clocks, bonuses, rates, {
+    start: selected.start,
+    end: selected.end,
+  });
+  // Efficiency cross-link: reframe a low-efficiency period as unflagged time with
+  // a dollar value. Only when clocked > flagged AND customer-pay is priced.
+  const gapHours = clockFlagGap(wageCheck.clockedHours, wageCheck.flagHours);
+  const unflaggedDollars = unflaggedTimeValue(gapHours, rates);
+  const unflaggedTime =
+    unflaggedDollars !== null
+      ? { gapHours, dollars: unflaggedDollars }
+      : null;
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [resetting, startResetting] = useTransition();
   const [resetError, setResetError] = useState<string | null>(null);
@@ -127,7 +152,14 @@ export function PayPeriodView({
         )}
       </div>
 
-      <PeriodStats stats={stats} earnings={earnings} warrantyLoss={warrantyLoss} />
+      <PeriodStats
+        stats={stats}
+        earnings={earnings}
+        warrantyLoss={warrantyLoss}
+        unflaggedTime={unflaggedTime}
+      />
+
+      <WageCheckCard result={wageCheck} referenceRate={referenceRate} />
 
       <SpiffsCard
         key={`spiffs-${selected.key}`}

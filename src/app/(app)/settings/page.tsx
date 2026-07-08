@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { GoalHoursCard } from "@/components/settings/GoalHoursCard";
 import { PayRatesCard } from "@/components/settings/PayRatesCard";
+import { ReferenceRateCard } from "@/components/settings/ReferenceRateCard";
 import { SplitDayCard } from "@/components/settings/SplitDayCard";
 import { DataCard } from "@/components/settings/DataCard";
 import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
@@ -33,6 +34,7 @@ export default async function SettingsPage() {
             initialRates={laborRates}
             initialDefaultLaborType={settings.defaultLaborType}
           />
+          <ReferenceRateCard initialRate={settings.referenceHourlyRate} />
           <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
           <TimezoneCard initialTimezone={timezone} />
         </div>

@@ -24,12 +24,17 @@ export function PeriodStats({
   stats,
   earnings = null,
   warrantyLoss = null,
+  unflaggedTime = null,
 }: {
   stats: Stats;
   // Both null unless the user has priced rates — when null, nothing dollar-based
   // renders and the grid looks exactly as it did before this feature.
   earnings?: number | null;
   warrantyLoss?: number | null;
+  // Dollar translation of the clock-vs-flag gap on a low-efficiency period. null
+  // unless efficiency is below 100% AND the customer-pay rate is priced — reframes
+  // the efficiency number as unflagged time with a dollar value (see wage-check).
+  unflaggedTime?: { gapHours: number; dollars: number } | null;
 }) {
   return (
     <div className="space-y-2">
@@ -46,6 +51,16 @@ export function PeriodStats({
           <Cell label="Earnings" value={fmtMoney(earnings)} highlighted />
         )}
       </EntranceGrid>
+      {unflaggedTime !== null && (
+        <p className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-xs text-[var(--fg-2)]">
+          {fmtHours(unflaggedTime.gapHours)} clocked hours had no flagged work —
+          at your customer-pay rate that window represents{" "}
+          <span className="font-medium text-[var(--fg-1)]">
+            {fmtMoney(unflaggedTime.dollars)}
+          </span>{" "}
+          of unflagged time.
+        </p>
+      )}
       {warrantyLoss !== null && warrantyLoss > 0 && (
         <p className="rounded-md border border-[color-mix(in_oklab,var(--bad)_30%,transparent)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--fg-2)]">
           Warranty work cost you{" "}
