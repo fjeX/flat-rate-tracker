@@ -1,50 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+// Log / edit a repair order. This component is the STATE OWNER: it calls
+// useLogRoForm once and threads slices of that state down into the section
+// components (RoScanSection, OpCodeLines, VehicleFields). The shell here owns
+// only the surrounding layout — title, RO#/notes steps, save bar, dialogs.
 import Link from "next/link";
-import { Camera, ChevronDown, ChevronUp, Info, Plus, Search, Trash2, X } from "lucide-react";
-import type { Entry, NewEntry, NewEntryOpCode, OpCode, RoMatch, RoTemplate, SubOpCode } from "@/lib/types";
-import { isoDate } from "@/lib/periods";
-import { fmtHours } from "@/lib/stats";
-import { saveEntry, deleteEntryAction, findDuplicateRos } from "@/app/actions/entries";
-import { createLibraryOpCode } from "@/app/actions/op-codes";
-import {
-  CustomOpCodeModal,
-  NewLibraryOpCodeModal,
-  type OpCodeDraft,
-} from "./OpCodeModals";
-import { ScanRoButton } from "./ScanRoButton";
-import type { OcrResult } from "@/lib/ocr";
-import { SubOpCodePickerModal } from "./SubOpCodePickerModal";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import type { Entry, LaborType, NewEntry, OpCode, RoTemplate } from "@/lib/types";
+import type { OpCodeDraft } from "./OpCodeModals";
 import { DuplicateRoDialog } from "./DuplicateRoDialog";
-import { tap } from "@/lib/haptics";
-
-const COMMON_MAKES = [
-  "Acura", "Audi", "BMW", "Buick", "Cadillac", "Chevrolet", "Chrysler",
-  "Dodge", "Ford", "GMC", "Honda", "Hyundai", "Infiniti", "Jeep", "Kia",
-  "Land Rover", "Lexus", "Lincoln", "Lucid", "Mazda", "Mercedes-Benz",
-  "Mitsubishi", "Nissan", "Porsche", "RAM", "Rivian", "Subaru", "Tesla",
-  "Toyota", "Volkswagen", "Volvo",
-];
-
-type LineDraft = NewEntryOpCode & { key: string };
-
-function linesFromEntry(entry: Entry | undefined): LineDraft[] {
-  if (!entry) return [];
-  return entry.opCodes.map((oc) => ({
-    key: oc.id,
-    opCodeId: oc.opCodeId,
-    custom: oc.custom,
-    customCode: oc.customCode,
-    customDescription: oc.customDescription,
-    flagHours: oc.flagHours,
-    actualHours: oc.actualHours,
-    notes: oc.notes,
-    position: oc.position,
-    subOpCodeId: oc.subOpCodeId,
-  }));
-}
+import { useLogRoForm } from "./useLogRoForm";
+import { RoScanSection } from "./RoScanSection";
+import { OpCodeLines } from "./OpCodeLines";
+import { VehicleFields } from "./VehicleFields";
 
 export function LogRoForm({
   initialOpCodes,
@@ -53,6 +21,8 @@ export function LogRoForm({
   onSave,
   onCreateOpCode,
   redirectTo = "/dashboard",
+  defaultLaborType = null,
+  laborTypeEnabled = false,
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -60,376 +30,27 @@ export function LogRoForm({
   onSave?: (input: NewEntry) => void | Promise<void>;
   onCreateOpCode?: (draft: OpCodeDraft) => OpCode;
   redirectTo?: string;
+  defaultLaborType?: LaborType | null;
+  laborTypeEnabled?: boolean;
 }) {
-  const router = useRouter();
-  const isEdit = Boolean(existingEntry);
-
-  const [date, setDate] = useState(existingEntry?.date ?? isoDate());
-  const [roNumber, setRoNumber] = useState(existingEntry?.roNumber ?? "");
-  const [year, setYear] = useState(existingEntry?.vehicle.year ?? "");
-  const [make, setMake] = useState(existingEntry?.vehicle.make ?? "");
-  const [model, setModel] = useState(existingEntry?.vehicle.model ?? "");
-  const [vin, setVin] = useState(existingEntry?.vehicle.vin ?? "");
-  const [mileage, setMileage] = useState(existingEntry?.vehicle.mileage ?? "");
-  const [autoFill, setAutoFill] = useState(false);
-  const [notes, setNotes] = useState(existingEntry?.notes ?? "");
-  const [lines, setLines] = useState<LineDraft[]>(() =>
-    linesFromEntry(existingEntry),
-  );
-  const [library, setLibrary] = useState<OpCode[]>(initialOpCodes);
-
-  const [search, setSearch] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [newLibraryOpen, setNewLibraryOpen] = useState(false);
-  const [newLibraryPending, setNewLibraryPending] = useState(false);
-  const [subPickerOc, setSubPickerOc] = useState<OpCode | null>(null);
-
-  const [vehicleOpen, setVehicleOpen] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
-
-  const [error, setError] = useState<string | null>(null);
-  const [savedRoNumber, setSavedRoNumber] = useState<string | null>(null);
-  const [isSubmitting, startTransition] = useTransition();
-  const [isDeleting, startDelete] = useTransition();
-
-  // Duplicate-RO prompt: when saving a NEW RO whose number already exists, we
-  // pause and ask the user (edit existing vs. log a separate repair).
-  const [dupMatches, setDupMatches] = useState<RoMatch[] | null>(null);
-  const [isChecking, setIsChecking] = useState(false);
-  const pendingAfterSave = useRef<(() => void) | undefined>(undefined);
-
-  function handleDeleteRo() {
-    if (!existingEntry) return;
-    if (!window.confirm(`Delete RO #${existingEntry.roNumber}? This can't be undone.`)) return;
-    startDelete(async () => {
-      try {
-        await deleteEntryAction(existingEntry.id);
-        router.push("/dashboard");
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to delete RO.");
-      }
-    });
-  }
-
-  const roInputRef = useRef<HTMLInputElement>(null);
-
-  // On new-RO load, restore autofill make from localStorage if the user saved one.
-  useEffect(() => {
-    if (isEdit) return;
-    const saved = localStorage.getItem("frt_default_make");
-    if (saved) {
-      setAutoFill(true);
-      setMake((m) => m || saved);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function handleMakeChange(value: string) {
-    setMake(value);
-    if (autoFill) localStorage.setItem("frt_default_make", value);
-  }
-
-  function handleAutoFillToggle(checked: boolean) {
-    setAutoFill(checked);
-    if (checked) {
-      localStorage.setItem("frt_default_make", make);
-    } else {
-      localStorage.removeItem("frt_default_make");
-    }
-  }
-
-  // Close the op-code picker when clicking anywhere outside it.
-  const pickerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!pickerOpen) return;
-    function handleMouseDown(e: MouseEvent) {
-      if (
-        pickerRef.current &&
-        !pickerRef.current.contains(e.target as Node)
-      ) {
-        setPickerOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleMouseDown);
-    return () =>
-      document.removeEventListener("mousedown", handleMouseDown);
-  }, [pickerOpen]);
-
-  const filteredLibrary = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return library;
-    return library.filter(
-      (oc) =>
-        oc.code.toLowerCase().includes(q) ||
-        oc.description.toLowerCase().includes(q),
-    );
-  }, [search, library]);
-
-  const totalFlag = lines.reduce((s, l) => s + (l.flagHours || 0), 0);
-
-  // Quick-add chips: first 6 library codes not already in lines
-  const quickChips = useMemo(
-    () =>
-      library
-        .slice(0, 6)
-        .filter((oc) => !lines.some((l) => l.opCodeId === oc.id)),
-    [library, lines],
-  );
-
-  // --- line manipulation ------------------------------------------------
-
-  function buildLineFromLibrary(oc: OpCode, sub?: SubOpCode): LineDraft {
-    return {
-      key: crypto.randomUUID(),
-      opCodeId: oc.id,
-      custom: false,
-      customCode: null,
-      customDescription: null,
-      flagHours: sub ? sub.flagHours : oc.flagHours,
-      actualHours: null,
-      notes: "",
-      position: lines.length,
-      subOpCodeId: sub ? sub.id : null,
-    };
-  }
-
-  function addFromLibrary(oc: OpCode) {
-    setSearch("");
-    setPickerOpen(false);
-    if (oc.subOpCodes.length > 0) {
-      // Pause and ask which sub op code was performed.
-      setSubPickerOc(oc);
-      return;
-    }
-    setLines((ls) => [...ls, { ...buildLineFromLibrary(oc), position: ls.length }]);
-  }
-
-  function confirmSubPick(sub: SubOpCode) {
-    if (!subPickerOc) return;
-    const oc = subPickerOc;
-    setSubPickerOc(null);
-    setLines((ls) => [...ls, { ...buildLineFromLibrary(oc, sub), position: ls.length }]);
-  }
-
-  function addCustomLine(draft: OpCodeDraft) {
-    setLines((ls) => [
-      ...ls,
-      {
-        key: crypto.randomUUID(),
-        opCodeId: null,
-        custom: true,
-        customCode: draft.code,
-        customDescription: draft.description,
-        flagHours: draft.flagHours,
-        actualHours: null,
-        notes: "",
-        position: ls.length,
-        subOpCodeId: null,
-      },
-    ]);
-    setCustomOpen(false);
-    setSearch("");
-    setPickerOpen(false);
-  }
-
-  async function addNewLibraryLine(draft: OpCodeDraft) {
-    setNewLibraryPending(true);
-    try {
-      const created = onCreateOpCode
-        ? onCreateOpCode(draft)
-        : await createLibraryOpCode(draft);
-      setLibrary((l) => [...l, created]);
-      addFromLibrary(created);
-      setNewLibraryOpen(false);
-    } finally {
-      setNewLibraryPending(false);
-    }
-  }
-
-  function updateLine(key: string, patch: Partial<LineDraft>) {
-    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
-  }
-
-  function removeLine(key: string) {
-    setLines((ls) => ls.filter((l) => l.key !== key));
-  }
-
-  function lineLabel(line: LineDraft): {
-    code: string;
-    description: string;
-    subCode: string | null;
-  } {
-    if (line.custom) {
-      return {
-        code: line.customCode ?? "",
-        description: line.customDescription ?? "",
-        subCode: null,
-      };
-    }
-    const ref = library.find((oc) => oc.id === line.opCodeId);
-    if (line.subOpCodeId && ref) {
-      const sub = ref.subOpCodes.find((s) => s.id === line.subOpCodeId);
-      if (sub) {
-        return { code: ref.code, description: sub.description, subCode: sub.code };
-      }
-    }
-    return {
-      code: ref?.code ?? "",
-      description: ref?.description ?? "",
-      subCode: null,
-    };
-  }
-
-  // --- OCR scan result --------------------------------------------------
-
-  function handleScanResult(result: OcrResult) {
-    if (result.roNumber) setRoNumber(result.roNumber);
-    if (result.year) setYear(result.year);
-    if (result.make) setMake(result.make);
-    if (result.model) setModel(result.model);
-    if (result.vin) setVin(result.vin);
-    if (!result.roNumber) setTimeout(() => roInputRef.current?.focus(), 50);
-    if (result.opCodeIds.length > 0) {
-      const newLines: LineDraft[] = result.opCodeIds.flatMap((id) => {
-        if (lines.some((l) => l.opCodeId === id)) return [];
-        const oc = library.find((o) => o.id === id);
-        if (!oc) return [];
-        // OCR-matched codes with subs skip the picker and add without a sub selected.
-        return [{
-          key: crypto.randomUUID(),
-          opCodeId: oc.id,
-          custom: false,
-          customCode: null,
-          customDescription: null,
-          flagHours: oc.flagHours,
-          actualHours: null,
-          notes: "",
-          position: lines.length,
-          subOpCodeId: null,
-        }];
-      });
-      if (newLines.length > 0) setLines((ls) => [...ls, ...newLines]);
-    }
-  }
-
-  // --- submit -----------------------------------------------------------
-
-  function resetForm() {
-    setDate(isoDate());
-    setRoNumber("");
-    setYear("");
-    if (!autoFill) setMake("");
-    setModel("");
-    setVin("");
-    setMileage("");
-    setNotes("");
-    setLines([]);
-    setError(null);
-    setVehicleOpen(false);
-    setNotesOpen(false);
-    setTimeout(() => roInputRef.current?.focus(), 50);
-  }
-
-  // The actual persist. No duplicate check here — callers gate that upstream.
-  function performSave(afterSave?: () => void) {
-    setError(null);
-    startTransition(async () => {
-      try {
-        const input: NewEntry = {
-          date,
-          roNumber: roNumber.trim(),
-          vehicle: {
-            year: year.trim(),
-            make: make.trim(),
-            model: model.trim(),
-            vin: vin.trim().toUpperCase(),
-            mileage: mileage.trim(),
-          },
-          notes,
-          opCodes: lines.map((line, i) => ({
-            opCodeId: line.opCodeId,
-            custom: line.custom,
-            customCode: line.customCode,
-            customDescription: line.customDescription,
-            flagHours: line.flagHours,
-            actualHours: line.actualHours,
-            notes: line.notes,
-            position: i,
-            subOpCodeId: line.subOpCodeId,
-          })),
-        };
-        if (onSave) {
-          await onSave(input);
-        } else {
-          await saveEntry(input, existingEntry?.id);
-        }
-        tap();
-        if (afterSave) {
-          afterSave();
-        } else {
-          router.push(redirectTo);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save.");
-      }
-    });
-  }
-
-  function handleSave(afterSave?: () => void) {
-    setError(null);
-    const ro = roNumber.trim();
-    // Edits and guest mode (in-memory onSave, no DB) skip the duplicate check.
-    // Empty RO# falls through too — performSave/server surfaces that error.
-    if (isEdit || onSave || !ro) {
-      performSave(afterSave);
-      return;
-    }
-    setIsChecking(true);
-    findDuplicateRos(ro)
-      .then((matches) => {
-        if (matches.length > 0) {
-          pendingAfterSave.current = afterSave;
-          setDupMatches(matches);
-        } else {
-          performSave(afterSave);
-        }
-      })
-      .catch(() => {
-        // Don't let a failed check block saving — just proceed.
-        performSave(afterSave);
-      })
-      .finally(() => setIsChecking(false));
-  }
-
-  function handleDupEdit(id: string) {
-    setDupMatches(null);
-    pendingAfterSave.current = undefined;
-    router.push(`/log?edit=${id}`);
-  }
-
-  function handleDupLogNew() {
-    const after = pendingAfterSave.current;
-    pendingAfterSave.current = undefined;
-    setDupMatches(null);
-    performSave(after);
-  }
-
-  function handleDupClose() {
-    pendingAfterSave.current = undefined;
-    setDupMatches(null);
-  }
-
-  function handleSaveAndNew() {
-    const savedRo = roNumber.trim();
-    handleSave(() => {
-      setSavedRoNumber(savedRo);
-      resetForm();
-      setTimeout(() => setSavedRoNumber(null), 3500);
-    });
-  }
-
-  const vehicleSummary = [year, make, model].filter(Boolean).join(" ");
+  // Destructure into locals rather than reading `x` in JSX: the hook returns
+  // refs, and the react-compiler lint rule otherwise taints every `x` read as
+  // "accessing a ref during render".
+  const {
+    isEdit, savedRoNumber, date, setDate, roNumber, setRoNumber, error, roInputRef,
+    library, handleScanResult, lines, search, setSearch, pickerOpen, setPickerOpen,
+    pickerRef, filteredLibrary, totalFlag, quickChips, customOpen, setCustomOpen,
+    newLibraryOpen, setNewLibraryOpen, newLibraryPending, subPickerOc, setSubPickerOc,
+    addFromLibrary, confirmSubPick, addCustomLine, addNewLibraryLine, updateLine, removeLine,
+    vehicleOpen, setVehicleOpen, vehicleSummary, year, setYear, make, handleMakeChange,
+    model, setModel, vin, setVin, mileage, setMileage, autoFill, handleAutoFillToggle,
+    notesOpen, setNotesOpen, notes, setNotes, isDeleting, isSubmitting, isChecking,
+    dupMatches, handleDeleteRo, handleSaveAndNew, handleSave, handleDupEdit,
+    handleDupLogNew, handleDupClose, laborTypeEnabled: laborTypeShown,
+  } = useLogRoForm({
+    initialOpCodes, existingEntry, onSave, onCreateOpCode, redirectTo,
+    defaultLaborType, laborTypeEnabled,
+  });
 
   return (
     <main className="mx-auto max-w-xl p-4 pb-32">
@@ -475,16 +96,11 @@ export function LogRoForm({
 
       {/* ---- Scan banner (new RO only) ---- */}
       {!isEdit && (
-        <div className="scan-banner">
-          <div className="ico">
-            <Camera size={20} style={{ color: "var(--brand)" }} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="label">Scan RO ticket</div>
-            <div className="sub">Auto-fills RO#, vehicle and op codes</div>
-          </div>
-          <ScanRoButton library={library} templates={roTemplates ?? []} onResult={handleScanResult} />
-        </div>
+        <RoScanSection
+          library={library}
+          templates={roTemplates ?? []}
+          onResult={handleScanResult}
+        />
       )}
 
       {/* ---- Step 1: RO number ---- */}
@@ -516,399 +132,52 @@ export function LogRoForm({
       </div>
 
       {/* ---- Step 2: Op codes ---- */}
-      <div className="step-card active">
-        <div className="step-head" style={{ cursor: "default" }}>
-          <div className="step-num">2</div>
-          <div className="step-title">Op codes</div>
-          {lines.length > 0 && (
-            <div className="step-summary">
-              {lines.length} line{lines.length !== 1 ? "s" : ""} · {fmtHours(totalFlag)}h
-            </div>
-          )}
-        </div>
-        <div className="step-body">
-          {/* Search / picker */}
-          <div className="opc-search" ref={pickerRef}>
-            <span className="icon">
-              <Search size={15} />
-            </span>
-            <label htmlFor="opc-search" className="sr-only">Search or add op code</label>
-            <input
-              id="opc-search"
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPickerOpen(true);
-              }}
-              onFocus={() => setPickerOpen(true)}
-              placeholder="Search or add op code…"
-              className="input"
-              style={{ width: "100%", paddingRight: search ? 36 : undefined }}
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                style={{
-                  position: "absolute",
-                  right: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--fg-3)",
-                  display: "flex",
-                  alignItems: "center",
-                }}
-                aria-label="Clear"
-              >
-                <X size={14} />
-              </button>
-            )}
-
-            {pickerOpen && (
-              <div className="opc-dropdown">
-                <div style={{ maxHeight: 256, overflowY: "auto" }}>
-                  {filteredLibrary.length === 0 ? (
-                    <div className="opc-dropdown-item" style={{ color: "var(--fg-3)", cursor: "default" }}>
-                      No matches in your library.
-                    </div>
-                  ) : (
-                    filteredLibrary.map((oc) => (
-                      <button
-                        key={oc.id}
-                        type="button"
-                        className="opc-dropdown-item"
-                        onClick={() => addFromLibrary(oc)}
-                      >
-                        <span>
-                          <span className="opc-code">{oc.code}</span>
-                          <span style={{ marginLeft: 8, fontSize: 12, color: "var(--fg-2)" }}>
-                            {oc.description}
-                          </span>
-                          {oc.subOpCodes.length > 0 && (
-                            <span style={{
-                              marginLeft: 6,
-                              fontSize: 10,
-                              letterSpacing: "0.06em",
-                              textTransform: "uppercase",
-                              color: "var(--fg-3)",
-                              background: "var(--bg-3)",
-                              padding: "1px 5px",
-                              borderRadius: 4,
-                            }}>
-                              {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
-                            </span>
-                          )}
-                        </span>
-                        <span style={{ fontSize: 12, color: "var(--fg-3)", fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
-                          {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-                <div className="opc-dropdown-footer">
-                  <div className="opc-dropdown-footer-label">Other</div>
-                  <button
-                    type="button"
-                    className="opc-dropdown-item"
-                    onClick={() => setCustomOpen(true)}
-                    style={{ borderRadius: 6 }}
-                  >
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Plus size={13} />
-                      Other op code (one-time)
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="opc-dropdown-item"
-                    onClick={() => setNewLibraryOpen(true)}
-                    style={{ borderRadius: 6 }}
-                  >
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Plus size={13} />
-                      Create new library op code
-                    </span>
-                  </button>
-                </div>
-                <div style={{ borderTop: "1px solid var(--line)", padding: "6px 12px", textAlign: "right" }}>
-                  <button
-                    type="button"
-                    onClick={() => setPickerOpen(false)}
-                    style={{ fontSize: 11, color: "var(--fg-3)", background: "transparent", border: "none", cursor: "pointer" }}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Op code lines */}
-          {lines.length === 0 ? (
-            <p style={{ textAlign: "center", fontSize: 13, color: "var(--fg-3)", padding: "16px 0" }}>
-              No op codes yet. Search above or tap a chip below.
-            </p>
-          ) : (
-            <div style={{ marginTop: 8 }}>
-              {lines.map((line) => {
-                const { code, description, subCode } = lineLabel(line);
-                return (
-                  <div key={line.key} className="opc-line">
-                    <div className="grow">
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                        <span className="opc-code">{code}</span>
-                        {subCode && (
-                          <span style={{
-                            fontSize: 10,
-                            letterSpacing: "0.06em",
-                            textTransform: "uppercase",
-                            color: "var(--brand)",
-                            background: "color-mix(in oklab, var(--brand) 15%, transparent)",
-                            padding: "1px 5px",
-                            borderRadius: 4,
-                          }}>
-                            {subCode}
-                          </span>
-                        )}
-                        {line.custom && (
-                          <span style={{
-                            fontSize: 10,
-                            letterSpacing: "0.06em",
-                            textTransform: "uppercase",
-                            color: "var(--fg-3)",
-                            background: "var(--bg-3)",
-                            padding: "1px 5px",
-                            borderRadius: 4,
-                          }}>
-                            Other
-                          </span>
-                        )}
-                      </div>
-                      <div className="opc-desc" style={{ fontSize: 12, color: "var(--fg-2)" }}>
-                        {description}
-                      </div>
-                    </div>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={Number.isFinite(line.flagHours) ? line.flagHours : ""}
-                      onChange={(e) =>
-                        updateLine(line.key, {
-                          flagHours: e.target.value === "" ? 0 : Number(e.target.value),
-                        })
-                      }
-                      className="opc-hours-input"
-                      title="Flag hours"
-                      aria-label={`Flag hours for ${code || "op code line"}`}
-                      placeholder="flag"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={line.actualHours ?? ""}
-                      onChange={(e) =>
-                        updateLine(line.key, {
-                          actualHours: e.target.value === "" ? null : Number(e.target.value),
-                        })
-                      }
-                      className="opc-hours-input"
-                      title="Actual hours"
-                      aria-label={`Actual hours for ${code || "op code line"}`}
-                      placeholder="act"
-                    />
-                    <button
-                      type="button"
-                      className="remove"
-                      onClick={() => removeLine(line.key)}
-                      aria-label="Remove line"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Quick-add chips */}
-          {quickChips.length > 0 && (
-            <div className="opc-quick">
-              {quickChips.map((oc) => (
-                <button
-                  key={oc.id}
-                  type="button"
-                  className="opc-chip"
-                  onClick={() => addFromLibrary(oc)}
-                >
-                  <span className="c">{oc.code}</span>
-                  <span className="h">
-                    {oc.subOpCodes.length > 0 ? "→" : `${oc.flagHours}h`}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Total */}
-          {lines.length > 0 && (
-            <div className="opc-total">
-              <span className="label">Total flag hours</span>
-              <span className="val">{fmtHours(totalFlag)}h</span>
-            </div>
-          )}
-        </div>
-      </div>
+      <OpCodeLines
+        library={library}
+        lines={lines}
+        search={search}
+        setSearch={setSearch}
+        pickerOpen={pickerOpen}
+        setPickerOpen={setPickerOpen}
+        pickerRef={pickerRef}
+        filteredLibrary={filteredLibrary}
+        totalFlag={totalFlag}
+        quickChips={quickChips}
+        customOpen={customOpen}
+        setCustomOpen={setCustomOpen}
+        newLibraryOpen={newLibraryOpen}
+        setNewLibraryOpen={setNewLibraryOpen}
+        newLibraryPending={newLibraryPending}
+        subPickerOc={subPickerOc}
+        setSubPickerOc={setSubPickerOc}
+        addFromLibrary={addFromLibrary}
+        confirmSubPick={confirmSubPick}
+        addCustomLine={addCustomLine}
+        addNewLibraryLine={addNewLibraryLine}
+        updateLine={updateLine}
+        removeLine={removeLine}
+        laborTypeEnabled={laborTypeShown}
+      />
 
       {/* ---- Step 3: Vehicle (collapsible) ---- */}
-      <div className={`step-card${vehicleOpen ? " active" : " collapsed"}`}>
-        <button
-          type="button"
-          className="step-head"
-          onClick={() => setVehicleOpen((v) => !v)}
-          aria-expanded={vehicleOpen}
-          aria-controls="vehicle-step-body"
-        >
-          <div className="step-num">3</div>
-          <div className="step-title">
-            Vehicle
-            <span className="optional-badge">recommended</span>
-          </div>
-          {vehicleSummary && !vehicleOpen && (
-            <div className="step-summary">{vehicleSummary}</div>
-          )}
-          {vehicleOpen ? <ChevronUp size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} />}
-        </button>
-
-        {vehicleOpen && (
-          <div className="step-body" id="vehicle-step-body">
-            <p style={{
-              display: "flex",
-              gap: 6,
-              alignItems: "flex-start",
-              fontSize: 11,
-              lineHeight: 1.45,
-              color: "var(--fg-3)",
-              marginBottom: 12,
-            }}>
-              <Info size={13} style={{ flexShrink: 0, marginTop: 1, color: "var(--brand)" }} />
-              <span>
-                Optional, but worth it — RO numbers get reused over time. The vehicle
-                is what tells repeat RO numbers apart later.
-              </span>
-            </p>
-
-            <datalist id="make-options">
-              {COMMON_MAKES.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <div>
-                <label className="field-label" htmlFor="ro-year">Year</label>
-                <input
-                  id="ro-year"
-                  type="text"
-                  value={year}
-                  onChange={(e) => setYear(e.target.value)}
-                  inputMode="numeric"
-                  placeholder="2000"
-                  className="input"
-                  style={{ width: "100%" }}
-                />
-              </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <label className="field-label" htmlFor="ro-make" style={{ margin: 0 }}>Make</label>
-                  {!isEdit && (
-                    <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={autoFill}
-                        onChange={(e) => handleAutoFillToggle(e.target.checked)}
-                        style={{ accentColor: "var(--brand)", width: 11, height: 11 }}
-                      />
-                      <span style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-3)" }}>
-                        Auto
-                      </span>
-                    </label>
-                  )}
-                </div>
-                <input
-                  id="ro-make"
-                  type="text"
-                  list="make-options"
-                  value={make}
-                  onChange={(e) => handleMakeChange(e.target.value)}
-                  placeholder="Toyota"
-                  autoComplete="off"
-                  className="input"
-                  style={{
-                    width: "100%",
-                    borderColor: autoFill ? "var(--brand-soft)" : undefined,
-                  }}
-                />
-                {autoFill && make && (
-                  <p style={{ marginTop: 2, fontSize: 10, color: "var(--brand)" }}>
-                    ✓ Saved — new ROs pre-fill with {make}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="field-label" htmlFor="ro-model">Model</label>
-                <input
-                  id="ro-model"
-                  type="text"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder="Camry"
-                  className="input"
-                  style={{ width: "100%" }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div>
-                <label className="field-label" htmlFor="ro-vin">VIN</label>
-                <input
-                  id="ro-vin"
-                  type="text"
-                  value={vin}
-                  onChange={(e) => setVin(e.target.value.toUpperCase())}
-                  maxLength={17}
-                  placeholder="17-char VIN"
-                  autoCapitalize="characters"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  className="input mono"
-                  style={{ width: "100%" }}
-                />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="ro-mileage">Mileage</label>
-                <input
-                  id="ro-mileage"
-                  type="text"
-                  inputMode="numeric"
-                  value={mileage}
-                  onChange={(e) => setMileage(e.target.value)}
-                  placeholder="65,000"
-                  className="input"
-                  style={{ width: "100%" }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <VehicleFields
+        isEdit={isEdit}
+        vehicleOpen={vehicleOpen}
+        setVehicleOpen={setVehicleOpen}
+        vehicleSummary={vehicleSummary}
+        year={year}
+        setYear={setYear}
+        make={make}
+        handleMakeChange={handleMakeChange}
+        model={model}
+        setModel={setModel}
+        vin={vin}
+        setVin={setVin}
+        mileage={mileage}
+        setMileage={setMileage}
+        autoFill={autoFill}
+        handleAutoFillToggle={handleAutoFillToggle}
+      />
 
       {/* ---- Step 4: Notes (collapsible) ---- */}
       <div className={`step-card${notesOpen ? " active" : " collapsed"}`}>
@@ -1015,27 +284,7 @@ export function LogRoForm({
         </div>
       </div>
 
-      {/* ---- Modals ---- */}
-      <CustomOpCodeModal
-        open={customOpen}
-        initialCode={search}
-        onAdd={addCustomLine}
-        onClose={() => setCustomOpen(false)}
-      />
-      <NewLibraryOpCodeModal
-        open={newLibraryOpen}
-        initialCode={search}
-        onSubmit={addNewLibraryLine}
-        onClose={() => setNewLibraryOpen(false)}
-        isPending={newLibraryPending}
-      />
-      {subPickerOc && (
-        <SubOpCodePickerModal
-          opCode={subPickerOc}
-          onSelect={confirmSubPick}
-          onClose={() => setSubPickerOc(null)}
-        />
-      )}
+      {/* ---- Duplicate-RO dialog ---- */}
       {dupMatches && (
         <DuplicateRoDialog
           roNumber={roNumber.trim()}

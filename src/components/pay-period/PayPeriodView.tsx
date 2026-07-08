@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import type { Entry, OpCode } from "@/lib/types";
 import type { PeriodRange } from "@/lib/periods";
 import type { Stats } from "@/lib/stats";
+import {
+  hasAnyRate,
+  periodEarnings,
+  warrantyLoss as computeWarrantyLoss,
+  type RateMap,
+} from "@/lib/earnings";
 import { formatPeriodLabel } from "@/lib/periods";
 import { clearPeriodOverrideAction } from "@/app/actions/settings";
 import { RoList } from "@/components/ro/RoList";
@@ -21,6 +27,7 @@ export function PayPeriodView({
   paidFlagHours,
   entries,
   library,
+  rates = {},
 }: {
   availablePeriods: PeriodRange[];
   currentKey: string;
@@ -30,8 +37,14 @@ export function PayPeriodView({
   paidFlagHours: number | null;
   entries: Entry[];
   library: OpCode[];
+  rates?: RateMap;
 }) {
   const router = useRouter();
+  // Dollars are additive: null when no rates are priced, so PeriodStats/RoList
+  // render exactly as before.
+  const showMoney = hasAnyRate(rates);
+  const earnings = showMoney ? periodEarnings(entries, rates) : null;
+  const warrantyLoss = showMoney ? computeWarrantyLoss(entries, rates) : null;
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [resetting, startResetting] = useTransition();
   const [resetError, setResetError] = useState<string | null>(null);
@@ -104,7 +117,7 @@ export function PayPeriodView({
         )}
       </div>
 
-      <PeriodStats stats={stats} />
+      <PeriodStats stats={stats} earnings={earnings} warrantyLoss={warrantyLoss} />
 
       <DiscrepancyCard
         key={selected.key}
@@ -120,6 +133,7 @@ export function PayPeriodView({
         <RoList
           entries={entries}
           library={library}
+          rates={rates}
           emptyState={
             <div className="card p-6 text-center">
               <p className="text-sm text-[var(--fg-2)]">

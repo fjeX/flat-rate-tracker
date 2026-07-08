@@ -87,6 +87,7 @@ export function GuestSyncEffect() {
             notes: line.notes,
             position: line.position,
             subOpCodeId: null,
+            laborType: line.laborType ?? null,
           };
         }
 
@@ -102,6 +103,7 @@ export function GuestSyncEffect() {
             notes: line.notes,
             position: line.position,
             subOpCodeId: null,
+            laborType: line.laborType ?? null,
           };
         }
 
@@ -119,6 +121,7 @@ export function GuestSyncEffect() {
           notes: line.notes,
           position: line.position,
           subOpCodeId: null,
+          laborType: line.laborType ?? null,
         };
       });
 

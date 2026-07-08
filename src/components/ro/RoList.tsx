@@ -5,6 +5,7 @@ import { ClipboardList } from "lucide-react";
 import type { Entry, OpCode } from "@/lib/types";
 import { formatDateShort } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
+import type { RateMap } from "@/lib/earnings";
 import { RoDetailModal } from "./RoDetailModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -22,11 +23,13 @@ function lineCode(
 export function RoList({
   entries,
   library = [],
+  rates = {},
   emptyState,
   onRowClick,
 }: {
   entries: Entry[];
   library?: OpCode[];
+  rates?: RateMap;
   emptyState?: React.ReactNode;
   onRowClick?: (entry: Entry) => void;
 }) {
@@ -108,6 +111,7 @@ export function RoList({
         <RoDetailModal
           entry={openEntry}
           library={library}
+          rates={rates}
           onClose={() => setOpenId(null)}
         />
       )}

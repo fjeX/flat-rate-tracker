@@ -10,6 +10,7 @@ import {
   startOfMonth,
   endOfMonth,
 } from "@/lib/periods";
+import { ratesToMap } from "@/lib/earnings";
 import { HistoryView } from "@/components/history/HistoryView";
 
 export default async function HistoryPage() {
@@ -20,10 +21,11 @@ export default async function HistoryPage() {
   const tz = cookieStore.get("frt_timezone")?.value;
 
   const PAGE_SIZE = 100;
-  const [entries, library, settings] = await Promise.all([
+  const [entries, library, settings, laborRates] = await Promise.all([
     db.listEntries(supabase, { limit: PAGE_SIZE }),
     db.listOpCodes(supabase),
     db.getSettings(supabase),
+    db.listLaborRates(supabase),
   ]);
   const hasMore = entries.length === PAGE_SIZE;
 
@@ -44,6 +46,7 @@ export default async function HistoryPage() {
       monthStart={startOfMonth(today)}
       monthEnd={endOfMonth(today)}
       weekStartDay={weekStartDay}
+      rates={ratesToMap(laborRates)}
     />
   );
 }

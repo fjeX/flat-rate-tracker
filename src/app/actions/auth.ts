@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { seedStarterOpCodesIfEmpty } from "@/lib/seed-opcodes";
+import { reportServerError } from "@/lib/report-error-server";
 
 function toSigninWithError(message: string): never {
   redirect(`/signin?error=${encodeURIComponent(message)}`);
@@ -40,7 +41,11 @@ export async function signUp(formData: FormData) {
   // Non-fatal — if this fails the user can add codes manually.
   try {
     await seedStarterOpCodesIfEmpty(supabase);
-  } catch { /* ignore seeding errors */ }
+  } catch (err) {
+    // Non-fatal for the user, but no longer silent — report it so a broken seed
+    // (e.g. RLS/schema drift) is visible instead of leaving accounts empty.
+    await reportServerError(err, { url: "action:signUp/seedStarterOpCodes" });
+  }
 
   // Local dev has email confirmation disabled, so the user is signed in
   // immediately. On phase-2+ with confirmation on, the user would land here

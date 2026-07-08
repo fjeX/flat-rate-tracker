@@ -4,6 +4,7 @@ import type {
   Entry,
   EntryOpCode,
   EntryPatch,
+  LaborType,
   NewEntry,
   NewEntryOpCode,
 } from "@/lib/types";
@@ -24,6 +25,7 @@ function toEntryOpCode(row: EntryOpCodeRow): EntryOpCode {
     notes: row.notes,
     position: row.position,
     subOpCodeId: row.sub_op_code_id ?? null,
+    laborType: (row.labor_type as LaborType | null) ?? null,
   };
 }
 
@@ -135,7 +137,31 @@ function toLineInsert(
   if (line.notes) insert.notes = line.notes;
   // Only include sub_op_code_id when set — safe on DBs that haven't run migration yet.
   if (line.subOpCodeId) insert.sub_op_code_id = line.subOpCodeId;
+  // Same guard for labor_type: omit when null so inserts still work pre-migration.
+  if (line.laborType) insert.labor_type = line.laborType;
   return insert;
+}
+
+// The set of line columns the FORM owns. A diff-based UPDATE only touches these,
+// so any column the form doesn't carry (today: none beyond this; tomorrow:
+// paid_hours, labor_type, …) survives an edit instead of being wiped. This is
+// the whole reason updateEntry diffs instead of delete-and-reinsert.
+function toLineUpdate(
+  line: NewEntryOpCode,
+  position: number,
+): Database["public"]["Tables"]["entry_op_codes"]["Update"] {
+  return {
+    op_code_id: line.opCodeId ?? null,
+    custom: line.custom,
+    custom_code: line.customCode ?? null,
+    custom_description: line.customDescription ?? null,
+    flag_hours: line.flagHours,
+    actual_hours: line.actualHours,
+    notes: line.notes ?? "",
+    position,
+    sub_op_code_id: line.subOpCodeId ?? null,
+    labor_type: line.laborType ?? null,
+  };
 }
 
 export async function createEntry(
@@ -205,26 +231,62 @@ export async function updateEntry(
   }
 
   if (patch.opCodes !== undefined) {
-    // Simplest correct approach: delete existing lines and re-insert.
-    // RLS + FK-cascade makes this safe; trigger will recompute flag_hours.
-    const { error: delErr } = await supabase
-      .from("entry_op_codes")
-      .delete()
-      .eq("entry_id", id);
-    if (delErr) throw delErr;
-
-    if (patch.opCodes.length > 0) {
-      const lineInserts = patch.opCodes.map((oc, i) => toLineInsert(id, oc, i));
-      const { error: insErr } = await supabase
-        .from("entry_op_codes")
-        .insert(lineInserts);
-      if (insErr) throw insErr;
-    }
+    await diffEntryLines(supabase, id, patch.opCodes);
   }
 
   const fresh = await getEntry(supabase, id);
   if (!fresh) throw new Error("Entry not found after update");
   return fresh;
+}
+
+// Reconcile the entry's op-code lines against the incoming form state WITHOUT
+// blowing them away. Lines carry their DB id through the form; we UPDATE ones
+// that still exist (touching only form-owned columns), INSERT new ones, and
+// DELETE the ones the form dropped.
+//
+// Why not delete-and-reinsert? That silently wipes any column the form doesn't
+// round-trip. The moment a per-line column exists that the log form doesn't
+// carry (paid_hours, labor_type, a timer-written actual_hours, …), a plain edit
+// of the RO's notes would erase it. A diff fixes the whole class of bug.
+async function diffEntryLines(
+  supabase: DbClient,
+  entryId: string,
+  lines: NewEntryOpCode[],
+): Promise<void> {
+  const { data: existing, error: exErr } = await supabase
+    .from("entry_op_codes")
+    .select("id")
+    .eq("entry_id", entryId);
+  if (exErr) throw exErr;
+  const existingIds = new Set((existing ?? []).map((r) => r.id));
+  const keptIds = new Set<string>();
+
+  // Position is the array index so reordering in the form persists.
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.id && existingIds.has(line.id)) {
+      keptIds.add(line.id);
+      const { error: upErr } = await supabase
+        .from("entry_op_codes")
+        .update(toLineUpdate(line, i))
+        .eq("id", line.id);
+      if (upErr) throw upErr;
+    } else {
+      const { error: insErr } = await supabase
+        .from("entry_op_codes")
+        .insert(toLineInsert(entryId, line, i));
+      if (insErr) throw insErr;
+    }
+  }
+
+  const toDelete = [...existingIds].filter((lineId) => !keptIds.has(lineId));
+  if (toDelete.length > 0) {
+    const { error: delErr } = await supabase
+      .from("entry_op_codes")
+      .delete()
+      .in("id", toDelete);
+    if (delErr) throw delErr;
+  }
 }
 
 export async function deleteEntry(supabase: DbClient, id: string): Promise<void> {

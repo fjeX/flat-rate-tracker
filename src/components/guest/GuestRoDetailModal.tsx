@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { useGuestStore } from "@/lib/guest/context";
 import { formatDateLong } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
+import { fmtMoney } from "@/lib/earnings";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 
 export function GuestRoDetailModal({
@@ -15,8 +16,10 @@ export function GuestRoDetailModal({
   entry: Entry;
   onClose: () => void;
 }) {
-  const { opCodes, deleteGuestEntry } = useGuestStore();
+  const { opCodes, deleteGuestEntry, hourlyRate } = useGuestStore();
   const opCodesById = new Map(opCodes.map((oc) => [oc.id, oc]));
+  const showMoney = hourlyRate !== null && hourlyRate > 0;
+  const roEarnings = showMoney ? entry.flagHours * hourlyRate : 0;
 
   function handleDelete() {
     if (!window.confirm("Delete this RO? This can't be undone.")) return;
@@ -73,6 +76,12 @@ export function GuestRoDetailModal({
                 : "—"}
             </div>
           </div>
+          {showMoney && (
+            <div className="flex items-center justify-between border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+              <span className="text-[var(--fg-2)]">Earnings</span>
+              <span className="font-medium text-[var(--good)]">{fmtMoney(roEarnings)}</span>
+            </div>
+          )}
         </div>
 
         {/* Notes section */}

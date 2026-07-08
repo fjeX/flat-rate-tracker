@@ -33,6 +33,7 @@ function makeEntry(
               notes: "",
               position: 0,
               subOpCodeId: null,
+              laborType: null,
             },
           ]
         : [],

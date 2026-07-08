@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { GoalHoursCard } from "@/components/settings/GoalHoursCard";
+import { PayRatesCard } from "@/components/settings/PayRatesCard";
 import { SplitDayCard } from "@/components/settings/SplitDayCard";
 import { DataCard } from "@/components/settings/DataCard";
 import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
@@ -12,7 +13,10 @@ import { QuickAddCard } from "@/components/settings/QuickAddCard";
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const settings = await db.getSettings(supabase);
+  const [settings, laborRates] = await Promise.all([
+    db.getSettings(supabase),
+    db.listLaborRates(supabase),
+  ]);
   const overrideCount = Object.keys(settings.periodOverrides).length;
   const cookieStore = await cookies();
   const timezone = cookieStore.get("frt_timezone")?.value ?? "";
@@ -25,6 +29,10 @@ export default async function SettingsPage() {
         <h2 className="section-title">Tracking</h2>
         <div className="space-y-6">
           <GoalHoursCard initialGoalHours={settings.goalHours} />
+          <PayRatesCard
+            initialRates={laborRates}
+            initialDefaultLaborType={settings.defaultLaborType}
+          />
           <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
           <TimezoneCard initialTimezone={timezone} />
         </div>

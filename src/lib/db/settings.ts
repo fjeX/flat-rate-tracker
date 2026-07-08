@@ -1,6 +1,6 @@
 // User settings, including persistent timer state.
 import type { Database } from "@/lib/supabase/database.types";
-import type { FieldRegion, PeriodOverride, RoTemplate, UserSettings } from "@/lib/types";
+import type { FieldRegion, LaborType, PeriodOverride, RoTemplate, UserSettings } from "@/lib/types";
 import { getCurrentUserId, type DbClient } from "./_client";
 
 type SettingsRow = Database["public"]["Tables"]["user_settings"]["Row"];
@@ -28,6 +28,7 @@ function toSettings(row: SettingsRow): UserSettings {
     timerAccumulated: row.timer_accumulated,
     updatedAt: row.updated_at,
     roTemplates: normaliseTemplates(row.ro_template),
+    defaultLaborType: (row.default_labor_type as LaborType | null) ?? null,
   };
 }
 
@@ -50,6 +51,7 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
       timerAccumulated: 0,
       updatedAt: new Date().toISOString(),
       roTemplates: [],
+      defaultLaborType: null,
     };
   }
   return toSettings(data);
@@ -60,6 +62,7 @@ export type SettingsPatch = {
   goalHours?: number;
   periodOverrides?: Record<string, PeriodOverride>;
   roTemplates?: RoTemplate[];
+  defaultLaborType?: LaborType | null;
 };
 
 export async function updateSettings(
@@ -76,6 +79,8 @@ export async function updateSettings(
     update.period_overrides = patch.periodOverrides;
   if (patch.roTemplates !== undefined)
     update.ro_template = patch.roTemplates.length > 0 ? patch.roTemplates : null;
+  if (patch.defaultLaborType !== undefined)
+    update.default_labor_type = patch.defaultLaborType;
 
   const { data, error } = await supabase
     .from("user_settings")

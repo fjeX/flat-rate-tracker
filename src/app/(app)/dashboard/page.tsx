@@ -12,7 +12,9 @@ import {
   startOfMonth,
   startOfWeek,
 } from "@/lib/periods";
-import { aggregateStats, fmtPct } from "@/lib/stats";
+import { aggregateStats, fmtHours, fmtPct } from "@/lib/stats";
+import { fmtMoney, hasAnyRate, periodEarnings, ratesToMap } from "@/lib/earnings";
+import { computeForecast } from "@/lib/forecast";
 import { TodayCard } from "@/components/dashboard/TodayCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RoList } from "@/components/ro/RoList";
@@ -91,11 +93,20 @@ export default async function DashboardPage() {
     : isoDate(new Date(Date.now() - 90 * 86_400_000));
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
-  const [entries, clocks, library] = await Promise.all([
+  const [entries, clocks, library, laborRates] = await Promise.all([
     db.listEntries(supabase, { from: fetchFrom, to: monthEnd }),
     db.listDailyClocks(supabase, { from: fetchFrom, to: monthEnd }),
     db.listOpCodes(supabase),
+    db.listLaborRates(supabase),
   ]);
+
+  // Dollars are additive — computed only when the user has priced a rate.
+  const rateMap = ratesToMap(laborRates);
+  const showMoney = hasAnyRate(rateMap);
+  const periodEntries = entries.filter(
+    (e) => e.date >= period.start && e.date <= period.end,
+  );
+  const periodDollars = showMoney ? periodEarnings(periodEntries, rateMap) : 0;
 
   const statsToday  = aggregateStats(entries, clocks, { start: today, end: today });
   const statsWeek   = aggregateStats(entries, clocks, { start: weekStart, end: weekEnd });
@@ -125,31 +136,60 @@ export default async function DashboardPage() {
   const daysLeft     = periodDays - currentDay;
   const paceTarget  = currentDay / periodDays;
   // How full the progress fill is (0–1, clamped to 1 for display)
-  const actualFill  = Math.min(statsPeriod.flagHours / goalHours, 1);
-  // Expected hours at this point in the period
-  const expectedNow = (currentDay / periodDays) * goalHours;
-  const paceRatio   = expectedNow > 0 ? statsPeriod.flagHours / expectedNow : null;
+  const hasGoal     = goalHours > 0;
+  const actualFill  = hasGoal ? Math.min(statsPeriod.flagHours / goalHours, 1) : 0;
 
-  // Pill: good ≥ 95% of pace, warn 80–95%, bad < 80%
+  // Forward projection — where the period lands if recent pace holds. Computed
+  // from the entries already loaded above; no extra fetch.
+  const forecast = computeForecast(entries, {
+    today,
+    periodEnd: period.end,
+    current: statsPeriod.flagHours,
+    goal: goalHours,
+  });
+
+  // Pill + ring colour follow the projection, not just the current point.
+  // Four states: ahead / close (within 10%) / behind / insufficient-history.
   let pillClass = "";
-  let pillLabel = "On pace";
+  let pillLabel = "On track";
   let ringTier: "good" | "warn" | "bad" | null = null;
-  if (paceRatio === null) {
+  if (!hasGoal || forecast.state === "insufficient-history") {
     pillClass = "neutral";
-    pillLabel = "No data";
+    pillLabel = "Getting started";
     ringTier = null;
-  } else if (paceRatio >= 0.95) {
+  } else if (forecast.state === "ahead") {
     pillClass = "";      // default pill = good
-    pillLabel = "On pace";
+    pillLabel = "On track";
     ringTier = "good";
-  } else if (paceRatio >= 0.80) {
+  } else if (forecast.state === "close") {
     pillClass = "warn";
-    pillLabel = "Slightly behind";
+    pillLabel = "Close";
     ringTier = "warn";
   } else {
     pillClass = "bad";
-    pillLabel = "Behind pace";
+    pillLabel = "Behind";
     ringTier = "bad";
+  }
+
+  // Projection copy — plain language, real status, no filler.
+  let forecastLine = "";
+  let requiredLine = "";
+  if (hasGoal) {
+    if (forecast.state === "insufficient-history") {
+      forecastLine = "Not enough history yet to project — keep logging and this fills in.";
+    } else {
+      forecastLine = `On pace for about ${Math.round(forecast.projected!)} of ${goalHours} flag hrs`;
+      const daysWord = forecast.daysRemaining === 1 ? "day" : "days";
+      if (forecast.state === "ahead") {
+        requiredLine = "On track to hit your goal — keep it up.";
+      } else if (forecast.requiredPerDay !== null && forecast.daysRemaining > 0) {
+        requiredLine =
+          `Flag about ${fmtHours(forecast.requiredPerDay)} more hrs/day across your ` +
+          `${forecast.daysRemaining} working ${daysWord} left to reach ${goalHours}.`;
+      } else {
+        requiredLine = "No working days left this period.";
+      }
+    }
   }
 
   // pace-fill colour: brand for normal progress
@@ -209,6 +249,21 @@ export default async function DashboardPage() {
                 </div>
               </div>
             </div>
+            {hasGoal && (
+              <div className="pace-forecast">
+                <div className="pace-forecast-proj">{forecastLine}</div>
+                {requiredLine && <div className="pace-forecast-req">{requiredLine}</div>}
+              </div>
+            )}
+            {showMoney && (
+              <div
+                className="pace-forecast"
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}
+              >
+                <span style={{ color: "var(--fg-2)", fontSize: 13 }}>Period earnings</span>
+                <span style={{ color: "var(--good)", fontWeight: 600 }}>{fmtMoney(periodDollars)}</span>
+              </div>
+            )}
             <div className="pace-foot">
               <span>{formatPeriodLabel(period)}</span>
               <span>
@@ -243,6 +298,7 @@ export default async function DashboardPage() {
             <RoList
               entries={recentEntries}
               library={library}
+              rates={rateMap}
               emptyState={
                 <EmptyState
                   icon={<ClipboardList size={22} />}

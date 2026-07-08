@@ -4,28 +4,7 @@ import { useState, useTransition } from "react";
 import type { Stats } from "@/lib/stats";
 import { fmtHours } from "@/lib/stats";
 import { setPaidPeriodHoursAction } from "@/app/actions/paid-periods";
-
-const TOLERANCE = 0.1;
-
-type Verdict = "missing" | "over" | "match" | "unknown";
-
-function toText(n: number | null): string {
-  return n === null ? "" : String(n);
-}
-
-function parseHours(text: string): number | null {
-  const t = text.trim();
-  if (t === "") return null;
-  const n = Number(t);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-function verdictFor(paid: number | null, logged: number): Verdict {
-  if (paid === null) return "unknown";
-  const diff = paid - logged;
-  if (Math.abs(diff) <= TOLERANCE) return "match";
-  return diff < 0 ? "missing" : "over";
-}
+import { toText, parseHours, verdictFor } from "@/lib/discrepancy";
 
 export function DiscrepancyCard({
   periodKey,

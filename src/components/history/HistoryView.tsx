@@ -12,6 +12,7 @@ import {
   startOfWeek,
 } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
+import type { RateMap } from "@/lib/earnings";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { HistoryBarChart } from "./HistoryBarChart";
@@ -126,6 +127,7 @@ export function HistoryView({
   weekEnd: weekEndProp,
   weekStartDay,
   renderDetail,
+  rates = {},
 }: {
   entries: Entry[];
   hasMore?: boolean;
@@ -140,6 +142,7 @@ export function HistoryView({
   monthEnd: string;
   weekStartDay: 0 | 1;
   renderDetail?: (entry: Entry, onClose: () => void) => React.ReactNode;
+  rates?: RateMap;
 }) {
   // `entries` comes from the live store. In guest mode it hydrates from
   // sessionStorage in an effect AFTER first render, so freezing it into state
@@ -334,7 +337,7 @@ export function HistoryView({
       {openEntry && (
         renderDetail
           ? renderDetail(openEntry, () => setOpenId(null))
-          : <RoDetailModal entry={openEntry} library={library} onClose={() => setOpenId(null)} />
+          : <RoDetailModal entry={openEntry} library={library} rates={rates} onClose={() => setOpenId(null)} />
       )}
     </main>
   );

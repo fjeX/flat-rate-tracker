@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { formatDateLong } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
+import { entryEarnings, fmtMoney, hasAnyRate, lineEarnings, type RateMap } from "@/lib/earnings";
 import {
   addOpCodeLineToEntryAction,
   deleteEntryAction,
@@ -18,10 +19,12 @@ import {
 export function RoDetailModal({
   entry,
   library = [],
+  rates = {},
   onClose,
 }: {
   entry: Entry;
   library?: OpCode[];
+  rates?: RateMap;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -31,6 +34,9 @@ export function RoDetailModal({
     0,
   );
   const hasAnyActual = entry.opCodes.some((oc) => oc.actualHours !== null);
+  // Dollars only surface once the user has priced at least one rate.
+  const showMoney = hasAnyRate(rates);
+  const roEarnings = showMoney ? entryEarnings(entry, rates) : 0;
 
   return (
     <Modal open onClose={onClose} title={`RO #${entry.roNumber}`}>
@@ -68,6 +74,7 @@ export function RoDetailModal({
                 libraryById={libraryById}
                 isOnly={entry.opCodes.length === 1}
                 onDeleted={() => router.refresh()}
+                earnings={showMoney ? lineEarnings(line, rates) : null}
               />
             ))}
           </ul>
@@ -80,6 +87,12 @@ export function RoDetailModal({
               {hasAnyActual ? `${fmtHours(totalActual)}h` : "—"}
             </div>
           </div>
+          {showMoney && (
+            <div className="flex items-center justify-between border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+              <span className="text-[var(--fg-2)]">Earnings</span>
+              <span className="font-medium text-[var(--good)]">{fmtMoney(roEarnings)}</span>
+            </div>
+          )}
         </div>
 
         {/* Quick-add op code from library */}
@@ -171,11 +184,13 @@ function LineRow({
   libraryById,
   isOnly,
   onDeleted,
+  earnings,
 }: {
   line: EntryOpCode;
   libraryById: Map<string, OpCode>;
   isOnly: boolean;
   onDeleted: () => void;
+  earnings: number | null; // null when rates are off or this line's type is unpriced
 }) {
   const router = useRouter();
   const [text, setText] = useState<string>(
@@ -250,6 +265,11 @@ function LineRow({
             </span>
           )}
           {description && <ExpandableDescription text={description} />}
+          {earnings !== null && (
+            <div className="mt-0.5 font-mono text-[10px] text-[var(--good)]">
+              {fmtMoney(earnings)}
+            </div>
+          )}
         </div>
         <div className="w-16 text-right font-mono text-sm">
           {fmtHours(line.flagHours)}
@@ -350,6 +370,7 @@ function AddOpCodePicker({
           actualHours: null,
           notes: "",
           subOpCodeId: subOpCodeId ?? null,
+          laborType: null,
         });
         onAdded();
         setSearch("");

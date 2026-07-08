@@ -9,6 +9,7 @@ import {
   type PeriodRange,
 } from "@/lib/periods";
 import { aggregateStats } from "@/lib/stats";
+import { ratesToMap } from "@/lib/earnings";
 import { PayPeriodView } from "@/components/pay-period/PayPeriodView";
 
 export default async function PayPeriodPage({
@@ -29,12 +30,13 @@ export default async function PayPeriodPage({
     ? isoDateInTz(tz, threeYearsAgo)
     : isoDate(threeYearsAgo);
 
-  const [settings, entries, clocks, paidList, library] = await Promise.all([
+  const [settings, entries, clocks, paidList, library, laborRates] = await Promise.all([
     db.getSettings(supabase),
     db.listEntries(supabase, { from: fromDate }),
     db.listDailyClocks(supabase),
     db.listPaidPeriods(supabase),
     db.listOpCodes(supabase),
+    db.listLaborRates(supabase),
   ]);
 
   const current = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
@@ -87,6 +89,7 @@ export default async function PayPeriodPage({
       paidFlagHours={paidForSelected}
       entries={periodEntries}
       library={library}
+      rates={ratesToMap(laborRates)}
     />
   );
 }

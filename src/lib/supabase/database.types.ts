@@ -36,6 +36,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_errors: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          stack_hash: string | null
+          url: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          stack_hash?: string | null
+          url?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          stack_hash?: string | null
+          url?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       daily_clock_hours: {
         Row: {
           date: string
@@ -111,6 +138,7 @@ export type Database = {
           entry_id: string
           flag_hours: number
           id: string
+          labor_type: string | null
           notes: string
           op_code_id: string | null
           position: number
@@ -124,6 +152,7 @@ export type Database = {
           entry_id: string
           flag_hours?: number
           id?: string
+          labor_type?: string | null
           notes?: string
           op_code_id?: string | null
           position?: number
@@ -137,6 +166,7 @@ export type Database = {
           entry_id?: string
           flag_hours?: number
           id?: string
+          labor_type?: string | null
           notes?: string
           op_code_id?: string | null
           position?: number
@@ -165,6 +195,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      labor_rates: {
+        Row: {
+          created_at: string
+          hourly_rate: number
+          id: string
+          labor_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hourly_rate?: number
+          id?: string
+          labor_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          hourly_rate?: number
+          id?: string
+          labor_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       op_code_variants: {
         Row: {
@@ -263,6 +320,7 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          default_labor_type: string | null
           goal_hours: number
           period_overrides: Json
           ro_template: Json | null
@@ -274,6 +332,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          default_labor_type?: string | null
           goal_hours?: number
           period_overrides?: Json
           ro_template?: Json | null
@@ -285,6 +344,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          default_labor_type?: string | null
           goal_hours?: number
           period_overrides?: Json
           ro_template?: Json | null

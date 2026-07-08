@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { seedStarterOpCodesIfEmpty } from "@/lib/seed-opcodes";
+import { reportServerError } from "@/lib/report-error-server";
 
 function signinError(base: string, message: string) {
   return NextResponse.redirect(`${base}/signin?error=${encodeURIComponent(message)}`);
@@ -44,7 +45,11 @@ export async function GET(request: Request) {
   // land with an empty library. Idempotent — a no-op for returning users.
   try {
     await seedStarterOpCodesIfEmpty(supabase);
-  } catch { /* non-fatal — the user can add codes manually */ }
+  } catch (err) {
+    // Non-fatal — the user can add codes manually — but report it instead of
+    // swallowing so a broken seed path is visible.
+    await reportServerError(err, { url: "route:auth/callback/seedStarterOpCodes" });
+  }
 
   return NextResponse.redirect(`${base}/dashboard`);
 }

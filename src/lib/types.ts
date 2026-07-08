@@ -28,6 +28,24 @@ export type Vehicle = {
   mileage: string;
 };
 
+// The five pay categories a flat-rate tech's time falls into. Warranty time is
+// where techs get bled — it usually pays a lower rate than customer pay — which
+// is why rates are keyed per type instead of a single flat rate.
+export type LaborType =
+  | "customer_pay"
+  | "warranty"
+  | "internal"
+  | "used_car"
+  | "other";
+
+// A user's pay rate for one labor type. There is at most one row per (user, type);
+// a missing row means that type is unpriced. V1 stores only the CURRENT rate —
+// historical accuracy (rate at time of RO) would need an effective_from column.
+export type LaborRate = {
+  laborType: LaborType;
+  hourlyRate: number;
+};
+
 export type EntryOpCode = {
   id: string; // entry_op_codes.id (so we can update/delete a line)
   opCodeId: string | null; // reference to library op code, null for custom
@@ -39,6 +57,7 @@ export type EntryOpCode = {
   notes: string;
   position: number;
   subOpCodeId: string | null; // reference to a sub op code (variant), null if none selected
+  laborType: LaborType | null; // null = untyped (historical); earnings fall back to customer_pay rate
 };
 
 export type Entry = {
@@ -102,6 +121,7 @@ export type UserSettings = {
   timerAccumulated: number; // ms accumulated while paused
   updatedAt: string;
   roTemplates: RoTemplate[];
+  defaultLaborType: LaborType | null; // seeds the per-line selector in the log form; null = no default
 };
 
 // ------------------------------------------------------------------------

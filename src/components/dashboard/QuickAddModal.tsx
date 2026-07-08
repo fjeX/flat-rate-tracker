@@ -221,6 +221,7 @@ export function QuickAddModal({
             notes: "",
             position: i,
             subOpCodeId: line.subOpCodeId,
+            laborType: null, // quick-add is a fast path; type on the line stays untyped
           })),
         };
         await saveEntry(input);
