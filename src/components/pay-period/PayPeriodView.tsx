@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Select } from "@/components/ui/Select";
 import { useRouter } from "next/navigation";
 import type { Bonus, DailyClock, Entry, OpCode } from "@/lib/types";
 import type { PeriodRange } from "@/lib/periods";
@@ -113,10 +114,10 @@ export function PayPeriodView({
           <span className="field-label">
             Period
           </span>
-          <select
+          <Select
             value={selected.key}
             onChange={(e) => pickPeriod(e.target.value)}
-            className="input mt-1 text-sm"
+            className="mt-1 text-sm"
           >
             {availablePeriods.map((p) => (
               <option key={p.key} value={p.key}>
@@ -124,7 +125,7 @@ export function PayPeriodView({
                 {p.key === currentKey ? " (current)" : ""}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -146,7 +147,7 @@ export function PayPeriodView({
           )}
         </div>
         {resetError && (
-          <p className="rounded-md border border-[color-mix(in_oklab,var(--bad)_30%,transparent)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--bad)]">
+          <p className="rounded-[var(--radius-sm)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--bad)]">
             {resetError}
           </p>
         )}

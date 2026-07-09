@@ -97,7 +97,7 @@ function ReconLineRow({
             {status === "short" ? "Short" : "Pending"}
           </span>
         </div>
-        <div className="mt-0.5 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
+        <div className="mt-0.5 text-xs text-[var(--fg-3)]">
           Flag {fmtHours(line.flagHours)}h
         </div>
         {error && <p className="mt-1 text-xs text-[var(--bad)]">{error}</p>}
@@ -292,7 +292,7 @@ export function ReconciliationCard({
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-md border border-[color-mix(in_oklab,var(--good)_30%,transparent)] bg-[var(--good-bg)] px-3 py-2 text-sm text-[var(--good)]">
+        <p className="rounded-[var(--radius-sm)] bg-[var(--good-bg)] px-3 py-2 text-sm text-[var(--good)]">
           All jobs reconciled for this period.
         </p>
       ) : (
@@ -318,7 +318,7 @@ export function ReconciliationCard({
               <div className="text-sm font-medium text-[var(--fg-1)]">
                 Export discrepancies
               </div>
-              <div className="text-[11px] text-[var(--fg-3)]">
+              <div className="text-xs text-[var(--fg-3)]">
                 Flagged vs. paid variance report for {periodLabel || "this period"}
                 {exportedAt && (
                   <>

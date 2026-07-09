@@ -95,11 +95,11 @@ export function BonusForm({
       <div>
         <label
           htmlFor="bonus-amount"
-          className="mb-1.5 block text-xs uppercase tracking-wide text-[var(--fg-3)]"
+          className="field-label"
         >
           Amount
         </label>
-        <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)]">
+        <div className="flex items-center gap-2 card-inset px-3 py-2 focus-within:border-[var(--brand)] focus-within:shadow-[var(--ring)]">
           <span className="text-base font-bold text-[var(--fg-3)]" aria-hidden="true">
             $
           </span>
@@ -124,7 +124,7 @@ export function BonusForm({
 
       {/* Category */}
       <div>
-        <div className="mb-2 text-xs uppercase tracking-wide text-[var(--fg-3)]">
+        <div className="field-label mb-2">
           Category
         </div>
         <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Category">
@@ -137,7 +137,7 @@ export function BonusForm({
                 role="radio"
                 aria-checked={active}
                 onClick={() => setCategory(c)}
-                className={`rounded-md border px-3 py-2.5 text-sm ${
+                className={`rounded-[var(--radius-sm)] border px-3 py-2.5 text-sm ${
                   active
                     ? "border-[var(--brand)] bg-[var(--brand-bg)] text-[var(--brand)]"
                     : "border-[var(--line)] bg-[var(--bg-3)] text-[var(--fg-2)] hover:border-[var(--brand-soft)]"
@@ -155,7 +155,7 @@ export function BonusForm({
         <div>
           <label
             htmlFor="bonus-source"
-            className="mb-1.5 block text-xs uppercase tracking-wide text-[var(--fg-3)]"
+            className="field-label"
           >
             Source
           </label>
@@ -172,7 +172,7 @@ export function BonusForm({
         <div>
           <label
             htmlFor="bonus-date"
-            className="mb-1.5 block text-xs uppercase tracking-wide text-[var(--fg-3)]"
+            className="field-label"
           >
             Date
           </label>
@@ -193,7 +193,7 @@ export function BonusForm({
       <div>
         <label
           htmlFor="bonus-note"
-          className="mb-1.5 block text-xs uppercase tracking-wide text-[var(--fg-3)]"
+          className="field-label"
         >
           Note <span className="text-[var(--fg-3)]">(optional)</span>
         </label>
@@ -268,7 +268,7 @@ function RoLinkPicker({
         Linked RO <span className="text-[var(--fg-3)]">(optional)</span>
       </div>
       {entryId ? (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+        <div className="flex items-center justify-between gap-2 card-inset px-3 py-2 text-sm">
           <span className="flex items-center gap-1.5 min-w-0">
             <Link2 className="h-3.5 w-3.5 flex-shrink-0 text-[var(--brand)]" />
             <span className="font-mono text-[var(--brand)]">
@@ -296,13 +296,13 @@ function RoLinkPicker({
             setOpen(true);
             void ensureLoaded();
           }}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-[var(--line)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
         >
           <Link2 className="h-3.5 w-3.5" />
           Attach to an RO
         </button>
       ) : (
-        <div className="rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
+        <div className="card-inset">
           <div className="flex items-center justify-between border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
             <span>Recent ROs</span>
             <button

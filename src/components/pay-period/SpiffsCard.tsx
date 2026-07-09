@@ -9,6 +9,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Plus, Link2, Pencil, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import type { Bonus } from "@/lib/types";
 import { fmtMoney } from "@/lib/earnings";
@@ -77,7 +78,7 @@ export function SpiffsCard({
         </p>
       ) : (
         <>
-          <ul className="divide-y divide-[var(--line)] rounded-md border border-[var(--line)]">
+          <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
             {bonuses.map((b) => (
               <li
                 key={b.id}
@@ -88,9 +89,9 @@ export function SpiffsCard({
                     <span className="text-sm text-[var(--fg-1)]">
                       {b.source?.trim() || BONUS_CATEGORY_LABELS[b.category]}
                     </span>
-                    <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+                    <Badge>
                       {BONUS_CATEGORY_LABELS[b.category]}
-                    </span>
+                    </Badge>
                     {b.entryId && (
                       <Link2 className="h-3 w-3 text-[var(--brand)]" aria-label="Linked to an RO" />
                     )}
@@ -126,7 +127,7 @@ export function SpiffsCard({
           </div>
 
           {totals.showBreakdown && (
-            <p className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-xs text-[var(--fg-2)]">
+            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
               Total pay:{" "}
               <span className="font-medium">Flag pay {fmtMoney(totals.flagPay ?? 0)}</span>
               {" + "}
@@ -138,7 +139,7 @@ export function SpiffsCard({
         </>
       )}
 
-      <p className="text-[11px] text-[var(--fg-3)]">
+      <p className="text-xs text-[var(--fg-3)]">
         Spiffs aren&apos;t part of hours reconciliation — they show in dollar
         totals only.
       </p>

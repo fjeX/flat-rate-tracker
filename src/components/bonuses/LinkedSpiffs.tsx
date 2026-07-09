@@ -36,7 +36,7 @@ export function LinkedSpiffs({ entryId }: { entryId: string }) {
   if (!loaded || bonuses.length === 0) return null;
 
   return (
-    <div className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-3">
+    <div className="card-inset p-3">
       <div className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wide text-[var(--fg-3)]">
         <BadgeDollarSign className="h-3.5 w-3.5" />
         Linked spiffs

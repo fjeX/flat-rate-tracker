@@ -52,7 +52,7 @@ export function PeriodStats({
         )}
       </EntranceGrid>
       {unflaggedTime !== null && (
-        <p className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-xs text-[var(--fg-2)]">
+        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
           {fmtHours(unflaggedTime.gapHours)} clocked hours had no flagged work —
           at your customer-pay rate that window represents{" "}
           <span className="font-medium text-[var(--fg-1)]">
@@ -62,7 +62,7 @@ export function PeriodStats({
         </p>
       )}
       {warrantyLoss !== null && warrantyLoss > 0 && (
-        <p className="rounded-md border border-[color-mix(in_oklab,var(--bad)_30%,transparent)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--fg-2)]">
+        <p className="rounded-[var(--radius-sm)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--fg-2)]">
           Warranty work cost you{" "}
           <span className="font-medium text-[var(--bad)]">{fmtMoney(warrantyLoss)}</span>{" "}
           this period versus customer-pay rates.

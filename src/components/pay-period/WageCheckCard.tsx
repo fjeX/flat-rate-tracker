@@ -66,7 +66,7 @@ export function WageCheckCard({
           <h2 className="text-sm font-medium text-[var(--fg-1)]">
             Pay Check-Up
           </h2>
-          <p className="text-[11px] text-[var(--fg-3)]">
+          <p className="text-xs text-[var(--fg-3)]">
             Your effective hourly pay and clock-vs-flag time this period.
           </p>
         </div>
@@ -96,13 +96,13 @@ export function WageCheckCard({
                   /hr
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-[var(--fg-3)]">
+              <p className="mt-1 text-xs text-[var(--fg-3)]">
                 Total pay {result.totalPay !== null ? fmtMoney(result.totalPay) : "—"}{" "}
                 ÷ {fmtHours(result.clockedHours)} clocked hours.
               </p>
             </div>
           ) : (
-            <div className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm text-[var(--fg-2)]">
+            <div className="card-inset px-3 py-2 text-sm text-[var(--fg-2)]">
               {result.status === "no_clock" && (
                 <>
                   No clocked hours logged for this period yet. Effective hourly
@@ -133,7 +133,7 @@ export function WageCheckCard({
 
           {/* Reference comparison — ONLY when a reference rate is set and we have a figure. */}
           {comparison !== null && (
-            <p className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm text-[var(--fg-2)]">
+            <p className="card-inset px-3 py-2 text-sm text-[var(--fg-2)]">
               Your effective rate this period was{" "}
               <span className="font-semibold text-[var(--fg-1)]">
                 {fmtRate(comparison.effective)}/hr
@@ -163,7 +163,7 @@ export function WageCheckCard({
 
           {/* Missing-day breadcrumb even when a figure IS shown (partial context). */}
           {missingCount > 0 && result.status !== "incomplete_clock" && (
-            <p className="text-[11px] text-[var(--fg-3)]">
+            <p className="text-xs text-[var(--fg-3)]">
               Days with flagged work but no clock entry:{" "}
               {result.missingClockDays.map(formatDateShort).join(", ")}.
             </p>
@@ -173,11 +173,11 @@ export function WageCheckCard({
             <button
               type="button"
               onClick={() => setExplainerOpen(true)}
-              className="text-[11px] text-[var(--brand)] underline"
+              className="text-xs text-[var(--brand)] underline"
             >
               What does this mean?
             </button>
-            <span className="text-[11px] text-[var(--fg-3)]">
+            <span className="text-xs text-[var(--fg-3)]">
               Informational only — not legal advice.
             </span>
           </div>
@@ -248,7 +248,7 @@ export function WageCheckCard({
                 .
               </p>
             </div>
-            <p className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-[13px] text-[var(--fg-2)]">
+            <p className="card-inset px-3 py-2 text-sm text-[var(--fg-2)]">
               This tool presents numbers from your own records for your
               information. It does not provide legal advice or reach any legal
               conclusion. For guidance on your specific situation, consult a

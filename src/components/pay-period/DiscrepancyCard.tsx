@@ -109,7 +109,7 @@ export function DiscrepancyCard({
       )}
 
       {verdict === "missing" && diff !== null && (
-        <div className="rounded-md border border-[color-mix(in_oklab,var(--bad)_30%,transparent)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
+        <div className="rounded-[var(--radius-sm)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
           Missing {fmtHours(-diff)} hours. Review the RO list below — use the
           logged ROs as proof when you talk to your service manager.
         </div>
