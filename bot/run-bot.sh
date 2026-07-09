@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FRT nightly bot runner — VM only.
-# Cron: 0 3 * * *  /home/slime/docker/flat-rate-tracker/bot/run-bot.sh
+# Cron: 0 3 * * *  /home/liem9319/docker/flat-rate-tracker/bot/run-bot.sh
 # Setup: see bot/README.md
 
 set -uo pipefail

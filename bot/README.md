@@ -50,7 +50,7 @@ reconciliation, spiffs, Pay Check-Up…), and emails Liem a report via n8n.
    ```bash
    crontab -e
    # add:
-   0 3 * * * /home/slime/docker/flat-rate-tracker/bot/run-bot.sh
+   0 3 * * * /home/liem9319/docker/flat-rate-tracker/bot/run-bot.sh
    ```
    Check the VM timezone first (`timedatectl`) — 3 AM should be 3 AM Pacific.
 
