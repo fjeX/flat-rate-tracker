@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus, Search, Trash2, X } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import type { NewEntry, OpCode, SubOpCode } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
@@ -252,7 +253,7 @@ export function QuickAddModal({
       title="Quick Add"
     >
       {/* Mode tabs — RO vs. Spiff/Bonus */}
-      <div className="mb-4 grid grid-cols-2 gap-1 rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-1" role="tablist" aria-label="Quick add mode">
+      <div className="mb-4 grid grid-cols-2 gap-1 card-inset p-1" role="tablist" aria-label="Quick add mode">
         {(["ro", "spiff"] as const).map((m) => (
           <button
             key={m}
@@ -281,7 +282,7 @@ export function QuickAddModal({
           <label htmlFor="quick-add-ro-number" className="mb-1.5 block text-xs uppercase tracking-wide text-[var(--fg-3)]">
             RO Number
           </label>
-          <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)]">
+          <div className="flex items-center gap-2 card-inset px-3 py-2 focus-within:border-[var(--brand)] focus-within:shadow-[var(--ring)]">
             <span className="text-base font-bold text-[var(--fg-3)]" aria-hidden="true">#</span>
             <input
               id="quick-add-ro-number"
@@ -314,7 +315,7 @@ export function QuickAddModal({
                   key={oc.id}
                   type="button"
                   onClick={() => addFromLibrary(oc)}
-                  className="flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--bg-3)] px-2.5 py-1 text-xs hover:border-[var(--brand-soft)] hover:bg-[var(--bg-4)]"
+                  className="flex min-h-[38px] items-center gap-1.5 rounded-full bg-[var(--bg-3)] px-3 py-1 text-xs hover:bg-[var(--bg-4)]"
                 >
                   <span className="font-mono text-[var(--brand)]">{oc.code}</span>
                   <span className="text-[var(--fg-3)]">
@@ -327,7 +328,7 @@ export function QuickAddModal({
 
           {/* Search picker */}
           <div ref={pickerRef}>
-            <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-2)] px-3 focus-within:border-[var(--brand-soft)] focus-within:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)]">
+            <div className="flex items-center gap-2 card-inset px-3 focus-within:border-[var(--brand-soft)] focus-within:shadow-[var(--ring)]">
               <Search className="h-3.5 w-3.5 flex-shrink-0 text-[var(--fg-3)]" />
               <label htmlFor="quick-add-search" className="sr-only">Search op codes</label>
               <input
@@ -355,7 +356,7 @@ export function QuickAddModal({
             <div
               ref={dropdownRef}
               style={{ position: "fixed", top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, zIndex: 9999 }}
-              className="rounded-md border border-[var(--line)] bg-[var(--bg-2)] shadow-xl"
+              className="card-inset shadow-[var(--shadow-pop)]"
             >
               <ul className="max-h-48 overflow-y-auto">
                 {filteredLibrary.length === 0 ? (
@@ -378,9 +379,9 @@ export function QuickAddModal({
                             {oc.description}
                           </span>
                           {oc.subOpCodes.length > 0 && (
-                            <span className="ml-1.5 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
+                            <Badge className="ml-1.5">
                               {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
-                            </span>
+                            </Badge>
                           )}
                         </span>
                         <span className="flex-shrink-0 font-mono text-xs text-[var(--fg-2)]">
@@ -392,7 +393,7 @@ export function QuickAddModal({
                 )}
               </ul>
               <div className="border-t border-[var(--line)] p-1">
-                <div className="px-2 pb-0.5 pt-1 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
+                <div className="px-2 pb-0.5 pt-1 text-xs text-[var(--fg-3)]">
                   Other
                 </div>
                 <button
@@ -418,8 +419,8 @@ export function QuickAddModal({
 
           {/* Lines table */}
           {lines.length > 0 && (
-            <div className="mt-3 rounded-md border border-[var(--line)]">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] bg-[var(--bg-1)] px-3 py-1.5 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
+            <div className="mt-3 card-inset overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
                 <div>Op code</div>
                 <div className="w-16 text-right">Flag hrs</div>
                 <div className="w-6" />
@@ -439,14 +440,14 @@ export function QuickAddModal({
                               {code}
                             </span>
                             {subCode && (
-                              <span className="rounded bg-[var(--brand-bg)] px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-[var(--brand)]">
+                              <Badge tone="brand" mono>
                                 {subCode}
-                              </span>
+                              </Badge>
                             )}
                             {line.custom && (
-                              <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
+                              <Badge>
                                 Other
-                              </span>
+                              </Badge>
                             )}
                           </div>
                           {description && (

@@ -255,8 +255,8 @@ export function LogRoForm({
               type="button"
               onClick={handleDeleteRo}
               disabled={isDeleting || isSubmitting}
-              className="btn btn-sm"
-              style={{ color: "#fca5a5", borderColor: "rgba(153,27,27,0.5)", background: "transparent", marginRight: "auto" }}
+              className="btn btn-sm btn-danger"
+              style={{ marginRight: "auto" }}
             >
               <Trash2 style={{ width: 14, height: 14 }} />
               {isDeleting ? "Deleting…" : "Delete RO"}

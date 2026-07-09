@@ -246,7 +246,7 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
           type="button"
           onClick={handleScanClick}
           disabled={status === "loading"}
-          className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-3)] px-3 py-2 text-sm text-[var(--fg-1)] hover:bg-[var(--bg-4)] disabled:opacity-60"
+          className="flex items-center gap-2 min-h-[44px] rounded-full bg-[var(--bg-3)] px-4 py-2 text-sm text-[var(--fg-1)] hover:bg-[var(--bg-4)] disabled:opacity-60"
         >
           {status === "loading" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -269,7 +269,7 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
           border: "1px solid var(--line)",
           background: "var(--bg-2)",
           padding: 12,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+          boxShadow: "var(--shadow-pop)",
         }}>
           <p style={{ marginBottom: 8, fontSize: 12, fontWeight: 600, color: "var(--fg-2)" }}>
             First time scanning? 3 steps to set it up:
@@ -293,7 +293,7 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
 
       {/* Template picker — shown only when user has multiple templates */}
       {pickerOpen && (
-        <div className="w-full rounded-md border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-lg">
+        <div className="card-inset w-full p-2 shadow-[var(--shadow-pop)]">
           <div className="mb-1.5 flex items-center justify-between">
             <p className="text-xs font-medium text-[var(--fg-2)]">Which template?</p>
             <button
@@ -311,7 +311,7 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
                 key={t.id}
                 type="button"
                 onClick={() => handlePickTemplate(t)}
-                className="w-full rounded-md border border-[var(--line)] bg-[var(--bg-3)] px-3 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-4)]"
+                className="w-full min-h-[44px] rounded-[var(--radius-sm)] bg-[var(--bg-3)] px-3 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-4)]"
               >
                 {t.name}
               </button>
@@ -345,7 +345,7 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
           </button>
 
           {showDebug && (
-            <div className="mt-1 w-full rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-3 text-left">
+            <div className="card-inset mt-1 w-full p-3 text-left">
               <div className="space-y-2">
                 {debugRegions.map((r) => {
                   const { icon, label } = getRegionStatus(r);

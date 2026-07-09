@@ -54,7 +54,7 @@ export function DuplicateRoDialog({
               key={m.id}
               type="button"
               onClick={() => onEdit(m.id)}
-              className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+              className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] border px-3 py-2.5 text-left transition-colors ${
                 recommended
                   ? "border-[var(--brand-soft)] bg-[var(--brand-bg)] hover:brightness-110"
                   : "border-[var(--line)] hover:bg-[var(--bg-3)]"
@@ -81,8 +81,8 @@ export function DuplicateRoDialog({
         <button
           type="button"
           onClick={onLogNew}
-          style={!suggestEdit ? { color: "oklch(0.18 0.04 50)" } : undefined}
-          className={`flex w-full items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-semibold transition-colors ${
+          style={!suggestEdit ? { color: "var(--brand-ink)" } : undefined}
+          className={`flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-semibold transition-colors ${
             suggestEdit
               ? "border border-[var(--line)] text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
               : "bg-[var(--brand)] hover:brightness-105"
@@ -91,7 +91,7 @@ export function DuplicateRoDialog({
           <Plus className="h-4 w-4" />
           Log as new entry
         </button>
-        <p className="pt-2 text-center text-[11px] text-[var(--fg-3)]">
+        <p className="pt-2 text-center text-xs text-[var(--fg-3)]">
           Same RO number, different repair — kept separate from{" "}
           {matches.length === 1 ? "the one above" : `the ${matches.length} above`}.
         </p>
