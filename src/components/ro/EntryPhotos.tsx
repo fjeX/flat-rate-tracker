@@ -116,7 +116,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
   const viewerPhoto = viewerId ? photos.find((p) => p.id === viewerId) ?? null : null;
 
   return (
-    <div className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-3">
+    <div className="card-inset p-3">
       <div className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wide text-[var(--fg-3)]">
         <Camera className="h-3.5 w-3.5" />
         Photos
@@ -136,7 +136,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
               type="button"
               onClick={() => setViewerId(photo.id)}
               aria-label={`View photo captured ${formatCaptured(photo.capturedAt)}`}
-              className="relative h-16 w-16 overflow-hidden rounded-md border border-[var(--line)] bg-[var(--bg-3)] transition-colors hover:border-[var(--brand-soft)]"
+              className="relative h-16 w-16 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-3)] transition-colors hover:border-[var(--brand-soft)]"
             >
               {urls[photo.id] ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -159,7 +159,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="grid h-16 w-16 place-items-center rounded-md border border-dashed border-[var(--line)] text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="grid h-16 w-16 place-items-center rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Attach a photo"
             >
               {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
@@ -273,7 +273,7 @@ function PhotoViewer({
           type="button"
           onClick={() => startDelete(async () => { await onDelete(); })}
           disabled={deleting}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[var(--overlay-fg)]/20 px-4 py-2 text-sm text-[var(--overlay-fg)]/90 hover:bg-[var(--overlay-fg)]/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--overlay-fg)]/20 px-4 py-2 text-sm text-[var(--overlay-fg)]/90 hover:bg-[var(--overlay-fg)]/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" />
           {deleting ? "Deleting…" : "Delete photo"}

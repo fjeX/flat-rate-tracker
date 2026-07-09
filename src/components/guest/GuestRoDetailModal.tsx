@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useGuestStore } from "@/lib/guest/context";
 import { formatDateLong } from "@/lib/periods";
@@ -56,8 +58,8 @@ export function GuestRoDetailModal({
         )}
 
         {/* Op code lines table */}
-        <div className="rounded-md border border-[var(--line)]">
-          <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] bg-[var(--bg-1)] px-3 py-1.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+        <div className="card-inset overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
             <div>Op code</div>
             <div className="w-16 text-right">Flag</div>
             <div className="w-20 text-right">Actual</div>
@@ -67,7 +69,7 @@ export function GuestRoDetailModal({
               <GuestLineRow key={line.id} line={line} entryId={entry.id} opCodesMap={opCodesById} />
             ))}
           </ul>
-          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] px-3 py-2 text-sm">
             <div className="text-[var(--fg-2)]">Total</div>
             <div className="w-16 text-right font-medium">{fmtHours(entry.flagHours)}h</div>
             <div className="w-20 text-right text-[var(--fg-2)]">
@@ -77,7 +79,7 @@ export function GuestRoDetailModal({
             </div>
           </div>
           {showMoney && (
-            <div className="flex items-center justify-between border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+            <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-2 text-sm">
               <span className="text-[var(--fg-2)]">Earnings</span>
               <span className="font-medium text-[var(--good)]">{fmtMoney(roEarnings)}</span>
             </div>
@@ -86,29 +88,19 @@ export function GuestRoDetailModal({
 
         {/* Notes section */}
         {entry.notes && (
-          <div className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-3">
-            <div className="mb-1 text-xs uppercase tracking-wide text-[var(--fg-3)]">Notes</div>
+          <div className="card-inset p-3">
+            <div className="mb-1 text-xs text-[var(--fg-3)]">Notes</div>
             <p className="whitespace-pre-wrap text-sm text-[var(--fg-1)]">{entry.notes}</p>
           </div>
         )}
 
         {/* Footer with Delete + Close */}
         <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--bad)]/40 px-3 py-2 text-sm text-[var(--bad)] hover:bg-[var(--bad-bg)]"
-          >
+          <Button variant="danger" onClick={handleDelete}>
             <Trash2 className="h-4 w-4" />
             Delete
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[var(--line)] px-3 py-2 text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
-          >
-            Close
-          </button>
+          </Button>
+          <Button onClick={onClose}>Close</Button>
         </div>
       </div>
     </Modal>
@@ -153,9 +145,7 @@ function GuestLineRow({
       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
         <div className="min-w-0">
           <span className="font-mono text-sm text-[var(--brand)]">{code}</span>
-          {line.custom && (
-            <span className="ml-2 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">Other</span>
-          )}
+          {line.custom && <Badge className="ml-2">Other</Badge>}
           {description && <div className="text-xs text-[var(--fg-3)]">{description}</div>}
         </div>
         <div className="w-16 text-right font-mono text-sm">{fmtHours(line.flagHours)}</div>
@@ -170,7 +160,7 @@ function GuestLineRow({
             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             placeholder="—"
             aria-label={`Actual hours for ${code}`}
-            className="w-full rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1 text-right font-mono text-sm text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:border-[var(--brand)] focus:outline-none"
+            className="opc-hours-input w-full"
           />
         </div>
       </div>

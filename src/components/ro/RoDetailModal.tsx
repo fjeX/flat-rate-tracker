@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EntryPhotos } from "@/components/ro/EntryPhotos";
 import { LinkedSpiffs } from "@/components/bonuses/LinkedSpiffs";
@@ -62,8 +64,8 @@ export function RoDetailModal({
           mileage={entry.vehicle.mileage}
         />
 
-        <div className="rounded-md border border-[var(--line)]">
-          <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] bg-[var(--bg-1)] px-3 py-1.5 text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+        <div className="card-inset overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
             <div>Op code</div>
             <div className="w-16 text-right">Flag</div>
             <div className="w-20 text-right">Actual</div>
@@ -80,7 +82,7 @@ export function RoDetailModal({
               />
             ))}
           </ul>
-          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] px-3 py-2 text-sm">
             <div className="text-[var(--fg-2)]">Total</div>
             <div className="w-16 text-right font-medium">
               {fmtHours(entry.flagHours)}h
@@ -90,7 +92,7 @@ export function RoDetailModal({
             </div>
           </div>
           {showMoney && (
-            <div className="flex items-center justify-between border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
+            <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-2 text-sm">
               <span className="text-[var(--fg-2)]">Earnings</span>
               <span className="font-medium text-[var(--good)]">{fmtMoney(roEarnings)}</span>
             </div>
@@ -105,8 +107,8 @@ export function RoDetailModal({
         />
 
         {entry.notes && (
-          <div className="rounded-md border border-[var(--line)] bg-[var(--bg-1)] p-3">
-            <div className="mb-1 text-xs uppercase tracking-wide text-[var(--fg-3)]">
+          <div className="card-inset p-3">
+            <div className="mb-1 text-xs text-[var(--fg-3)]">
               Notes
             </div>
             <p className="whitespace-pre-wrap text-sm text-[var(--fg-1)]">
@@ -263,18 +265,14 @@ function LineRow({
         <div className="min-w-0">
           <span className="font-mono text-sm text-[var(--brand)]">{code}</span>
           {subRef && (
-            <span className="ml-2 rounded bg-[var(--brand-bg)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--brand)]">
+            <Badge tone="brand" mono className="ml-2">
               {subRef.code}
-            </span>
+            </Badge>
           )}
-          {line.custom && (
-            <span className="ml-2 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
-              Other
-            </span>
-          )}
+          {line.custom && <Badge className="ml-2">Other</Badge>}
           {description && <ExpandableDescription text={description} />}
           {earnings !== null && (
-            <div className="mt-0.5 font-mono text-[10px] text-[var(--good)]">
+            <div className="mt-0.5 font-mono text-xs text-[var(--good)]">
               {fmtMoney(earnings)}
             </div>
           )}
@@ -301,7 +299,7 @@ function LineRow({
             aria-label={`Actual hours for ${code}`}
             aria-invalid={Boolean(error)}
             aria-describedby={error ? `line-error-${line.id}` : undefined}
-            className="w-full rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1 text-right font-mono text-sm text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:border-[var(--brand)] focus:outline-none"
+            className="opc-hours-input w-full"
           />
         </div>
         <button
@@ -309,12 +307,12 @@ function LineRow({
           onClick={handleDelete}
           disabled={deleting || isOnly}
           aria-label="Remove line"
-          className="relative rounded p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
+          className="relative rounded-[var(--radius-sm)] p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
-      {error && <div id={`line-error-${line.id}`} role="alert" className="mt-1 text-[10px] text-[var(--bad)]">{error}</div>}
+      {error && <div id={`line-error-${line.id}`} role="alert" className="mt-1 text-xs text-[var(--bad)]">{error}</div>}
       {line.notes && (
         <p className="mt-1.5 text-xs text-[var(--fg-3)] italic">{line.notes}</p>
       )}
@@ -406,14 +404,14 @@ function AddOpCodePicker({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-[var(--line)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
         >
           <Plus className="h-3.5 w-3.5" />
           Add op code
         </button>
       ) : subPickOc ? (
         // Sub op code selection step
-        <div className="rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
+        <div className="card-inset overflow-hidden">
           <div className="flex items-center gap-2 border-b border-[var(--line)] px-3 py-2">
             <button
               type="button"
@@ -434,7 +432,7 @@ function AddOpCodePicker({
                   type="button"
                   disabled={pending}
                   onClick={() => addLine(subPickOc, sub.id)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)] disabled:opacity-50"
+                  className="flex min-h-[44px] w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)] disabled:opacity-50"
                 >
                   <span>
                     <span className="font-mono text-sm text-[var(--brand)]">{sub.code}</span>
@@ -454,7 +452,7 @@ function AddOpCodePicker({
           )}
         </div>
       ) : (
-        <div className="rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
+        <div className="card-inset overflow-hidden">
           <div className="flex items-center gap-2 px-3">
             <Search className="h-3.5 w-3.5 flex-shrink-0 text-[var(--fg-3)]" />
             <label htmlFor="ro-detail-add-search" className="sr-only">Search op codes</label>
@@ -486,7 +484,7 @@ function AddOpCodePicker({
                     type="button"
                     disabled={pending}
                     onClick={() => handleOpCodeClick(oc)}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)] disabled:opacity-50"
+                    className="flex min-h-[44px] w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)] disabled:opacity-50"
                   >
                     <span>
                       <span className="font-mono text-sm text-[var(--brand)]">{oc.code}</span>
@@ -544,23 +542,12 @@ function Footer({
         <p role="alert" className="text-sm text-[var(--bad)]">{error}</p>
       )}
       <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={deleting}
-          className="inline-flex items-center gap-1.5 rounded-md border border-[var(--bad)]/40 px-3 py-2 text-sm text-[var(--bad)] hover:bg-[var(--bad-bg)] disabled:opacity-50"
-        >
+        <Button variant="danger" onClick={handleDelete} disabled={deleting}>
           <Trash2 className="h-4 w-4" />
           {deleting ? "Deleting…" : "Delete"}
-        </button>
+        </Button>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[var(--line)] px-3 py-2 text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
-          >
-            Close
-          </button>
+          <Button onClick={onClose}>Close</Button>
           <Link
             href={`/log?edit=${entryId}`}
             className="btn btn-primary"
