@@ -141,3 +141,11 @@ networks:
 - Do not `docker compose down` the Traefik container — it serves all homelab traffic
 - Do not create Docker networks named `web`, `traefik`, or `default` — use `proxy`
 - Do not clone the Supabase repo anywhere other than `~/supabase/`
+
+## UI Changes — Required Gate
+
+Before any commit that touches `.tsx` or `.css`, run **`npm run test:ui`**
+(visual snapshots + quality checks, every route × dark/light × mobile/desktop).
+Intentional look changes: review with `npm run test:ui:report`, accept with
+`npm run test:ui:update`, commit baselines with the change. Details in
+`README.md` and `AGENTS.md`.
