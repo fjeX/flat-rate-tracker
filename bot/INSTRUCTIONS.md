@@ -26,6 +26,15 @@ Never write the password into the report, screenshots descriptions, or anywhere 
    **RECURRING (also seen YYYY-MM-DD)** instead of being reported as new.
 3. If a previously-broken thing now works, report it under **Fixed since last run**.
 
+## Heads-up: the app was redesigned (2026-07-09)
+
+The whole UI moved to the "Calm Workspace" design language — borderless
+elevated cards, pill buttons/tabs, sentence-case labels, brighter light theme.
+**This is intentional, not breakage.** Judge behavior and legibility, not
+whether it looks like previous nights' screenshots. Do flag anything that is
+genuinely broken in the new look (overlapping text, unreadable contrast,
+controls too small to tap, horizontal scrolling).
+
 ## Nightly checklist
 
 Work through every section. If a section's feature doesn't exist in the UI
