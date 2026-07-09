@@ -35,15 +35,25 @@ Work through every section. If a section's feature doesn't exist in the UI
 - Log in with the bot credentials. Confirm you land on the dashboard.
 - Note load time roughly (fast / sluggish / >5s).
 
+### 1b. One-time account setup (check every night, do only if missing)
+Several features are **gated behind pay rates** — with no rates set, the
+per-line labor-type selector, earnings dollars, and reconciliation shortfall
+dollars are hidden BY DESIGN (not a bug). Go to Settings and if no pay rates
+exist, set them once: CP $32/hr, warranty $28/hr, internal $25/hr. From then
+on, exercise labor types and verify dollar amounts everywhere they appear.
+
 ### 2. Log ROs (2–5 of them)
 - Log between 2 and 5 repair orders. Vary them each night:
   - Total hours per RO anywhere from **4 to 25** (vary: some small, some monsters)
   - At least one **multi-line RO** (2–4 op-code lines with different hours)
   - Mix labor types where the form offers them (CP / warranty / internal / etc.)
-  - Realistic RO numbers (5–6 digits), realistic vehicles (year/make/model),
-    plausible op codes and descriptions (you know cars — write like a tech)
+  - Realistic RO numbers (5–6 digits), realistic vehicles — fill **year, make,
+    AND model** (the vehicle section may be collapsed; expand it), plausible
+    op codes and descriptions (you know cars — write like a tech)
   - Include today's seeded scenario (see rotation below)
-- After each save, verify the RO actually appears in history with the right hours.
+- After each save, verify the RO actually appears in history with the right
+  hours, **on the right date (today, your local date)**, and with the full
+  vehicle (year + make + model) displayed — a missing field you typed is a bug.
 - Edit one of tonight's ROs (change hours or add a line) and verify the edit stuck.
 - Delete one RO you created **tonight only** and verify it's gone. Never delete
   entries from previous nights — they are accumulated test data.

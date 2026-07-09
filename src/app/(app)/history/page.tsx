@@ -40,6 +40,7 @@ export default async function HistoryPage() {
       library={library}
       settings={settings}
       today={today}
+      tz={tz}
       periodStart={period.start}
       periodEnd={period.end}
       weekStart={startOfWeek(today, weekStartDay)}

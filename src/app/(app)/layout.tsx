@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { Header } from "@/components/layout/Header";
 import { Nav } from "@/components/layout/Nav";
+import { TimezoneSync } from "@/components/layout/TimezoneSync";
 import { TimerPip } from "@/components/timer/TimerPip";
 import type { Entry, OpCode } from "@/lib/types";
 
@@ -18,6 +20,9 @@ export default async function AppLayout({
 
   // Proxy should already redirect unauthenticated users; defense-in-depth.
   if (!user) redirect("/signin");
+
+  const cookieStore = await cookies();
+  const hasTz = cookieStore.has("frt_timezone");
 
   const settings = await db.getSettings(supabase);
   const timerRunning = settings.timerStartTime !== null;
@@ -39,6 +44,7 @@ export default async function AppLayout({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <TimezoneSync hasTz={hasTz} />
       <Header userEmail={user.email} />
       <Nav timerRunning={timerRunning} />
       <div style={{ flex: 1 }}>{children}</div>

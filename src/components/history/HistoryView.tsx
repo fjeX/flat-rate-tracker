@@ -57,19 +57,26 @@ function getRange(
   }
 }
 
-// Format a time string from an ISO timestamp, e.g. "2:14 PM"
-function fmtTime(isoTimestamp: string): string {
+// Format a time string from an ISO timestamp, e.g. "2:14 PM".
+// `tz` pins the output to the user's timezone so the server render (container
+// clock, usually UTC) matches the client render — without it this line was a
+// guaranteed hydration mismatch (React #418) for any non-UTC user.
+function fmtTime(isoTimestamp: string, tz?: string): string {
   const d = new Date(isoTimestamp);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+  });
 }
 
-function fmtRowDate(date: string, today: string, createdAt: string): string {
+function fmtRowDate(date: string, today: string, createdAt: string, tz?: string): string {
   const yesterday = (() => {
     const d = new Date(today + "T12:00:00");
     d.setDate(d.getDate() - 1);
     return d.toISOString().slice(0, 10);
   })();
-  const time = fmtTime(createdAt);
+  const time = fmtTime(createdAt, tz);
   if (date === today) return `Today · ${time}`;
   if (date === yesterday) return `Yesterday · ${time}`;
   const MONTHS = [
@@ -83,11 +90,13 @@ function fmtRowDate(date: string, today: string, createdAt: string): string {
 function RoRow({
   entry,
   today,
+  tz,
   onOpen,
   hasPhoto = false,
 }: {
   entry: Entry;
   today: string;
+  tz?: string;
   onOpen: () => void;
   hasPhoto?: boolean;
 }) {
@@ -95,7 +104,7 @@ function RoRow({
     .filter(Boolean)
     .join(" ")
     .trim();
-  const dateLine = fmtRowDate(entry.date, today, entry.createdAt);
+  const dateLine = fmtRowDate(entry.date, today, entry.createdAt, tz);
 
   return (
     <button
@@ -132,6 +141,7 @@ export function HistoryView({
   library,
   settings,
   today,
+  tz,
   weekStart: weekStartProp,
   weekEnd: weekEndProp,
   weekStartDay,
@@ -144,6 +154,10 @@ export function HistoryView({
   library: OpCode[];
   settings: UserSettings;
   today: string;
+  // User's IANA timezone (from the frt_timezone cookie). Keeps server- and
+  // client-rendered timestamps identical; omitted in guest mode, where rows
+  // only render after sessionStorage hydration (client-only, no mismatch).
+  tz?: string;
   periodStart: string;
   periodEnd: string;
   weekStart: string;
@@ -328,6 +342,7 @@ export function HistoryView({
               key={entry.id}
               entry={entry}
               today={today}
+              tz={tz}
               onOpen={() => setOpenId(entry.id)}
               hasPhoto={entryIdsWithPhotos?.has(entry.id) ?? false}
             />
