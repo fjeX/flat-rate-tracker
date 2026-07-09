@@ -217,7 +217,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search code or description"
-          className="w-full bg-transparent py-2 text-sm placeholder-[var(--fg-3)] focus:outline-none"
+          className="min-h-[44px] w-full rounded-full bg-transparent px-1 text-sm placeholder-[var(--fg-3)] focus-ring focus:outline-none"
         />
         {search && (
           <button

@@ -83,11 +83,13 @@ export function LogRoForm({
           onChange={(e) => setDate(e.target.value)}
           required
           aria-required="true"
+          className="focus-ring rounded-full px-2"
           style={{
             background: "transparent",
             border: "none",
             outline: "none",
-            fontSize: 11,
+            minHeight: 44,
+            fontSize: 12,
             color: "var(--fg-3)",
             letterSpacing: "0.04em",
             cursor: "pointer",

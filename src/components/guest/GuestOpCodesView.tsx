@@ -97,7 +97,7 @@ export function GuestOpCodesView() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search code or description"
-          className="w-full bg-transparent py-2 text-sm placeholder-[var(--fg-3)] focus:outline-none"
+          className="min-h-[44px] w-full rounded-full bg-transparent px-1 text-sm placeholder-[var(--fg-3)] focus-ring focus:outline-none"
         />
         {search && (
           <button
@@ -184,7 +184,7 @@ export function GuestOpCodesView() {
                     type="button"
                     onClick={() => setEditTarget(op)}
                     aria-label={`Edit ${op.code}`}
-                    className="cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
+                    className="relative cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] after:absolute after:-inset-1.5 after:content-['']"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
@@ -192,7 +192,7 @@ export function GuestOpCodesView() {
                     type="button"
                     onClick={() => handleDelete(op.id, op.code)}
                     aria-label={`Delete ${op.code}`}
-                    className="cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
+                    className="relative cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)] after:absolute after:-inset-1.5 after:content-['']"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

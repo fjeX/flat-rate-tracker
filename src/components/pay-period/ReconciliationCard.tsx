@@ -232,7 +232,7 @@ export function ReconciliationCard({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 text-left"
+        className="flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
       >
         <h2 className="text-sm font-medium">Pay Reconciliation</h2>
         <span className="flex items-center gap-2 text-[var(--fg-3)]">

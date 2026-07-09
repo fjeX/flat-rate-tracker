@@ -173,7 +173,7 @@ export function VehicleFields({
                       type="checkbox"
                       checked={autoFill}
                       onChange={(e) => handleAutoFillToggle(e.target.checked)}
-                      style={{ accentColor: "var(--brand)", width: 11, height: 11 }}
+                      style={{ accentColor: "var(--brand)", width: 16, height: 16 }}
                     />
                     <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-3)" }}>
                       Auto

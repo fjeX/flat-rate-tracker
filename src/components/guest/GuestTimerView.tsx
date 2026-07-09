@@ -202,7 +202,7 @@ export function GuestTimerView() {
                         <button
                           type="button"
                           onClick={() => setLinePickEntry(attachedEntry)}
-                          className="text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+                          className="hit-expand text-[var(--fg-3)] hover:text-[var(--fg-1)]"
                         >
                           Change
                         </button>
@@ -211,7 +211,7 @@ export function GuestTimerView() {
                       <button
                         type="button"
                         onClick={() => setLinePickEntry(attachedEntry)}
-                        className="text-[var(--fg-2)] hover:text-[var(--fg-1)]"
+                        className="hit-expand text-[var(--fg-2)] hover:text-[var(--fg-1)]"
                       >
                         Pick a line →
                       </button>
@@ -365,7 +365,7 @@ export function GuestTimerView() {
                           ev.stopPropagation();
                           setLinePickEntry(null);
                         }}
-                        className="mt-2 text-xs text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+                        className="hit-expand mt-2 text-xs text-[var(--fg-3)] hover:text-[var(--fg-1)]"
                       >
                         Cancel
                       </button>

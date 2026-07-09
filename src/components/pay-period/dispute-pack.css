@@ -78,3 +78,8 @@
   .dp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .dp-table { min-width: 560px; }
 }
+
+/* On-screen toolbar buttons meet the 44px touch floor (print unaffected) */
+@media screen {
+  .dp-btn { min-height: 44px; }
+}

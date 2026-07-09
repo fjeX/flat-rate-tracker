@@ -1323,3 +1323,15 @@ a { color: inherit; }
      background explicitly so a flat, static block is guaranteed. */
   .skel { background: var(--bg-3); opacity: 1; }
 }
+
+/* ── Touch-target floor (Phase 3 quality gate) ──────────
+   Compact desktop controls grow to the 44px floor below 900px. */
+/* focus ring for bare/transparent text inputs that opt out of .input —
+   :focus (not :focus-visible) on purpose: text-entry controls always ring */
+.focus-ring:focus { outline: none; box-shadow: var(--ring); }
+
+@media (max-width: 899px) {
+  .r-tab, .r-mode-btn, .r-sub-btn { min-height: var(--tap-min); }
+  .section-title .link { display: inline-flex; align-items: center; min-height: var(--tap-min); }
+  .opc-dropdown-close { min-height: var(--tap-min); }
+}

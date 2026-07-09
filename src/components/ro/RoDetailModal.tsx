@@ -452,7 +452,7 @@ function AddOpCodePicker({
           )}
         </div>
       ) : (
-        <div className="card-inset overflow-hidden">
+        <div className="card-inset overflow-hidden focus-within:border-[var(--brand)] focus-within:shadow-[var(--ring)]">
           <div className="flex items-center gap-2 px-3">
             <Search className="h-3.5 w-3.5 flex-shrink-0 text-[var(--fg-3)]" />
             <label htmlFor="ro-detail-add-search" className="sr-only">Search op codes</label>
@@ -463,7 +463,7 @@ function AddOpCodePicker({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search op codes…"
-              className="w-full bg-transparent py-2 text-sm placeholder-[var(--fg-3)] focus:outline-none"
+              className="min-h-[44px] w-full bg-transparent text-sm placeholder-[var(--fg-3)] focus:outline-none"
             />
             <button
               type="button"

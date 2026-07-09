@@ -338,7 +338,7 @@ export function QuickAddModal({
                 onChange={(e) => { setSearch(e.target.value); setPickerOpen(true); }}
                 onFocus={() => setPickerOpen(true)}
                 placeholder="Search op codes…"
-                className="w-full bg-transparent py-2 text-sm placeholder-[var(--fg-3)] focus:outline-none"
+                className="min-h-[44px] w-full bg-transparent text-sm placeholder-[var(--fg-3)] focus:outline-none"
               />
               {search && (
                 <button
@@ -369,7 +369,7 @@ export function QuickAddModal({
                       <button
                         type="button"
                         onClick={() => addFromLibrary(oc)}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)]"
+                        className="flex min-h-[44px] w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)]"
                       >
                         <span className="min-w-0">
                           <span className="font-mono text-sm text-[var(--brand)]">
@@ -399,7 +399,7 @@ export function QuickAddModal({
                 <button
                   type="button"
                   onClick={() => { setPickerOpen(false); setCustomOpen(true); }}
-                  className="flex w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
+                  className="flex min-h-[44px] w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Other op code (one-time)
@@ -407,7 +407,7 @@ export function QuickAddModal({
                 <button
                   type="button"
                   onClick={() => { setPickerOpen(false); setNewLibraryOpen(true); }}
-                  className="flex w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
+                  className="flex min-h-[44px] w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Create new library op code

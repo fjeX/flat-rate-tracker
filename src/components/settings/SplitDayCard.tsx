@@ -76,7 +76,6 @@ export function SplitDayCard({ initialSplitDay, overrideCount }: Props) {
             aria-invalid={!valid}
             aria-describedby={error ? "splitDay-error" : undefined}
             className="input w-20"
-            style={{ padding: "6px 12px" }}
           />
           <button
             type="submit"

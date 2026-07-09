@@ -36,7 +36,7 @@ export function QuickAddCard() {
             role="switch"
             aria-checked={enabled}
             onClick={() => handleToggle(!enabled)}
-            className="relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 after:absolute after:-inset-2.5 after:content-['']"
             style={{ background: enabled ? "var(--brand)" : "var(--bg-4)" }}
             aria-label={enabled ? "Disable quick add" : "Enable quick add"}
           >

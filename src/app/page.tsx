@@ -326,7 +326,7 @@ function Nav() {
       }}
     >
       <div className="max-w-[1180px] mx-auto px-7 flex items-center justify-between h-[76px] max-sm:h-[68px] max-sm:px-[18px]">
-        <Link href="/" className="no-underline">
+        <Link href="/" className="inline-flex min-h-[44px] items-center no-underline">
           <Wordmark />
         </Link>
         <div className="flex gap-2.5 items-center">
@@ -757,7 +757,7 @@ function FinalCTA() {
               </Link>
               <Link
                 href="/guest"
-                className="font-mono text-sm text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors no-underline"
+                className="inline-flex min-h-[44px] items-center font-mono text-sm text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors no-underline"
               >
                 Try it first — no account →
               </Link>
@@ -773,7 +773,7 @@ function Footer() {
   return (
     <footer className="border-t border-[var(--line)] py-10">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start max-sm:gap-[18px]">
-        <Link href="/" className="no-underline">
+        <Link href="/" className="inline-flex min-h-[44px] items-center no-underline">
           <Wordmark size={15} />
         </Link>
         <div className="flex gap-5">
@@ -785,7 +785,7 @@ function Footer() {
             <Link
               key={l.label}
               href={l.href}
-              className="font-mono text-sm text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors whitespace-nowrap no-underline"
+              className="inline-flex min-h-[44px] items-center font-mono text-sm text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors whitespace-nowrap no-underline"
             >
               {l.label}
             </Link>

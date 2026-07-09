@@ -60,7 +60,7 @@ export function WageCheckCard({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 text-left"
+        className="flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
       >
         <div>
           <h2 className="text-sm font-medium text-[var(--fg-1)]">

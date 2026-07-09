@@ -326,7 +326,7 @@ function RoLinkPicker({
                       onChange(r.id);
                       setOpen(false);
                     }}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)]"
+                    className="flex min-h-[44px] w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)]"
                   >
                     <span className="min-w-0">
                       <span className="font-mono text-sm text-[var(--brand)]">

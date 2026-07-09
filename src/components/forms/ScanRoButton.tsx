@@ -230,6 +230,7 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
           type="button"
           onClick={() => setShowInfo((v) => !v)}
           aria-label="First-time setup help"
+          className="hit-expand"
           style={{
             background: "transparent",
             border: "none",

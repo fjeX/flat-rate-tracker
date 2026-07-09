@@ -229,7 +229,7 @@ export function TimerView({
                 <button
                   type="button"
                   onClick={() => setDetailEntry(attachedEntry)}
-                  className="font-mono text-sm text-[var(--brand)] hover:underline"
+                  className="hit-expand font-mono text-sm text-[var(--brand)] hover:underline"
                 >
                   #{attachedEntry.roNumber}
                 </button>
@@ -249,7 +249,7 @@ export function TimerView({
                       <button
                         type="button"
                         onClick={() => setLinePickEntry(attachedEntry)}
-                        className="text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+                        className="hit-expand text-[var(--fg-3)] hover:text-[var(--fg-1)]"
                       >
                         Change
                       </button>
@@ -258,7 +258,7 @@ export function TimerView({
                     <button
                       type="button"
                       onClick={() => setLinePickEntry(attachedEntry)}
-                      className="text-[var(--fg-2)] hover:text-[var(--fg-1)]"
+                      className="hit-expand text-[var(--fg-2)] hover:text-[var(--fg-1)]"
                     >
                       Pick a line →
                     </button>
@@ -483,7 +483,7 @@ function RecentRoList({
                       ev.stopPropagation();
                       onOpenDetail(e);
                     }}
-                    className="font-mono text-sm text-[var(--brand)] hover:underline"
+                    className="hit-expand font-mono text-sm text-[var(--brand)] hover:underline"
                   >
                     #{e.roNumber}
                   </button>
