@@ -1,5 +1,6 @@
 "use client";
 
+import "./dispute-pack.css";
 import Link from "next/link";
 import type { DisputePack } from "@/lib/dispute-pack";
 
@@ -15,15 +16,14 @@ function fmtD(n: number): string {
   });
 }
 
-// One-page printable variance report. Self-contained styling (a scoped <style>
-// block) so it prints as clean black-on-white regardless of the app theme, and
-// so the on-screen toolbar disappears when printed to PDF.
+// One-page printable variance report. Styles live in dispute-pack.css so it
+// prints as clean black-on-white regardless of the app theme, and the
+// on-screen toolbar disappears when printed to PDF.
 export function DisputePackPrint({ pack }: { pack: DisputePack }) {
   const empty = pack.lines.length === 0;
 
   return (
     <div className="dp-root">
-      <style>{CSS}</style>
 
       <div className="dp-toolbar">
         <Link href="/pay-period" className="dp-btn dp-btn-ghost">
@@ -140,74 +140,3 @@ export function DisputePackPrint({ pack }: { pack: DisputePack }) {
   );
 }
 
-const CSS = `
-.dp-root {
-  min-height: 100vh;
-  background: #f4f4f4;
-  padding: 24px 16px 64px;
-  color: #111;
-}
-.dp-toolbar {
-  max-width: 800px;
-  margin: 0 auto 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-.dp-btn {
-  font-family: var(--font-plex), system-ui, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid #d0d0d0;
-  cursor: pointer;
-  text-decoration: none;
-  color: #111;
-  background: #fff;
-}
-.dp-btn-primary {
-  background: #111;
-  color: #fff;
-  border-color: #111;
-}
-.dp-btn:hover:not(:disabled) { background: #f0f0f0; }
-.dp-btn-primary:hover:not(:disabled) { background: #333; }
-.dp-btn:focus-visible { outline: 2px solid #111; outline-offset: 2px; }
-.dp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.dp-sheet {
-  max-width: 800px;
-  margin: 0 auto;
-  background: #fff;
-  color: #111;
-  padding: 40px;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-  font-family: var(--font-plex), system-ui, sans-serif;
-  line-height: 1.5;
-}
-.dp-header { border-bottom: 2px solid #111; padding-bottom: 16px; margin-bottom: 24px; }
-.dp-header h1 { font-size: 20px; font-weight: 700; margin: 0 0 12px; letter-spacing: -0.01em; }
-.dp-meta { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0; }
-.dp-meta div { display: flex; flex-direction: column; }
-.dp-meta dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #666; }
-.dp-meta dd { margin: 0; font-size: 16px; font-weight: 600; }
-.dp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.dp-table th, .dp-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e2e2e2; vertical-align: top; }
-.dp-table thead th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #555; border-bottom: 1.5px solid #111; }
-.dp-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dp-variance { font-weight: 600; }
-.dp-table tfoot td { border-top: 1.5px solid #111; border-bottom: none; padding-top: 12px; font-weight: 700; }
-.dp-total-label { text-align: right; }
-.dp-footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e2e2e2; font-size: 12px; color: #444; }
-.dp-footer p { margin: 4px 0; }
-.dp-empty { font-size: 16px; color: #444; }
-
-@media print {
-  .dp-root { background: #fff; padding: 0; }
-  .dp-toolbar { display: none; }
-  .dp-sheet { max-width: none; margin: 0; padding: 0; border-radius: 0; box-shadow: none; }
-  @page { margin: 16mm; }
-}
-`;

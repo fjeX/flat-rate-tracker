@@ -109,7 +109,7 @@ export function SpiffsCard({
                     type="button"
                     onClick={() => setEditing(b)}
                     aria-label="Edit bonus"
-                    className="relative rounded p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--fg-1)] active:scale-[0.96] after:absolute after:-inset-1.5 after:content-['']"
+                    className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--fg-1)] active:scale-[0.96] after:absolute after:-inset-1.5 after:content-['']"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -193,7 +193,7 @@ function DeleteButton({
       onClick={handle}
       disabled={pending}
       aria-label="Delete bonus"
-      className="relative rounded p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 after:absolute after:-inset-1.5 after:content-['']"
+      className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 after:absolute after:-inset-1.5 after:content-['']"
     >
       <Trash2 className="h-3.5 w-3.5" />
     </button>

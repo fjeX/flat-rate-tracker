@@ -249,7 +249,7 @@ function PhotoViewer({
           type="button"
           onClick={onClose}
           aria-label="Close photo"
-          className="grid h-11 w-11 place-items-center rounded text-[var(--overlay-fg)]/80 hover:bg-[var(--overlay-fg)]/10 hover:text-[var(--overlay-fg)]"
+          className="grid h-11 w-11 place-items-center rounded-full text-[var(--overlay-fg)]/80 hover:bg-[var(--overlay-fg)]/10 hover:text-[var(--overlay-fg)]"
         >
           <X className="h-5 w-5" />
         </button>

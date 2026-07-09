@@ -299,7 +299,7 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
             <button
               type="button"
               onClick={() => setPickerOpen(false)}
-              className="rounded p-0.5 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+              className="rounded-full p-0.5 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
               aria-label="Close picker"
             >
               <X className="h-3.5 w-3.5" />

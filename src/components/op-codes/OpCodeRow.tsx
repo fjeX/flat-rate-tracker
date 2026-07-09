@@ -57,7 +57,7 @@ export function OpCodeRow({
         <div
           {...listeners}
           onClick={(e) => e.stopPropagation()}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-[var(--fg-2)] cursor-grab active:cursor-grabbing hover:text-[var(--fg-1)]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--fg-2)] cursor-grab active:cursor-grabbing hover:text-[var(--fg-1)]"
           aria-label="Drag to reorder"
         >
           <GripVertical className="h-4 w-4" />
@@ -107,7 +107,7 @@ export function OpCodeRow({
           type="button"
           onClick={() => onEdit(opCode)}
           aria-label={`Edit ${opCode.code}`}
-          className="relative cursor-pointer rounded p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] after:absolute after:-inset-1.5 after:content-['']"
+          className="relative cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] after:absolute after:-inset-1.5 after:content-['']"
         >
           <Pencil className="h-4 w-4" />
         </button>
@@ -116,7 +116,7 @@ export function OpCodeRow({
           onClick={() => onDelete(opCode)}
           disabled={deleting}
           aria-label={`Delete ${opCode.code}`}
-          className="relative cursor-pointer rounded p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)] disabled:opacity-50 after:absolute after:-inset-1.5 after:content-['']"
+          className="relative cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)] disabled:opacity-50 after:absolute after:-inset-1.5 after:content-['']"
         >
           <Trash2 className="h-4 w-4" />
         </button>

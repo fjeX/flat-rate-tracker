@@ -179,7 +179,7 @@ function BarChart({ bars, height }: { bars: number[]; height: number }) {
       {bars.map((h, i) => (
         <div
           key={i}
-          className={`flex-1 rounded-t-sm ${h > 78 ? "bg-[var(--brand-strong)]" : "bg-[var(--bg-4)]"}`}
+          className={`flex-1 rounded-t-[2px] ${h > 78 ? "bg-[var(--brand-strong)]" : "bg-[var(--bg-4)]"}`}
           style={{ height: `${h}%` }}
         />
       ))}
@@ -194,16 +194,16 @@ function ROForm() {
         <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
           RO Number
         </label>
-        <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[9px] px-3 py-2.5 flex items-center">
-          <span className="font-mono font-semibold text-[var(--fg-0)] text-[15px]">48213</span>
+        <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[var(--radius-sm)] px-3 py-2.5 flex items-center">
+          <span className="font-mono font-semibold text-[var(--fg-0)] text-base">48213</span>
         </div>
       </div>
       <div>
         <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
           Op Code
         </label>
-        <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[9px] px-3 py-2.5 flex items-center gap-2.5">
-          <span className="font-mono font-semibold text-[var(--fg-0)] text-[15px]">BRK-FR</span>
+        <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[var(--radius-sm)] px-3 py-2.5 flex items-center gap-2.5">
+          <span className="font-mono font-semibold text-[var(--fg-0)] text-base">BRK-FR</span>
           <span className="font-mono text-[11px] text-[var(--fg-3)]">Front brake job · 2.4 hrs</span>
         </div>
       </div>
@@ -221,7 +221,7 @@ function ROForm() {
 
 function OpCodeList() {
   return (
-    <div className="flex flex-col gap-px bg-[var(--line)] border border-[var(--line)] rounded-xl overflow-hidden">
+    <div className="flex flex-col gap-px bg-[var(--line)] border border-[var(--line)] rounded-[var(--radius)] overflow-hidden">
       {/* BRK — expanded */}
       <div
         className="grid items-center gap-2.5 px-3 py-2.5 bg-[var(--bg-2)]"
@@ -270,7 +270,7 @@ function DiscrepancyCard() {
       ].map((row) => (
         <div key={row.label} className="flex items-baseline justify-between">
           <span className="font-mono text-[12px] tracking-[0.05em] text-[var(--fg-2)]">{row.label}</span>
-          <span className="font-mono font-bold text-[18px] text-[var(--fg-0)]">
+          <span className="font-mono font-bold text-lg text-[var(--fg-0)]">
             {row.value}{" "}
             <span className="text-[11px] text-[var(--fg-3)] font-normal">{row.unit}</span>
           </span>
@@ -279,7 +279,7 @@ function DiscrepancyCard() {
       <div className="h-px bg-[var(--line)] my-0.5" />
       <div className="flex items-baseline justify-between">
         <span className="font-mono text-[12px] tracking-[0.05em] text-[var(--fg-1)]">Discrepancy</span>
-        <span className="font-mono font-bold text-[18px] text-[var(--warn)]">
+        <span className="font-mono font-bold text-lg text-[var(--warn)]">
           −2.3{" "}
           <span className="text-[11px] text-[var(--fg-3)] font-normal">hrs</span>
         </span>
@@ -302,7 +302,7 @@ function HistoryRows() {
       {rows.map((r, i) => (
         <div
           key={i}
-          className="grid items-center gap-2.5 px-3 py-2 bg-[var(--bg-1)] border border-[var(--line)] rounded-[9px]"
+          className="grid items-center gap-2.5 px-3 py-2 bg-[var(--bg-1)] border border-[var(--line)] rounded-[var(--radius-sm)]"
           style={{ gridTemplateColumns: "70px 1fr auto" }}
         >
           <span className="font-mono font-semibold text-[12px] text-[var(--brand)]">{r.code}</span>
@@ -335,7 +335,7 @@ function Nav() {
           </Link>
           <Link
             href="/signin"
-            className="hidden sm:inline-flex items-center font-bold text-sm px-4 py-2 rounded-lg text-[var(--fg-2)] hover:text-[var(--fg-0)] transition-colors whitespace-nowrap"
+            className="hidden sm:inline-flex items-center font-bold text-sm px-4 py-2 rounded-full text-[var(--fg-2)] hover:text-[var(--fg-0)] transition-colors whitespace-nowrap"
           >
             Log in
           </Link>
@@ -507,8 +507,8 @@ function HowItWorks() {
               <div className="font-mono font-bold text-[13px] text-[var(--brand-strong)] tracking-[0.1em]">
                 {s.n}
               </div>
-              <h3 className="text-[21px] font-bold mt-3 mb-2 text-[var(--fg-0)] tracking-tight">{s.t}</h3>
-              <p className="text-[var(--fg-2)] leading-[1.55] m-0 text-[15px]">{s.d}</p>
+              <h3 className="text-xl font-bold mt-3 mb-2 text-[var(--fg-0)] tracking-tight">{s.t}</h3>
+              <p className="text-[var(--fg-2)] leading-[1.55] m-0 text-base">{s.d}</p>
             </Rv>
           ))}
         </div>
@@ -631,12 +631,12 @@ function Features() {
             <Rv
               key={f.tag}
               delay={(i % 3) * 80}
-              className="card rounded-2xl p-[22px] flex flex-col hover:border-[var(--brand-soft)] hover:-translate-y-0.5 transition-all duration-200"
+              className="card rounded-[var(--radius)] p-[22px] flex flex-col hover:border-[var(--brand-soft)] hover:-translate-y-0.5 transition-all duration-200"
             >
               <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--brand-strong)]">
                 {f.tag}
               </span>
-              <h3 className="text-[19px] font-bold mt-2 mb-1.5 text-[var(--fg-0)] tracking-tight">
+              <h3 className="text-lg font-bold mt-2 mb-1.5 text-[var(--fg-0)] tracking-tight">
                 {f.title}
               </h3>
               <p className="text-[var(--fg-2)] text-sm leading-[1.5] mb-[18px]">{f.desc}</p>
@@ -687,7 +687,7 @@ function GuestMode() {
             </Rv>
           </div>
 
-          <Rv delay={120} className="card rounded-2xl p-6">
+          <Rv delay={120} className="card rounded-[var(--radius)] p-6">
             <div className="flex items-center gap-2.5 mb-[18px] flex-wrap">
               <span className="font-mono text-[11px] font-bold tracking-[0.08em] uppercase text-[var(--brand)] bg-[var(--brand-bg)] px-2.5 py-1.5 rounded-full whitespace-nowrap">
                 ● Guest session
@@ -816,7 +816,7 @@ export default function LandingPage() {
           }
         }
       `}</style>
-      <div id="lp" className="min-h-screen selection:bg-[var(--brand)] selection:text-[oklch(0.18_0.04_50)]">
+      <div id="lp" className="min-h-screen selection:bg-[var(--brand)] selection:text-[var(--brand-ink)]">
         <Nav />
         <Hero />
         <PaceSection />

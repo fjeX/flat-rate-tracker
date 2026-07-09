@@ -98,7 +98,7 @@ export function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="grid h-11 w-11 place-items-center rounded text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
+            className="grid h-11 w-11 place-items-center rounded-full text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
             aria-label="Close"
           >
             <X className="h-4 w-4" />

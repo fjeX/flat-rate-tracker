@@ -94,7 +94,7 @@ function TagInput({
       {tags.map((tag) => (
         <span
           key={tag}
-          className="flex items-center gap-1 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-xs text-[var(--fg-1)]"
+          className="flex items-center gap-1 badge badge-neutral text-[var(--fg-1)]"
         >
           {tag}
           <button
@@ -349,7 +349,7 @@ function OpCodeFormBody({
             type="checkbox"
             checked={draft.hasSubCodes}
             onChange={(e) => toggleSubCodes(e.target.checked)}
-            className="h-4 w-4 rounded border-[var(--line)] bg-[var(--bg-3)] accent-[var(--brand)]"
+            className="h-4 w-4 rounded-[4px] border-[var(--line)] bg-[var(--bg-3)] accent-[var(--brand)]"
           />
           <span className="text-sm text-[var(--fg-1)]">This op code has sub op codes</span>
         </label>
@@ -379,7 +379,7 @@ function OpCodeFormBody({
                   aria-label="Sub op code"
                   required
                   aria-required="true"
-                  className="rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1.5 text-sm font-mono text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
+                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-2 py-1.5 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
                 />
                 <input
                   type="text"
@@ -387,19 +387,19 @@ function OpCodeFormBody({
                   onChange={(e) => updateSubCode(sub.draftKey, { description: e.target.value })}
                   placeholder="Description…"
                   aria-label="Sub op code description"
-                  className="rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
+                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
                 />
                 <HoursInput
                   value={sub.flagHours}
                   onChange={(val) => updateSubCode(sub.draftKey, { flagHours: val })}
                   ariaLabel="Sub op code flag hours"
-                  className="rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
+                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => removeSubCode(sub.draftKey)}
                   aria-label="Remove sub op code"
-                  className="flex items-center justify-center rounded p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
+                  className="flex items-center justify-center rounded-full p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

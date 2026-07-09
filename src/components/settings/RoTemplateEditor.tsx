@@ -276,7 +276,7 @@ export function RoTemplateEditor({
           </div>
           <button
             onClick={() => onClose()}
-            className="relative rounded p-1 text-[var(--fg-2)] hover:text-[var(--fg-0)] after:absolute after:-inset-2.5 after:content-['']"
+            className="relative rounded-full p-1 text-[var(--fg-2)] hover:text-[var(--fg-0)] after:absolute after:-inset-2.5 after:content-['']"
             aria-label="Close"
           >
             <X className="h-5 w-5" />

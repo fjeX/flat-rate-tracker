@@ -184,7 +184,7 @@ export function GuestOpCodesView() {
                     type="button"
                     onClick={() => setEditTarget(op)}
                     aria-label={`Edit ${op.code}`}
-                    className="cursor-pointer rounded p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
+                    className="cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
@@ -192,7 +192,7 @@ export function GuestOpCodesView() {
                     type="button"
                     onClick={() => handleDelete(op.id, op.code)}
                     aria-label={`Delete ${op.code}`}
-                    className="cursor-pointer rounded p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
+                    className="cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

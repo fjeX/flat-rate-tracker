@@ -261,7 +261,7 @@ export function QuickAddModal({
             role="tab"
             aria-selected={mode === m}
             onClick={() => setMode(m)}
-            className={`rounded px-3 py-3 text-sm font-medium ${
+            className={`rounded-full px-3 py-3 text-sm font-medium ${
               mode === m
                 ? "bg-[var(--bg-3)] text-[var(--fg-0)] shadow-[inset_0_0_0_1px_var(--bg-4)]"
                 : "text-[var(--fg-2)] hover:text-[var(--fg-1)]"
@@ -399,7 +399,7 @@ export function QuickAddModal({
                 <button
                   type="button"
                   onClick={() => { setPickerOpen(false); setCustomOpen(true); }}
-                  className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
+                  className="flex w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Other op code (one-time)
@@ -407,7 +407,7 @@ export function QuickAddModal({
                 <button
                   type="button"
                   onClick={() => { setPickerOpen(false); setNewLibraryOpen(true); }}
-                  className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
+                  className="flex w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Create new library op code
@@ -469,7 +469,7 @@ export function QuickAddModal({
                               )
                             }
                             aria-label={`Flag hours for ${code || "op code line"}`}
-                            className="w-full rounded border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1 text-right font-mono text-sm tabular-nums text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)] focus:outline-none"
+                            className="opc-hours-input w-full"
                             placeholder="0"
                           />
                         </div>
@@ -477,7 +477,7 @@ export function QuickAddModal({
                           type="button"
                           onClick={() => removeLine(line.key)}
                           aria-label="Remove line"
-                          className="relative rounded p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
+                          className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
