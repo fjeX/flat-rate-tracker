@@ -71,3 +71,10 @@
   .dp-sheet { max-width: none; margin: 0; padding: 0; border-radius: 0; box-shadow: none; }
   @page { margin: 16mm; }
 }
+
+/* On-screen phones: let the variance table scroll inside its own container
+   instead of widening the page. Print layout is unaffected. */
+@media screen and (max-width: 640px) {
+  .dp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .dp-table { min-width: 560px; }
+}

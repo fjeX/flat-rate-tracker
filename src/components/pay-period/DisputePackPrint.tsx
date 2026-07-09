@@ -68,6 +68,7 @@ export function DisputePackPrint({ pack }: { pack: DisputePack }) {
           </p>
         ) : (
           <>
+            <div className="dp-table-wrap">
             <table className="dp-table">
               <thead>
                 <tr>
@@ -121,6 +122,7 @@ export function DisputePackPrint({ pack }: { pack: DisputePack }) {
                 </tr>
               </tfoot>
             </table>
+            </div>
 
             <footer className="dp-footer">
               <p>
