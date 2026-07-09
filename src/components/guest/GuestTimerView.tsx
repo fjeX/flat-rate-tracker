@@ -6,6 +6,8 @@ import { useGuestStore } from "@/lib/guest/context";
 import { fmtHours } from "@/lib/stats";
 import { formatDateShort } from "@/lib/periods";
 import type { Entry, EntryOpCode } from "@/lib/types";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { RollingNumber } from "@/components/ui/RollingNumber";
 import { tap } from "@/lib/haptics";
 
@@ -20,23 +22,18 @@ function formatElapsed(ms: number): string {
 }
 
 function StatusBadge({ status }: { status: "READY" | "RUNNING" | "PAUSED" }) {
-  const styles: Record<typeof status, string> = {
-    READY: "border-[var(--line)] bg-[var(--bg-3)] text-[var(--fg-2)]",
-    RUNNING: "border-[var(--good)]/30 bg-[var(--good-bg)] text-[var(--good)]",
-    PAUSED: "border-[var(--warn)]/30 bg-[var(--warn-bg)] text-[var(--warn)]",
-  };
+  const tone = { READY: "neutral", RUNNING: "good", PAUSED: "warn" } as const;
+  const label = { READY: "Ready", RUNNING: "Running", PAUSED: "Paused" } as const;
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${styles[status]}`}
-    >
+    <Badge tone={tone[status]}>
       {status === "RUNNING" && (
         <span className="relative inline-flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--good)] opacity-75" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--good)]" />
         </span>
       )}
-      {status}
-    </span>
+      {label[status]}
+    </Badge>
   );
 }
 
@@ -158,39 +155,26 @@ export function GuestTimerView() {
         />
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           {running ? (
-            <button
-              type="button"
-              onClick={() => { tap(); pauseGuestTimer(); }}
-              className="btn btn-primary"
-            >
+            <Button variant="primary" onClick={() => { tap(); pauseGuestTimer(); }}>
               <Pause className="h-4 w-4" />
               Pause
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
-              onClick={() => { tap(); startGuestTimer(); }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--good-strong)] px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-            >
+            <Button variant="good" onClick={() => { tap(); startGuestTimer(); }}>
               <Play className="h-4 w-4" />
               {status === "PAUSED" ? "Resume" : "Start"}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={handleReset}
-            disabled={status === "READY"}
-            className="btn"
-          >
+          <Button onClick={handleReset} disabled={status === "READY"}>
             <RotateCcw className="h-4 w-4" />
             Reset
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Attached RO */}
       <section className="card p-4">
-        <h2 className="text-xs uppercase tracking-wide text-[var(--fg-3)]">Attached RO</h2>
+        <h2 className="section-title">Attached RO</h2>
 
         {attachedEntry ? (
           <div className="mt-2 space-y-2">
@@ -237,30 +221,24 @@ export function GuestTimerView() {
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
                   onClick={() => setSaveConfirming(true)}
                   disabled={!canSave}
-                  className="btn btn-primary"
                   title={!canSave ? "Start the timer first and pick a line" : undefined}
                 >
                   <Save className="h-4 w-4" />
                   Save to Job
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearRo}
-                  className="rounded-md border border-[var(--line)] p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
-                  aria-label="Clear attached RO"
-                >
+                </Button>
+                <Button variant="ghost" onClick={handleClearRo} aria-label="Clear attached RO">
                   <X className="h-4 w-4" />
-                </button>
+                </Button>
               </div>
             </div>
 
             {/* Inline save confirmation */}
             {saveConfirming && (
-              <div className="rounded-lg border border-[var(--brand-soft)] bg-[var(--brand-bg)] px-4 py-3">
+              <div className="rounded-[var(--radius-sm)] bg-[var(--brand-bg)] px-4 py-3">
                 <p className="text-sm text-[var(--fg-1)]">
                   Saving{" "}
                   <span className="font-mono font-medium text-[var(--brand)]">
@@ -272,20 +250,12 @@ export function GuestTimerView() {
                   </span>
                 </p>
                 <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleConfirmSave}
-                    className="btn btn-primary btn-sm"
-                  >
+                  <Button variant="primary" size="sm" onClick={handleConfirmSave}>
                     Confirm Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSaveConfirming(false)}
-                    className="btn btn-sm"
-                  >
+                  </Button>
+                  <Button size="sm" onClick={() => setSaveConfirming(false)}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -338,11 +308,7 @@ export function GuestTimerView() {
                         <span className="text-xs text-[var(--fg-3)]">
                           {formatDateShort(entry.date)}
                         </span>
-                        {isAttached && (
-                          <span className="pill brand uppercase tracking-wide text-[10px]">
-                            Attached
-                          </span>
-                        )}
+                        {isAttached && <Badge tone="brand">Attached</Badge>}
                       </div>
                       {vehicle && (
                         <div className="mt-0.5 truncate text-xs text-[var(--fg-2)]">
@@ -372,17 +338,13 @@ export function GuestTimerView() {
                                   ev.stopPropagation();
                                   handleLineConfirm(line.id, entry);
                                 }}
-                                className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left hover:bg-[var(--bg-4)]/50"
+                                className="flex w-full min-h-[44px] items-center justify-between gap-3 rounded-[var(--radius-sm)] px-2 py-1.5 text-left hover:bg-[var(--bg-4)]/50"
                               >
                                 <div className="min-w-0">
                                   <span className="font-mono text-sm text-[var(--brand)]">
                                     {code}
                                   </span>
-                                  {line.custom && (
-                                    <span className="ml-2 rounded bg-[var(--bg-4)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
-                                      Other
-                                    </span>
-                                  )}
+                                  {line.custom && <Badge className="ml-2">Other</Badge>}
                                   {description && (
                                     <div className="truncate text-xs text-[var(--fg-3)]">
                                       {description}

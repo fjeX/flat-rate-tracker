@@ -10,6 +10,8 @@ import {
   startTimerAction,
 } from "@/app/actions/timer";
 import { TimerSaveModal } from "./TimerSaveModal";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { RollingNumber } from "@/components/ui/RollingNumber";
 import { tap } from "@/lib/haptics";
 
@@ -249,7 +251,7 @@ export function TimerPip({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        className={`select-none touch-none cursor-grab active:cursor-grabbing rounded-3xl border-2 ${borderCls} bg-[var(--bg-2)] shadow-2xl`}
+        className={`select-none touch-none cursor-grab active:cursor-grabbing rounded-[var(--radius)] border-2 ${borderCls} bg-[var(--bg-2)] shadow-[var(--shadow-pop)]`}
       >
         {expanded ? (
           <ExpandedCard
@@ -337,7 +339,7 @@ function CollapsedPill({
         </button>
       </div>
       {roNumber && (
-        <span className="mt-0.5 text-[10px] text-[var(--fg-3)]">#{roNumber}</span>
+        <span className="mt-0.5 text-xs text-[var(--fg-3)]">#{roNumber}</span>
       )}
     </div>
   );
@@ -385,24 +387,18 @@ function ExpandedCard({
   const stopDrag = (e: React.PointerEvent) => e.stopPropagation();
 
   return (
-    <div className="relative flex h-full w-full flex-col rounded-3xl p-4">
+    <div className="relative flex h-full w-full flex-col rounded-[var(--radius)] p-4">
       {/* Header: status badge + minimize (row itself stays draggable) */}
       <div className="mb-3 flex items-start justify-between">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-wide ${
-            isRunning
-              ? "border-[var(--good)]/30 bg-[var(--good-bg)] text-[var(--good)]"
-              : "border-[var(--warn)]/30 bg-[var(--warn-bg)] text-[var(--warn)]"
-          }`}
-        >
+        <Badge tone={isRunning ? "good" : "warn"}>
           {isRunning && (
             <span className="relative flex h-2 w-2">
               <span className="absolute inset-0 animate-ping rounded-full bg-[var(--good)] opacity-75" />
               <span className="relative flex h-2 w-2 rounded-full bg-[var(--good)]" />
             </span>
           )}
-          {status}
-        </span>
+          {isRunning ? "Running" : "Paused"}
+        </Badge>
         <button
           type="button"
           onPointerDown={stopDrag}
@@ -434,48 +430,30 @@ function ExpandedCard({
       {/* Controls (buttons stop drag; the gaps between them stay draggable) */}
       <div className="mt-4 flex gap-2">
         {isRunning ? (
-          <button
-            type="button"
-            onPointerDown={stopDrag}
-            onClick={onPause}
-            disabled={pending}
-            className="btn min-w-0 flex-1"
-          >
+          <Button onPointerDown={stopDrag} onClick={onPause} disabled={pending} className="min-w-0 flex-1">
             <Pause className="h-4 w-4 shrink-0" />
             Pause
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
-            onPointerDown={stopDrag}
-            onClick={onResume}
-            disabled={pending}
-            className="btn min-w-0 flex-1"
-          >
+          <Button onPointerDown={stopDrag} onClick={onResume} disabled={pending} className="min-w-0 flex-1">
             <Play className="h-4 w-4 shrink-0" />
             Resume
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          onPointerDown={stopDrag}
-          onClick={onReset}
-          disabled={pending}
-          className="btn min-w-0 flex-1"
-        >
+        <Button onPointerDown={stopDrag} onClick={onReset} disabled={pending} className="min-w-0 flex-1">
           <RotateCcw className="h-4 w-4 shrink-0" />
           Reset
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
           onPointerDown={stopDrag}
           onClick={onSave}
           disabled={pending || !attachedEntry || elapsedMs === 0}
-          className="btn btn-primary min-w-0 flex-1"
+          className="min-w-0 flex-1"
         >
           <Save className="h-4 w-4 shrink-0" />
           Save
-        </button>
+        </Button>
       </div>
 
       {/* Resize grip — bottom-right corner, browser-window style */}
@@ -485,7 +463,7 @@ function ExpandedCard({
         onPointerDown={onResizeDown}
         onPointerMove={onResizeMove}
         onPointerUp={onResizeUp}
-        className="absolute -bottom-0.5 -right-0.5 flex h-11 w-11 cursor-nwse-resize touch-none items-end justify-end rounded-tl-lg p-2 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+        className="absolute -bottom-0.5 -right-0.5 flex h-11 w-11 cursor-nwse-resize touch-none items-end justify-end rounded-tl-[var(--radius-sm)] p-2 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
           <path d="M9 1v8H1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

@@ -584,6 +584,14 @@ body {
 .btn-primary:hover { filter: brightness(1.06); }
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-ghost:hover { background: var(--bg-3); }
+/* positive/"go" action — timer start, confirmations */
+.btn-good {
+  background: var(--good-strong);
+  border-color: transparent;
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+.btn-good:hover:not(:disabled) { filter: brightness(1.06); }
 .btn-danger {
   background: transparent;
   border-color: color-mix(in oklab, var(--bad) 40%, transparent);

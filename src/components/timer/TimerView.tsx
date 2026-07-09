@@ -21,6 +21,8 @@ import {
 import { saveEntry } from "@/app/actions/entries";
 import { TimerSaveModal } from "./TimerSaveModal";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { LogRoForm } from "@/components/forms/LogRoForm";
 import { RollingNumber } from "@/components/ui/RollingNumber";
@@ -191,44 +193,35 @@ export function TimerView({
         />
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           {running ? (
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={() => { tap(); run(() => pauseTimerAction()); }}
               disabled={pending}
-              className="btn btn-primary"
             >
               <Pause className="h-4 w-4" />
               Pause
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="good"
               onClick={() => { tap(); run(() => startTimerAction()); }}
               disabled={pending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--good-strong)] px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50"
             >
               <Play className="h-4 w-4" />
               {status === "PAUSED" ? "Resume" : "Start"}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={handleReset}
-            disabled={pending || status === "READY"}
-            className="btn"
-          >
+          <Button onClick={handleReset} disabled={pending || status === "READY"}>
             <RotateCcw className="h-4 w-4" />
             Reset
-          </button>
+          </Button>
         </div>
         {error && <p className="mt-3 text-sm text-[var(--bad)]">{error}</p>}
       </div>
 
       {/* Attached RO */}
       <section className="card p-4">
-        <h2 className="text-xs uppercase tracking-wide text-[var(--fg-3)]">
-          Attached RO
-        </h2>
+        <h2 className="section-title">Attached RO</h2>
         {attachedEntry ? (
           <div className="mt-2 flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -274,11 +267,10 @@ export function TimerView({
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
+              <Button
+                variant="primary"
                 onClick={() => setSaveOpen(true)}
                 disabled={!canSave || pending}
-                className="btn btn-primary"
                 title={
                   !canSave && elapsedMs === 0
                     ? "Start the timer first"
@@ -287,17 +279,16 @@ export function TimerView({
               >
                 <Save className="h-4 w-4" />
                 Save to Job
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={handleClearRo}
                 disabled={pending}
-                className="rounded-md border border-[var(--line)] p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] disabled:opacity-50"
                 aria-label="Clear attached RO"
                 title="Clear attached RO"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -312,14 +303,10 @@ export function TimerView({
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium text-[var(--fg-2)]">Recent ROs</h2>
-          <button
-            type="button"
-            onClick={() => setLogRoOpen(true)}
-            className="btn btn-sm"
-          >
+          <Button size="sm" onClick={() => setLogRoOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
             Log RO
-          </button>
+          </Button>
         </div>
         <RecentRoList
           entries={recentEntries}
@@ -361,7 +348,7 @@ export function TimerView({
             <p className="text-sm text-[var(--fg-2)]">
               Which line do you want to track time for?
             </p>
-            <ul className="divide-y divide-[var(--line-soft)] rounded-[var(--radius-sm)] border border-[var(--line)]">
+            <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
               {linePickEntry.opCodes.map((line) => {
                 const { code, description } = getLineLabel(line);
                 return (
@@ -369,16 +356,14 @@ export function TimerView({
                     <button
                       type="button"
                       onClick={() => handleLineConfirm(line.id, linePickEntry)}
-                      className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
+                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
                     >
                       <div className="min-w-0 flex-1">
                         <span className="font-mono text-sm text-[var(--brand)]">
                           {code}
                         </span>
                         {line.custom && (
-                          <span className="ml-2 rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
-                            Other
-                          </span>
+                          <Badge className="ml-2">Other</Badge>
                         )}
                         {description && (
                           <div className="truncate text-xs text-[var(--fg-3)]">
@@ -403,14 +388,9 @@ export function TimerView({
         <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-0)]">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg-0)]/90 px-4 py-3 backdrop-blur">
             <h2 className="text-base font-semibold">Log New RO</h2>
-            <button
-              type="button"
-              onClick={() => setLogRoOpen(false)}
-              className="rounded p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
-              aria-label="Close"
-            >
+            <Button variant="ghost" onClick={() => setLogRoOpen(false)} aria-label="Close">
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
           <LogRoForm
             initialOpCodes={library}
@@ -427,23 +407,18 @@ export function TimerView({
 // ── Sub-components ──────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: "READY" | "RUNNING" | "PAUSED" }) {
-  const styles: Record<typeof status, string> = {
-    READY: "border-[var(--line)] bg-[var(--bg-3)] text-[var(--fg-2)]",
-    RUNNING: "border-[var(--good)]/30 bg-[var(--good-bg)] text-[var(--good)]",
-    PAUSED: "border-[var(--warn)]/30 bg-[var(--warn-bg)] text-[var(--warn)]",
-  };
+  const tone = { READY: "neutral", RUNNING: "good", PAUSED: "warn" } as const;
+  const label = { READY: "Ready", RUNNING: "Running", PAUSED: "Paused" } as const;
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${styles[status]}`}
-    >
+    <Badge tone={tone[status]}>
       {status === "RUNNING" && (
         <span className="relative inline-flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--good)] opacity-75" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--good)]" />
         </span>
       )}
-      {status}
-    </span>
+      {label[status]}
+    </Badge>
   );
 }
 
@@ -515,11 +490,7 @@ function RecentRoList({
                   <span className="text-xs text-[var(--fg-3)]">
                     {formatDateShort(e.date)}
                   </span>
-                  {isAttached && (
-                    <span className="pill brand uppercase tracking-wide text-[10px]">
-                      Attached
-                    </span>
-                  )}
+                  {isAttached && <Badge tone="brand">Attached</Badge>}
                 </div>
                 {vehicle && (
                   <div className="mt-0.5 truncate text-xs text-[var(--fg-2)]">

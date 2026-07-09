@@ -1,8 +1,8 @@
 import type { ButtonHTMLAttributes } from "react";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  /** Visual weight. `danger` is for destructive actions (delete RO, etc.). */
-  variant?: "default" | "primary" | "ghost" | "danger";
+  /** Visual weight. `danger` is destructive; `good` is a positive/"go" action. */
+  variant?: "default" | "primary" | "ghost" | "danger" | "good";
   size?: "sm" | "lg";
   block?: boolean;
 };

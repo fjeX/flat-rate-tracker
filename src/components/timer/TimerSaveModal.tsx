@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
@@ -97,11 +99,11 @@ export function TimerSaveModal({
         </p>
 
         {entry.opCodes.length === 0 ? (
-          <p className="rounded-md border border-[var(--warn)]/30 bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
+          <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
             This RO has no op codes. Edit it first to add one.
           </p>
         ) : (
-          <fieldset className="rounded-md border border-[var(--line)]">
+          <fieldset className="card-inset overflow-hidden">
           <legend className="sr-only">Op code to save time to</legend>
           <ul className="divide-y divide-[var(--line-soft)]">
             {entry.opCodes.map((line) => {
@@ -126,11 +128,7 @@ export function TimerSaveModal({
                         <span className="font-mono text-sm text-[var(--brand)]">
                           {code}
                         </span>
-                        {line.custom && (
-                          <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
-                            Other
-                          </span>
-                        )}
+                        {line.custom && <Badge>Other</Badge>}
                         <span className="ml-auto text-xs text-[var(--fg-3)]">
                           Flag {fmtHours(line.flagHours)}h
                         </span>
@@ -158,22 +156,12 @@ export function TimerSaveModal({
         {error && <p role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={pending}
-            className="btn"
-          >
+          <Button onClick={onClose} disabled={pending}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={pending || !selected}
-            className="btn btn-primary"
-          >
+          </Button>
+          <Button variant="primary" onClick={handleSave} disabled={pending || !selected}>
             {pending ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
