@@ -24,7 +24,7 @@ export function GuestRateCard() {
   return (
     <label className="flex items-center gap-2 text-sm">
       <span className="text-[var(--fg-2)]">Your rate</span>
-      <span className="flex items-center rounded-md border border-[var(--line)] bg-[var(--bg-1)] pl-2 focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_oklch(0.66_0.19_50_/_0.18)]">
+      <span className="flex items-center card-inset pl-2 focus-within:border-[var(--brand)] focus-within:shadow-[var(--ring)]">
         <span className="text-[var(--fg-3)]">$</span>
         <input
           type="number"

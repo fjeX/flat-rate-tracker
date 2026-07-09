@@ -90,7 +90,7 @@ export function WageCheckCard({
           {result.hourly !== null ? (
             <div>
               <div className="field-label">Effective hourly this period</div>
-              <div className="mono mt-0.5 text-[20px] font-semibold tabular-nums text-[var(--fg-0)]">
+              <div className="mono mt-0.5 text-xl font-semibold tabular-nums text-[var(--fg-0)]">
                 {fmtRate(result.hourly)}
                 <span className="text-base font-normal text-[var(--fg-3)]">
                   /hr

@@ -174,7 +174,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
         </p>
       )}
       {atCap && (
-        <p className="mt-2 text-[11px] text-[var(--fg-3)]">
+        <p className="mt-2 text-xs text-[var(--fg-3)]">
           Maximum {MAX_PHOTOS_PER_ENTRY} photos per RO.
         </p>
       )}
@@ -242,7 +242,7 @@ function PhotoViewer({
     >
       <div className="flex items-center justify-between px-4 py-3">
         <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wide text-[var(--overlay-fg)]/50">Photographed</div>
+          <div className="text-xs text-[var(--overlay-fg)]/50">Photographed</div>
           <div className="truncate text-sm font-medium text-[var(--overlay-fg)]">{formatCaptured(capturedAt)}</div>
         </div>
         <button

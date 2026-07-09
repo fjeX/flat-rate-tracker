@@ -169,7 +169,7 @@ export function GuestOpCodesView() {
                       {op.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] text-[var(--fg-2)]"
+                          className="badge badge-neutral"
                         >
                           {tag}
                         </span>

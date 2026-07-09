@@ -8,7 +8,7 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 
 /**
  * Small tinted label. Replaces the dozen hand-rolled
- * `rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] …` clusters the
+ * hand-rolled tinted-chip utility clusters the
  * Phase 0 audit found — tone is a prop, not a className recipe.
  */
 export function Badge({ tone = "neutral", mono, className, ...rest }: BadgeProps) {

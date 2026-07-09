@@ -73,7 +73,7 @@ export function OpCodeRow({
             {fmtHours(opCode.flagHours)}h
           </span>
           {opCode.subOpCodes.length > 0 && (
-            <span className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fg-2)]">
+            <span className="badge badge-neutral">
               {opCode.subOpCodes.length} sub{opCode.subOpCodes.length !== 1 ? "s" : ""}
             </span>
           )}
@@ -93,7 +93,7 @@ export function OpCodeRow({
             {opCode.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded bg-[var(--bg-3)] px-1.5 py-0.5 text-[10px] text-[var(--fg-2)]"
+                className="badge badge-neutral"
               >
                 {tag}
               </span>

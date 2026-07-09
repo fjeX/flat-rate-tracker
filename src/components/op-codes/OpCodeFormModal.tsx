@@ -359,9 +359,9 @@ function OpCodeFormBody({
             {/* Column header */}
             {draft.subCodes.length > 0 && (
               <div className="grid grid-cols-[100px_1fr_72px_32px] gap-2 px-1">
-                <span className="text-[10px] uppercase tracking-wide text-[var(--fg-2)]">Code</span>
-                <span className="text-[10px] uppercase tracking-wide text-[var(--fg-2)]">Description</span>
-                <span className="text-[10px] uppercase tracking-wide text-[var(--fg-2)]">Flag hrs</span>
+                <span className="text-xs text-[var(--fg-2)]">Code</span>
+                <span className="text-xs text-[var(--fg-2)]">Description</span>
+                <span className="text-xs text-[var(--fg-2)]">Flag hrs</span>
                 <span />
               </div>
             )}
@@ -409,7 +409,7 @@ function OpCodeFormBody({
             <button
               type="button"
               onClick={addSubCode}
-              className="flex items-center gap-1.5 rounded-md border border-dashed border-[var(--line)] px-3 py-1.5 text-xs text-[var(--fg-2)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
+              className="flex items-center gap-1.5 min-h-[38px] rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] px-3 py-1.5 text-xs text-[var(--fg-2)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
             >
               <Plus className="h-3.5 w-3.5" />
               Add sub op code

@@ -60,7 +60,7 @@ function getRange(
 // Format a time string from an ISO timestamp, e.g. "2:14 PM".
 // `tz` pins the output to the user's timezone so the server render (container
 // clock, usually UTC) matches the client render — without it this line was a
-// guaranteed hydration mismatch (React #418) for any non-UTC user.
+// guaranteed hydration mismatch (React error 418) for any non-UTC user.
 function fmtTime(isoTimestamp: string, tz?: string): string {
   const d = new Date(isoTimestamp);
   return d.toLocaleTimeString("en-US", {

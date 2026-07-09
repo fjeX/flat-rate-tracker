@@ -307,7 +307,7 @@ export function RoTemplateEditor({
                 key={field}
                 onClick={() => setActiveField(field)}
                 aria-pressed={active}
-                className={`flex items-center gap-1.5 rounded-md border px-3 py-2.5 text-sm font-medium transition-all
+                className={`flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 py-2.5 text-sm font-medium transition-all
                   ${active
                     ? `${cfg.border} ${cfg.bg} ${cfg.color}`
                     : "border-[var(--line)] text-[var(--fg-2)] hover:border-[var(--fg-3)] hover:text-[var(--fg-1)]"
@@ -324,7 +324,7 @@ export function RoTemplateEditor({
         {!imageObjectUrl ? (
           <button
             type="button"
-            className="flex min-h-56 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-[var(--line)] hover:border-[var(--fg-3)]"
+            className="flex min-h-56 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-sm)] border-2 border-dashed border-[var(--line)] hover:border-[var(--fg-3)]"
             onClick={() => fileInputRef.current?.click()}
           >
             {loadingImg ? (
@@ -340,7 +340,7 @@ export function RoTemplateEditor({
         ) : (
           <div
             ref={containerRef}
-            className="relative select-none overflow-hidden rounded-lg border border-[var(--line)]"
+            className="relative select-none overflow-hidden rounded-[var(--radius-sm)] border border-[var(--line)]"
             style={{ touchAction: "none", cursor: "crosshair" }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -359,7 +359,7 @@ export function RoTemplateEditor({
             {/* Existing boxes */}
             {regions.map((r) => {
               const cfg = FIELDS[r.field];
-              const cornerBase = "absolute h-3 w-3 rounded-sm border border-[var(--fg-3)] bg-white";
+              const cornerBase = "absolute h-3 w-3 rounded-[2px] border border-[var(--fg-3)] bg-[var(--overlay-fg)]";
               return (
                 <div
                   key={r.field}
@@ -368,7 +368,7 @@ export function RoTemplateEditor({
                 >
                   {/* Label */}
                   <div
-                    className={`pointer-events-none absolute -top-6 left-0 whitespace-nowrap rounded-sm bg-[var(--bg-1)]/90 px-1 py-0.5 text-[10px] font-semibold ${cfg.color}`}
+                    className={`pointer-events-none absolute -top-6 left-0 whitespace-nowrap rounded-full bg-[var(--bg-1)]/90 px-1.5 py-0.5 text-xs font-semibold ${cfg.color}`}
                   >
                     {cfg.label}
                   </div>
