@@ -41,6 +41,11 @@ yarn-error.log*
 .claude/settings.local.json
 .claude/handoffs/
 
+# nightly bot output (VM-local)
+/bot/reports/
+/bot/logs/
+/bot/FOCUS.md
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
