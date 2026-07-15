@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pause, Play, RotateCcw, Save, X } from "lucide-react";
 import { useGuestStore } from "@/lib/guest/context";
 import { fmtHours } from "@/lib/stats";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { RollingNumber } from "@/components/ui/RollingNumber";
 import { tap } from "@/lib/haptics";
+import { useTickingNow } from "@/lib/use-ticking-now";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,17 +52,11 @@ export function GuestTimerView() {
     updateEntryHours,
   } = useGuestStore();
 
-  const [now, setNow] = useState<number>(() => Date.now());
   const [linePickEntry, setLinePickEntry] = useState<Entry | null>(null);
   const [saveConfirming, setSaveConfirming] = useState(false);
 
   const running = timerState.startTime !== null;
-
-  useEffect(() => {
-    if (!running) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [running]);
+  const now = useTickingNow(running);
 
   const elapsedMs =
     timerState.accumulated +

@@ -27,8 +27,8 @@ function validate(input: NewBonus): void {
   if (!isBonusCategory(input.category)) {
     throw new Error(`Unknown category: ${input.category}`);
   }
-  if (!Number.isFinite(input.amount) || input.amount <= 0 || input.amount > 999999) {
-    throw new Error("Amount must be a positive dollar figure.");
+  if (!Number.isFinite(input.amount) || input.amount < 0 || input.amount > 999999) {
+    throw new Error("Amount must be a dollar figure of $0 or more.");
   }
 }
 

@@ -27,6 +27,7 @@ import { Modal } from "@/components/ui/Modal";
 import { LogRoForm } from "@/components/forms/LogRoForm";
 import { RollingNumber } from "@/components/ui/RollingNumber";
 import { tap } from "@/lib/haptics";
+import { useTickingNow } from "@/lib/use-ticking-now";
 
 type TimerState = {
   roId: string | null;
@@ -57,7 +58,7 @@ export function TimerView({
 }) {
   const router = useRouter();
   const running = initialTimer.startTime !== null;
-  const [now, setNow] = useState<number>(() => Date.now());
+  const now = useTickingNow(running);
   const [pending, startPending] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -102,12 +103,6 @@ export function TimerView({
     const ref = line.opCodeId ? libraryById.get(line.opCodeId) : undefined;
     return { code: ref?.code ?? "—", description: ref?.description ?? "" };
   }
-
-  useEffect(() => {
-    if (!running) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [running]);
 
   const elapsedMs =
     initialTimer.accumulated +

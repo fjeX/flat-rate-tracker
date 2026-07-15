@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { RollingNumber } from "@/components/ui/RollingNumber";
 import { tap } from "@/lib/haptics";
+import { useTickingNow } from "@/lib/use-ticking-now";
 
 type TimerState = {
   roId: string | null;
@@ -67,7 +68,6 @@ export function TimerPip({
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
   const [pending, startPending] = useTransition();
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
 
@@ -121,16 +121,11 @@ export function TimerPip({
   }, [size]);
 
   const running = initialTimer.startTime !== null;
+  const now = useTickingNow(running);
   const elapsedMs =
     initialTimer.accumulated +
     (running ? Math.max(0, now - initialTimer.startTime!) : 0);
   const status = running ? "RUNNING" : elapsedMs > 0 ? "PAUSED" : "READY";
-
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [running]);
 
   // Keep pos clamped if the window is resized and the pill would go off-screen
   useEffect(() => {

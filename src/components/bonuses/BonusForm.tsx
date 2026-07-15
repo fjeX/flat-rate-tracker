@@ -61,7 +61,7 @@ export function BonusForm({
 
   function handleSubmit() {
     const parsed = Number(amount);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
+    if (!Number.isFinite(parsed) || parsed < 0 || amount.trim() === "") {
       setError("Enter a dollar amount.");
       return;
     }
