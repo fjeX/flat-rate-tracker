@@ -79,7 +79,7 @@ function OpCodeFields({
             })
           }
           aria-describedby={errorId}
-          className="mt-1 w-32 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
+          className="mt-1 w-32 rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
         />
       </label>
     </div>

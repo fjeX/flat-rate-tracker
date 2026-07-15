@@ -30,7 +30,7 @@ export function GuestRoDetailModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={`RO #${entry.roNumber}`}>
+    <Modal open onClose={onClose} title={`RO #${entry.roNumber}`} wide>
       <div className="space-y-4">
         {/* Date section */}
         <div className="text-xs text-[var(--fg-3)]">
@@ -62,7 +62,7 @@ export function GuestRoDetailModal({
           <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
             <div>Op code</div>
             <div className="w-16 text-right">Flag</div>
-            <div className="w-20 text-right">Actual</div>
+            <div className="w-20 text-center">Actual</div>
           </div>
           <ul>
             {entry.opCodes.map((line) => (
@@ -72,7 +72,7 @@ export function GuestRoDetailModal({
           <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] px-3 py-2 text-sm">
             <div className="text-[var(--fg-2)]">Total</div>
             <div className="w-16 text-right font-medium">{fmtHours(entry.flagHours)}h</div>
-            <div className="w-20 text-right text-[var(--fg-2)]">
+            <div className="w-20 text-center text-[var(--fg-2)]">
               {entry.opCodes.some((l) => l.actualHours !== null)
                 ? `${fmtHours(entry.opCodes.reduce((s, l) => s + (l.actualHours ?? 0), 0))}h`
                 : "—"}
@@ -149,7 +149,7 @@ function GuestLineRow({
           {description && <div className="text-xs text-[var(--fg-3)]">{description}</div>}
         </div>
         <div className="w-16 text-right font-mono text-sm">{fmtHours(line.flagHours)}</div>
-        <div className="w-20">
+        <div className="flex w-20 justify-center">
           <input
             type="number"
             min={0}
@@ -160,7 +160,7 @@ function GuestLineRow({
             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             placeholder="—"
             aria-label={`Actual hours for ${code}`}
-            className="opc-hours-input w-full"
+            className="opc-hours-input on-inset"
           />
         </div>
       </div>

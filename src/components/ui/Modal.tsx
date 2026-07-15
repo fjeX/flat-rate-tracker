@@ -10,11 +10,14 @@ export function Modal({
   onClose,
   title,
   children,
+  wide = false,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  /** Wider desktop panel for forms with row grids (e.g. sub op codes). */
+  wide?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +94,7 @@ export function Modal({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="modal-panel max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-[var(--radius)] border border-[var(--line)] bg-[var(--bg-2)] outline-none sm:rounded-[var(--radius)]"
+        className={`modal-panel max-h-[90vh] w-full ${wide ? "max-w-2xl" : "max-w-md"} overflow-y-auto rounded-t-[var(--radius)] border border-[var(--line)] bg-[var(--bg-1)] outline-none sm:rounded-[var(--radius)]`}
       >
         <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
           <h2 className="text-base font-semibold text-[var(--fg-0)]">{title}</h2>

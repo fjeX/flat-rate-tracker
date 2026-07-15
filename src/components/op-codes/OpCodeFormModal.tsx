@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 
@@ -40,6 +40,43 @@ function HoursInput({
         onChange(normalized);
       }}
       className={className}
+    />
+  );
+}
+
+// Single-line-looking textarea that grows with its content so long sub op
+// code descriptions are fully readable while editing.
+function AutoGrowInput({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  className,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      className={`resize-none overflow-hidden ${className ?? ""}`}
     />
   );
 }
@@ -90,7 +127,7 @@ function TagInput({
   );
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-2 py-1.5 focus-within:border-[var(--brand)]">
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-2 py-1.5 focus-within:border-[var(--brand)]">
       {tags.map((tag) => (
         <span
           key={tag}
@@ -309,7 +346,7 @@ function OpCodeFormBody({
           <HoursInput
             value={draft.flagHours}
             onChange={(val) => setDraft({ ...draft, flagHours: val })}
-            className="mt-1 w-32 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:outline-none"
+            className="mt-1 w-32 rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
           />
         </label>
         <label className="block">
@@ -358,10 +395,12 @@ function OpCodeFormBody({
           <div className="space-y-2">
             {/* Column header */}
             {draft.subCodes.length > 0 && (
-              <div className="grid grid-cols-[100px_1fr_72px_32px] gap-2 px-1">
-                <span className="text-xs text-[var(--fg-2)]">Code</span>
-                <span className="text-xs text-[var(--fg-2)]">Description</span>
-                <span className="text-xs text-[var(--fg-2)]">Flag hrs</span>
+              // px-2 on each label matches the inputs' own px-2 so the column
+              // headers line up with the text inside the fields below.
+              <div className="grid grid-cols-[100px_1fr_72px_32px] gap-2">
+                <span className="px-2 text-xs text-[var(--fg-2)]">Code</span>
+                <span className="px-2 text-xs text-[var(--fg-2)]">Description</span>
+                <span className="px-2 text-xs text-[var(--fg-2)]">Flag hrs</span>
                 <span />
               </div>
             )}
@@ -369,7 +408,7 @@ function OpCodeFormBody({
             {draft.subCodes.map((sub) => (
               <div
                 key={sub.draftKey}
-                className="grid grid-cols-[100px_1fr_72px_32px] items-center gap-2"
+                className="grid grid-cols-[100px_1fr_72px_32px] items-start gap-2"
               >
                 <input
                   type="text"
@@ -379,27 +418,26 @@ function OpCodeFormBody({
                   aria-label="Sub op code"
                   required
                   aria-required="true"
-                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-2 py-1.5 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
+                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-3)] px-2 py-1.5 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
                 />
-                <input
-                  type="text"
+                <AutoGrowInput
                   value={sub.description}
-                  onChange={(e) => updateSubCode(sub.draftKey, { description: e.target.value })}
+                  onChange={(val) => updateSubCode(sub.draftKey, { description: val })}
                   placeholder="Description…"
-                  aria-label="Sub op code description"
-                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
+                  ariaLabel="Sub op code description"
+                  className="w-full rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-3)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
                 />
                 <HoursInput
                   value={sub.flagHours}
                   onChange={(val) => updateSubCode(sub.draftKey, { flagHours: val })}
                   ariaLabel="Sub op code flag hours"
-                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
+                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-3)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => removeSubCode(sub.draftKey)}
                   aria-label="Remove sub op code"
-                  className="flex items-center justify-center rounded-full p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
+                  className="mt-1.5 flex items-center justify-center rounded-full p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -492,7 +530,7 @@ export function OpCodeFormModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={title}>
+    <Modal open={open} onClose={onClose} title={title} wide>
       <OpCodeFormBody
         mode={mode}
         initial={seeded}

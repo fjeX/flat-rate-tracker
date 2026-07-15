@@ -469,7 +469,7 @@ export function QuickAddModal({
                               )
                             }
                             aria-label={`Flag hours for ${code || "op code line"}`}
-                            className="opc-hours-input w-full"
+                            className="opc-hours-input on-inset w-full"
                             placeholder="0"
                           />
                         </div>

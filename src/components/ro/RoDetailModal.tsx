@@ -43,7 +43,7 @@ export function RoDetailModal({
   const roEarnings = showMoney ? entryEarnings(entry, rates) : 0;
 
   return (
-    <Modal open onClose={onClose} title={`RO #${entry.roNumber}`}>
+    <Modal open onClose={onClose} title={`RO #${entry.roNumber}`} wide>
       <div className="space-y-4">
         <div className="text-xs text-[var(--fg-3)]">
           <div>{formatDateLong(entry.date)}</div>
@@ -65,10 +65,13 @@ export function RoDetailModal({
         />
 
         <div className="card-inset overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
+          {/* Header, rows, and total all share this exact template (incl. the
+              22px trash-button column) so Flag/Actual line up with the inputs. */}
+          <div className="grid grid-cols-[1fr_64px_80px_22px] items-center gap-2 border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
             <div>Op code</div>
-            <div className="w-16 text-right">Flag</div>
-            <div className="w-20 text-right">Actual</div>
+            <div className="text-right">Flag</div>
+            <div className="text-center">Actual</div>
+            <div />
           </div>
           <ul>
             {entry.opCodes.map((line) => (
@@ -82,14 +85,15 @@ export function RoDetailModal({
               />
             ))}
           </ul>
-          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] px-3 py-2 text-sm">
+          <div className="grid grid-cols-[1fr_64px_80px_22px] items-center gap-2 border-t border-[var(--line)] px-3 py-2 text-sm">
             <div className="text-[var(--fg-2)]">Total</div>
-            <div className="w-16 text-right font-medium">
+            <div className="text-right font-medium">
               {fmtHours(entry.flagHours)}h
             </div>
-            <div className="w-20 text-right text-[var(--fg-2)]">
+            <div className="text-center text-[var(--fg-2)]">
               {hasAnyActual ? `${fmtHours(totalActual)}h` : "—"}
             </div>
+            <div />
           </div>
           {showMoney && (
             <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-2 text-sm">
@@ -261,7 +265,7 @@ function LineRow({
 
   return (
     <li className="border-b border-[var(--line)] px-3 py-2 last:border-b-0">
-      <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
+      <div className="grid grid-cols-[1fr_64px_80px_22px] items-center gap-2">
         <div className="min-w-0">
           <span className="font-mono text-sm text-[var(--brand)]">{code}</span>
           {subRef && (
@@ -277,10 +281,10 @@ function LineRow({
             </div>
           )}
         </div>
-        <div className="w-16 text-right font-mono text-sm">
+        <div className="text-right font-mono text-sm">
           {fmtHours(line.flagHours)}
         </div>
-        <div className="w-20">
+        <div className="flex justify-center">
           <input
             type="number"
             min={0}
@@ -299,7 +303,7 @@ function LineRow({
             aria-label={`Actual hours for ${code}`}
             aria-invalid={Boolean(error)}
             aria-describedby={error ? `line-error-${line.id}` : undefined}
-            className="opc-hours-input w-full"
+            className="opc-hours-input on-inset"
           />
         </div>
         <button

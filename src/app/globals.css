@@ -773,6 +773,11 @@ button.step-head {
   transition: border-color 120ms, box-shadow 120ms;
 }
 .opc-hours-input:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
+/* On a --bg-2 inset (e.g. the RO-detail op-code table) the default --bg-2 well
+   vanishes — step one rung up the ladder so the field stays visible. Keeps the
+   base 64px width — the host cell centers it under its column header (a
+   `w-full` utility would lose to the base rule's width anyway). */
+.opc-hours-input.on-inset { background: var(--bg-3); }
 .opc-line .remove {
   position: relative;
   width: 28px; height: 28px;
