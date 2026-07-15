@@ -110,6 +110,75 @@ export type Database = {
           },
         ]
       }
+      career_milestones: {
+        Row: {
+          achieved_at: string
+          threshold: number
+          user_id: string
+        }
+        Insert: {
+          achieved_at?: string
+          threshold: number
+          user_id: string
+        }
+        Update: {
+          achieved_at?: string
+          threshold?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      days_off: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          start_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          start_date: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          start_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      portfolio_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          ro_threshold: number
+          seq: number
+          stats: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ro_threshold: number
+          seq: number
+          stats: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ro_threshold?: number
+          seq?: number
+          stats?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       daily_clock_hours: {
         Row: {
           date: string

@@ -34,13 +34,15 @@ export const ROUTES: RouteSpec[] = [
   { name: "guest-op-codes", path: "/guest/op-codes", auth: false, mask: [] },
 
   // ── authed (bot account data churns nightly — mask it) ─
-  { name: "dashboard", path: "/dashboard", auth: true, mask: [".greeting", ".pace", ...NUMBERS, ...RO_LISTS, ...CHARTS, ...DATES] },
+  // .gami-* fills/pins move with the bot's nightly logging — mask whole cards.
+  { name: "dashboard", path: "/dashboard", auth: true, mask: [".greeting", ".pace", ".gami-heat", ".gami-odo", ".gami-snap", ...NUMBERS, ...RO_LISTS, ...CHARTS, ...DATES] },
   { name: "log", path: "/log", auth: true, mask: [".opc-quick", ...DATES] },
   { name: "history", path: "/history", auth: true, mask: [".history-summary", ...NUMBERS, ...RO_LISTS, ...CHARTS] },
   { name: "timer", path: "/timer", auth: true, mask: [...NUMBERS, ...RO_LISTS, ...DATES] },
   { name: "op-codes", path: "/op-codes", auth: true, mask: ["main ul", "main ol", ...NUMBERS] },
   { name: "pay-period", path: "/pay-period", auth: true, mask: [".stat-grid", ".pill", "input", ...NUMBERS, ...RO_LISTS, ...DATES] },
   { name: "account", path: "/account", auth: true, mask: ["main"] },
+  { name: "snapshots", path: "/snapshots", auth: true, mask: [".gami-sheet", ...NUMBERS] },
   { name: "settings", path: "/settings", auth: true, mask: ["input", "select", ...NUMBERS] },
   { name: "dispute-pack", path: "/pay-period/dispute-pack", auth: true, mask: [".dp-meta", ".dp-table-wrap", ".dp-header", ".dp-footer"] },
 ];

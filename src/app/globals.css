@@ -1335,3 +1335,155 @@ a { color: inherit; }
   .section-title .link { display: inline-flex; align-items: center; min-height: var(--tap-min); }
   .opc-dropdown-close { min-height: var(--tap-min); }
 }
+
+/* ===================================================================
+   Gamification Phase 1 (docs/gamification.md) — streak heat gauge (1C),
+   career odometer + milestone road (2A+2C hybrid), portfolio snapshot
+   build sheets (8B). Tokens only; reduced-motion neutralised by the
+   global guard above.
+   =================================================================== */
+
+/* — Two-up row for streak + odometer — */
+.gami-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 900px) { .gami-grid { grid-template-columns: 1fr 1fr; } }
+
+/* — Streak heat gauge — */
+.gami-heat-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.gami-heat-label { font-size: 12.5px; color: var(--fg-3); font-weight: 550; }
+.gami-heat-num { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; margin-top: 5px; }
+.gami-heat-num .unit { font-size: 14px; font-weight: 500; color: var(--fg-2); letter-spacing: 0; }
+.gami-heat-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.gami-heat-flame { color: var(--brand); filter: drop-shadow(0 0 10px oklch(0.65 0.18 50 / 0.45)); }
+.gami-heat-flame.cold { color: var(--fg-3); filter: none; }
+.gami-heat-track {
+  position: relative; height: 12px; margin-top: 14px;
+  border-radius: 999px; background: var(--bg-3); border: 1px solid var(--line);
+}
+.gami-heat-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-strong), var(--brand));
+  box-shadow: 0 0 14px oklch(0.65 0.18 50 / 0.35);
+}
+.gami-heat:not([data-animated="true"]) .gami-heat-fill {
+  animation: pace-grow 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.gami-heat-marks { position: relative; height: 26px; margin-top: 5px; }
+.gami-heat-mark {
+  position: absolute; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-size: 10px; color: var(--fg-3);
+}
+.gami-heat-mark::before { content: ""; width: 1.5px; height: 7px; background: var(--fg-3); opacity: 0.5; }
+.gami-heat-mark.hit { color: var(--brand); font-weight: 700; }
+.gami-heat-mark.hit::before { background: var(--brand); opacity: 1; }
+.gami-heat-sub { font-size: 12.5px; color: var(--fg-2); margin-top: 2px; line-height: 1.5; }
+.gami-heat-sub b { color: var(--fg-0); }
+.gami-heat-frozen { display: inline-flex; align-items: center; gap: 3px; color: var(--info); white-space: nowrap; }
+
+/* — Career odometer (quiet number + milestone road) — */
+.gami-odo { position: relative; overflow: hidden; }
+.gami-odo::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: var(--brand);
+}
+.gami-odo-val { font-size: 34px; font-weight: 650; letter-spacing: -0.02em; margin-top: 5px; line-height: 1; }
+.gami-odo-val .unit { font-size: 14px; color: var(--fg-2); font-weight: 500; margin-left: 2px; }
+.gami-odo-delta {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 7px; font-size: 12px; color: var(--good);
+}
+.gami-road { position: relative; margin: 30px 6px 6px; height: 4px; border-radius: 999px; background: var(--bg-3); }
+.gami-road-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-strong), var(--brand));
+}
+.gami-odo:not([data-animated="true"]) .gami-road-fill {
+  animation: pace-grow 800ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.gami-road-stop {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  display: grid; place-items: center;
+}
+.gami-road-stop .pin {
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--bg-4); border: 2px solid var(--bg-1);
+}
+.gami-road-stop.done .pin { background: var(--brand); }
+.gami-road-stop.here .pin {
+  width: 17px; height: 17px; background: var(--brand);
+  box-shadow: 0 0 0 5px var(--brand-bg), 0 0 14px oklch(0.65 0.18 50 / 0.5);
+}
+.gami-road-stop .t {
+  position: absolute; top: 14px;
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-size: 10px; color: var(--fg-3); white-space: nowrap;
+}
+.gami-road-stop.done .t { color: var(--fg-1); font-weight: 600; }
+.gami-road-legend { margin-top: 30px; font-size: 12.5px; color: var(--fg-2); }
+.gami-road-legend b { color: var(--fg-0); }
+
+/* — Portfolio snapshot build sheet — */
+.gami-sheet {
+  background: var(--bg-1); border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in oklab, var(--fg-3) 25%, transparent);
+  box-shadow: var(--shadow-card);
+  padding: 18px; position: relative; overflow: hidden;
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+}
+/* Dashed brand strip — a plain dashed border, not a new gradient technique
+   (the approved gradient set stays closed; see design-review 2026-07-14). */
+.gami-sheet::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0;
+  border-top: 4px dashed var(--brand);
+}
+.gami-sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-top: 4px; }
+.gami-sheet-eyebrow { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fg-3); }
+.gami-sheet-title { font-size: 16px; font-weight: 700; margin-top: 3px; letter-spacing: 0.01em; }
+.gami-stamp {
+  display: inline-flex; align-items: center; gap: 3px;
+  transform: rotate(4deg);
+  border: 2px solid var(--good); color: var(--good);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 4px 8px; border-radius: 4px; opacity: 0.9; white-space: nowrap;
+}
+.gami-sheet-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  background: var(--line); border: 1px solid var(--line);
+  border-radius: 8px; overflow: hidden; margin-top: 14px;
+}
+@media (min-width: 600px) { .gami-sheet-grid { grid-template-columns: repeat(4, 1fr); } }
+.gami-sheet-cell { background: var(--bg-2); padding: 10px 12px; }
+/* .k labels are load-bearing (they name the stat) — fg-2, not decorative fg-3 */
+.gami-sheet-cell .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-2); }
+.gami-sheet-cell .v { font-size: 16px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.gami-sheet-cell .v small { font-size: 10px; color: var(--fg-2); font-weight: 500; }
+.gami-sheet-specs { margin-top: 12px; font-size: 11px; color: var(--fg-2); line-height: 1.7; }
+.gami-sheet-specs b { color: var(--fg-0); }
+.gami-sheet-foot {
+  display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px;
+  border-top: 1px dashed var(--line); font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--fg-3);
+}
+
+/* — Snapshot dashboard card (progress to next unlock) — */
+.gami-snap-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.gami-snap-title { font-size: 14px; font-weight: 600; }
+.gami-snap-count {
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-size: 12px; color: var(--fg-2); font-variant-numeric: tabular-nums;
+}
+.gami-snap-count b { color: var(--brand); font-size: 14px; }
+.gami-snap-bar {
+  margin-top: 12px; height: 10px; border-radius: 999px;
+  background: var(--bg-3); border: 1px solid var(--line); overflow: hidden;
+}
+.gami-snap-bar i {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--good-strong), var(--good));
+}
+.gami-snap:not([data-animated="true"]) .gami-snap-bar i {
+  animation: pace-grow 750ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.gami-snap-sub { margin-top: 8px; font-size: 12px; color: var(--fg-3); }
+.gami-snap-sheetwrap { margin-top: 14px; }

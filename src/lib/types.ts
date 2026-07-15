@@ -211,3 +211,41 @@ export type NewOpCode = {
 };
 
 export type OpCodePatch = Partial<Omit<NewOpCode, "sortOrder">>;
+
+// ------------------------------------------------------------------------
+// Gamification Phase 1 (docs/gamification.md)
+// ------------------------------------------------------------------------
+
+// Explicit "don't expect me to log" range — vacation, injury. The streak
+// treats every date inside as frozen.
+export type DayOff = {
+  id: string;
+  startDate: string; // "YYYY-MM-DD", inclusive
+  endDate: string; // inclusive
+  createdAt: string;
+};
+
+export type SnapshotTopOp = { code: string; description: string; count: number };
+
+// Stats frozen into a portfolio snapshot at generation time. Immutable —
+// later RO edits never touch an issued snapshot.
+export type SnapshotStats = {
+  roCount: number;
+  totalFlagHours: number;
+  // sum(actual) / sum(flag) over lines that have actual hours; null when
+  // fewer than MIN_BOOK_LINES lines carry actuals (timer not used enough).
+  avgVsBook: number | null;
+  photoCount: number;
+  topOps: SnapshotTopOp[]; // up to 3, by line count
+  firstDate: string; // "YYYY-MM-DD"
+  lastDate: string;
+  workDays: number; // distinct logged dates in range
+};
+
+export type PortfolioSnapshot = {
+  id: string;
+  seq: number; // display number: Snapshot #seq
+  roThreshold: number; // the RO-count line this snapshot marks
+  stats: SnapshotStats;
+  createdAt: string;
+};

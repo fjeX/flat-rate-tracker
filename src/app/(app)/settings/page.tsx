@@ -10,13 +10,16 @@ import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
 import { RoTemplateCard } from "@/components/settings/RoTemplateCard";
 import { TimezoneCard } from "@/components/settings/TimezoneCard";
 import { QuickAddCard } from "@/components/settings/QuickAddCard";
+import { DaysOffCard } from "@/components/settings/DaysOffCard";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const [settings, laborRates] = await Promise.all([
+  const [settings, laborRates, daysOff] = await Promise.all([
     db.getSettings(supabase),
     db.listLaborRates(supabase),
+    // null while the gamification migration hasn't been applied — card hidden.
+    db.listDaysOffSafe(supabase),
   ]);
   const overrideCount = Object.keys(settings.periodOverrides).length;
   const cookieStore = await cookies();
@@ -37,6 +40,7 @@ export default async function SettingsPage() {
           <ReferenceRateCard initialRate={settings.referenceHourlyRate} />
           <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
           <TimezoneCard initialTimezone={timezone} />
+          {daysOff !== null && <DaysOffCard initialDaysOff={daysOff} />}
         </div>
       </section>
 

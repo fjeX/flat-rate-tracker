@@ -17,6 +17,9 @@ import { fmtMoney, hasAnyRate, periodEarnings, ratesToMap } from "@/lib/earnings
 import { computeForecast } from "@/lib/forecast";
 import { TodayCard } from "@/components/dashboard/TodayCard";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { StreakCard } from "@/components/dashboard/StreakCard";
+import { CareerOdometerCard } from "@/components/dashboard/CareerOdometerCard";
+import { SnapshotsCard } from "@/components/dashboard/SnapshotsCard";
 import { RoList } from "@/components/ro/RoList";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
@@ -93,11 +96,14 @@ export default async function DashboardPage() {
     : isoDate(new Date(Date.now() - 90 * 86_400_000));
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
-  const [entries, clocks, library, laborRates] = await Promise.all([
+  const [entries, clocks, library, laborRates, gamification] = await Promise.all([
     db.listEntries(supabase, { from: fetchFrom, to: monthEnd }),
     db.listDailyClocks(supabase, { from: fetchFrom, to: monthEnd }),
     db.listOpCodes(supabase),
     db.listLaborRates(supabase),
+    // Streak + odometer + snapshots. Null while the gamification migration
+    // hasn't been applied — the cards just don't render.
+    db.getGamificationData(supabase, { today }),
   ]);
 
   // Dollars are additive — computed only when the user has priced a rate.
@@ -285,6 +291,18 @@ export default async function DashboardPage() {
           <StatCard label="This Month"     stats={statsMonth} />
         </EntranceGrid>
 
+        {/* ── Streak + career odometer ────────────────────────── */}
+        {gamification && (
+          <div className="gami-grid">
+            <StreakCard streak={gamification.streak} />
+            <CareerOdometerCard
+              careerTotal={gamification.careerTotal}
+              careerMilestones={gamification.careerMilestones}
+              weekDelta={gamification.weekDelta}
+            />
+          </div>
+        )}
+
         {/* ── Recent ROs ──────────────────────────────────────── */}
         <section>
           <div className="section-title">
@@ -311,6 +329,16 @@ export default async function DashboardPage() {
             />
           </div>
         </section>
+
+        {/* ── Portfolio snapshots ─────────────────────────────── */}
+        {gamification && (
+          <SnapshotsCard
+            snapshots={gamification.snapshots}
+            roCount={gamification.roCount}
+            nextSnapshotAt={gamification.nextSnapshotAt}
+            timeZone={tz}
+          />
+        )}
 
         {/* ── Averages chart ──────────────────────────────────── */}
         <AveragesChart

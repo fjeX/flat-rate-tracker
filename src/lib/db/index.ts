@@ -15,3 +15,4 @@ export * from "./labor-rates";
 export * from "./settings";
 export * from "./daily-clock";
 export * from "./paid-periods";
+export * from "./gamification";

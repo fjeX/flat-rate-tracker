@@ -102,6 +102,24 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
 - Pay period stats reflect tonight's new ROs.
 - History filters/search: find one of tonight's ROs by RO number.
 
+### 8b. Gamification widgets (shipped 2026-07-14)
+The dashboard has three new cards; sanity-check each:
+- **Logging streak** (heat gauge): shows a work-day count, not calendar days.
+  After logging tonight's ROs it should count today. Numbers sane (no NaN,
+  streak not larger than days-since-account-creation).
+- **Career hours flagged** (odometer + milestone road): the lifetime total
+  should have gone UP by tonight's flagged hours vs. what you can infer from
+  last night's report. Milestone pins ≤ the total are filled; the "hrs to the
+  next marker" line matches (next milestone − total).
+- **Portfolio snapshots** (progress + build sheet): the RO counter should equal
+  your all-time RO count. When you cross a threshold (10, 25, 50, 100, then
+  every 100), a new numbered snapshot sheet must appear — check /snapshots
+  lists it and its stats look sane (RO count = the threshold, dates plausible).
+  Snapshots from previous nights must never change — they are frozen records.
+- **Settings → Days Off**: add a day off for a past date, verify it appears in
+  the list, then remove it. (Don't leave test days-off behind — they change
+  streak math.)
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:
