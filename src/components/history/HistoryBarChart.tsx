@@ -336,11 +336,13 @@ export function HistoryBarChart({
                     onMouseEnter={() => setHover(i)}
                     onTouchStart={() => setHover(i)}
                   />
-                  {/* Bar */}
+                  {/* Bar — pointer-events off so it never occludes the
+                      full-height hit zone behind it (hover must register). */}
                   <rect
                     x={x} y={y} width={barW} height={h}
                     rx={bar.hours > 0 ? Math.min(barW / 2, 6) : 0}
                     fill={highlight ? "var(--brand)" : "var(--bg-4)"}
+                    pointerEvents="none"
                   />
                   {/* Primary axis label */}
                   {showLabel && (
@@ -371,7 +373,7 @@ export function HistoryBarChart({
                   )}
                   {/* Hover indicator dot */}
                   {isHover && bar.hours > 0 && (
-                    <circle cx={cx} cy={y - 7} r={2.2} fill="var(--brand)" />
+                    <circle cx={cx} cy={y - 7} r={2.2} fill="var(--brand)" pointerEvents="none" />
                   )}
                 </g>
               );

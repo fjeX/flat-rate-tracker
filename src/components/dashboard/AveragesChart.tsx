@@ -422,11 +422,14 @@ function RoomierBarChart({
                 onMouseEnter={() => setHover(i)}
                 onTouchStart={() => setHover(i)}
               />
-              {/* Bar — no glow, just color change on highlight */}
+              {/* Bar — no glow, just color change on highlight. pointer-events
+                  off so it never occludes the full-height hit zone behind it
+                  (hovering a bar must still register on the hit rect). */}
               <rect
                 x={x} y={y} width={barW} height={h}
                 rx={bar.value > 0 ? Math.min(barW / 2, 6) : 0}
                 fill={highlight ? "var(--brand)" : "var(--bg-4)"}
+                pointerEvents="none"
               />
               {/* Primary axis label */}
               {primaryLabel && (
@@ -456,7 +459,7 @@ function RoomierBarChart({
               )}
               {/* Hover indicator dot */}
               {isHover && bar.value > 0 && (
-                <circle cx={cx} cy={y - 7} r={2.2} fill="var(--brand)" />
+                <circle cx={cx} cy={y - 7} r={2.2} fill="var(--brand)" pointerEvents="none" />
               )}
             </g>
           );

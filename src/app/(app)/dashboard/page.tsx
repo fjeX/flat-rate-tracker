@@ -233,6 +233,11 @@ export default async function DashboardPage() {
   if (hasGoal) {
     if (forecast.state === "insufficient-history") {
       forecastLine = "Not enough history yet to project — keep logging and this fills in.";
+    } else if (forecast.projected! >= goalHours * 1.5) {
+      // Early in a period a strong recent average can extrapolate to an
+      // implausible multiple of the goal ("486 of 88"). The math is honest but
+      // the number reads broken — report the status, not the wild figure.
+      forecastLine = `Well ahead — on pace to clear your ${goalHours} flag hr goal`;
     } else {
       forecastLine = `On pace for about ${Math.round(forecast.projected!)} of ${goalHours} flag hrs`;
       const daysWord = forecast.daysRemaining === 1 ? "day" : "days";

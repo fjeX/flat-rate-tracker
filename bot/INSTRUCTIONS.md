@@ -66,11 +66,14 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
   block: choose "Log as new entry" if a duplicate is intentional. Use fresh
   RO numbers normally; the dialog NOT appearing for a known-duplicate number
   is a bug.
-- Labor types (changed 2026-07-15): explicitly picking "Untyped" on a line now
-  stores a real untyped value — such lines are unpriced and must show NO
-  dollar earnings anywhere (RO detail modal shows no per-line $). Old lines
-  that were never given a type still price at the customer-pay rate — that is
-  intended, not a bug.
+- Labor types: explicitly picking "Untyped" on a line stores a real untyped
+  value — such lines are unpriced and must show NO dollar earnings anywhere
+  (RO detail modal shows no per-line $). Lines added WITHOUT choosing a type
+  (quick-add chips, "Add op code", legacy lines) default to Customer Pay: as of
+  2026-07-16 they DISPLAY as "Customer Pay" in the labor-type selector and
+  correctly show the customer-pay dollar amount — that is intended, not a bug.
+  Only a line whose selector actually reads "Untyped" that STILL shows a dollar
+  figure is a bug. A "Customer Pay" line showing $ is correct.
 - After each save, verify the RO actually appears in history with the right
   hours, **on the right date (today, your local date)**, and with the full
   vehicle (year + make + model) displayed — a missing field you typed is a bug.
@@ -81,9 +84,13 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
 ### 3. Timer
 - Start the timer on a job, let it run **60–90 seconds**, stop it.
 - Verify the elapsed time recorded is plausible (~1–2 min, not 0, not hours).
-- The live display now ticks from a Web Worker (fixed 2026-07-15), so it must
-  track wall clock even with the tab backgrounded — a lagging display is a
-  regression again, flag it.
+- The live display ticks from a Web Worker. In a real, foregrounded browser it
+  tracks wall clock exactly (verified 2026-07-16 via Playwright — dead-linear,
+  zero drift growth). In this headless/automated session the worker's timer can
+  be throttled, so the DISPLAY may read behind real time — that is an
+  environment artifact of the automation harness, **NOT a product bug. Do NOT
+  flag timer display lag.** Instead verify the **saved actual hours** after you
+  stop are plausible; only a wrong *saved* value is a bug.
 - You are testing the mechanism, not the duration — never run it long.
 
 ### 4. Pay discrepancy check

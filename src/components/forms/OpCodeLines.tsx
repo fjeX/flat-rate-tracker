@@ -267,12 +267,14 @@ export function OpCodeLines({
                           <label htmlFor={`labor-type-${line.key}`} className="sr-only">
                             Labor type for {code || "op code line"}
                           </label>
-                          {/* Legacy null and explicit "untyped" both display as
-                              Untyped; picking it stores the explicit value so
-                              the line is deliberately unpriced (no CP fallback). */}
+                          {/* Legacy null lines predate labor types and are priced
+                              as Customer Pay (earnings.ts), so they must DISPLAY as
+                              Customer Pay — otherwise a line reads "Untyped" while
+                              still earning money. Only an explicit "untyped"
+                              selection is deliberately unpriced. */}
                           <select
                             id={`labor-type-${line.key}`}
-                            value={line.laborType ?? "untyped"}
+                            value={line.laborType ?? "customer_pay"}
                             onChange={(e) =>
                               updateLine(line.key, {
                                 laborType: e.target.value as LaborType | "untyped",
