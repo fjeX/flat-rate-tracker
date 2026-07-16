@@ -9,12 +9,15 @@ import { tagHueVar } from "./tagHue";
 
 export function OpCodeRow({
   opCode,
+  tagColors,
   reorderable,
   onEdit,
   onDelete,
   deleting,
 }: {
   opCode: OpCode;
+  /** Per-tag colour overrides (settings.tagColors). */
+  tagColors?: Record<string, number>;
   reorderable: boolean;
   onEdit: (op: OpCode) => void;
   onDelete: (op: OpCode) => void;
@@ -80,7 +83,7 @@ export function OpCodeRow({
           <span
             className="opl-tick"
             style={
-              { "--tagc": tagHueVar(opCode.tags[0]) } as React.CSSProperties
+              { "--tagc": tagHueVar(opCode.tags[0], tagColors) } as React.CSSProperties
             }
           />
           <span className="truncate font-mono text-sm font-semibold text-[var(--fg-0)]">

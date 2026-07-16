@@ -22,7 +22,12 @@ import {
   snapshotSeqForThreshold,
   snapshotThresholdsReached,
 } from "@/lib/career";
-import { buildSnapshotStats, chronological, type SnapshotScheduleData } from "@/lib/snapshots";
+import {
+  buildSnapshotStats,
+  chronological,
+  snapshotEfficiency,
+  type SnapshotScheduleData,
+} from "@/lib/snapshots";
 import { addDays } from "@/lib/periods";
 import type { DailyClock } from "@/lib/types";
 import { getCurrentUserId, type DbClient } from "./_client";
@@ -293,6 +298,59 @@ async function generateMissingSnapshots(
 }
 
 // ------------------------------------------------------------------------
+// Efficiency backfill — snapshots frozen before the schedule feature
+// ------------------------------------------------------------------------
+
+/** Snapshots frozen before schedule-aware efficiency existed have no
+ * overallEfficiency key at all. Once a schedule exists, patch those rows a
+ * single time: recompute over the same first-N entries and merge ONLY the two
+ * efficiency fields into the stored stats — everything else stays frozen.
+ * After the patch the key exists (possibly null), so this never re-runs. */
+async function backfillSnapshotEfficiency(
+  supabase: DbClient,
+  snapshots: PortfolioSnapshot[],
+  today: string,
+): Promise<PortfolioSnapshot[]> {
+  const missing = snapshots.filter(
+    (s) => !("overallEfficiency" in (s.stats as unknown as Record<string, unknown>)),
+  );
+  if (missing.length === 0) return snapshots;
+
+  // No schedule yet — nothing meaningful to compute; try again once one exists.
+  const schedules = await listWorkSchedulesSafe(supabase);
+  if (schedules === null || schedules.length === 0) return snapshots;
+
+  const [all, clocks, daysOff, confirmedZeroDays, shiftOverrides] = await Promise.all([
+    listAllEntriesChronological(supabase),
+    listAllDailyClocks(supabase),
+    listDaysOff(supabase),
+    listConfirmedZeroDaysSafe(supabase),
+    listShiftOverridesSafe(supabase),
+  ]);
+  const scheduleData: SnapshotScheduleData = {
+    clocks,
+    ctx: {
+      schedules,
+      daysOff,
+      confirmedZeroDays: confirmedZeroDays ?? [],
+      today,
+      shiftOverrides: shiftOverrides ?? {},
+    },
+  };
+
+  for (const snap of missing) {
+    const eff = snapshotEfficiency(all.slice(0, snap.roThreshold), scheduleData);
+    const stats = { ...(snap.stats as unknown as Record<string, unknown>), ...eff };
+    const { error } = await supabase
+      .from("portfolio_snapshots")
+      .update({ stats: stats as unknown as Json })
+      .eq("id", snap.id);
+    if (error) throw error;
+  }
+  return listSnapshots(supabase);
+}
+
+// ------------------------------------------------------------------------
 // Dashboard orchestrator
 // ------------------------------------------------------------------------
 
@@ -353,10 +411,9 @@ export async function getGamificationData(
       (a, b) => a - b,
     );
 
-    const freshSnapshots = await generateMissingSnapshots(
+    const freshSnapshots = await backfillSnapshotEfficiency(
       supabase,
-      roCount,
-      snapshots,
+      await generateMissingSnapshots(supabase, roCount, snapshots, opts.today),
       opts.today,
     );
 

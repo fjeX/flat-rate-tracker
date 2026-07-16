@@ -33,6 +33,9 @@ function toSettings(row: SettingsRow): UserSettings {
       row.reference_hourly_rate === null
         ? null
         : Number(row.reference_hourly_rate),
+    // `?? {}` also covers a pre-migration DB, where select("*") simply
+    // doesn't return the column.
+    tagColors: (row.tag_colors as Record<string, number> | null) ?? {},
   };
 }
 
@@ -57,6 +60,7 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
       roTemplates: [],
       defaultLaborType: null,
       referenceHourlyRate: null,
+      tagColors: {},
     };
   }
   return toSettings(data);
@@ -69,6 +73,7 @@ export type SettingsPatch = {
   roTemplates?: RoTemplate[];
   defaultLaborType?: LaborType | null;
   referenceHourlyRate?: number | null;
+  tagColors?: Record<string, number>;
 };
 
 export async function updateSettings(
@@ -89,6 +94,7 @@ export async function updateSettings(
     update.default_labor_type = patch.defaultLaborType;
   if (patch.referenceHourlyRate !== undefined)
     update.reference_hourly_rate = patch.referenceHourlyRate;
+  if (patch.tagColors !== undefined) update.tag_colors = patch.tagColors;
 
   const { data, error } = await supabase
     .from("user_settings")

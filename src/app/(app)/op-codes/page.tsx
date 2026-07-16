@@ -4,7 +4,10 @@ import { OpCodesView } from "@/components/op-codes/OpCodesView";
 
 export default async function OpCodesPage() {
   const supabase = await createClient();
-  const library = await db.listOpCodes(supabase);
+  const [library, settings] = await Promise.all([
+    db.listOpCodes(supabase),
+    db.getSettings(supabase),
+  ]);
 
-  return <OpCodesView library={library} />;
+  return <OpCodesView library={library} tagColors={settings.tagColors} />;
 }

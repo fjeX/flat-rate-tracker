@@ -13,7 +13,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "@/lib/periods";
-import { aggregateStats, aggregateStatsWithSchedule, fmtHours, fmtPct } from "@/lib/stats";
+import { aggregateStats, aggregateStatsWithSchedule, dailyDenominators, fmtHours, fmtPct } from "@/lib/stats";
 import { shiftForDate } from "@/lib/schedule";
 import { fmtMoney, hasAnyRate, periodEarnings, ratesToMap } from "@/lib/earnings";
 import { computeForecast } from "@/lib/forecast";
@@ -159,6 +159,14 @@ export default async function DashboardPage() {
       ).unresolvedDays
     : [];
 
+  // Day-level efficiency for the Flagged Hours chart's week-tab hover readout.
+  const denomByDay = dailyDenominators(
+    clocks,
+    { start: weekStart, end: today },
+    today,
+    scheduleCtx,
+  );
+
   const todaysClock  = clocks.find((c) => c.date === today);
   const recentEntries = entries.slice(0, 5);
 
@@ -283,7 +291,14 @@ export default async function DashboardPage() {
                   <span className="pace-goal">Goal {goalHours}</span>
                 </div>
                 <div className="pace-track-wrap">
-                  <span className="pace-today-label" style={{ left: `${paceTarget * 100}%` }}>TODAY</span>
+                  {/* clamp keeps the label's center at least half its width
+                      from either end, so it can never spill past the track */}
+                  <span
+                    className="pace-today-label"
+                    style={{ left: `clamp(20px, ${paceTarget * 100}%, calc(100% - 20px))` }}
+                  >
+                    TODAY
+                  </span>
                   <div className="pace-track">
                     <div
                       className={paceFillClass}
@@ -292,7 +307,7 @@ export default async function DashboardPage() {
                   </div>
                   <div
                     className="pace-target"
-                    style={{ left: `${paceTarget * 100}%` }}
+                    style={{ left: `clamp(1px, ${paceTarget * 100}%, calc(100% - 1px))` }}
                   />
                 </div>
               </div>
@@ -313,7 +328,7 @@ export default async function DashboardPage() {
               <span>{formatPeriodLabel(period)}</span>
               <span>
                 {statsPeriod.efficiency !== null
-                  ? `${fmtPct(statsPeriod.efficiency)} eff`
+                  ? `${fmtPct(statsPeriod.efficiency)} efficiency`
                   : `Day ${currentDay} / ${periodDays}`}
               </span>
             </div>
@@ -398,6 +413,7 @@ export default async function DashboardPage() {
         {/* ── Averages chart ──────────────────────────────────── */}
         <AveragesChart
           entries={entries}
+          denomByDay={denomByDay}
           today={today}
           periodStart={period.start}
           periodEnd={period.end}

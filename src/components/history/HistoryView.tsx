@@ -11,7 +11,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "@/lib/periods";
-import { fmtHours } from "@/lib/stats";
+import { fmtHours, type DayDenom } from "@/lib/stats";
 import type { RateMap } from "@/lib/earnings";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -148,6 +148,7 @@ export function HistoryView({
   renderDetail,
   rates = {},
   entryIdsWithPhotos,
+  denomByDay,
 }: {
   entries: Entry[];
   hasMore?: boolean;
@@ -170,6 +171,8 @@ export function HistoryView({
   // Entry ids that have at least one attached photo — drives the camera icon.
   // Absent in guest mode (no photo storage).
   entryIdsWithPhotos?: Set<string>;
+  // Per-day efficiency denominators for the chart readout. Absent in guest mode.
+  denomByDay?: Record<string, DayDenom>;
 }) {
   // `entries` comes from the live store. In guest mode it hydrates from
   // sessionStorage in an effect AFTER first render, so freezing it into state
@@ -286,6 +289,7 @@ export function HistoryView({
         weekStart={weekStartProp}
         weekEnd={weekEndProp}
         splitDay={settings.splitDay}
+        denomByDay={denomByDay}
       />
 
       {/* Search bar */}

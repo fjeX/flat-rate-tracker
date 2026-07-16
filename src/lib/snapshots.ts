@@ -33,6 +33,32 @@ export type SnapshotScheduleData = {
   ctx: ScheduleContext;
 } | null;
 
+/** Overall efficiency over a snapshot's first-N entries — shared by live
+ * generation and the backfill of snapshots frozen before the field existed.
+ * Per-day clocked hours win, scheduled hours fill silent days, unresolved
+ * days contribute nothing. Backfill-safe: generation-day "today" is at or
+ * after lastDate, so every day in range counts as completed. */
+export function snapshotEfficiency(
+  firstN: Entry[],
+  scheduleData: SnapshotScheduleData,
+): Pick<SnapshotStats, "overallEfficiency" | "efficiencySource"> {
+  if (!scheduleData || firstN.length === 0) {
+    return { overallEfficiency: null, efficiencySource: null };
+  }
+  const dates = firstN.map((e) => e.date).sort();
+  const s = aggregateStatsWithSchedule(
+    firstN,
+    scheduleData.clocks,
+    { start: dates[0], end: dates[dates.length - 1] },
+    scheduleData.ctx,
+  );
+  return {
+    overallEfficiency:
+      s.efficiency === null ? null : Math.round(s.efficiency * 10) / 10,
+    efficiencySource: s.denomSource,
+  };
+}
+
 /** Sort entries into log order: date asc, then created_at asc. */
 export function chronological(entries: Entry[]): Entry[] {
   return entries
@@ -93,23 +119,10 @@ export function buildSnapshotStats(
 
   const sortedDates = [...dates].sort();
 
-  // Overall efficiency over the snapshot's range: per-day clocked hours win,
-  // scheduled hours fill silent days, unresolved days contribute nothing.
-  // Snapshots are backfill-safe: generation-day "today" is at or after
-  // lastDate, so every day in range counts as completed.
-  let overallEfficiency: number | null = null;
-  let efficiencySource: SnapshotStats["efficiencySource"] = null;
-  if (scheduleData && sortedDates.length > 0) {
-    const s = aggregateStatsWithSchedule(
-      firstN,
-      scheduleData.clocks,
-      { start: sortedDates[0], end: sortedDates[sortedDates.length - 1] },
-      scheduleData.ctx,
-    );
-    overallEfficiency =
-      s.efficiency === null ? null : Math.round(s.efficiency * 10) / 10;
-    efficiencySource = s.denomSource;
-  }
+  const { overallEfficiency, efficiencySource } = snapshotEfficiency(
+    firstN,
+    scheduleData,
+  );
 
   return {
     overallEfficiency,

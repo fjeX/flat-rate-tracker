@@ -483,6 +483,7 @@ export type Database = {
           reference_hourly_rate: number | null
           ro_template: Json | null
           split_day: number
+          tag_colors: Json
           timer_accumulated: number
           timer_ro_id: string | null
           timer_start_time: number | null
@@ -496,6 +497,7 @@ export type Database = {
           reference_hourly_rate?: number | null
           ro_template?: Json | null
           split_day?: number
+          tag_colors?: Json
           timer_accumulated?: number
           timer_ro_id?: string | null
           timer_start_time?: number | null
@@ -509,6 +511,7 @@ export type Database = {
           reference_hourly_rate?: number | null
           ro_template?: Json | null
           split_day?: number
+          tag_colors?: Json
           timer_accumulated?: number
           timer_ro_id?: string | null
           timer_start_time?: number | null

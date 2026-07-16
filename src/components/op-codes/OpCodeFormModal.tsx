@@ -3,6 +3,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { TAG_HUE_SLOTS, tagHueSlot, tagHueVar } from "./tagHue";
 
 function HoursInput({
   value,
@@ -83,16 +84,23 @@ function AutoGrowInput({
 
 // Chip-style tag editor: type a tag, Enter or comma commits it, × removes it.
 // `suggestions` are tags already used elsewhere in the library (for autocomplete).
+// When `onSetTagColor` is provided, each chip gets a colour dot that opens an
+// 8-swatch picker — colours are library-wide per tag, saved immediately.
 function TagInput({
   tags,
   onChange,
   suggestions,
+  tagColors,
+  onSetTagColor,
 }: {
   tags: string[];
   onChange: (tags: string[]) => void;
   suggestions: string[];
+  tagColors?: Record<string, number>;
+  onSetTagColor?: (tag: string, hue: number | null) => void;
 }) {
   const [raw, setRaw] = useState("");
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
   const listId = useId();
 
   function addTag(value: string) {
@@ -133,6 +141,17 @@ function TagInput({
           key={tag}
           className="flex items-center gap-1 badge badge-neutral text-[var(--fg-1)]"
         >
+          {onSetTagColor && (
+            <button
+              type="button"
+              onClick={() => setPickerFor(pickerFor === tag ? null : tag)}
+              aria-label={`Change color for ${tag}`}
+              aria-expanded={pickerFor === tag}
+              title="Tag color"
+              className="h-3 w-3 shrink-0 rounded-full border border-[var(--line)] hover:scale-125"
+              style={{ background: tagHueVar(tag, tagColors), transition: "transform 0.1s" }}
+            />
+          )}
           {tag}
           <button
             type="button"
@@ -144,6 +163,41 @@ function TagInput({
           </button>
         </span>
       ))}
+      {/* Swatch picker for the chip whose dot was tapped */}
+      {onSetTagColor && pickerFor && tags.includes(pickerFor) && (
+        <div className="flex w-full flex-wrap items-center gap-2 pt-1.5">
+          <span className="text-xs text-[var(--fg-3)]">{pickerFor}:</span>
+          {Array.from({ length: TAG_HUE_SLOTS }, (_, i) => {
+            const active = tagHueSlot(pickerFor, tagColors) === i;
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  onSetTagColor(pickerFor, i);
+                  setPickerFor(null);
+                }}
+                aria-label={`Color ${i + 1}${active ? " (current)" : ""}`}
+                className="h-5 w-5 rounded-full border border-[var(--line)]"
+                style={{
+                  background: `var(--tag-hue-${i})`,
+                  boxShadow: active ? "0 0 0 2px var(--bg-2), 0 0 0 4px var(--fg-2)" : undefined,
+                }}
+              />
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => {
+              onSetTagColor(pickerFor, null);
+              setPickerFor(null);
+            }}
+            className="text-xs text-[var(--fg-2)] underline hover:text-[var(--fg-0)]"
+          >
+            Auto
+          </button>
+        </div>
+      )}
       <input
         type="text"
         value={raw}
@@ -193,6 +247,8 @@ function OpCodeFormBody({
   mode,
   initial,
   allTags,
+  tagColors,
+  onSetTagColor,
   onSubmit,
   onClose,
   onDelete,
@@ -201,6 +257,8 @@ function OpCodeFormBody({
   mode: Mode;
   initial: OpCodeFormValues;
   allTags: string[];
+  tagColors?: Record<string, number>;
+  onSetTagColor?: (tag: string, hue: number | null) => void;
   onSubmit: (values: OpCodeFormValues) => Promise<void>;
   onClose: () => void;
   onDelete?: () => void;
@@ -375,6 +433,8 @@ function OpCodeFormBody({
             tags={draft.tags}
             onChange={(tags) => setDraft({ ...draft, tags })}
             suggestions={allTags}
+            tagColors={tagColors}
+            onSetTagColor={onSetTagColor}
           />
         </label>
       </div>
@@ -503,6 +563,8 @@ export function OpCodeFormModal({
   mode,
   initial,
   allTags = [],
+  tagColors,
+  onSetTagColor,
   onSubmit,
   onClose,
   onDelete,
@@ -512,6 +574,10 @@ export function OpCodeFormModal({
   mode: Mode;
   initial?: OpCodeFormValues;
   allTags?: string[];
+  /** Per-tag colour overrides (settings.tagColors). */
+  tagColors?: Record<string, number>;
+  /** When provided, tag chips get the colour-dot picker. */
+  onSetTagColor?: (tag: string, hue: number | null) => void;
   onSubmit: (values: OpCodeFormValues) => Promise<void>;
   onClose: () => void;
   onDelete?: () => void;
@@ -535,6 +601,8 @@ export function OpCodeFormModal({
         mode={mode}
         initial={seeded}
         allTags={allTags}
+        tagColors={tagColors}
+        onSetTagColor={onSetTagColor}
         onSubmit={onSubmit}
         onClose={onClose}
         onDelete={onDelete}

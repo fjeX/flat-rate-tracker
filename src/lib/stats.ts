@@ -3,6 +3,7 @@ import type { DailyClock, DenomSource, Entry } from "./types";
 import { addDays } from "./periods";
 import {
   scheduledHoursFor,
+  scheduledHoursForRetro,
   type ShiftOverrideMap,
   type WorkSchedule,
 } from "./schedule";
@@ -194,4 +195,54 @@ export function aggregateStatsWithSchedule(
     denomSource,
     unresolvedDays,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Per-day denominators — chart hover readouts.
+// Same hierarchy as aggregateStatsWithSchedule, per single day: clocked hours
+// win; scheduled paid hours fill COMPLETED days (never today mid-shift, never
+// explicit days off). Days with no denominator are simply absent — the chart
+// shows hours only, no efficiency.
+//
+// One display-only difference from the period stats: days before the first
+// schedule existed borrow the earliest schedule's pattern (retro fallback),
+// so setting up a schedule today lights up last week's hovers too.
+// ---------------------------------------------------------------------------
+
+export type DayDenom = {
+  hours: number;
+  source: "clocked" | "scheduled";
+};
+
+export function dailyDenominators(
+  clocks: DailyClock[],
+  range: { start: string; end: string },
+  today: string,
+  schedule: ScheduleContext | null,
+): Record<string, DayDenom> {
+  const out: Record<string, DayDenom> = {};
+  const clockByDay = new Map<string, number>();
+  for (const c of clocks) {
+    if (inRange(c.date, range.start, range.end)) clockByDay.set(c.date, c.hours);
+  }
+  const off = schedule ? expandDaysOff(schedule.daysOff) : new Set<string>();
+
+  let d = range.start;
+  for (let i = 0; d <= range.end && i < MAX_RANGE_DAYS; i++, d = addDays(d, 1)) {
+    const clocked = clockByDay.get(d) ?? 0;
+    if (clocked > 0) {
+      out[d] = { hours: clocked, source: "clocked" };
+      continue;
+    }
+    if (!schedule || d >= today || off.has(d)) continue;
+    const scheduled = scheduledHoursForRetro(
+      schedule.schedules,
+      d,
+      schedule.shiftOverrides ?? {},
+    );
+    if (scheduled !== null && scheduled > 0) {
+      out[d] = { hours: scheduled, source: "scheduled" };
+    }
+  }
+  return out;
 }

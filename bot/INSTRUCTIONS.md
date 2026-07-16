@@ -163,13 +163,36 @@ efficiency denominator falls back to the scheduled hours.
   marker changes to "zero day", then **Undo zero day** to put it back.
 - **Dashboard tie-ins:** the Today card may show **"On Pace"** (live pace vs
   the shift as it passes) instead of Efficiency until clocked hours are
-  entered — that's by design. Week/period/month tiles may show a `· sched` or
-  `· mixed` suffix on efficiency — also by design (it marks an estimated
-  denominator). An "N scheduled days look empty" card on the dashboard is the
-  same resolver as the calendar's amber days.
+  entered — that's by design. An "N scheduled days look empty" card on the
+  dashboard is the same resolver as the calendar's amber days.
+- **Efficiency label (2026-07-16 change):** week/period/month tiles and the
+  pace-card footer now read "N% efficiency" — the old `eff` / `· sched` /
+  `· mixed` suffixes are GONE from the visible text (provenance moved to the
+  hover title). Seeing a bare "efficiency" label is correct, not a regression.
 - **Tier colors are honest now (2026-07-15 fix):** efficiency < 95% shows
   amber, < 80% red. Colored-not-green tiles are not a bug; check the color
   matches the number.
+- **Chart hover efficiency (2026-07-16):** on the dashboard Flagged Hours
+  chart (Week tab, Total mode) and the History chart (Today/Week filters),
+  hovering a day bar with flagged hours shows "N% efficiency" in the readout
+  row. Expected absences (NOT bugs): days with 0 flagged hours, and today
+  before clocked hours are entered. Past days show it even from before the
+  schedule existed (retro pattern fallback).
+- **Today clocked placeholder (2026-07-16):** the Today tile's Clocked input
+  shows today's scheduled paid hours as a grey placeholder (e.g. 8.0) on
+  scheduled days. It's a hint only — an empty field still means "no clock
+  entered".
+
+### 8d. Op code tag colors (shipped 2026-07-16)
+Tags in the op code library have user-settable colors (8 theme swatches).
+- On /op-codes, tag filter chips show a small color dot; the row tick uses
+  the first tag's color.
+- Open any op code's edit modal: each tag chip has a color dot — click it,
+  an 8-swatch row + "Auto" appears. Pick a different swatch, verify the row
+  tick and filter-chip dot update, then set it back with **Auto** (don't
+  leave test colors behind).
+- If picking a color errors with "migration needs to run first", report it —
+  that means the tag_colors migration is missing from prod.
 
 ### 9. Nightly edge case (seeded rotation)
 

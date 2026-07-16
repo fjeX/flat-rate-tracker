@@ -177,6 +177,10 @@ export type UserSettings = {
   // pay-period Pay Check-Up comparison. null = unset (no comparison shown). We do
   // NOT store a statutory figure — wage floors change yearly and vary by locale.
   referenceHourlyRate: number | null;
+  // Per-tag colour overrides for the op code library: lowercased tag → hue
+  // slot index (0-7, the --tag-hue-N theme tokens). Tags not listed keep
+  // their deterministic hash colour.
+  tagColors: Record<string, number>;
 };
 
 // ------------------------------------------------------------------------

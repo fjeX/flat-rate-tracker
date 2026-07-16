@@ -439,6 +439,7 @@ body {
 }
 .r-readout-main {
   display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums;
+  flex: 1; min-width: 0;
 }
 .r-readout-label {
   color: var(--fg-2); font-size: 12px; font-weight: 600;
@@ -450,6 +451,13 @@ body {
 }
 .r-readout-unit {
   color: var(--fg-3); font-size: 11px; font-family: ui-monospace, Menlo, monospace;
+}
+/* Day-efficiency suffix — pinned to the right edge of the readout row */
+.r-readout-eff {
+  margin-left: auto;
+  font-size: 11px; font-weight: 600;
+  font-family: ui-monospace, Menlo, monospace;
+  cursor: default;
 }
 .r-modewrap {
   display: flex; align-items: center; justify-content: space-between;

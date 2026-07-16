@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Plus } from "lucide-react";
 import { upsertDailyClockHoursAction } from "@/app/actions/daily-clock";
 import { minutesNowInTz, shiftPace } from "@/lib/pace";
-import type { ShiftDef } from "@/lib/schedule";
+import { shiftPaidHours, type ShiftDef } from "@/lib/schedule";
 import { computeEfficiency, fmtHours, fmtPct } from "@/lib/stats";
 import type { Stats } from "@/lib/stats";
 import type { OpCode } from "@/lib/types";
@@ -175,7 +175,9 @@ export function TodayCard({
                     (e.target as HTMLInputElement).blur();
                   }
                 }}
-                placeholder="0"
+                // Placeholder = today's scheduled paid hours: a hint at what
+                // the day is planned to be, never treated as entered data.
+                placeholder={todayShift ? fmtHours(shiftPaidHours(todayShift)) : "0"}
                 className="input mono tabular"
                 style={{ width: 72, fontSize: 13 }}
               />

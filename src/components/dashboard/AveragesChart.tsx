@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import type { Entry } from "@/lib/types";
-import { fmtHours } from "@/lib/stats";
+import { fmtHours, type DayDenom } from "@/lib/stats";
 import { getPeriodForDate, addDays } from "@/lib/periods";
+import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,6 +18,7 @@ type BarData = {
   label: string;       // short axis label (M, May 3)
   longLabel: string;   // readout label (Mon, May 3)
   subLabel?: string;   // secondary axis label (Wk 1 / Wk 2 for period tab)
+  date?: string;       // ISO date for day-level bars — enables the efficiency readout
   value: number;
   isBest: boolean;
   isCurrent: boolean;
@@ -24,6 +26,9 @@ type BarData = {
 
 type Props = {
   entries: Entry[];
+  /** Per-day efficiency denominators (clocked > scheduled) — day-bar hover
+   * shows that day's efficiency when present. */
+  denomByDay?: Record<string, DayDenom>;
   today: string;
   periodStart: string;
   periodEnd: string;
@@ -110,6 +115,7 @@ function computeWeek(
     bars.push({
       label: wd,
       longLabel: `${wd}, ${MONTHS_SHORT[m - 1]} ${day}`,
+      date: d,
       value,
       isBest: false,
       isCurrent: d === today,
@@ -466,6 +472,7 @@ function RoomierBarChart({
 
 export function AveragesChart({
   entries,
+  denomByDay,
   today,
   weekStart,
   weekEnd,
@@ -543,6 +550,13 @@ export function AveragesChart({
                 {activeBar ? `${fmtHours(activeBar.value)}h` : "—"}
               </span>
               <span className="r-readout-unit">{unitLabel}</span>
+              {/* Day efficiency — total mode only (avg bars are synthetic) */}
+              {mode === "total" && activeBar?.date && (
+                <ReadoutEfficiency
+                  flagHours={activeBar.value}
+                  denom={denomByDay?.[activeBar.date]}
+                />
+              )}
             </div>
           </div>
 

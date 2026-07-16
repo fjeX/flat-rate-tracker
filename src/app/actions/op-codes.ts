@@ -27,6 +27,40 @@ function normalizeTags(tags: string[] | undefined): string[] {
   return out;
 }
 
+// Set (or clear, with null) the colour override for a library tag.
+// Tag colours are library-wide, keyed by lowercased tag; hue is a slot index
+// into the 8 --tag-hue-N theme tokens. Unset tags keep their hash colour.
+export async function setTagColorAction(
+  tag: string,
+  hue: number | null,
+): Promise<void> {
+  const key = tag.trim().toLowerCase();
+  if (!key) throw new Error("Tag is required.");
+  if (hue !== null && (!Number.isInteger(hue) || hue < 0 || hue > 7))
+    throw new Error("Colour must be one of the 8 palette slots.");
+
+  const supabase = await createClient();
+  const settings = await db.getSettings(supabase);
+  const next = { ...settings.tagColors };
+  if (hue === null) delete next[key];
+  else next[key] = hue;
+  try {
+    await db.updateSettings(supabase, { tagColors: next });
+  } catch (err) {
+    // Pre-migration DB: the tag_colors column doesn't exist yet. Postgres
+    // says 42703, PostgREST's schema cache says PGRST204.
+    const e = err as { code?: string; message?: string } | null;
+    if (e?.code === "42703" || e?.code === "PGRST204" || /tag_colors/.test(e?.message ?? "")) {
+      throw new Error(
+        "Tag colors aren't enabled on the server yet — the tag_colors migration needs to run first.",
+      );
+    }
+    throw err;
+  }
+
+  revalidateOpCodes();
+}
+
 // Sub code shape accepted by create/update actions.
 type SubCodeInput = {
   id?: string; // undefined = new (not yet in DB)

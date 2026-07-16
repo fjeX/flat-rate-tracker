@@ -5,6 +5,7 @@ import {
   type OpCodeSortKind,
   type SortDir,
 } from "./useOpCodeBrowsing";
+import { tagHueVar } from "./tagHue";
 
 // Reuses the History page's chip styling (.filter-row / .filter-chip) so the
 // op code library sorts and filters with the same look and feel.
@@ -24,6 +25,7 @@ export function OpCodeBrowseBar({
   selectedTags,
   onToggleTag,
   onClearTags,
+  tagColors,
   showManualSort = true,
 }: {
   sortBy: OpCodeSortKind;
@@ -33,6 +35,8 @@ export function OpCodeBrowseBar({
   selectedTags: string[];
   onToggleTag: (tag: string) => void;
   onClearTags: () => void;
+  /** Per-tag colour overrides (settings.tagColors) for the chip dots. */
+  tagColors?: Record<string, number>;
   // Guest demo has no drag order, so it can hide the "My order" option.
   showManualSort?: boolean;
 }) {
@@ -83,6 +87,18 @@ export function OpCodeBrowseBar({
                 aria-pressed={active}
                 className={`filter-chip${active ? " active" : ""}`}
               >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-block",
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: tagHueVar(tag, tagColors),
+                    marginRight: 6,
+                    verticalAlign: "baseline",
+                  }}
+                />
                 {tag}
               </button>
             );

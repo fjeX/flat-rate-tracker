@@ -24,6 +24,7 @@ import {
   createLibraryOpCode,
   deleteLibraryOpCode,
   reorderLibraryOpCodes,
+  setTagColorAction,
   updateLibraryOpCode,
 } from "@/app/actions/op-codes";
 import {
@@ -39,10 +40,18 @@ type ModalState =
   | { kind: "add" }
   | { kind: "edit"; opCode: OpCode };
 
-export function OpCodesView({ library }: { library: OpCode[] }) {
+export function OpCodesView({
+  library,
+  tagColors: initialTagColors = {},
+}: {
+  library: OpCode[];
+  /** Per-tag colour overrides (settings.tagColors). */
+  tagColors?: Record<string, number>;
+}) {
   const router = useRouter();
 
   const [items, setItems] = useState<OpCode[]>(library);
+  const [tagColors, setTagColors] = useState<Record<string, number>>(initialTagColors);
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   const [saving, startSaving] = useTransition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -145,6 +154,29 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
     });
   }
 
+  // Tag colours are library-wide, saved immediately (not part of the form
+  // draft) — optimistic update, rolled back if the server rejects it.
+  function handleSetTagColor(tag: string, hue: number | null) {
+    const key = tag.trim().toLowerCase();
+    if (!key) return;
+    const prev = tagColors;
+    const next = { ...tagColors };
+    if (hue === null) delete next[key];
+    else next[key] = hue;
+    setTagColors(next);
+    startSaving(async () => {
+      try {
+        await setTagColorAction(tag, hue);
+        router.refresh();
+      } catch (err) {
+        setTagColors(prev);
+        window.alert(
+          err instanceof Error ? err.message : "Failed to save tag color.",
+        );
+      }
+    });
+  }
+
   function handleDelete(opCode: OpCode) {
     if (
       !window.confirm(
@@ -241,6 +273,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
         selectedTags={selectedTags}
         onToggleTag={toggleTag}
         onClearTags={clearTags}
+        tagColors={tagColors}
       />
 
       {reorderError && (
@@ -283,6 +316,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
                   <OpCodeRow
                     key={op.id}
                     opCode={op}
+                    tagColors={tagColors}
                     reorderable={canReorder}
                     onEdit={(target) =>
                       setModal({ kind: "edit", opCode: target })
@@ -313,6 +347,8 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
         open={modal.kind === "add"}
         mode="add"
         allTags={allTags}
+        tagColors={tagColors}
+        onSetTagColor={handleSetTagColor}
         onClose={() => setModal({ kind: "closed" })}
         onSubmit={submitAdd}
         isPending={saving}
@@ -321,6 +357,8 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
         open={modal.kind === "edit"}
         mode="edit"
         allTags={allTags}
+        tagColors={tagColors}
+        onSetTagColor={handleSetTagColor}
         initial={modal.kind === "edit" ? editInitial(modal.opCode) : undefined}
         onClose={() => setModal({ kind: "closed" })}
         onSubmit={(values) =>

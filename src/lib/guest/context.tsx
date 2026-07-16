@@ -45,6 +45,7 @@ const defaultSettings: UserSettings = {
   roTemplates: [],
   defaultLaborType: null,
   referenceHourlyRate: null,
+  tagColors: {},
 };
 
 // Demo tags so the guest library shows off grouping out of the box.

@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { Entry } from "@/lib/types";
 import { addDays, getPeriodForDate } from "@/lib/periods";
-import { fmtHours } from "@/lib/stats";
+import { fmtHours, type DayDenom } from "@/lib/stats";
+import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
 
 type FilterKind = "today" | "week" | "period" | "month" | "all";
 
@@ -14,6 +15,9 @@ type Props = {
   weekStart: string;
   weekEnd: string;
   splitDay: number;
+  /** Per-day efficiency denominators (clocked > scheduled) — day-bar hover
+   * shows that day's efficiency when present. Absent in guest mode. */
+  denomByDay?: Record<string, DayDenom>;
 };
 
 const MONTHS = [
@@ -50,6 +54,7 @@ type BarData = {
   label: string;       // primary axis label (15, Mon, Apr 1, Apr)
   subLabel?: string;   // secondary axis row (Wk 1 / Wk 2 for periods)
   longLabel: string;   // readout label (2 PM / Mon, Apr 3 / Apr 1 – 15 / April 2026)
+  date?: string;       // ISO date for day-level bars — enables the efficiency readout
   hours: number;
   isCurrent: boolean;  // today / current period / current month bar
 };
@@ -59,7 +64,7 @@ function buildTodayBars(entries: Entry[], today: string): BarData[] {
   const total = entries
     .filter((e) => e.date === today)
     .reduce((s, e) => s + e.flagHours, 0);
-  return [{ label: "Today", longLabel: "Today", hours: total, isCurrent: true }];
+  return [{ label: "Today", longLabel: "Today", date: today, hours: total, isCurrent: true }];
 }
 
 // ── week: one bar per day of the current week ────────────────────────────
@@ -81,6 +86,7 @@ function buildWeekBars(
     bars.push({
       label: wd,
       longLabel: fmtLongDay(d),
+      date: d,
       hours: byDate.get(d) ?? 0,
       isCurrent: d === today,
     });
@@ -202,6 +208,7 @@ export function HistoryBarChart({
   weekStart,
   weekEnd,
   splitDay,
+  denomByDay,
 }: Props) {
   const [hover, setHover] = useState<number | null>(null);
 
@@ -282,6 +289,12 @@ export function HistoryBarChart({
               {activeBar ? `${fmtHours(activeBar.hours)}h` : "—"}
             </span>
             <span className="r-readout-unit">flag hrs</span>
+            {activeBar?.date && (
+              <ReadoutEfficiency
+                flagHours={activeBar.hours}
+                denom={denomByDay?.[activeBar.date]}
+              />
+            )}
           </div>
         </div>
 
