@@ -10,16 +10,14 @@ import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
 import { RoTemplateCard } from "@/components/settings/RoTemplateCard";
 import { TimezoneCard } from "@/components/settings/TimezoneCard";
 import { QuickAddCard } from "@/components/settings/QuickAddCard";
-import { DaysOffCard } from "@/components/settings/DaysOffCard";
+import Link from "next/link";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const [settings, laborRates, daysOff] = await Promise.all([
+  const [settings, laborRates] = await Promise.all([
     db.getSettings(supabase),
     db.listLaborRates(supabase),
-    // null while the gamification migration hasn't been applied — card hidden.
-    db.listDaysOffSafe(supabase),
   ]);
   const overrideCount = Object.keys(settings.periodOverrides).length;
   const cookieStore = await cookies();
@@ -40,7 +38,19 @@ export default async function SettingsPage() {
           <ReferenceRateCard initialRate={settings.referenceHourlyRate} />
           <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
           <TimezoneCard initialTimezone={timezone} />
-          {daysOff !== null && <DaysOffCard initialDaysOff={daysOff} />}
+          <section className="card padded-lg">
+            <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>
+              Work Schedule & Days Off
+            </h2>
+            <p className="mb-4 text-sm" style={{ color: "var(--fg-2)" }}>
+              Your weekly pattern, days off, and one-day changes live on the
+              schedule calendar — they drive efficiency on days you don&apos;t
+              enter clocked hours.
+            </p>
+            <Link href="/schedule" className="btn btn-primary">
+              Open schedule calendar
+            </Link>
+          </section>
         </div>
       </section>
 

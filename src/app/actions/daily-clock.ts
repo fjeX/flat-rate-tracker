@@ -17,6 +17,8 @@ export async function upsertDailyClockHoursAction(
   await db.upsertDailyClock(supabase, date, hours);
 
   revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/schedule");
 }

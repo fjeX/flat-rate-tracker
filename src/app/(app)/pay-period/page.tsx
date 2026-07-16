@@ -8,7 +8,7 @@ import {
   isoDateInTz,
   type PeriodRange,
 } from "@/lib/periods";
-import { aggregateStats } from "@/lib/stats";
+import { aggregateStats, aggregateStatsWithSchedule } from "@/lib/stats";
 import { ratesToMap } from "@/lib/earnings";
 import { filterBonusesInRange } from "@/lib/bonuses";
 import { PayPeriodView } from "@/components/pay-period/PayPeriodView";
@@ -52,6 +52,14 @@ export default async function PayPeriodPage({
     db.listBonuses(supabase),
     supabase.auth.getUser(),
   ]);
+  // Null while the work_schedules migration hasn't been applied —
+  // efficiency falls back to clocked-hours-only.
+  const [schedules, daysOff, confirmedZeroDays, shiftOverrides] = await Promise.all([
+    db.listWorkSchedulesSafe(supabase),
+    db.listDaysOffSafe(supabase),
+    db.listConfirmedZeroDaysSafe(supabase),
+    db.listShiftOverridesSafe(supabase),
+  ]);
 
   const firstName =
     (userData.user?.user_metadata?.first_name as string | undefined) ?? "";
@@ -88,10 +96,26 @@ export default async function PayPeriodPage({
       ? availablePeriods.find((p) => p.key === params.period)
       : undefined) ?? current;
 
-  const stats = aggregateStats(entries, clocks, {
-    start: selected.start,
-    end: selected.end,
-  });
+  // Schedule-aware efficiency once a schedule exists (clocked hours still
+  // win per day); plain clocked-hours efficiency otherwise.
+  const stats =
+    schedules !== null && schedules.length > 0
+      ? aggregateStatsWithSchedule(
+          entries,
+          clocks,
+          { start: selected.start, end: selected.end },
+          {
+            schedules,
+            daysOff: daysOff ?? [],
+            confirmedZeroDays: confirmedZeroDays ?? [],
+            today,
+            shiftOverrides: shiftOverrides ?? {},
+          },
+        )
+      : aggregateStats(entries, clocks, {
+          start: selected.start,
+          end: selected.end,
+        });
   const periodEntries = entries.filter(
     (e) => e.date >= selected.start && e.date <= selected.end,
   );

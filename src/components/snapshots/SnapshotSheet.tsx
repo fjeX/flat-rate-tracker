@@ -77,6 +77,17 @@ export function SnapshotSheet({
             <br />
           </>
         )}
+        {s.overallEfficiency != null && (
+          <>
+            <b>Overall efficiency:</b> {Math.round(s.overallEfficiency)}%
+            {s.efficiencySource === "scheduled"
+              ? " (vs scheduled hours)"
+              : s.efficiencySource === "mixed"
+                ? " (vs clocked + scheduled hours)"
+                : " (vs clocked hours)"}
+            <br />
+          </>
+        )}
         <b>Range:</b> {formatDateShort(s.firstDate)} → {formatDateShort(s.lastDate)} ·{" "}
         {s.workDays} work {s.workDays === 1 ? "day" : "days"}
       </div>

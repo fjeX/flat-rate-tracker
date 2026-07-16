@@ -1,5 +1,6 @@
 import type { Stats } from "@/lib/stats";
 import { fmtHours, fmtPct } from "@/lib/stats";
+import type { DenomSource } from "@/lib/types";
 import { fmtMoney } from "@/lib/earnings";
 import { EntranceGrid } from "@/components/ui/EntranceGrid";
 
@@ -26,7 +27,7 @@ export function PeriodStats({
   warrantyLoss = null,
   unflaggedTime = null,
 }: {
-  stats: Stats;
+  stats: Stats & { denomSource?: DenomSource | null };
   // Both null unless the user has priced rates — when null, nothing dollar-based
   // renders and the grid looks exactly as it did before this feature.
   earnings?: number | null;
@@ -46,7 +47,16 @@ export function PeriodStats({
           highlighted={earnings === null}
         />
         <Cell label="Clocked hrs" value={`${fmtHours(stats.clockedHours)}h`} />
-        <Cell label="Efficiency" value={fmtPct(stats.efficiency)} />
+        <Cell
+          label={
+            stats.denomSource === "scheduled"
+              ? "Efficiency · sched"
+              : stats.denomSource === "mixed"
+                ? "Efficiency · mixed"
+                : "Efficiency"
+          }
+          value={fmtPct(stats.efficiency)}
+        />
         {earnings !== null && (
           <Cell label="Earnings" value={fmtMoney(earnings)} highlighted />
         )}

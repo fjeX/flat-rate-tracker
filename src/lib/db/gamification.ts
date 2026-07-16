@@ -22,10 +22,16 @@ import {
   snapshotSeqForThreshold,
   snapshotThresholdsReached,
 } from "@/lib/career";
-import { buildSnapshotStats, chronological } from "@/lib/snapshots";
+import { buildSnapshotStats, chronological, type SnapshotScheduleData } from "@/lib/snapshots";
 import { addDays } from "@/lib/periods";
+import type { DailyClock } from "@/lib/types";
 import { getCurrentUserId, type DbClient } from "./_client";
 import { listOpCodes } from "./op-codes";
+import {
+  listConfirmedZeroDaysSafe,
+  listShiftOverridesSafe,
+  listWorkSchedulesSafe,
+} from "./schedules";
 
 const PAGE = 500;
 
@@ -183,6 +189,24 @@ async function listAllEntriesChronological(supabase: DbClient): Promise<Entry[]>
   return chronological(out);
 }
 
+/** All-time clock rows, paged — snapshot generation only. */
+async function listAllDailyClocks(supabase: DbClient): Promise<DailyClock[]> {
+  const out: DailyClock[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("daily_clock_hours")
+      .select("user_id, date, hours")
+      .order("date", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    for (const r of data ?? []) {
+      out.push({ userId: r.user_id, date: r.date, hours: Number(r.hours) });
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 /** entry_id of every photo the user owns (for per-snapshot photo counts). */
 async function listAllPhotoEntryIds(supabase: DbClient): Promise<string[]> {
   const out: string[] = [];
@@ -206,6 +230,7 @@ async function generateMissingSnapshots(
   supabase: DbClient,
   roCount: number,
   existing: PortfolioSnapshot[],
+  today: string,
 ): Promise<PortfolioSnapshot[]> {
   const due = snapshotThresholdsReached(roCount);
   const have = new Set(existing.map((s) => s.roThreshold));
@@ -213,17 +238,42 @@ async function generateMissingSnapshots(
   if (missing.length === 0) return existing;
 
   const userId = await getCurrentUserId(supabase);
-  const [all, library, photoEntryIds] = await Promise.all([
+  const [all, library, photoEntryIds, schedules] = await Promise.all([
     listAllEntriesChronological(supabase),
     listOpCodes(supabase),
     listAllPhotoEntryIds(supabase),
+    // Null pre-migration; empty when no schedule is set up yet.
+    listWorkSchedulesSafe(supabase),
   ]);
+
+  // Schedule-aware overall efficiency is only worth freezing once a schedule
+  // exists — the extra fetches are skipped otherwise (rare path regardless).
+  let scheduleData: SnapshotScheduleData = null;
+  if (schedules !== null && schedules.length > 0) {
+    const [clocks, daysOff, confirmedZeroDays, shiftOverrides] = await Promise.all([
+      listAllDailyClocks(supabase),
+      listDaysOff(supabase),
+      listConfirmedZeroDaysSafe(supabase),
+      listShiftOverridesSafe(supabase),
+    ]);
+    scheduleData = {
+      clocks,
+      ctx: {
+        schedules,
+        daysOff,
+        confirmedZeroDays: confirmedZeroDays ?? [],
+        today,
+        shiftOverrides: shiftOverrides ?? {},
+      },
+    };
+  }
 
   for (const threshold of missing) {
     const stats = buildSnapshotStats(
       all.slice(0, threshold),
       library,
       photoEntryIds,
+      scheduleData,
     );
     // ignoreDuplicates: a concurrent load generating the same snapshot wins
     // quietly — seq is deterministic, so both writers agree on the row.
@@ -307,6 +357,7 @@ export async function getGamificationData(
       supabase,
       roCount,
       snapshots,
+      opts.today,
     );
 
     return {

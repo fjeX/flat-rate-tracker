@@ -16,3 +16,4 @@ export * from "./settings";
 export * from "./daily-clock";
 export * from "./paid-periods";
 export * from "./gamification";
+export * from "./schedules";

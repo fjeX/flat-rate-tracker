@@ -11,6 +11,7 @@ const TABS = [
   { href: "/history", label: "History", match: (p: string) => p.startsWith("/history") },
   { href: "/timer", label: "Timer", match: (p: string) => p.startsWith("/timer") },
   { href: "/pay-period", label: "Pay Period", match: (p: string) => p.startsWith("/pay-period") },
+  { href: "/schedule", label: "Schedule", match: (p: string) => p.startsWith("/schedule") },
   { href: "/op-codes", label: "Op Codes", match: (p: string) => p.startsWith("/op-codes") },
   { href: "/settings", label: "Settings", match: (p: string) => p.startsWith("/settings") },
 ];

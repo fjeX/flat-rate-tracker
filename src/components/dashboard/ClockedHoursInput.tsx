@@ -31,8 +31,8 @@ export function ClockedHoursInput({
   const parsedHours = parseHoursText(hoursText);
   const efficiency = computeEfficiency(todayFlagHours, parsedHours);
   const dirty = parsedHours !== savedHours;
-  const effGood = efficiency !== null && efficiency >= 1.0;
-  const effBad  = efficiency !== null && efficiency < 0.85;
+  const effGood = efficiency !== null && efficiency >= 100;
+  const effBad  = efficiency !== null && efficiency < 85;
 
   function commit() {
     if (!dirty) return;

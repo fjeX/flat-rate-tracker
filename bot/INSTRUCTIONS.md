@@ -116,9 +116,40 @@ The dashboard has three new cards; sanity-check each:
   every 100), a new numbered snapshot sheet must appear — check /snapshots
   lists it and its stats look sane (RO count = the threshold, dates plausible).
   Snapshots from previous nights must never change — they are frozen records.
-- **Settings → Days Off**: add a day off for a past date, verify it appears in
-  the list, then remove it. (Don't leave test days-off behind — they change
-  streak math.)
+- ~~Settings → Days Off~~ (moved 2026-07-15): days off now live on the
+  Schedule page — tested in section 8c below.
+
+### 8c. Schedule & efficiency (shipped 2026-07-15)
+A new **Schedule** tab (desktop nav; on mobile it's linked from Settings)
+drives schedule-based efficiency: on days without entered clocked hours, the
+efficiency denominator falls back to the scheduled hours.
+
+- **One-time setup (do only if missing):** on /schedule, if no weekly pattern
+  exists, set one: Mon–Fri, 8 hrs, starts 08:00, lunch 60 min. If a
+  "Suggest from my history" button appears, note whether it prefills sanely.
+- **Calendar sanity:** the month grid renders without overlap; today is
+  ringed; scheduled days show hours; the bot's logged days show flag hours.
+- **Tap a past scheduled day** and check the panel opens with sane status
+  (scheduled hours / flag / clocked).
+- **Actual hours:** on ONE of tonight's RO days, set actual hours (e.g. 9),
+  verify dashboard efficiency reflects it, then set it back (0 clears) —
+  don't leave test clock data behind.
+- **Day off round-trip:** mark a past date off, verify the cell shows "off",
+  remove it. (Same don't-leave-it-behind rule as before.)
+- **One-day shift override:** on a future date, change the shift (e.g. 10 hrs),
+  verify the `*` marker appears, then "Reset to pattern".
+- **Empty-day resolution:** amber "empty?" days are scheduled workdays with
+  nothing logged. If one exists, resolve it as "Worked, zero flag", verify the
+  marker changes to "zero day", then **Undo zero day** to put it back.
+- **Dashboard tie-ins:** the Today card may show **"On Pace"** (live pace vs
+  the shift as it passes) instead of Efficiency until clocked hours are
+  entered — that's by design. Week/period/month tiles may show a `· sched` or
+  `· mixed` suffix on efficiency — also by design (it marks an estimated
+  denominator). An "N scheduled days look empty" card on the dashboard is the
+  same resolver as the calendar's amber days.
+- **Tier colors are honest now (2026-07-15 fix):** efficiency < 95% shows
+  amber, < 80% red. Colored-not-green tiles are not a bug; check the color
+  matches the number.
 
 ### 9. Nightly edge case (seeded rotation)
 

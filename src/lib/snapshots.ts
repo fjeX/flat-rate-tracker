@@ -8,10 +8,19 @@
 // Sparse data degrades gracefully: avgVsBook is null without enough lines
 // carrying actual hours; topOps may be shorter than 3; photoCount can be 0.
 
-import type { Entry, OpCode, SnapshotStats, SnapshotTopOp } from "./types";
+import { aggregateStatsWithSchedule, type ScheduleContext } from "./stats";
+import type { DailyClock, Entry, OpCode, SnapshotStats, SnapshotTopOp } from "./types";
 
 /** Minimum lines with actual hours before avg-vs-book is trustworthy. */
 const MIN_BOOK_LINES = 5;
+
+/** Clock rows + schedule context for the overall-efficiency stat. Null when
+ * the tech has no schedule — the snapshot field stays absent, same as
+ * snapshots frozen before the feature existed. */
+export type SnapshotScheduleData = {
+  clocks: DailyClock[];
+  ctx: ScheduleContext;
+} | null;
 
 /** Sort entries into log order: date asc, then created_at asc. */
 export function chronological(entries: Entry[]): Entry[] {
@@ -27,6 +36,7 @@ export function buildSnapshotStats(
   firstN: Entry[],
   library: OpCode[],
   photoEntryIds: string[],
+  scheduleData: SnapshotScheduleData = null,
 ): SnapshotStats {
   const byId = new Map(library.map((oc) => [oc.id, oc]));
 
@@ -72,7 +82,27 @@ export function buildSnapshotStats(
 
   const sortedDates = [...dates].sort();
 
+  // Overall efficiency over the snapshot's range: per-day clocked hours win,
+  // scheduled hours fill silent days, unresolved days contribute nothing.
+  // Snapshots are backfill-safe: generation-day "today" is at or after
+  // lastDate, so every day in range counts as completed.
+  let overallEfficiency: number | null = null;
+  let efficiencySource: SnapshotStats["efficiencySource"] = null;
+  if (scheduleData && sortedDates.length > 0) {
+    const s = aggregateStatsWithSchedule(
+      firstN,
+      scheduleData.clocks,
+      { start: sortedDates[0], end: sortedDates[sortedDates.length - 1] },
+      scheduleData.ctx,
+    );
+    overallEfficiency =
+      s.efficiency === null ? null : Math.round(s.efficiency * 10) / 10;
+    efficiencySource = s.denomSource;
+  }
+
   return {
+    overallEfficiency,
+    efficiencySource,
     roCount: firstN.length,
     totalFlagHours: Math.round(totalFlagHours * 100) / 100,
     avgVsBook:

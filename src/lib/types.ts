@@ -229,6 +229,9 @@ export type SnapshotTopOp = { code: string; description: string; count: number }
 
 // Stats frozen into a portfolio snapshot at generation time. Immutable —
 // later RO edits never touch an issued snapshot.
+/** How an efficiency denominator was measured (schedule-based efficiency). */
+export type DenomSource = "clocked" | "scheduled" | "mixed";
+
 export type SnapshotStats = {
   roCount: number;
   totalFlagHours: number;
@@ -240,6 +243,11 @@ export type SnapshotStats = {
   firstDate: string; // "YYYY-MM-DD"
   lastDate: string;
   workDays: number; // distinct logged dates in range
+  // Schedule-aware overall efficiency (flag ÷ clocked-or-scheduled hours)
+  // over the snapshot's range, with how the denominator was measured.
+  // Absent on snapshots frozen before the schedule feature existed.
+  overallEfficiency?: number | null;
+  efficiencySource?: DenomSource | null;
 };
 
 export type PortfolioSnapshot = {

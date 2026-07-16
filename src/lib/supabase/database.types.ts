@@ -517,6 +517,75 @@ export type Database = {
         }
         Relationships: []
       }
+      work_schedules: {
+        Row: {
+          anchor_monday: string
+          created_at: string
+          effective_from: string
+          id: string
+          rotation_weeks: number
+          user_id: string
+          weeks: Json
+        }
+        Insert: {
+          anchor_monday: string
+          created_at?: string
+          effective_from: string
+          id?: string
+          rotation_weeks?: number
+          user_id: string
+          weeks: Json
+        }
+        Update: {
+          anchor_monday?: string
+          created_at?: string
+          effective_from?: string
+          id?: string
+          rotation_weeks?: number
+          user_id?: string
+          weeks?: Json
+        }
+        Relationships: []
+      }
+      work_shift_overrides: {
+        Row: {
+          created_at: string
+          date: string
+          shift: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          shift: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          shift?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      confirmed_zero_days: {
+        Row: {
+          created_at: string
+          date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

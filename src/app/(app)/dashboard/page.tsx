@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import {
+  addDays,
   endOfMonth,
   endOfWeek,
   formatPeriodLabel,
@@ -12,12 +13,14 @@ import {
   startOfMonth,
   startOfWeek,
 } from "@/lib/periods";
-import { aggregateStats, fmtHours, fmtPct } from "@/lib/stats";
+import { aggregateStats, aggregateStatsWithSchedule, fmtHours, fmtPct } from "@/lib/stats";
+import { shiftForDate } from "@/lib/schedule";
 import { fmtMoney, hasAnyRate, periodEarnings, ratesToMap } from "@/lib/earnings";
 import { computeForecast } from "@/lib/forecast";
 import { TodayCard } from "@/components/dashboard/TodayCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { StreakCard } from "@/components/dashboard/StreakCard";
+import { UnresolvedDaysCard } from "@/components/dashboard/UnresolvedDaysCard";
 import { CareerOdometerCard } from "@/components/dashboard/CareerOdometerCard";
 import { SnapshotsCard } from "@/components/dashboard/SnapshotsCard";
 import { RoList } from "@/components/ro/RoList";
@@ -96,7 +99,7 @@ export default async function DashboardPage() {
     : isoDate(new Date(Date.now() - 90 * 86_400_000));
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
-  const [entries, clocks, library, laborRates, gamification] = await Promise.all([
+  const [entries, clocks, library, laborRates, gamification, schedules, daysOff, confirmedZeroDays, shiftOverrides] = await Promise.all([
     db.listEntries(supabase, { from: fetchFrom, to: monthEnd }),
     db.listDailyClocks(supabase, { from: fetchFrom, to: monthEnd }),
     db.listOpCodes(supabase),
@@ -104,6 +107,12 @@ export default async function DashboardPage() {
     // Streak + odometer + snapshots. Null while the gamification migration
     // hasn't been applied — the cards just don't render.
     db.getGamificationData(supabase, { today }),
+    // Null while the work_schedules migration hasn't been applied —
+    // efficiency falls back to clocked-hours-only.
+    db.listWorkSchedulesSafe(supabase),
+    db.listDaysOffSafe(supabase),
+    db.listConfirmedZeroDaysSafe(supabase),
+    db.listShiftOverridesSafe(supabase),
   ]);
 
   // Dollars are additive — computed only when the user has priced a rate.
@@ -114,10 +123,41 @@ export default async function DashboardPage() {
   );
   const periodDollars = showMoney ? periodEarnings(periodEntries, rateMap) : 0;
 
+  // Week/period/month efficiency is schedule-aware once a schedule exists:
+  // clocked hours win per day, scheduled hours fill silent days, and today
+  // never gets a schedule fallback mid-shift. Today's card stays live off the
+  // clocked-hours input, so it uses the plain aggregate.
+  const scheduleCtx =
+    schedules !== null && schedules.length > 0
+      ? {
+          schedules,
+          daysOff: daysOff ?? [],
+          confirmedZeroDays: confirmedZeroDays ?? [],
+          today,
+          shiftOverrides: shiftOverrides ?? {},
+        }
+      : null;
+  const rangeStats = (range: { start: string; end: string }) =>
+    scheduleCtx
+      ? aggregateStatsWithSchedule(entries, clocks, range, scheduleCtx)
+      : aggregateStats(entries, clocks, range);
+
   const statsToday  = aggregateStats(entries, clocks, { start: today, end: today });
-  const statsWeek   = aggregateStats(entries, clocks, { start: weekStart, end: weekEnd });
-  const statsPeriod = aggregateStats(entries, clocks, { start: period.start, end: period.end });
-  const statsMonth  = aggregateStats(entries, clocks, { start: monthStart, end: monthEnd });
+  const statsWeek   = rangeStats({ start: weekStart, end: weekEnd });
+  const statsPeriod = rangeStats({ start: period.start, end: period.end });
+  const statsMonth  = rangeStats({ start: monthStart, end: monthEnd });
+
+  // Empty scheduled workdays from the trailing 30 days, awaiting a
+  // day-off / real-zero decision. Older ones stop nagging (their periods just
+  // keep the day held out). Entries/clocks are already fetched 90 days back.
+  const unresolvedDays = scheduleCtx
+    ? aggregateStatsWithSchedule(
+        entries,
+        clocks,
+        { start: addDays(today, -30), end: addDays(today, -1) },
+        scheduleCtx,
+      ).unresolvedDays
+    : [];
 
   const todaysClock  = clocks.find((c) => c.date === today);
   const recentEntries = entries.slice(0, 5);
@@ -278,6 +318,13 @@ export default async function DashboardPage() {
           </EntranceGrid>
         </div>
 
+        {/* ── Empty scheduled days needing a decision ─────────── */}
+        {unresolvedDays.length > 0 && (
+          <div className="mt-4">
+            <UnresolvedDaysCard days={unresolvedDays} />
+          </div>
+        )}
+
         {/* ── Stat tiles ──────────────────────────────────────── */}
         <EntranceGrid className="stat-grid">
           <TodayCard
@@ -285,6 +332,12 @@ export default async function DashboardPage() {
             stats={statsToday}
             initialHours={todaysClock?.hours ?? 0}
             library={library}
+            todayShift={
+              scheduleCtx
+                ? shiftForDate(scheduleCtx.schedules, today, scheduleCtx.shiftOverrides)
+                : null
+            }
+            timezone={tz ?? ""}
           />
           <StatCard label="This Week"      stats={statsWeek} />
           <StatCard label="Pay Period"     stats={statsPeriod} />

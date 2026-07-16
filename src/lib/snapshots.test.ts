@@ -96,6 +96,48 @@ describe("buildSnapshotStats", () => {
     expect(stats.avgVsBook).toBeNull();
     expect(stats.photoCount).toBe(0);
   });
+
+  it("omits overall efficiency without schedule data", () => {
+    const entries = [mk("2026-06-08", [line({ flagHours: 8 })])];
+    const stats = buildSnapshotStats(entries, LIB, []);
+    expect(stats.overallEfficiency).toBeNull();
+    expect(stats.efficiencySource).toBeNull();
+  });
+
+  it("freezes schedule-aware overall efficiency over the snapshot range", () => {
+    // Mon 06-08 and Tue 06-09, Mon–Fri 8h schedule, no clock rows: 12 flag
+    // over 16 scheduled hours = 75%, source "scheduled".
+    const SHIFT_8 = { start: "08:00", end: "17:00", breakMin: 60 };
+    const entries = [
+      mk("2026-06-08", [line({ flagHours: 8 })]),
+      mk("2026-06-09", [line({ flagHours: 4 })]),
+    ];
+    const stats = buildSnapshotStats(entries, LIB, [], {
+      clocks: [],
+      ctx: {
+        schedules: [
+          {
+            id: "s1",
+            effectiveFrom: "2026-06-01",
+            rotationWeeks: 1,
+            anchorMonday: "2026-06-01",
+            weeks: [
+              {
+                mon: SHIFT_8, tue: SHIFT_8, wed: SHIFT_8, thu: SHIFT_8,
+                fri: SHIFT_8, sat: null, sun: null,
+              },
+            ],
+            createdAt: "2026-06-01T00:00:00Z",
+          },
+        ],
+        daysOff: [],
+        confirmedZeroDays: [],
+        today: "2026-07-15", // generation day — the whole range is completed
+      },
+    });
+    expect(stats.overallEfficiency).toBe(75);
+    expect(stats.efficiencySource).toBe("scheduled");
+  });
 });
 
 describe("snapshotSeqForThreshold", () => {
