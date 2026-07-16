@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { Plus, Search, X } from "lucide-react";
 import type { OpCode } from "@/lib/types";
+import { fmtHours } from "@/lib/stats";
 import {
   createLibraryOpCode,
   deleteLibraryOpCode,
@@ -248,8 +249,17 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
         </p>
       )}
 
-      {/* List */}
-      <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--bg-1)] p-1.5">
+      {/* List — ledger sheet */}
+      <div className="opl-sheet">
+        <div className="opl-grid opl-head" aria-hidden="true">
+          <span />
+          <div className="opl-main">
+            <span className="opl-codecell">Code</span>
+            <span className="opl-desc">Description</span>
+          </div>
+          <span className="opl-hours">Flag hrs</span>
+          <span />
+        </div>
         {items.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
             No op codes yet. Add one to get started.
@@ -268,7 +278,7 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
               items={visible.map((op) => op.id)}
               strategy={verticalListSortingStrategy}
             >
-              <ul className="space-y-1.5">
+              <ul>
                 {visible.map((op) => (
                   <OpCodeRow
                     key={op.id}
@@ -285,6 +295,17 @@ export function OpCodesView({ library }: { library: OpCode[] }) {
             </SortableContext>
           </DndContext>
         )}
+        <div className="opl-foot">
+          <span>
+            {visible.length === items.length
+              ? `${items.length} code${items.length !== 1 ? "s" : ""}`
+              : `${visible.length} of ${items.length} codes`}
+          </span>
+          <span className="mono tabular">
+            {fmtHours(visible.reduce((sum, op) => sum + op.flagHours, 0))} flag
+            hours on the books
+          </span>
+        </div>
       </div>
 
       {/* Modals */}

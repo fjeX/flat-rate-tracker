@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil, Trash2 } from "lucide-react";
 import type { OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
+import { tagHueVar } from "./tagHue";
 
 export function OpCodeRow({
   opCode,
@@ -49,60 +50,74 @@ export function OpCodeRow({
         }
       }}
       aria-label={`Edit ${opCode.code}`}
-      className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-2)] px-2 py-2 cursor-pointer transition-colors hover:border-[var(--line)] hover:bg-[var(--bg-3)]"
+      className="opl-grid opl-row"
     >
-      {!reorderable ? (
-        <div className="h-8 w-8 shrink-0" aria-hidden="true" />
-      ) : (
+      {reorderable ? (
         <div
           {...listeners}
           onClick={(e) => e.stopPropagation()}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--fg-2)] cursor-grab active:cursor-grabbing hover:text-[var(--fg-1)]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--fg-3)] cursor-grab active:cursor-grabbing hover:text-[var(--fg-1)]"
           aria-label="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+      ) : (
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--fg-3)] opacity-20"
+          title="Reordering is available in My order with no search or tag filters"
+          aria-hidden="true"
         >
           <GripVertical className="h-4 w-4" />
         </div>
       )}
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="font-mono text-sm font-semibold text-[var(--fg-0)]">
+      <div className="opl-main">
+        {/* Code + category tick (hue = first tag) */}
+        <div
+          className="opl-codecell"
+          title={opCode.tags.length > 0 ? opCode.tags.join(", ") : undefined}
+        >
+          <span
+            className="opl-tick"
+            style={
+              { "--tagc": tagHueVar(opCode.tags[0]) } as React.CSSProperties
+            }
+          />
+          <span className="truncate font-mono text-sm font-semibold text-[var(--fg-0)]">
             {opCode.code}
           </span>
-          <span className="text-xs text-[var(--brand)]">
-            {fmtHours(opCode.flagHours)}h
+        </div>
+
+        {/* Description · notes, one truncated line, sub count pinned */}
+        <div className="opl-desc">
+          <span className="truncate text-xs">
+            {opCode.description && (
+              <span className="text-[var(--fg-1)]">{opCode.description}</span>
+            )}
+            {opCode.notes && (
+              <span className="italic text-[var(--fg-3)]">
+                {opCode.description ? " · " : ""}
+                {opCode.notes}
+              </span>
+            )}
           </span>
           {opCode.subOpCodes.length > 0 && (
-            <span className="badge badge-neutral">
-              {opCode.subOpCodes.length} sub{opCode.subOpCodes.length !== 1 ? "s" : ""}
+            <span className="badge badge-neutral shrink-0">
+              {opCode.subOpCodes.length} sub
+              {opCode.subOpCodes.length !== 1 ? "s" : ""}
             </span>
           )}
         </div>
-        {opCode.description && (
-          <p className="truncate text-xs text-[var(--fg-2)]">
-            {opCode.description}
-          </p>
-        )}
-        {opCode.notes && (
-          <p className="truncate text-xs italic text-[var(--fg-2)]">
-            {opCode.notes}
-          </p>
-        )}
-        {opCode.tags.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {opCode.tags.map((tag) => (
-              <span
-                key={tag}
-                className="badge badge-neutral"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      <span className="opl-hours font-mono text-sm font-semibold tabular text-[var(--brand)]">
+        {fmtHours(opCode.flagHours)}
+      </span>
+
+      <div
+        className="opl-acts flex shrink-0 items-center justify-end gap-1"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           type="button"
           onClick={() => onEdit(opCode)}

@@ -45,6 +45,17 @@
   --info:        oklch(0.75 0.13 230);
   --info-bg:     oklch(0.30 0.08 230 / 0.20);
 
+  /* op-code category hues — muted, decorative-adjacent (a 3px tick, never
+     text). 8 slots; tags map to one deterministically (tagHue.ts). */
+  --tag-hue-0: oklch(0.72 0.11 15);
+  --tag-hue-1: oklch(0.74 0.11 60);
+  --tag-hue-2: oklch(0.74 0.10 110);
+  --tag-hue-3: oklch(0.74 0.11 150);
+  --tag-hue-4: oklch(0.74 0.10 200);
+  --tag-hue-5: oklch(0.72 0.10 240);
+  --tag-hue-6: oklch(0.72 0.11 290);
+  --tag-hue-7: oklch(0.72 0.11 330);
+
   --radius: 18px;
   --radius-sm: 12px;
   --shadow-card: 0 1px 2px rgba(0,0,0,0.25), 0 10px 30px rgba(0,0,0,0.28);
@@ -1248,6 +1259,73 @@ a:focus-visible {
 
 a { color: inherit; }
 
+/* ── Op code library — ledger ─────────────────────────────────────────
+   One sheet, hairline-divided rows, a fixed mono code column and a
+   right-aligned tabular hours column. Category hue appears only as a
+   3px tick beside the code (the Phase-4 "op-code category hue" idea). */
+.opl-sheet {
+  background: var(--bg-1);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.opl-grid {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 64px 76px;
+  gap: 10px;
+  align-items: center;
+}
+/* Code + description live in one flexible cell: side by side on desktop,
+   stacked on narrow screens so descriptions keep readable width. */
+.opl-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.opl-codecell { display: flex; align-items: center; gap: 8px; flex: 0 0 108px; min-width: 0; }
+.opl-desc { display: flex; align-items: baseline; gap: 8px; flex: 1 1 auto; min-width: 0; }
+@media (max-width: 560px) {
+  .opl-grid { grid-template-columns: 26px minmax(0, 1fr) 46px 72px; gap: 6px; }
+  .opl-main { flex-direction: column; align-items: stretch; gap: 2px; }
+  .opl-codecell { flex: none; }
+  .opl-head .opl-desc { display: none; }
+}
+.opl-head {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--fg-3);
+  font-weight: 550;
+}
+.opl-row {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.opl-row:last-child { border-bottom: none; }
+.opl-row:hover { background: var(--bg-2); }
+.opl-row:focus-visible { outline: none; box-shadow: inset var(--ring); }
+.opl-tick {
+  flex-shrink: 0;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--tagc, var(--bg-3));
+}
+.opl-hours { text-align: right; }
+/* Actions fade in on hover where hover exists; stay visible on touch. */
+@media (hover: hover) {
+  .opl-acts { opacity: 0; transition: opacity 0.12s ease; }
+  .opl-row:hover .opl-acts,
+  .opl-row:focus-within .opl-acts { opacity: 1; }
+}
+.opl-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--bg-2);
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
 /* ── Light theme ─────────────────────────────────────────── */
 .theme-light {
   color-scheme: light;
@@ -1290,6 +1368,17 @@ a { color: inherit; }
 
   --info:        oklch(0.39 0.13 230);
   --info-bg:     oklch(0.90 0.08 230 / 0.15);
+
+  /* category hues — darkened for the paper ground; still tick-only, so
+     these need to be distinguishable, not AA-as-text */
+  --tag-hue-0: oklch(0.52 0.14 15);
+  --tag-hue-1: oklch(0.54 0.13 60);
+  --tag-hue-2: oklch(0.54 0.12 110);
+  --tag-hue-3: oklch(0.52 0.13 150);
+  --tag-hue-4: oklch(0.52 0.12 200);
+  --tag-hue-5: oklch(0.50 0.12 240);
+  --tag-hue-6: oklch(0.50 0.13 290);
+  --tag-hue-7: oklch(0.52 0.13 330);
 
   --shadow-card: 0 1px 2px rgba(28,25,20,0.05), 0 10px 30px rgba(28,25,20,0.07);
   --shadow-pop: 0 18px 48px rgba(28,25,20,0.16);

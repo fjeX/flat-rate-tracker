@@ -6,6 +6,7 @@ import { useGuestStore } from "@/lib/guest/context";
 import { OpCodeFormModal, type OpCodeFormValues } from "@/components/op-codes/OpCodeFormModal";
 import { OpCodeBrowseBar } from "@/components/op-codes/OpCodeBrowseBar";
 import { useOpCodeBrowsing } from "@/components/op-codes/useOpCodeBrowsing";
+import { tagHueVar } from "@/components/op-codes/tagHue";
 import { fmtHours } from "@/lib/stats";
 import type { OpCode } from "@/lib/types";
 
@@ -122,8 +123,17 @@ export function GuestOpCodesView() {
         onClearTags={clearTags}
       />
 
-      {/* List */}
-      <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--bg-1)] p-1.5">
+      {/* List — ledger sheet (mirrors the authed view's layout) */}
+      <div className="opl-sheet">
+        <div className="opl-grid opl-head" aria-hidden="true">
+          <span />
+          <div className="opl-main">
+            <span className="opl-codecell">Code</span>
+            <span className="opl-desc">Description</span>
+          </div>
+          <span className="opl-hours">Flag hrs</span>
+          <span />
+        </div>
         {opCodes.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
             No op codes yet. Add one to get started.
@@ -133,7 +143,7 @@ export function GuestOpCodesView() {
             No op codes match.
           </p>
         ) : (
-          <ul className="space-y-1.5">
+          <ul>
             {visible.map((op) => (
               <li
                 key={op.id}
@@ -147,39 +157,55 @@ export function GuestOpCodesView() {
                   }
                 }}
                 aria-label={`Edit ${op.code}`}
-                className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-2)] px-2 py-2 cursor-pointer transition-colors hover:border-[var(--line)] hover:bg-[var(--bg-3)]"
+                className="opl-grid opl-row"
               >
-                {/* Blank space where drag handle would be — keeps alignment identical to real app */}
+                {/* Blank space where the drag handle sits in the real app */}
                 <div className="h-8 w-8 shrink-0" aria-hidden="true" />
 
-                {/* Main content */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-mono text-sm font-semibold text-[var(--fg-0)]">{op.code}</span>
-                    <span className="text-xs text-[var(--brand)]">{fmtHours(op.flagHours)}h</span>
+                <div className="opl-main">
+                  <div
+                    className="opl-codecell"
+                    title={op.tags.length > 0 ? op.tags.join(", ") : undefined}
+                  >
+                    <span
+                      className="opl-tick"
+                      style={
+                        {
+                          "--tagc": tagHueVar(op.tags[0]),
+                        } as React.CSSProperties
+                      }
+                    />
+                    <span className="truncate font-mono text-sm font-semibold text-[var(--fg-0)]">
+                      {op.code}
+                    </span>
                   </div>
-                  {op.description && (
-                    <p className="truncate text-xs text-[var(--fg-2)]">{op.description}</p>
-                  )}
-                  {op.notes && (
-                    <p className="truncate text-xs italic text-[var(--fg-2)]">{op.notes}</p>
-                  )}
-                  {op.tags.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {op.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="badge badge-neutral"
-                        >
-                          {tag}
+
+                  <div className="opl-desc">
+                    <span className="truncate text-xs">
+                      {op.description && (
+                        <span className="text-[var(--fg-1)]">
+                          {op.description}
                         </span>
-                      ))}
-                    </div>
-                  )}
+                      )}
+                      {op.notes && (
+                        <span className="italic text-[var(--fg-3)]">
+                          {op.description ? " · " : ""}
+                          {op.notes}
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </div>
 
+                <span className="opl-hours font-mono text-sm font-semibold tabular text-[var(--brand)]">
+                  {fmtHours(op.flagHours)}
+                </span>
+
                 {/* Action buttons — stopPropagation so row click doesn't also fire */}
-                <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <div
+                  className="opl-acts flex shrink-0 items-center justify-end gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <button
                     type="button"
                     onClick={() => setEditTarget(op)}
@@ -201,6 +227,17 @@ export function GuestOpCodesView() {
             ))}
           </ul>
         )}
+        <div className="opl-foot">
+          <span>
+            {visible.length === opCodes.length
+              ? `${opCodes.length} code${opCodes.length !== 1 ? "s" : ""}`
+              : `${visible.length} of ${opCodes.length} codes`}
+          </span>
+          <span className="mono tabular">
+            {fmtHours(visible.reduce((sum, op) => sum + op.flagHours, 0))} flag
+            hours on the books
+          </span>
+        </div>
       </div>
 
       {/* Add modal */}
