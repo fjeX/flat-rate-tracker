@@ -14,6 +14,17 @@ import type { DailyClock, Entry, OpCode, SnapshotStats, SnapshotTopOp } from "./
 /** Minimum lines with actual hours before avg-vs-book is trustworthy. */
 const MIN_BOOK_LINES = 5;
 
+/** Minimum summed actual hours before avg-vs-book is trustworthy — a handful
+ * of seconds-long timer runs (0.02h actuals) can clear MIN_BOOK_LINES and
+ * produce a meaningless "0.01×". */
+const MIN_BOOK_ACTUAL_HOURS = 1;
+
+/** Trust floor for DISPLAYING a stored ratio. Snapshots are frozen records, so
+ * ratios computed before the MIN_BOOK_ACTUAL_HOURS guard existed may persist
+ * junk like 0.01× — no human beats book 20:1 in either direction, so anything
+ * below this renders as "—" instead. */
+export const MIN_PLAUSIBLE_AVG_VS_BOOK = 0.05;
+
 /** Clock rows + schedule context for the overall-efficiency stat. Null when
  * the tech has no schedule — the snapshot field stays absent, same as
  * snapshots frozen before the feature existed. */
@@ -106,7 +117,9 @@ export function buildSnapshotStats(
     roCount: firstN.length,
     totalFlagHours: Math.round(totalFlagHours * 100) / 100,
     avgVsBook:
-      bookLines >= MIN_BOOK_LINES && bookFlagSum > 0
+      bookLines >= MIN_BOOK_LINES &&
+      bookFlagSum > 0 &&
+      bookActualSum >= MIN_BOOK_ACTUAL_HOURS
         ? Math.round((bookActualSum / bookFlagSum) * 100) / 100
         : null,
     photoCount,

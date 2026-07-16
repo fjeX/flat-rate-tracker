@@ -181,9 +181,11 @@ export default async function DashboardPage() {
   // Where the "today" tick sits on the bar (0–1)
   const daysLeft     = periodDays - currentDay;
   const paceTarget  = currentDay / periodDays;
-  // How full the progress fill is (0–1, clamped to 1 for display)
+  // True fraction of goal (can exceed 1); bar/ring geometry clamps to full,
+  // but every NUMBER shown reports the real figure (pace-bar-cap escalation).
   const hasGoal     = goalHours > 0;
-  const actualFill  = hasGoal ? Math.min(statsPeriod.flagHours / goalHours, 1) : 0;
+  const actualFrac  = hasGoal ? statsPeriod.flagHours / goalHours : 0;
+  const actualFill  = Math.min(actualFrac, 1);
 
   // Forward projection — where the period lands if recent pace holds. Computed
   // from the entries already loaded above; no extra fetch.
@@ -268,10 +270,10 @@ export default async function DashboardPage() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <PaceRing
-                value={actualFill}
+                value={actualFrac}
                 size={64}
                 tier={ringTier}
-                label={`${Math.round(actualFill * 100)}%`}
+                label={`${Math.round(actualFrac * 100)}%`}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="pace-values">

@@ -58,11 +58,13 @@ export function hasAnyRate(rates: RateMap): boolean {
 }
 
 // The rate that applies to a single line, or null if that type is unpriced.
-// Untyped (null) lines resolve against customer_pay.
+// Implicitly untyped (null, historical) lines resolve against customer_pay;
+// explicitly "untyped" lines are always unpriced.
 export function resolveLineRate(
   line: Pick<EntryOpCode, "laborType">,
   rates: RateMap,
 ): number | null {
+  if (line.laborType === "untyped") return null;
   const type: LaborType = line.laborType ?? "customer_pay";
   return rates[type] ?? null;
 }
@@ -98,8 +100,9 @@ export type LaborTypeBreakdown = {
   priced: boolean;
 };
 
-// Flag hours and dollars grouped by labor type. Untyped lines roll into
-// customer_pay (mirroring the earnings fallback). Only types with hours appear.
+// Flag hours and dollars grouped by labor type. Implicitly untyped (null)
+// lines roll into customer_pay (mirroring the earnings fallback); explicitly
+// "untyped" lines are excluded. Only types with hours appear.
 export function earningsByLaborType(
   entries: Entry[],
   rates: RateMap,
@@ -113,6 +116,7 @@ export function earningsByLaborType(
   };
   for (const e of entries) {
     for (const line of e.opCodes) {
+      if (line.laborType === "untyped") continue;
       const type: LaborType = line.laborType ?? "customer_pay";
       hours[type] += line.flagHours;
     }

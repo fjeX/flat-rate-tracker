@@ -97,6 +97,18 @@ describe("buildSnapshotStats", () => {
     expect(stats.photoCount).toBe(0);
   });
 
+  it("hides avg-vs-book when actuals are trivially small (seconds-long timer runs)", () => {
+    // 5 lines clear MIN_BOOK_LINES, but 0.02h actuals against 2h flags would
+    // produce a meaningless 0.01× — the actual-hours floor keeps it null.
+    const entries = [
+      mk("2026-06-08", Array.from({ length: 5 }, () =>
+        line({ opCodeId: "brk", flagHours: 2, actualHours: 0.02 }),
+      )),
+    ];
+    const stats = buildSnapshotStats(entries, LIB, []);
+    expect(stats.avgVsBook).toBeNull();
+  });
+
   it("omits overall efficiency without schedule data", () => {
     const entries = [mk("2026-06-08", [line({ flagHours: 8 })])];
     const stats = buildSnapshotStats(entries, LIB, []);

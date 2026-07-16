@@ -267,14 +267,15 @@ export function OpCodeLines({
                           <label htmlFor={`labor-type-${line.key}`} className="sr-only">
                             Labor type for {code || "op code line"}
                           </label>
+                          {/* Legacy null and explicit "untyped" both display as
+                              Untyped; picking it stores the explicit value so
+                              the line is deliberately unpriced (no CP fallback). */}
                           <select
                             id={`labor-type-${line.key}`}
-                            value={line.laborType ?? ""}
+                            value={line.laborType ?? "untyped"}
                             onChange={(e) =>
                               updateLine(line.key, {
-                                laborType: e.target.value === ""
-                                  ? null
-                                  : (e.target.value as LaborType),
+                                laborType: e.target.value as LaborType | "untyped",
                               })
                             }
                             className="input"
@@ -287,7 +288,7 @@ export function OpCodeLines({
                               maxWidth: 150,
                             }}
                           >
-                            <option value="">Untyped</option>
+                            <option value="untyped">Untyped</option>
                             {LABOR_TYPES.map((t) => (
                               <option key={t} value={t}>
                                 {LABOR_TYPE_LABELS[t]}

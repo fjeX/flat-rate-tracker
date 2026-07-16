@@ -78,6 +78,11 @@ describe("resolveLineRate / lineEarnings", () => {
     expect(lineEarnings(line({ laborType: null, flagHours: 1.5 }), rates)).toBe(45);
   });
 
+  it("is always unpriced for an explicitly untyped line — no customer_pay fallback", () => {
+    expect(resolveLineRate(line({ laborType: "untyped" }), rates)).toBeNull();
+    expect(lineEarnings(line({ laborType: "untyped", flagHours: 2 }), rates)).toBeNull();
+  });
+
   it("returns null when the applicable rate is unpriced", () => {
     expect(resolveLineRate(line({ laborType: "internal" }), rates)).toBeNull();
     expect(lineEarnings(line({ laborType: "internal", flagHours: 3 }), rates)).toBeNull();
@@ -123,6 +128,7 @@ describe("earningsByLaborType", () => {
       line({ id: "b", laborType: null, flagHours: 1 }), // -> customer_pay bucket
       line({ id: "c", laborType: "warranty", flagHours: 2 }),
       line({ id: "d", laborType: "internal", flagHours: 5 }), // unpriced
+      line({ id: "e", laborType: "untyped", flagHours: 9 }), // explicit — excluded entirely
     ]);
     const breakdown = earningsByLaborType([e], rates);
     const cp = breakdown.find((b) => b.laborType === "customer_pay")!;

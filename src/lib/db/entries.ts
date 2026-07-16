@@ -25,7 +25,7 @@ function toEntryOpCode(row: EntryOpCodeRow): EntryOpCode {
     notes: row.notes,
     position: row.position,
     subOpCodeId: row.sub_op_code_id ?? null,
-    laborType: (row.labor_type as LaborType | null) ?? null,
+    laborType: (row.labor_type as LaborType | "untyped" | null) ?? null,
     // numeric(5,2) comes back as a string through PostgREST — wrap in Number().
     paidHours: row.paid_hours === null ? null : Number(row.paid_hours),
   };

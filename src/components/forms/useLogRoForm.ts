@@ -63,6 +63,7 @@ export function useLogRoForm({
   redirectTo = "/dashboard",
   defaultLaborType = null,
   laborTypeEnabled = false,
+  checkDuplicates = !onSave,
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -74,6 +75,10 @@ export function useLogRoForm({
   // unchanged for anyone who hasn't touched pay rates.
   defaultLaborType?: LaborType | null;
   laborTypeEnabled?: boolean;
+  // Warn before saving an RO number that already exists. Defaults off when a
+  // custom onSave is provided (guest mode has no DB to check) — DB-backed
+  // embedders like the timer's Log RO modal must opt back in explicitly.
+  checkDuplicates?: boolean;
 }) {
   const router = useRouter();
   const isEdit = Boolean(existingEntry);
@@ -419,9 +424,10 @@ export function useLogRoForm({
   function handleSave(afterSave?: () => void) {
     setError(null);
     const ro = roNumber.trim();
-    // Edits and guest mode (in-memory onSave, no DB) skip the duplicate check.
+    // Edits skip the duplicate check (the number already belongs to this RO),
+    // as do embedders that opted out (guest mode's in-memory onSave has no DB).
     // Empty RO# falls through too — performSave/server surfaces that error.
-    if (isEdit || onSave || !ro) {
+    if (isEdit || !checkDuplicates || !ro) {
       performSave(afterSave);
       return;
     }

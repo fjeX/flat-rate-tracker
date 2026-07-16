@@ -57,7 +57,10 @@ export type EntryOpCode = {
   notes: string;
   position: number;
   subOpCodeId: string | null; // reference to a sub op code (variant), null if none selected
-  laborType: LaborType | null; // null = untyped (historical); earnings fall back to customer_pay rate
+  // null = implicitly untyped (predates the labor-type feature) — earnings fall
+  // back to the customer_pay rate. "untyped" = the user explicitly chose
+  // Untyped in the form — the line is unpriced and shows no dollars.
+  laborType: LaborType | "untyped" | null;
   // Flag hours the shop ACTUALLY paid on this job. null = not yet reconciled.
   // Written by the pay-period reconciliation UI, never by the log form (which
   // only passes it through on edit). Optional so line literals that predate the

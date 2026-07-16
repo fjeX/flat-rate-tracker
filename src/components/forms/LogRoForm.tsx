@@ -23,6 +23,7 @@ export function LogRoForm({
   redirectTo = "/dashboard",
   defaultLaborType = null,
   laborTypeEnabled = false,
+  checkDuplicates,
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -32,6 +33,7 @@ export function LogRoForm({
   redirectTo?: string;
   defaultLaborType?: LaborType | null;
   laborTypeEnabled?: boolean;
+  checkDuplicates?: boolean;
 }) {
   // Destructure into locals rather than reading `x` in JSX: the hook returns
   // refs, and the react-compiler lint rule otherwise taints every `x` read as
@@ -50,7 +52,7 @@ export function LogRoForm({
     photosEnabled, photoAttached, handlePhotoCaptured, clearCapturedPhoto,
   } = useLogRoForm({
     initialOpCodes, existingEntry, onSave, onCreateOpCode, redirectTo,
-    defaultLaborType, laborTypeEnabled,
+    defaultLaborType, laborTypeEnabled, checkDuplicates,
   });
 
   return (

@@ -20,7 +20,9 @@ export function PaceRing({
   label,
   sublabel,
 }: {
-  /** 0..1 fraction of goal reached (values outside this range are clamped). */
+  /** Fraction of goal reached. The ring geometry clamps to 0..1, but the
+   * accessible label reports the real value — beating goal reads "277% of
+   * pace goal", not a dishonest "100%". */
   value: number;
   size?: number;
   strokeWidth?: number;
@@ -65,7 +67,7 @@ export function PaceRing({
       className="pace-ring"
       style={{ width: size, height: size }}
       role="img"
-      aria-label={`${Math.round(clamped * 100)}% of pace goal`}
+      aria-label={`${Math.round(Math.max(0, value) * 100)}% of pace goal`}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle

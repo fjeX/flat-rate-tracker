@@ -4,6 +4,7 @@
 import { Check } from "lucide-react";
 import type { PortfolioSnapshot } from "@/lib/types";
 import { formatDateShort } from "@/lib/periods";
+import { MIN_PLAUSIBLE_AVG_VS_BOOK } from "@/lib/snapshots";
 
 function fmt(n: number): string {
   return n.toLocaleString("en-US", {
@@ -54,7 +55,9 @@ export function SnapshotSheet({
         <div className="gami-sheet-cell">
           <div className="k">Avg vs book</div>
           <div className="v">
-            {s.avgVsBook !== null ? (
+            {/* Trust floor: snapshots frozen before the builder's junk-data
+                guard can carry implausible ratios (0.01×) — show "—" instead. */}
+            {s.avgVsBook !== null && s.avgVsBook >= MIN_PLAUSIBLE_AVG_VS_BOOK ? (
               <>
                 {s.avgVsBook.toFixed(2)}
                 <small>×</small>

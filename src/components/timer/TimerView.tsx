@@ -392,6 +392,7 @@ export function TimerView({
             roTemplates={roTemplates}
             onSave={handleLogRoSave}
             redirectTo="/timer"
+            checkDuplicates
           />
         </div>
       )}

@@ -60,6 +60,17 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
     AND model** (the vehicle section may be collapsed; expand it), plausible
     op codes and descriptions (you know cars — write like a tech)
   - Include today's seeded scenario (see rotation below)
+- Duplicate RO numbers (changed 2026-07-15): saving an RO number that already
+  exists now shows a "RO #X already exists" dialog on EVERY path — full log
+  form, dashboard Quick Add, and the timer's Log RO overlay. It's warn-not-
+  block: choose "Log as new entry" if a duplicate is intentional. Use fresh
+  RO numbers normally; the dialog NOT appearing for a known-duplicate number
+  is a bug.
+- Labor types (changed 2026-07-15): explicitly picking "Untyped" on a line now
+  stores a real untyped value — such lines are unpriced and must show NO
+  dollar earnings anywhere (RO detail modal shows no per-line $). Old lines
+  that were never given a type still price at the customer-pay rate — that is
+  intended, not a bug.
 - After each save, verify the RO actually appears in history with the right
   hours, **on the right date (today, your local date)**, and with the full
   vehicle (year + make + model) displayed — a missing field you typed is a bug.
@@ -70,6 +81,9 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
 ### 3. Timer
 - Start the timer on a job, let it run **60–90 seconds**, stop it.
 - Verify the elapsed time recorded is plausible (~1–2 min, not 0, not hours).
+- The live display now ticks from a Web Worker (fixed 2026-07-15), so it must
+  track wall clock even with the tab backgrounded — a lagging display is a
+  regression again, flag it.
 - You are testing the mechanism, not the duration — never run it long.
 
 ### 4. Pay discrepancy check
@@ -99,6 +113,9 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
 ### 8. Dashboard & stats sweep
 - Dashboard: pace card / projection shows sane numbers (no NaN, no negative
   hours, projection roughly consistent with logged history).
+- Pace ring/bar past goal (changed 2026-07-15): the ring and bar stay visually
+  full at 100%, but the center label and aria-label report the REAL percent
+  (e.g. "277% of pace goal"). A "100%" label while true pace is higher is a bug.
 - Pay period stats reflect tonight's new ROs.
 - History filters/search: find one of tonight's ROs by RO number.
 
@@ -116,6 +133,9 @@ The dashboard has three new cards; sanity-check each:
   every 100), a new numbered snapshot sheet must appear — check /snapshots
   lists it and its stats look sane (RO count = the threshold, dates plausible).
   Snapshots from previous nights must never change — they are frozen records.
+  "Avg vs book: —" is the CORRECT display when actual-hours data is too thin
+  (fewer than 5 lines with actuals, or under 1h summed) — do not flag "—" as
+  missing data, and do not expect implausible ratios like 0.01× to render.
 - ~~Settings → Days Off~~ (moved 2026-07-15): days off now live on the
   Schedule page — tested in section 8c below.
 

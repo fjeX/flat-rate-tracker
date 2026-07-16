@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { Plus, Search, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import type { NewEntry, OpCode, SubOpCode } from "@/lib/types";
+import type { NewEntry, OpCode, RoMatch, SubOpCode } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
-import { saveEntry } from "@/app/actions/entries";
+import { findDuplicateRos, saveEntry } from "@/app/actions/entries";
+import { DuplicateRoDialog } from "@/components/forms/DuplicateRoDialog";
 import { createLibraryOpCode } from "@/app/actions/op-codes";
 import {
   CustomOpCodeModal,
@@ -57,6 +58,8 @@ export function QuickAddModal({
   const [subPickerOc, setSubPickerOc] = useState<OpCode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
+  // Same warn-but-allow duplicate flow as the full log form.
+  const [dupMatches, setDupMatches] = useState<RoMatch[] | null>(null);
 
   const roInputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -212,39 +215,56 @@ export function QuickAddModal({
 
   function handleSave() {
     setError(null);
+    const ro = roNumber.trim();
+    if (!ro) {
+      performSave();
+      return; // server surfaces the empty-RO# error
+    }
     startTransition(async () => {
-      try {
-        const input: NewEntry = {
-          date: isoDate(),
-          roNumber: roNumber.trim(),
-          vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
-          notes: "",
-          opCodes: lines.map((line, i) => ({
-            opCodeId: line.opCodeId,
-            custom: line.custom,
-            customCode: line.customCode,
-            customDescription: line.customDescription,
-            flagHours: line.flagHours,
-            actualHours: null,
-            notes: "",
-            position: i,
-            subOpCodeId: line.subOpCodeId,
-            laborType: null, // quick-add is a fast path; type on the line stays untyped
-          })),
-        };
-        await saveEntry(input);
-        tap();
-        onClose();
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save.");
-      }
+      // Warn-but-allow: a failed check never blocks saving.
+      const matches = await findDuplicateRos(ro).catch(() => []);
+      if (matches.length > 0) setDupMatches(matches);
+      else await performSaveInner();
     });
+  }
+
+  function performSave() {
+    startTransition(performSaveInner);
+  }
+
+  async function performSaveInner() {
+    try {
+      const input: NewEntry = {
+        date: isoDate(),
+        roNumber: roNumber.trim(),
+        vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
+        notes: "",
+        opCodes: lines.map((line, i) => ({
+          opCodeId: line.opCodeId,
+          custom: line.custom,
+          customCode: line.customCode,
+          customDescription: line.customDescription,
+          flagHours: line.flagHours,
+          actualHours: null,
+          notes: "",
+          position: i,
+          subOpCodeId: line.subOpCodeId,
+          laborType: null, // quick-add is a fast path; type on the line stays untyped
+        })),
+      };
+      await saveEntry(input);
+      tap();
+      onClose();
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save.");
+    }
   }
 
   // While a child modal is stacked on top, the outer modal must ignore its
   // own close triggers (Escape fires both modals' window listeners).
-  const childModalOpen = customOpen || newLibraryOpen || subPickerOc !== null;
+  const childModalOpen =
+    customOpen || newLibraryOpen || subPickerOc !== null || dupMatches !== null;
 
   return (
     <Modal
@@ -540,6 +560,22 @@ export function QuickAddModal({
           opCode={subPickerOc}
           onSelect={confirmSubPick}
           onClose={() => setSubPickerOc(null)}
+        />
+      )}
+      {dupMatches && (
+        <DuplicateRoDialog
+          roNumber={roNumber.trim()}
+          matches={dupMatches}
+          onEdit={(id) => {
+            setDupMatches(null);
+            onClose();
+            router.push(`/log?edit=${id}`);
+          }}
+          onLogNew={() => {
+            setDupMatches(null);
+            performSave();
+          }}
+          onClose={() => setDupMatches(null)}
         />
       )}
     </Modal>
