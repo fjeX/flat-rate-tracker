@@ -132,7 +132,7 @@ export default async function SchedulePage({
         <div className="flex items-center gap-2">
           <Link
             href={`/schedule?m=${monthShift(monthKey, -1)}`}
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm hit-expand"
             aria-label="Previous month"
           >
             ‹
@@ -142,7 +142,7 @@ export default async function SchedulePage({
           </span>
           <Link
             href={`/schedule?m=${monthShift(monthKey, 1)}`}
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm hit-expand"
             aria-label="Next month"
           >
             ›

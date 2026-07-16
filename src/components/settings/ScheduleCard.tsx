@@ -86,7 +86,7 @@ function WeekEditor({
             style={{ borderTop: "1px dashed var(--line-soft)" }}
           >
             <label
-              className="flex items-center gap-2"
+              className="sched-day-toggle flex items-center gap-2"
               style={{ width: 64, color: shift ? "var(--fg-1)" : "var(--fg-3)" }}
             >
               <input

@@ -810,6 +810,11 @@ button.step-head {
 .hit-expand { position: relative; }
 .hit-expand::after { content: ""; position: absolute; inset: -13px; }
 
+/* Weekly-pattern day toggle (ScheduleCard): the 64px label is the checkbox's
+   real tap target — give it full tap height on touch layouts, keep desktop
+   density (same split as .btn-sm). */
+@media (max-width: 899px) { .sched-day-toggle { min-height: var(--tap-min); } }
+
 /* Search-clear X inside the op-code search field — invisible ::after expands the
    tap area to ~44px without moving the 14px glyph (mirrors .opc-line .remove). */
 .opc-clear {

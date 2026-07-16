@@ -42,6 +42,9 @@ export const ROUTES: RouteSpec[] = [
   { name: "op-codes", path: "/op-codes", auth: true, mask: ["main ul", "main ol", ...NUMBERS] },
   { name: "pay-period", path: "/pay-period", auth: true, mask: [".stat-grid", ".pill", "input", ...NUMBERS, ...RO_LISTS, ...DATES] },
   { name: "account", path: "/account", auth: true, mask: ["main"] },
+  // Calendar cells + pattern editor both churn with the bot's data and the
+  // month rolls over — mask both sections, keep header/nav/intro copy.
+  { name: "schedule", path: "/schedule", auth: true, mask: ["main section", ...NUMBERS] },
   { name: "snapshots", path: "/snapshots", auth: true, mask: [".gami-sheet", ...NUMBERS] },
   { name: "settings", path: "/settings", auth: true, mask: ["input", "select", ...NUMBERS] },
   { name: "dispute-pack", path: "/pay-period/dispute-pack", auth: true, mask: [".dp-meta", ".dp-table-wrap", ".dp-header", ".dp-footer"] },
