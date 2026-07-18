@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { seedStarterOpCodesIfEmpty } from "@/lib/seed-opcodes";
 import { reportServerError } from "@/lib/report-error-server";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 function toSigninWithError(message: string): never {
   redirect(`/signin?error=${encodeURIComponent(message)}`);
@@ -23,6 +24,20 @@ export async function signUp(formData: FormData) {
   }
   if (password.length < 8) {
     toSignupWithError("Password must be at least 8 characters.");
+  }
+
+  // Brute-force / spam-signup speed bump (per IP). Fail-open — inert until
+  // Upstash is configured (Phase 1). Limit is generous: a human never hits it,
+  // a script gets stopped cold.
+  const ip = await clientIp();
+  const signupLimit = await rateLimit("signup", ip, {
+    limit: 6,
+    windowSec: 3600,
+  });
+  if (!signupLimit.ok) {
+    toSignupWithError(
+      "Too many sign-up attempts from your network. Please try again later.",
+    );
   }
 
   const supabase = await createClient();
@@ -60,6 +75,20 @@ export async function signIn(formData: FormData) {
 
   if (!email || !password) {
     toSigninWithError("Email and password are required.");
+  }
+
+  // Two-key brute-force protection: per-IP (broad, stops a host hammering many
+  // accounts) and per-email (protects one account from a distributed guess).
+  // Fail-open — inert until Upstash is configured (Phase 1).
+  const ip = await clientIp();
+  const [ipLimit, emailLimit] = await Promise.all([
+    rateLimit("signin-ip", ip, { limit: 20, windowSec: 600 }),
+    rateLimit("signin-email", email.toLowerCase(), { limit: 8, windowSec: 900 }),
+  ]);
+  if (!ipLimit.ok || !emailLimit.ok) {
+    toSigninWithError(
+      "Too many sign-in attempts. Please wait a few minutes and try again.",
+    );
   }
 
   const supabase = await createClient();
