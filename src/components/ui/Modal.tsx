@@ -21,6 +21,15 @@ export function Modal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Hold the latest onClose in a ref so the setup effect below can depend only
+  // on `open`. Depending on `onClose` re-ran the whole effect on every render
+  // (callers pass an inline handler → new identity each render), which yanked
+  // focus back to the first focusable element (the ✕) on every keystroke.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
 
@@ -39,7 +48,7 @@ export function Modal({
 
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;
@@ -77,7 +86,7 @@ export function Modal({
       // Restore focus to whatever was focused before the modal opened.
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
