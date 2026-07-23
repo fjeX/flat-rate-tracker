@@ -63,6 +63,89 @@ export type Database = {
         }
         Relationships: []
       }
+      bug_reports: {
+        Row: {
+          app_build: string | null
+          category: string | null
+          created_at: string
+          description: string
+          id: string
+          page_url: string | null
+          severity: string | null
+          status: string
+          triage_notes: string | null
+          updated_at: string
+          user_agent: string | null
+          user_id: string
+          viewport: string | null
+        }
+        Insert: {
+          app_build?: string | null
+          category?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          page_url?: string | null
+          severity?: string | null
+          status?: string
+          triage_notes?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          user_id: string
+          viewport?: string | null
+        }
+        Update: {
+          app_build?: string | null
+          category?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          page_url?: string | null
+          severity?: string | null
+          status?: string
+          triage_notes?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          user_id?: string
+          viewport?: string | null
+        }
+        Relationships: []
+      }
+      bug_report_photos: {
+        Row: {
+          byte_size: number
+          created_at: string
+          id: string
+          report_id: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          byte_size?: number
+          created_at?: string
+          id?: string
+          report_id: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          byte_size?: number
+          created_at?: string
+          id?: string
+          report_id?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bug_report_photos_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "bug_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bonuses: {
         Row: {
           amount: number
@@ -479,6 +562,7 @@ export type Database = {
         Row: {
           default_labor_type: string | null
           goal_hours: number
+          is_admin: boolean
           period_overrides: Json
           reference_hourly_rate: number | null
           ro_template: Json | null
@@ -493,6 +577,7 @@ export type Database = {
         Insert: {
           default_labor_type?: string | null
           goal_hours?: number
+          is_admin?: boolean
           period_overrides?: Json
           reference_hourly_rate?: number | null
           ro_template?: Json | null
@@ -507,6 +592,7 @@ export type Database = {
         Update: {
           default_labor_type?: string | null
           goal_hours?: number
+          is_admin?: boolean
           period_overrides?: Json
           reference_hourly_rate?: number | null
           ro_template?: Json | null

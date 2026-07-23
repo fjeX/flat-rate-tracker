@@ -264,3 +264,30 @@ export type PortfolioSnapshot = {
   stats: SnapshotStats;
   createdAt: string;
 };
+
+// ── Bug reports (Report a Bug) ─────────────────────────────────────────────────
+// A user-submitted bug report. Triage fields (severity/category/status/notes) are
+// admin-set and null until triaged. Context fields are silently auto-captured.
+export type BugReport = {
+  id: string;
+  userId: string;
+  description: string;
+  pageUrl: string | null;
+  userAgent: string | null;
+  viewport: string | null;
+  appBuild: string | null;
+  severity: string | null;
+  category: string | null;
+  status: string;
+  triageNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BugReportPhoto = {
+  id: string;
+  reportId: string;
+  storagePath: string;
+  byteSize: number;
+  createdAt: string;
+};

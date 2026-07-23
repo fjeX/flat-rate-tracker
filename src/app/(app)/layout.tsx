@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { Header } from "@/components/layout/Header";
 import { Nav } from "@/components/layout/Nav";
+import { Footer } from "@/components/layout/Footer";
 import { TimezoneSync } from "@/components/layout/TimezoneSync";
 import { TimerPip } from "@/components/timer/TimerPip";
 import type { Entry, OpCode } from "@/lib/types";
@@ -25,6 +26,7 @@ export default async function AppLayout({
   const hasTz = cookieStore.has("frt_timezone");
 
   const settings = await db.getSettings(supabase);
+  const isAdmin = await db.isCurrentUserAdmin(supabase);
   const timerRunning = settings.timerStartTime !== null;
   const timerActive = timerRunning || settings.timerAccumulated > 0;
 
@@ -48,6 +50,7 @@ export default async function AppLayout({
       <Header userEmail={user.email} />
       <Nav timerRunning={timerRunning} />
       <div style={{ flex: 1 }}>{children}</div>
+      <Footer isAdmin={isAdmin} />
       <TimerPip
         initialTimer={{
           roId: settings.timerRoId,

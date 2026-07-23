@@ -9,6 +9,7 @@
 export * from "./_client";
 export * from "./entries";
 export * from "./entry-photos";
+export * from "./bug-reports";
 export * from "./bonuses";
 export * from "./op-codes";
 export * from "./labor-rates";
