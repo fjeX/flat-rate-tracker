@@ -104,11 +104,25 @@ export function WageCheckCard({
           ) : (
             <div className="card-inset px-3 py-2 text-sm text-[var(--fg-2)]">
               {result.status === "no_clock" && (
-                <>
-                  No clocked hours logged for this period yet. Effective hourly
-                  needs the time you spent at the shop — add your clock hours on
-                  the dashboard to see it.
-                </>
+                missingCount > 0 ? (
+                  // Zero clocks is just the extreme of incomplete_clock — when we
+                  // know which flagged days are missing entries, name them (same
+                  // as the partial case) instead of a vaguer "no hours" message.
+                  <>
+                    {missingCount === 1
+                      ? "1 day this period has flagged work but no clock entry"
+                      : `${missingCount} days this period have flagged work but no clock entry`}
+                    , so there&apos;s no effective hourly yet. Add clock hours for{" "}
+                    {result.missingClockDays.map(formatDateShort).join(", ")} on the
+                    dashboard to see it.
+                  </>
+                ) : (
+                  <>
+                    No clocked hours logged for this period yet. Effective hourly
+                    needs the time you spent at the shop — add your clock hours on
+                    the dashboard to see it.
+                  </>
+                )
               )}
               {result.status === "incomplete_clock" && (
                 <>

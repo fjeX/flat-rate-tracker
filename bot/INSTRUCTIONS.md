@@ -10,6 +10,14 @@ touch the database directly, never read app source code to "verify" behavior —
 you test what a user sees, nothing else. You have no permission prompts, so be
 deliberate: only interact with tracker.slimelab.cc.
 
+**⛔ Never yield or end your turn until the report file is written.** You run
+headless (`claude -p`): the instant you background a wait or hand your turn back,
+the runner treats the session as finished and exits — losing the entire run with
+no report (this exact hang happened 2026-07-23). Any pause you need (e.g. the
+timer test) must be a **single foreground, blocking `sleep`** in one Bash call —
+never a background timer, scheduled wake-up, or async wait that ends the turn.
+Work in one continuous turn straight through to writing `bot/reports/$RUN_DATE.md`.
+
 ## Credentials & environment
 
 - Login email: `$FRT_BOT_EMAIL` (env var)
@@ -82,7 +90,11 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
   entries from previous nights — they are accumulated test data.
 
 ### 3. Timer
-- Start the timer on a job, let it run **60–90 seconds**, stop it.
+- Start the timer on a job, wait **60–90 seconds**, then stop it.
+- **How to wait:** run `sleep 75` as a single foreground, blocking Bash call and
+  let it finish. Do NOT background it, and do NOT use any timer/scheduled-wait
+  tool that yields your turn — headless `claude -p` exits on a yielded turn and
+  the run dies before the report is written (see the ⛔ rule at the top).
 - Verify the elapsed time recorded is plausible (~1–2 min, not 0, not hours).
 - The live display ticks from a Web Worker. In a real, foregrounded browser it
   tracks wall clock exactly (verified 2026-07-16 via Playwright — dead-linear,

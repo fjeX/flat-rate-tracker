@@ -70,8 +70,11 @@ export async function saveEntry(
     ? await db.updateEntry(supabase, entryId, normalized)
     : await db.createEntry(supabase, normalized);
 
-  // Revalidate everything that displays entries.
+  // Revalidate everything that displays entries. NB: "/" is the marketing
+  // landing page — the app dashboard lives at "/dashboard" and must be listed
+  // explicitly or its Recent-ROs / stats stay stale after a mutation.
   revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
   revalidatePath("/log");
@@ -83,6 +86,7 @@ export async function deleteEntryLineAction(lineId: string): Promise<void> {
   const supabase = await createClient();
   await db.deleteEntryLine(supabase, lineId);
   revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
 }
@@ -97,6 +101,7 @@ export async function deleteEntryAction(id: string): Promise<void> {
   }
   await db.deleteEntry(supabase, id);
   revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
 }
@@ -113,6 +118,7 @@ export async function addOpCodeLineToEntryAction(
     throw new Error(err instanceof Error ? err.message : "Failed to add op code.");
   }
   revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
 }
@@ -124,6 +130,7 @@ export async function setLineActualHoursAction(
   const supabase = await createClient();
   await db.setLineActualHours(supabase, lineId, actualHours);
   revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
 }
@@ -144,6 +151,7 @@ export async function setLinePaidHoursAction(
   const supabase = await createClient();
   await db.setLinePaidHours(supabase, lineId, paidHours);
   revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
 }

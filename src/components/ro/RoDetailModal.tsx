@@ -25,11 +25,16 @@ export function RoDetailModal({
   library = [],
   rates = {},
   onClose,
+  onDeleted,
 }: {
   entry: Entry;
   library?: OpCode[];
   rates?: RateMap;
   onClose: () => void;
+  // Called after the whole RO is deleted. When provided, the parent owns the
+  // post-delete refresh (e.g. History prunes its paginated "Load more" state,
+  // which a bare router.refresh() can't reach). Falls back to router.refresh().
+  onDeleted?: (entryId: string) => void;
 }) {
   const router = useRouter();
   const libraryById = useMemo(() => new Map(library.map((oc) => [oc.id, oc])), [library]);
@@ -127,7 +132,7 @@ export function RoDetailModal({
         {/* Spiffs/bonuses attached to this RO (read-only). */}
         <LinkedSpiffs entryId={entry.id} />
 
-        <Footer entryId={entry.id} onClose={onClose} />
+        <Footer entryId={entry.id} onClose={onClose} onDeleted={onDeleted} />
       </div>
     </Modal>
   );
@@ -518,9 +523,11 @@ function AddOpCodePicker({
 function Footer({
   entryId,
   onClose,
+  onDeleted,
 }: {
   entryId: string;
   onClose: () => void;
+  onDeleted?: (entryId: string) => void;
 }) {
   const router = useRouter();
   const [deleting, startDelete] = useTransition();
@@ -533,7 +540,10 @@ function Footer({
       try {
         await deleteEntryAction(entryId);
         onClose();
-        router.refresh();
+        // Let the parent reconcile its own list state if it wants to; otherwise
+        // fall back to a plain server refresh.
+        if (onDeleted) onDeleted(entryId);
+        else router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to delete.");
       }

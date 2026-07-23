@@ -428,7 +428,10 @@ function RoomierBarChart({
               <rect
                 x={x} y={y} width={barW} height={h}
                 rx={bar.value > 0 ? Math.min(barW / 2, 6) : 0}
-                fill={highlight ? "var(--brand)" : "var(--bg-4)"}
+                // Empty bars (future/zero days) never take the brand highlight —
+                // otherwise hovering an empty day paints its stub orange while
+                // the label stays un-bolded, which reads as a phantom data bar.
+                fill={highlight && bar.value > 0 ? "var(--brand)" : "var(--bg-4)"}
                 pointerEvents="none"
               />
               {/* Primary axis label */}

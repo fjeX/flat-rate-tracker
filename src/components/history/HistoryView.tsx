@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { loadMoreEntries } from "@/app/actions/entries";
 import { Camera, Search, X } from "lucide-react";
 import type { Entry, OpCode, UserSettings } from "@/lib/types";
@@ -178,6 +179,7 @@ export function HistoryView({
   // sessionStorage in an effect AFTER first render, so freezing it into state
   // here would strand the page on the empty initial value. Keep `entries` live
   // and track paginated ("load more") rows separately.
+  const router = useRouter();
   const [extraEntries, setExtraEntries] = useState<Entry[]>([]);
   const [hasMore, setHasMore] = useState(hasMoreProp);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -370,7 +372,21 @@ export function HistoryView({
       {openEntry && (
         renderDetail
           ? renderDetail(openEntry, () => setOpenId(null))
-          : <RoDetailModal entry={openEntry} library={library} rates={rates} onClose={() => setOpenId(null)} />
+          : <RoDetailModal
+              entry={openEntry}
+              library={library}
+              rates={rates}
+              onClose={() => setOpenId(null)}
+              // A deleted RO can live in the paginated "Load more" state, which a
+              // server refresh alone never prunes (that only refreshes the first
+              // page's `entries` prop) — so it lingered on the list until a full
+              // reload. Drop it from client state AND refresh the server page.
+              onDeleted={(id) => {
+                setExtraEntries((prev) => prev.filter((e) => e.id !== id));
+                setOpenId(null);
+                router.refresh();
+              }}
+            />
       )}
     </main>
   );

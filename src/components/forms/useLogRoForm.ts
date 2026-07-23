@@ -141,6 +141,8 @@ export function useLogRoForm({
   const [dupMatches, setDupMatches] = useState<RoMatch[] | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const pendingAfterSave = useRef<(() => void) | undefined>(undefined);
+  // Synchronous guard against overlapping persists (see performSave).
+  const inFlightRef = useRef(false);
 
   function handleDeleteRo() {
     if (!existingEntry) return;
@@ -369,6 +371,13 @@ export function useLogRoForm({
 
   // The actual persist. No duplicate check here — callers gate that upstream.
   function performSave(afterSave?: () => void) {
+    // Re-entry lock. `isSubmitting` (the transition flag) isn't reliably true
+    // yet on a fast double-tap or when reached via the async duplicate-check
+    // path, so a bare pending check can let two persists race — one of which
+    // navigates away as "saved" while the other is the one that actually wrote.
+    // A ref flips synchronously and closes that window (the silent-save-fail).
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setError(null);
     startTransition(async () => {
       try {
@@ -402,6 +411,12 @@ export function useLogRoForm({
           await onSave(input);
         } else {
           const saved = await saveEntry(input, existingEntry?.id);
+          // Never navigate away as though the RO was saved unless the persist
+          // came back with a real row. If it didn't, surface it and keep the
+          // form intact so the work isn't silently lost.
+          if (!saved?.id) {
+            throw new Error("Save didn't confirm — please try again.");
+          }
           // Attach the scanned photo now that the entry has an id. Only new-RO
           // saves carry a capturedPhoto (the scan banner is hidden in edit mode).
           if (photosEnabled && capturedPhoto) {
@@ -417,6 +432,8 @@ export function useLogRoForm({
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save.");
+      } finally {
+        inFlightRef.current = false;
       }
     });
   }

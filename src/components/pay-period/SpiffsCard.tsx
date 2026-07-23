@@ -150,7 +150,10 @@ export function SpiffsCard({
         <Modal open onClose={() => setAdding(false)} title="Add spiff / bonus">
           <BonusForm
             defaultDate={defaultDate}
-            onSaved={() => setAdding(false)}
+            // Close first, then refresh from here — the card stays mounted, so
+            // the refresh can't be dropped by BonusForm unmounting mid-transition
+            // (which left the new spiff invisible until a full reload).
+            onSaved={() => { setAdding(false); router.refresh(); }}
             onCancel={() => setAdding(false)}
           />
         </Modal>
@@ -159,7 +162,7 @@ export function SpiffsCard({
         <Modal open onClose={() => setEditing(null)} title="Edit spiff / bonus">
           <BonusForm
             initial={editing}
-            onSaved={() => setEditing(null)}
+            onSaved={() => { setEditing(null); router.refresh(); }}
             onCancel={() => setEditing(null)}
           />
         </Modal>
