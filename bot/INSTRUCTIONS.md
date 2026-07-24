@@ -213,6 +213,28 @@ Tags in the op code library have user-settable colors (8 theme swatches).
 - If picking a color errors with "migration needs to run first", report it —
   that means the tag_colors migration is missing from prod.
 
+### 8e. Footer & Report a Bug (shipped 2026-07-23)
+
+Authenticated pages now have a footer: **FAQ · About Us · Contact · Report a Bug**
+(and, for admins only, an **Admin** link — the bot account is NOT an admin, so
+it should NOT see Admin, and `/admin/bugs` should 404 for it; that is correct,
+not a bug).
+
+- **Footer presence:** scroll to the bottom of the dashboard — confirm the four
+  links render, aren't clipped, and don't overlap the mobile bottom nav.
+- **FAQ / About / Contact:** click each — they should open a clean "Coming soon"
+  placeholder page (NOT a 404). A 404 is a bug.
+- **Report a Bug modal — open, type, but DO NOT SUBMIT.** Click Report a Bug,
+  then type a full sentence into the description box.
+  - ⚠️ **Regression check (modal focus bug, fixed 2026-07-23):** every character
+    must land in the box and focus must STAY in the textarea. If focus jumps to
+    the ✕ / close button after the first keystroke (so you can only type one
+    char at a time), that's the bug returning — flag it.
+  - **Then Cancel / close the modal. Never click "Send report."** Submitting
+    writes a real row to the live inbox AND triggers the auto-triage automation —
+    the bot must not do that. Testing that it *opens and accepts text* is enough.
+- If the Report a Bug button or modal is missing entirely, note `SKIPPED — not present`.
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:
