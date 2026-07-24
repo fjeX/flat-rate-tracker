@@ -15,6 +15,9 @@ services:
       # POSTs {reportId, secret} here after a report lands. Unset = triage skipped.
       - BUG_TRIAGE_WEBHOOK_URL=${BUG_TRIAGE_WEBHOOK_URL:-}
       - BUG_TRIAGE_WEBHOOK_SECRET=${BUG_TRIAGE_WEBHOOK_SECRET:-}
+      # Auto-investigate hook: fired when a report is marked Verify. Shares the
+      # triage secret above. Unset = marking Verify just updates status.
+      - BUG_INVESTIGATE_WEBHOOK_URL=${BUG_INVESTIGATE_WEBHOOK_URL:-}
     networks:
       - proxy
     labels:

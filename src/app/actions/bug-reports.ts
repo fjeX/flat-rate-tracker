@@ -15,24 +15,24 @@ import {
 const BUCKET = "bug-photos";
 const SIGNED_URL_TTL_SECONDS = 60;
 
-// Fire the instant-triage webhook (n8n → SSH → headless Claude triages the row).
-// Best-effort: the report is already saved, so a failure here never surfaces to
-// the user. If it misses, the report just sits at "New" for manual triage.
-async function fireTriageWebhook(reportId: string): Promise<void> {
-  const url = process.env.BUG_TRIAGE_WEBHOOK_URL;
+// Fire a bug-automation webhook (n8n → SSH → headless Claude). Best-effort and
+// fire-and-forget: the relevant DB write already happened, so a webhook failure
+// never surfaces to the caller. Both the triage (on submit) and investigate (on
+// Verify) hooks share one secret and this one poster.
+async function fireBugWebhook(url: string | undefined, reportId: string): Promise<void> {
   const secret = process.env.BUG_TRIAGE_WEBHOOK_SECRET;
-  if (!url || !secret) return; // triage automation not configured — skip silently
+  if (!url || !secret) return; // automation not configured — skip silently
   try {
     await fetch(url, {
       method: "POST",
       // Explicit UA: the n8n instance sits behind Cloudflare, which rejects
       // some default/empty user-agents.
-      headers: { "content-type": "application/json", "user-agent": "FRT-BugTriage/1.0" },
+      headers: { "content-type": "application/json", "user-agent": "FRT-BugBot/1.0" },
       body: JSON.stringify({ reportId, secret }),
       signal: AbortSignal.timeout(5000),
     });
   } catch {
-    // swallow — triage is fire-and-forget
+    // swallow — automation is fire-and-forget
   }
 }
 
@@ -102,7 +102,7 @@ export async function submitBugReport(
     }
   }
 
-  await fireTriageWebhook(report.id);
+  await fireBugWebhook(process.env.BUG_TRIAGE_WEBHOOK_URL, report.id);
 
   return { reportId: report.id, photosAttached, photosFailed };
 }
@@ -191,5 +191,12 @@ export async function setBugTriage(
   }
 
   await db.updateBugReportTriage(supabase, reportId, clean);
+
+  // Marking a report "Verify" kicks off auto-investigation: headless Claude
+  // drafts a fix on a branch for review (fire-and-forget).
+  if (clean.status === "Verify") {
+    await fireBugWebhook(process.env.BUG_INVESTIGATE_WEBHOOK_URL, reportId);
+  }
+
   revalidatePath("/admin/bugs");
 }
