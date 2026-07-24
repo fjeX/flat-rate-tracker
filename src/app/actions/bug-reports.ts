@@ -15,6 +15,27 @@ import {
 const BUCKET = "bug-photos";
 const SIGNED_URL_TTL_SECONDS = 60;
 
+// Fire the instant-triage webhook (n8n → SSH → headless Claude triages the row).
+// Best-effort: the report is already saved, so a failure here never surfaces to
+// the user. If it misses, the report just sits at "New" for manual triage.
+async function fireTriageWebhook(reportId: string): Promise<void> {
+  const url = process.env.BUG_TRIAGE_WEBHOOK_URL;
+  const secret = process.env.BUG_TRIAGE_WEBHOOK_SECRET;
+  if (!url || !secret) return; // triage automation not configured — skip silently
+  try {
+    await fetch(url, {
+      method: "POST",
+      // Explicit UA: the n8n instance sits behind Cloudflare, which rejects
+      // some default/empty user-agents.
+      headers: { "content-type": "application/json", "user-agent": "FRT-BugTriage/1.0" },
+      body: JSON.stringify({ reportId, secret }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // swallow — triage is fire-and-forget
+  }
+}
+
 export type SubmitBugResult = {
   reportId: string;
   photosAttached: number;
@@ -80,6 +101,8 @@ export async function submitBugReport(
       photosFailed++;
     }
   }
+
+  await fireTriageWebhook(report.id);
 
   return { reportId: report.id, photosAttached, photosFailed };
 }

@@ -11,6 +11,10 @@ services:
       # instead of out through Traefik. Empty/unset falls back to the public
       # NEXT_PUBLIC_SUPABASE_URL. Runtime var — no rebuild needed to change it.
       - SUPABASE_INTERNAL_URL=${SUPABASE_INTERNAL_URL:-}
+      # Instant bug-triage webhook (n8n). Runtime vars — the submit server action
+      # POSTs {reportId, secret} here after a report lands. Unset = triage skipped.
+      - BUG_TRIAGE_WEBHOOK_URL=${BUG_TRIAGE_WEBHOOK_URL:-}
+      - BUG_TRIAGE_WEBHOOK_SECRET=${BUG_TRIAGE_WEBHOOK_SECRET:-}
     networks:
       - proxy
     labels:
