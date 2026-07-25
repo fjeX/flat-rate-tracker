@@ -89,13 +89,33 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
 - Delete one RO you created **tonight only** and verify it's gone. Never delete
   entries from previous nights — they are accumulated test data.
 
-### 3. Timer
-- Start the timer on a job, wait **60–90 seconds**, then stop it.
+### 3. Timers (up to 3 concurrent — reworked 2026-07-24)
+The Timer page runs **up to 3 job timers at once**. The header reads
+"Timers — N of 3". Each timer is bound to one RO and carries a status:
+**Working · Parts · Approval · Pause** (a 4-button row on each card).
+
+- Put an RO on a timer ("Start a timer" / "Add another timer"), wait
+  **60–90 seconds**, then Save it to a line.
 - **How to wait:** run `sleep 75` as a single foreground, blocking Bash call and
   let it finish. Do NOT background it, and do NOT use any timer/scheduled-wait
   tool that yields your turn — headless `claude -p` exits on a yielded turn and
   the run dies before the report is written (see the ⛔ rule at the top).
 - Verify the elapsed time recorded is plausible (~1–2 min, not 0, not hours).
+- **The big number is WORKED time only, and it is SUPPOSED to stop moving when
+  the status is Parts / Approval / Pause.** A frozen readout while on hold is
+  correct behavior, not a bug. Waiting time counts on its own line underneath
+  ("Waiting on parts 3m").
+- **Only one timer may be "Working" at a time.** Setting a second one to
+  Working must flip the first to **Paused** (not to a hold reason). If two
+  cards show Working simultaneously, that IS a bug.
+- **Saves are additive.** Saving a timer to a line that already has actual
+  hours must ADD to it, not replace it — the save modal shows the running total
+  ("1.5h + 0.03h = 1.53h"). A replaced value is a bug.
+- Check that a 4th timer cannot be started: with 3 running, the add button
+  reads "All timers in use" and is disabled.
+- Attaching the **same RO to two timers** must be refused with a clear message.
+- Only test the multi-timer mechanics if there are enough ROs; don't create
+  extra ROs just to fill slots.
 - The live display ticks from a Web Worker. In a real, foregrounded browser it
   tracks wall clock exactly (verified 2026-07-16 via Playwright — dead-linear,
   zero drift growth). In this headless/automated session the worker's timer can
