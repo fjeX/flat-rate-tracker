@@ -568,9 +568,6 @@ export type Database = {
           ro_template: Json | null
           split_day: number
           tag_colors: Json
-          timer_accumulated: number
-          timer_ro_id: string | null
-          timer_start_time: number | null
           updated_at: string
           user_id: string
         }
@@ -583,9 +580,6 @@ export type Database = {
           ro_template?: Json | null
           split_day?: number
           tag_colors?: Json
-          timer_accumulated?: number
-          timer_ro_id?: string | null
-          timer_start_time?: number | null
           updated_at?: string
           user_id: string
         }
@@ -598,9 +592,6 @@ export type Database = {
           ro_template?: Json | null
           split_day?: number
           tag_colors?: Json
-          timer_accumulated?: number
-          timer_ro_id?: string | null
-          timer_start_time?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -671,6 +662,93 @@ export type Database = {
         Update: {
           created_at?: string
           date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      active_timers: {
+        Row: {
+          created_at: string
+          entry_id: string | null
+          hold_approval_accumulated: number
+          hold_parts_accumulated: number
+          id: string
+          line_id: string | null
+          slot: number
+          start_time: number | null
+          status: string
+          updated_at: string
+          user_id: string
+          work_accumulated: number
+        }
+        Insert: {
+          created_at?: string
+          entry_id?: string | null
+          hold_approval_accumulated?: number
+          hold_parts_accumulated?: number
+          id?: string
+          line_id?: string | null
+          slot: number
+          start_time?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          work_accumulated?: number
+        }
+        Update: {
+          created_at?: string
+          entry_id?: string | null
+          hold_approval_accumulated?: number
+          hold_parts_accumulated?: number
+          id?: string
+          line_id?: string | null
+          slot?: number
+          start_time?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          work_accumulated?: number
+        }
+        Relationships: []
+      }
+      unpaid_time: {
+        Row: {
+          created_at: string
+          date: string
+          entry_id: string | null
+          hours: number
+          id: string
+          kind: string
+          note: string
+          original_entry_id: string | null
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          entry_id?: string | null
+          hours: number
+          id?: string
+          kind: string
+          note?: string
+          original_entry_id?: string | null
+          source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          entry_id?: string | null
+          hours?: number
+          id?: string
+          kind?: string
+          note?: string
+          original_entry_id?: string | null
+          source?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

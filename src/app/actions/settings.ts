@@ -353,7 +353,10 @@ export async function clearAllDataAction(): Promise<void> {
   await supabase.from("paid_period_hours").delete().eq("user_id", userId);
 
   await db.updateSettings(supabase, { splitDay: 15, periodOverrides: {} });
-  await db.setTimerState(supabase, { roId: null, startTime: null, accumulated: 0 });
+  // Both tolerate a pre-migration DB — a data wipe must not be blocked by a
+  // table that doesn't exist yet.
+  await db.clearAllTimerSlots(supabase);
+  await db.clearAllUnpaidTime(supabase);
 
   revalidateAll();
 }

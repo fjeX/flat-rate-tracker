@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, ClipboardPlus, Timer, History, Hash } from "lucide-react";
 import { BottomNav, type BottomTab } from "@/components/layout/BottomNav";
 import { useGuestStore } from "@/lib/guest/context";
+import { anyAccruing } from "@/lib/timer";
 
 const TABS = [
   { href: "/guest", label: "Dashboard", match: (p: string) => p === "/guest" },
@@ -16,8 +17,10 @@ const TABS = [
 
 export function GuestNav() {
   const pathname = usePathname();
-  const { timerState } = useGuestStore();
-  const timerRunning = timerState.startTime !== null;
+  const { timers } = useGuestStore();
+  // "Something is banking time" — which includes a job on hold, since waiting
+  // time is still being counted.
+  const timerRunning = anyAccruing(timers);
 
   // Guest mode has no floating TimerPip (it depends on server-fetched app
   // context); mirroring the authed Nav's running-dot on the Timer tab is the

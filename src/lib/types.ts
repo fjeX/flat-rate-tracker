@@ -124,6 +124,66 @@ export type NewBonus = {
 
 export type BonusPatch = Partial<NewBonus>;
 
+// A block of time the tech was at the shop and earned nothing for. The other
+// half of the pay picture from `Bonus`: money paid outside flag hours vs. hours
+// worked outside flag pay.
+//
+// Both entry links are nullable and that is load-bearing, not laziness — a
+// comeback on ANOTHER tech's work has no original RO in this user's data,
+// same-visit rework has no ticket at all, and waiting on parts has no RO to
+// hang off when nothing got logged that day.
+export type UnpaidTimeKind =
+  | "comeback_own" // redoing your own prior job, unpaid
+  | "comeback_other" // cleaning up another tech's work
+  | "rework_same_visit" // caught it before the car left; no ticket
+  | "wait_parts"
+  | "wait_approval"
+  | "shop_time"; // meetings, cleanup, dispatch limbo
+
+export const UNPAID_TIME_KINDS: readonly UnpaidTimeKind[] = [
+  "comeback_own",
+  "comeback_other",
+  "rework_same_visit",
+  "wait_parts",
+  "wait_approval",
+  "shop_time",
+];
+
+export function isUnpaidTimeKind(v: unknown): v is UnpaidTimeKind {
+  return typeof v === "string" && (UNPAID_TIME_KINDS as readonly string[]).includes(v);
+}
+
+/** How the row got here. `timer` rows are written automatically when a slot's
+ * hold time is banked; `zero_day` rows come from resolving an empty scheduled
+ * day as "worked — unpaid". */
+export type UnpaidTimeSource = "manual" | "timer" | "zero_day";
+
+export type UnpaidTime = {
+  id: string;
+  userId: string;
+  date: string; // "YYYY-MM-DD"
+  hours: number;
+  kind: UnpaidTimeKind;
+  entryId: string | null; // the RO this time was spent ON, if any
+  originalEntryId: string | null; // for comeback_own: the job being redone
+  source: UnpaidTimeSource;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NewUnpaidTime = {
+  date: string;
+  hours: number;
+  kind: UnpaidTimeKind;
+  entryId?: string | null;
+  originalEntryId?: string | null;
+  source?: UnpaidTimeSource;
+  note?: string;
+};
+
+export type UnpaidTimePatch = Partial<NewUnpaidTime>;
+
 export type SubOpCode = {
   id: string;
   opCodeId: string;
@@ -167,9 +227,9 @@ export type UserSettings = {
   splitDay: number; // 1..30
   goalHours: number; // flag hour target per pay period
   periodOverrides: Record<string, PeriodOverride>;
-  timerRoId: string | null;
-  timerStartTime: number | null; // epoch ms, null = paused or not running
-  timerAccumulated: number; // ms accumulated while paused
+  // Timer state used to live here as three columns. It moved to its own
+  // `active_timers` table when the timer went to 3 concurrent slots — see
+  // src/lib/db/timers.ts.
   updatedAt: string;
   roTemplates: RoTemplate[];
   defaultLaborType: LaborType | null; // seeds the per-line selector in the log form; null = no default

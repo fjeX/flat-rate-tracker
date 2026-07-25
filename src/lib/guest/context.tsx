@@ -4,16 +4,26 @@ import { createContext, useContext, useEffect, useReducer } from "react";
 import type { Entry, NewEntry, OpCode, UserSettings } from "@/lib/types";
 import type { OpCodeDraft } from "@/components/forms/OpCodeModals";
 import { STARTER_OP_CODES } from "@/lib/starter-opcodes";
+import {
+  bucketFor,
+  flushAccumulators,
+  msToHours,
+  nextFreeSlot,
+  type TimerSlot,
+  type TimerStatus,
+} from "@/lib/timer";
 
 const STORAGE_KEY = "frt_guest";
 
 type GuestState = {
   entries: Entry[];
   opCodes: OpCode[];
-  timerStartTime: number | null;   // Date.now() ms timestamp when started, null if not running
-  timerAccumulated: number;        // ms accumulated before current start
-  timerRoId: string | null;        // ID of attached guest Entry
-  timerLineId: string | null;      // ID of the specific EntryOpCode line being timed
+  // Mirrors the signed-in `active_timers` table, in memory. Guest mode gets the
+  // same 3 concurrent slots and the same statuses — it's the clearest demo of
+  // what the app does — but NOT the unpaid-time ledger. Waiting time shows
+  // while the tab is open and then evaporates, matching how every other pay
+  // feature (bonuses, reconciliation, wage-check) is signed-in-only.
+  timers: TimerSlot[];
   // Guest mode gets ONE flat rate, no labor types — just enough to preview the
   // dollar figures a signed-in user unlocks with per-type rates. null = unset.
   hourlyRate: number | null;
@@ -25,10 +35,12 @@ type GuestAction =
   | { type: "DELETE_OPCODE"; id: string }
   | { type: "EDIT_OPCODE"; id: string; patch: Pick<OpCode, "code" | "description" | "flagHours" | "notes" | "tags"> }
   | { type: "HYDRATE"; state: GuestState }
-  | { type: "TIMER_START"; startTime: number }
-  | { type: "TIMER_PAUSE"; accumulated: number }
-  | { type: "TIMER_RESET" }
-  | { type: "TIMER_SET_RO"; roId: string | null; lineId: string | null }
+  | { type: "TIMER_ATTACH"; id: string; slot: number; entryId: string; lineId: string | null; now: number }
+  | { type: "TIMER_SET_STATUS"; id: string; status: TimerStatus; now: number }
+  | { type: "TIMER_SET_LINE"; id: string; lineId: string | null }
+  | { type: "TIMER_RESET"; id: string; now: number }
+  | { type: "TIMER_RELEASE"; id: string }
+  | { type: "TIMER_SAVE"; id: string; lineId: string; now: number }
   | { type: "UPDATE_ENTRY_HOURS"; entryId: string; lineId: string; actualHours: number }
   | { type: "SET_RATE"; hourlyRate: number | null }
   | { type: "DELETE_ENTRY"; id: string };
@@ -38,9 +50,6 @@ const defaultSettings: UserSettings = {
   splitDay: 15,
   goalHours: 88,
   periodOverrides: {},
-  timerRoId: null,
-  timerStartTime: null,
-  timerAccumulated: 0,
   updatedAt: new Date().toISOString(),
   roTemplates: [],
   defaultLaborType: null,
@@ -80,12 +89,32 @@ export const GUEST_SAMPLE_OPCODES: OpCode[] = STARTER_OP_CODES.map((s, i) => ({
 const initialState: GuestState = {
   entries: [],
   opCodes: GUEST_SAMPLE_OPCODES,
-  timerStartTime: null,
-  timerAccumulated: 0,
-  timerRoId: null,
-  timerLineId: null,
+  timers: [],
   hourlyRate: null,
 };
+
+/** Bank a slot's in-flight time and stop its clock. Guest mode has no work
+ * schedule, so there's no auto-stop cap to apply. */
+function banked(slot: TimerSlot, now: number): TimerSlot {
+  return {
+    ...slot,
+    ...flushAccumulators(slot, now),
+    status: "paused",
+    startTime: null,
+  };
+}
+
+/** Only one slot may be `working` — same rule as the server, same reason: one
+ * pair of hands can't bank two streams of productive time at once. */
+function pauseOtherWorking(
+  timers: TimerSlot[],
+  exceptId: string,
+  now: number,
+): TimerSlot[] {
+  return timers.map((t) =>
+    t.id !== exceptId && t.status === "working" ? banked(t, now) : t,
+  );
+}
 
 function reducer(state: GuestState, action: GuestAction): GuestState {
   switch (action.type) {
@@ -104,31 +133,133 @@ function reducer(state: GuestState, action: GuestAction): GuestState {
       };
     case "HYDRATE":
       return action.state;
-    case "TIMER_START":
-      return { ...state, timerStartTime: action.startTime };
-    case "TIMER_PAUSE":
-      return { ...state, timerStartTime: null, timerAccumulated: action.accumulated };
+
+    case "TIMER_ATTACH": {
+      const timers = pauseOtherWorking(state.timers, action.id, action.now);
+      return {
+        ...state,
+        timers: [
+          ...timers,
+          {
+            id: action.id,
+            slot: action.slot,
+            entryId: action.entryId,
+            lineId: action.lineId,
+            status: "working" as const,
+            startTime: action.now,
+            workAccumulated: 0,
+            holdPartsAccumulated: 0,
+            holdApprovalAccumulated: 0,
+          },
+        ].sort((a, b) => a.slot - b.slot),
+      };
+    }
+
+    case "TIMER_SET_STATUS": {
+      const base =
+        action.status === "working"
+          ? pauseOtherWorking(state.timers, action.id, action.now)
+          : state.timers;
+      return {
+        ...state,
+        timers: base.map((t) =>
+          t.id !== action.id
+            ? t
+            : {
+                ...t,
+                ...flushAccumulators(t, action.now),
+                status: action.status,
+                // Paused banks nothing, so it carries no clock.
+                startTime: bucketFor(action.status) === null ? null : action.now,
+              },
+        ),
+      };
+    }
+
+    case "TIMER_SET_LINE":
+      return {
+        ...state,
+        timers: state.timers.map((t) =>
+          t.id === action.id ? { ...t, lineId: action.lineId } : t,
+        ),
+      };
+
     case "TIMER_RESET":
-      return { ...state, timerStartTime: null, timerAccumulated: 0, timerRoId: null, timerLineId: null };
-    case "TIMER_SET_RO":
-      return { ...state, timerRoId: action.roId, timerLineId: action.lineId };
+      return {
+        ...state,
+        timers: state.timers.map((t) =>
+          t.id !== action.id
+            ? t
+            : {
+                ...t,
+                workAccumulated: 0,
+                holdPartsAccumulated: 0,
+                holdApprovalAccumulated: 0,
+                startTime: bucketFor(t.status) === null ? null : action.now,
+              },
+        ),
+      };
+
+    case "TIMER_RELEASE":
+      return { ...state, timers: state.timers.filter((t) => t.id !== action.id) };
+
+    case "TIMER_SAVE": {
+      const slot = state.timers.find((t) => t.id === action.id);
+      if (!slot) return state;
+      const { workAccumulated } = flushAccumulators(slot, action.now);
+      const addHours = msToHours(workAccumulated);
+      const entries = state.entries.map((entry) => {
+        if (entry.id !== slot.entryId) return entry;
+        return {
+          ...entry,
+          opCodes: entry.opCodes.map((line) => {
+            if (line.id !== action.lineId) return line;
+            // Additive, same as the signed-in path — a job picked back up the
+            // next day should total, not overwrite.
+            const total =
+              Math.round(((line.actualHours ?? 0) + addHours) * 100) / 100;
+            return { ...line, actualHours: total };
+          }),
+        };
+      });
+      return {
+        ...state,
+        entries,
+        timers: state.timers.filter((t) => t.id !== action.id),
+      };
+    }
+
+    // Absolute set, from the RO detail modal's blur-to-save input. Distinct
+    // from TIMER_SAVE, which is additive — one is a human typing the number
+    // they mean, the other is a measurement being appended.
     case "UPDATE_ENTRY_HOURS": {
       const entries = state.entries.map((entry) => {
         if (entry.id !== action.entryId) return entry;
         return {
           ...entry,
-          opCodes: entry.opCodes.map((line) => {
-            if (line.id !== action.lineId) return line;
-            return { ...line, actualHours: action.actualHours };
-          }),
+          opCodes: entry.opCodes.map((line) =>
+            line.id === action.lineId
+              ? { ...line, actualHours: action.actualHours }
+              : line,
+          ),
         };
       });
       return { ...state, entries };
     }
+
     case "SET_RATE":
       return { ...state, hourlyRate: action.hourlyRate };
     case "DELETE_ENTRY":
-      return { ...state, entries: state.entries.filter((e) => e.id !== action.id) };
+      return {
+        ...state,
+        entries: state.entries.filter((e) => e.id !== action.id),
+        // A timer pointing at a deleted RO would render "RO no longer
+        // available" forever; the signed-in side gets this from the FK's
+        // ON DELETE SET NULL, so mirror it here.
+        timers: state.timers.map((t) =>
+          t.entryId === action.id ? { ...t, entryId: null, lineId: null } : t,
+        ),
+      };
     default:
       return state;
   }
@@ -143,20 +274,20 @@ type GuestContextValue = {
   addGuestOpCode: (draft: OpCodeDraft) => OpCode;
   editGuestOpCode: (id: string, draft: OpCodeDraft) => void;
   deleteGuestOpCode: (id: string) => void;
-  startGuestTimer: () => void;
-  pauseGuestTimer: () => void;
-  resetGuestTimer: () => void;
-  setGuestTimerRo: (roId: string | null, lineId: string | null) => void;
-  updateEntryHours: (entryId: string, lineId: string, actualHours: number) => void;
   hourlyRate: number | null;
   setGuestRate: (hourlyRate: number | null) => void;
   deleteGuestEntry: (id: string) => void;
-  timerState: {
-    startTime: number | null;
-    accumulated: number;
-    roId: string | null;
-    lineId: string | null;
-  };
+  updateEntryHours: (entryId: string, lineId: string, actualHours: number) => void;
+  // Timers — same slot model as the signed-in app, in memory.
+  timers: TimerSlot[];
+  /** Returns an error message when all slots are taken or the RO is already on
+   * one, mirroring the server action's refusals. */
+  attachGuestTimer: (entryId: string, lineId: string | null) => string | null;
+  setGuestTimerStatus: (id: string, status: TimerStatus) => void;
+  setGuestTimerLine: (id: string, lineId: string | null) => void;
+  resetGuestTimer: (id: string) => void;
+  releaseGuestTimer: (id: string) => void;
+  saveGuestTimer: (id: string, lineId: string) => void;
 };
 
 const GuestContext = createContext<GuestContextValue | null>(null);
@@ -174,10 +305,10 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
           state: {
             entries: parsed.entries ?? [],
             opCodes: parsed.opCodes ?? GUEST_SAMPLE_OPCODES,
-            timerStartTime: parsed.timerStartTime ?? null,
-            timerAccumulated: parsed.timerAccumulated ?? 0,
-            timerRoId: parsed.timerRoId ?? null,
-            timerLineId: parsed.timerLineId ?? null,
+            // A session stored before the multi-timer change has no `timers`
+            // key; starting empty is the honest fallback (the old single
+            // timer's shape can't be mapped without guessing a status).
+            timers: parsed.timers ?? [],
             hourlyRate: parsed.hourlyRate ?? null,
           },
         });
@@ -272,26 +403,48 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
     dispatch({ type: "DELETE_OPCODE", id });
   }
 
-  function startGuestTimer(): void {
-    dispatch({ type: "TIMER_START", startTime: Date.now() });
+  function attachGuestTimer(entryId: string, lineId: string | null): string | null {
+    if (state.timers.some((t) => t.entryId === entryId)) {
+      return "That RO is already on a timer.";
+    }
+    const slot = nextFreeSlot(state.timers);
+    if (slot === null) return "All 3 timers are in use. Save or clear one first.";
+    dispatch({
+      type: "TIMER_ATTACH",
+      id: crypto.randomUUID(),
+      slot,
+      entryId,
+      lineId,
+      now: Date.now(),
+    });
+    return null;
   }
 
-  function pauseGuestTimer(): void {
-    const accumulated =
-      state.timerAccumulated +
-      (state.timerStartTime ? Date.now() - state.timerStartTime : 0);
-    dispatch({ type: "TIMER_PAUSE", accumulated });
+  function setGuestTimerStatus(id: string, status: TimerStatus): void {
+    dispatch({ type: "TIMER_SET_STATUS", id, status, now: Date.now() });
   }
 
-  function resetGuestTimer(): void {
-    dispatch({ type: "TIMER_RESET" });
+  function setGuestTimerLine(id: string, lineId: string | null): void {
+    dispatch({ type: "TIMER_SET_LINE", id, lineId });
   }
 
-  function setGuestTimerRo(roId: string | null, lineId: string | null): void {
-    dispatch({ type: "TIMER_SET_RO", roId, lineId });
+  function resetGuestTimer(id: string): void {
+    dispatch({ type: "TIMER_RESET", id, now: Date.now() });
   }
 
-  function updateEntryHours(entryId: string, lineId: string, actualHours: number): void {
+  function releaseGuestTimer(id: string): void {
+    dispatch({ type: "TIMER_RELEASE", id });
+  }
+
+  function saveGuestTimer(id: string, lineId: string): void {
+    dispatch({ type: "TIMER_SAVE", id, lineId, now: Date.now() });
+  }
+
+  function updateEntryHours(
+    entryId: string,
+    lineId: string,
+    actualHours: number,
+  ): void {
     dispatch({ type: "UPDATE_ENTRY_HOURS", entryId, lineId, actualHours });
   }
 
@@ -314,20 +467,17 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         addGuestOpCode,
         editGuestOpCode,
         deleteGuestOpCode,
-        startGuestTimer,
-        pauseGuestTimer,
-        resetGuestTimer,
-        setGuestTimerRo,
-        updateEntryHours,
         hourlyRate: state.hourlyRate,
         setGuestRate,
         deleteGuestEntry,
-        timerState: {
-          startTime: state.timerStartTime,
-          accumulated: state.timerAccumulated,
-          roId: state.timerRoId,
-          lineId: state.timerLineId,
-        },
+        updateEntryHours,
+        timers: state.timers,
+        attachGuestTimer,
+        setGuestTimerStatus,
+        setGuestTimerLine,
+        resetGuestTimer,
+        releaseGuestTimer,
+        saveGuestTimer,
       }}
     >
       {children}

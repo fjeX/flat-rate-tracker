@@ -7,7 +7,9 @@ import { Nav } from "@/components/layout/Nav";
 import { Footer } from "@/components/layout/Footer";
 import { TimezoneSync } from "@/components/layout/TimezoneSync";
 import { TimerPip } from "@/components/timer/TimerPip";
-import type { Entry, OpCode } from "@/lib/types";
+import { anyAccruing } from "@/lib/timer";
+import { capsForSlots } from "@/lib/timer-schedule";
+import type { Entry } from "@/lib/types";
 
 export default async function AppLayout({
   children,
@@ -24,24 +26,39 @@ export default async function AppLayout({
 
   const cookieStore = await cookies();
   const hasTz = cookieStore.has("frt_timezone");
+  const timeZone = cookieStore.get("frt_timezone")?.value;
 
-  const settings = await db.getSettings(supabase);
-  const isAdmin = await db.isCurrentUserAdmin(supabase);
-  const timerRunning = settings.timerStartTime !== null;
-  const timerActive = timerRunning || settings.timerAccumulated > 0;
+  const [isAdmin, slotsOrNull] = await Promise.all([
+    db.isCurrentUserAdmin(supabase),
+    // Null pre-migration — the nav dot and pip simply don't render.
+    db.listTimerSlotsSafe(supabase),
+  ]);
+  const slots = slotsOrNull ?? [];
 
-  // Only fetch pip data when the timer has something to show
-  let pipEntry: Entry | null = null;
-  let pipLibrary: OpCode[] = [];
-  if (timerActive) {
-    const [entry, library] = await Promise.all([
-      settings.timerRoId
-        ? db.getEntry(supabase, settings.timerRoId)
-        : Promise.resolve(null),
-      db.listOpCodes(supabase),
+  // The dot means "something is banking time right now" — which includes a job
+  // sitting on hold, since waiting time is still being recorded.
+  const timerRunning = anyAccruing(slots);
+
+  // Only pay for pip data when there's actually a timer to show.
+  let pipEntries: Entry[] = [];
+  let caps: Record<string, number | null> = {};
+  if (slots.length > 0) {
+    const [entries, schedules, shiftOverrides] = await Promise.all([
+      Promise.all(
+        slots
+          .map((s) => s.entryId)
+          .filter((id): id is string => !!id)
+          .map((id) => db.getEntry(supabase, id)),
+      ),
+      db.listWorkSchedulesSafe(supabase),
+      db.listShiftOverridesSafe(supabase),
     ]);
-    pipEntry = entry;
-    pipLibrary = library;
+    pipEntries = entries.filter((e): e is Entry => !!e);
+    caps = capsForSlots(slots, {
+      schedules,
+      shiftOverrides: shiftOverrides ?? {},
+      timeZone,
+    });
   }
 
   return (
@@ -51,15 +68,7 @@ export default async function AppLayout({
       <Nav timerRunning={timerRunning} />
       <div style={{ flex: 1 }}>{children}</div>
       <Footer isAdmin={isAdmin} />
-      <TimerPip
-        initialTimer={{
-          roId: settings.timerRoId,
-          startTime: settings.timerStartTime,
-          accumulated: settings.timerAccumulated,
-        }}
-        attachedEntry={pipEntry}
-        library={pipLibrary}
-      />
+      <TimerPip slots={slots} entries={pipEntries} caps={caps} />
     </div>
   );
 }

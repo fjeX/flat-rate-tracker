@@ -1,7 +1,7 @@
 "use client";
 
-import { GuestTimerView } from "@/components/guest/GuestTimerView";
+import { GuestTimerSlots } from "@/components/guest/GuestTimerSlots";
 
 export default function GuestTimerPage() {
-  return <GuestTimerView />;
+  return <GuestTimerSlots />;
 }

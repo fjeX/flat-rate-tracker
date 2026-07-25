@@ -1,38 +1,58 @@
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import { TimerView } from "@/components/timer/TimerView";
+import { capsForSlots } from "@/lib/timer-schedule";
+import type { Entry } from "@/lib/types";
+import { TimerSlots } from "@/components/timer/TimerSlots";
 
 export default async function TimerPage() {
   const supabase = await createClient();
+  const cookieStore = await cookies();
+  const timeZone = cookieStore.get("frt_timezone")?.value;
 
-  const [settings, entries, library] = await Promise.all([
-    db.getSettings(supabase),
-    db.listEntries(supabase, { limit: 20 }),
-    db.listOpCodes(supabase),
-  ]);
-  const roTemplates = settings.roTemplates;
+  const [settings, entries, library, slotsOrNull, schedules, shiftOverrides] =
+    await Promise.all([
+      db.getSettings(supabase),
+      db.listEntries(supabase, { limit: 20 }),
+      db.listOpCodes(supabase),
+      // Null before the active_timers migration lands — the page still renders,
+      // just with no timers, rather than 500ing on a half-deployed VM.
+      db.listTimerSlotsSafe(supabase),
+      db.listWorkSchedulesSafe(supabase),
+      db.listShiftOverridesSafe(supabase),
+    ]);
+  const slots = slotsOrNull ?? [];
 
-  // The attached RO may be outside the 20 most-recent window, so fetch by id
-  // if we have one that isn't already in the list.
-  const inList = settings.timerRoId
-    ? entries.find((e) => e.id === settings.timerRoId) ?? null
-    : null;
-  const attachedEntry =
-    settings.timerRoId && !inList
-      ? await db.getEntry(supabase, settings.timerRoId)
-      : inList;
+  // An RO on a timer can easily be older than the 20 most recent (that's the
+  // point of a timer that survives days), so fetch any that the list missed.
+  const inList = new Map(entries.map((e) => [e.id, e]));
+  const missingIds = slots
+    .map((s) => s.entryId)
+    .filter((id): id is string => !!id && !inList.has(id));
+  const fetched = await Promise.all(
+    missingIds.map((id) => db.getEntry(supabase, id)),
+  );
+  const attachedEntries: Entry[] = [
+    ...slots
+      .map((s) => (s.entryId ? inList.get(s.entryId) : undefined))
+      .filter((e): e is Entry => !!e),
+    ...fetched.filter((e): e is Entry => !!e),
+  ];
+
+  const caps = capsForSlots(slots, {
+    schedules,
+    shiftOverrides: shiftOverrides ?? {},
+    timeZone,
+  });
 
   return (
-    <TimerView
-      initialTimer={{
-        roId: settings.timerRoId,
-        startTime: settings.timerStartTime,
-        accumulated: settings.timerAccumulated,
-      }}
-      attachedEntry={attachedEntry}
+    <TimerSlots
+      slots={slots}
+      attachedEntries={attachedEntries}
+      caps={caps}
       recentEntries={entries}
       library={library}
-      roTemplates={roTemplates}
+      roTemplates={settings.roTemplates}
     />
   );
 }

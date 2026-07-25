@@ -334,7 +334,7 @@ export async function addEntryLine(
 }
 
 // Update just a single op code line's actualHours — used by the RO detail
-// modal's "blur to save" behavior and by the timer's "save to job" flow.
+// modal's "blur to save" behavior, where the tech is typing an absolute value.
 export async function setLineActualHours(
   supabase: DbClient,
   lineId: string,
@@ -345,6 +345,43 @@ export async function setLineActualHours(
     .update({ actual_hours: actualHours })
     .eq("id", lineId);
   if (error) throw error;
+}
+
+// ADD time to a line rather than replacing it — the timer's "save to job" path.
+//
+// Jobs routinely span sessions: you pull it apart Monday, wait overnight on a
+// part, finish it Tuesday. Replacing meant Tuesday's save silently discarded
+// Monday's two hours, so the line's actual hours quietly under-reported every
+// multi-day job in the app's history. Additive is what "how long did this job
+// take me" actually means.
+//
+// Reads the current value and writes the sum. Returns both halves so the caller
+// can show the running total. A null existing value is treated as 0 — an
+// unmeasured line, not a zero-length one.
+export async function addLineActualHours(
+  supabase: DbClient,
+  lineId: string,
+  addHours: number,
+): Promise<{ previous: number | null; total: number }> {
+  const { data, error } = await supabase
+    .from("entry_op_codes")
+    .select("actual_hours")
+    .eq("id", lineId)
+    .single();
+  if (error) throw error;
+
+  const previous = data.actual_hours === null ? null : Number(data.actual_hours);
+  // numeric(5,2) — round the sum, not just the addend, so repeated saves can't
+  // accumulate a third decimal and get silently truncated by the column.
+  const total = Math.round(((previous ?? 0) + addHours) * 100) / 100;
+
+  const { error: updateError } = await supabase
+    .from("entry_op_codes")
+    .update({ actual_hours: total })
+    .eq("id", lineId);
+  if (updateError) throw updateError;
+
+  return { previous, total };
 }
 
 // Update just a single line's paid_hours — used by the pay-period reconciliation

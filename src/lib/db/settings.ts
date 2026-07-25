@@ -1,4 +1,9 @@
-// User settings, including persistent timer state.
+// User settings.
+//
+// Timer state used to live here as three columns on this singleton row. It
+// moved to its own `active_timers` child table when the timer went to 3
+// concurrent slots — see db/timers.ts for why (row-level atomicity and real
+// foreign keys, neither of which a shared settings row could provide).
 import type { Database } from "@/lib/supabase/database.types";
 import type { FieldRegion, LaborType, PeriodOverride, RoTemplate, UserSettings } from "@/lib/types";
 import { getCurrentUserId, type DbClient } from "./_client";
@@ -23,9 +28,6 @@ function toSettings(row: SettingsRow): UserSettings {
     goalHours: row.goal_hours,
     periodOverrides:
       (row.period_overrides as Record<string, PeriodOverride> | null) ?? {},
-    timerRoId: row.timer_ro_id,
-    timerStartTime: row.timer_start_time,
-    timerAccumulated: row.timer_accumulated,
     updatedAt: row.updated_at,
     roTemplates: normaliseTemplates(row.ro_template),
     defaultLaborType: (row.default_labor_type as LaborType | null) ?? null,
@@ -53,9 +55,6 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
       splitDay: 15,
       goalHours: 88,
       periodOverrides: {},
-      timerRoId: null,
-      timerStartTime: null,
-      timerAccumulated: 0,
       updatedAt: new Date().toISOString(),
       roTemplates: [],
       defaultLaborType: null,
@@ -106,27 +105,3 @@ export async function updateSettings(
   return toSettings(data);
 }
 
-// --- Timer state (server-persistent so it survives device switches) ---
-
-export type TimerState = {
-  roId: string | null;
-  startTime: number | null; // null means paused or not running
-  accumulated: number; // ms accumulated while paused
-};
-
-export async function setTimerState(
-  supabase: DbClient,
-  state: TimerState,
-): Promise<void> {
-  const userId = await getCurrentUserId(supabase);
-  const { error } = await supabase
-    .from("user_settings")
-    .update({
-      timer_ro_id: state.roId,
-      timer_start_time: state.startTime,
-      timer_accumulated: state.accumulated,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
-  if (error) throw error;
-}
