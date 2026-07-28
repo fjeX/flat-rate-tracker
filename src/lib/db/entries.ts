@@ -1,12 +1,13 @@
 // Data layer for repair orders (entries) and their op code lines.
 import type { Database } from "@/lib/supabase/database.types";
-import type {
-  Entry,
-  EntryOpCode,
-  EntryPatch,
-  LaborType,
-  NewEntry,
-  NewEntryOpCode,
+import {
+  isComebackKind,
+  type Entry,
+  type EntryOpCode,
+  type EntryPatch,
+  type LaborType,
+  type NewEntry,
+  type NewEntryOpCode,
 } from "@/lib/types";
 import { getCurrentUserId, type DbClient } from "./_client";
 
@@ -28,6 +29,9 @@ function toEntryOpCode(row: EntryOpCodeRow): EntryOpCode {
     laborType: (row.labor_type as LaborType | "untyped" | null) ?? null,
     // numeric(5,2) comes back as a string through PostgREST — wrap in Number().
     paidHours: row.paid_hours === null ? null : Number(row.paid_hours),
+    // ?? false, not a bare read: a DB that hasn't run the Phase 2 migration
+    // returns undefined here, and "not marked" is the honest reading of that.
+    isComeback: row.is_comeback ?? false,
   };
 }
 
@@ -48,6 +52,10 @@ function toEntry(row: EntryRow & { entry_op_codes?: EntryOpCodeRow[] }): Entry {
     },
     flagHours: Number(row.flag_hours),
     notes: row.notes,
+    comebackOfEntryId: row.comeback_of_entry_id ?? null,
+    // A kind the DB allows but this build doesn't know means the code is older
+    // than the schema — drop to null rather than crash the whole RO list.
+    comebackKind: isComebackKind(row.comeback_kind) ? row.comeback_kind : null,
     opCodes: (row.entry_op_codes ?? [])
       .slice()
       .sort((a, b) => a.position - b.position)
@@ -121,6 +129,18 @@ export async function getEntriesByRoNumber(
 // Writes
 // ------------------------------------------------------------------------
 
+// A comeback line flags zero, by definition — you are not paid for the redo.
+// The DB CHECK `entry_op_codes_comeback_zero_flag` is the hard backstop, but
+// enforcing it here too means every write path produces a legal row instead of
+// bouncing off a raw constraint violation the UI would have to translate.
+//
+// This zeroes rather than throws on purpose. "A comeback that flags 2.4 hours"
+// is not a value judgement call — it is a contradiction, and the auto-fill in
+// QuickAddModal/useLogRoForm is exactly how it gets produced by accident.
+function comebackSafeFlagHours(line: NewEntryOpCode): number {
+  return line.isComeback ? 0 : line.flagHours;
+}
+
 function toLineInsert(
   entryId: string,
   line: NewEntryOpCode,
@@ -132,10 +152,13 @@ function toLineInsert(
     custom: line.custom,
     custom_code: line.customCode ?? null,
     custom_description: line.customDescription ?? null,
-    flag_hours: line.flagHours,
+    flag_hours: comebackSafeFlagHours(line),
     actual_hours: line.actualHours,
     position,
   };
+  // Only include is_comeback when true — same pre-migration guard as the
+  // columns below, and false is the column default anyway.
+  if (line.isComeback) insert.is_comeback = true;
   if (line.notes) insert.notes = line.notes;
   // Only include sub_op_code_id when set — safe on DBs that haven't run migration yet.
   if (line.subOpCodeId) insert.sub_op_code_id = line.subOpCodeId;
@@ -162,12 +185,16 @@ function toLineUpdate(
     custom: line.custom,
     custom_code: line.customCode ?? null,
     custom_description: line.customDescription ?? null,
-    flag_hours: line.flagHours,
+    flag_hours: comebackSafeFlagHours(line),
     actual_hours: line.actualHours,
     notes: line.notes ?? "",
     position,
     sub_op_code_id: line.subOpCodeId ?? null,
     labor_type: line.laborType ?? null,
+    // Form-owned: the comeback toggle lives on the log form, so an edit that
+    // clears it must clear the column too. Unlike paid_hours, this is the
+    // form's to write.
+    is_comeback: line.isComeback ?? false,
   };
 }
 
@@ -181,19 +208,27 @@ export async function createEntry(
 
   const userId = await getCurrentUserId(supabase);
 
+  const entryInsert: Database["public"]["Tables"]["entries"]["Insert"] = {
+    user_id: userId,
+    date: input.date,
+    ro_number: input.roNumber,
+    vehicle_year: input.vehicle.year,
+    vehicle_make: input.vehicle.make,
+    vehicle_model: input.vehicle.model,
+    vehicle_vin: input.vehicle.vin,
+    vehicle_mileage: input.vehicle.mileage,
+    notes: input.notes,
+  };
+  // Omitted when unset so inserts still work against a DB that hasn't run the
+  // Phase 2 migration — same guard as the per-line columns.
+  if (input.comebackOfEntryId) {
+    entryInsert.comeback_of_entry_id = input.comebackOfEntryId;
+  }
+  if (input.comebackKind) entryInsert.comeback_kind = input.comebackKind;
+
   const { data: entry, error: entryErr } = await supabase
     .from("entries")
-    .insert({
-      user_id: userId,
-      date: input.date,
-      ro_number: input.roNumber,
-      vehicle_year: input.vehicle.year,
-      vehicle_make: input.vehicle.make,
-      vehicle_model: input.vehicle.model,
-      vehicle_vin: input.vehicle.vin,
-      vehicle_mileage: input.vehicle.mileage,
-      notes: input.notes,
-    })
+    .insert(entryInsert)
     .select()
     .single();
   if (entryErr) throw entryErr;
@@ -224,6 +259,10 @@ export async function updateEntry(
   if (patch.date !== undefined) update.date = patch.date;
   if (patch.roNumber !== undefined) update.ro_number = patch.roNumber;
   if (patch.notes !== undefined) update.notes = patch.notes;
+  if (patch.comebackOfEntryId !== undefined) {
+    update.comeback_of_entry_id = patch.comebackOfEntryId;
+  }
+  if (patch.comebackKind !== undefined) update.comeback_kind = patch.comebackKind;
   if (patch.vehicle !== undefined) {
     update.vehicle_year = patch.vehicle.year;
     update.vehicle_make = patch.vehicle.make;

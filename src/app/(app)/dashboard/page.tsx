@@ -99,7 +99,7 @@ export default async function DashboardPage() {
     : isoDate(new Date(Date.now() - 90 * 86_400_000));
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
-  const [entries, clocks, library, laborRates, gamification, schedules, daysOff, confirmedZeroDays, shiftOverrides] = await Promise.all([
+  const [entries, clocks, library, laborRates, gamification, schedules, daysOff, confirmedZeroDays, shiftOverrides, unpaidTime] = await Promise.all([
     db.listEntries(supabase, { from: fetchFrom, to: monthEnd }),
     db.listDailyClocks(supabase, { from: fetchFrom, to: monthEnd }),
     db.listOpCodes(supabase),
@@ -113,6 +113,9 @@ export default async function DashboardPage() {
     db.listDaysOffSafe(supabase),
     db.listConfirmedZeroDaysSafe(supabase),
     db.listShiftOverridesSafe(supabase),
+    // Null until the Phase 2 unpaid-time migration lands — stats then report
+    // zero unpaid hours rather than the page failing to render.
+    db.listUnpaidTimeSafe(supabase, { from: fetchFrom, to: monthEnd }),
   ]);
 
   // Dollars are additive — computed only when the user has priced a rate.
@@ -137,12 +140,13 @@ export default async function DashboardPage() {
           shiftOverrides: shiftOverrides ?? {},
         }
       : null;
+  const unpaid = unpaidTime ?? [];
   const rangeStats = (range: { start: string; end: string }) =>
     scheduleCtx
-      ? aggregateStatsWithSchedule(entries, clocks, range, scheduleCtx)
-      : aggregateStats(entries, clocks, range);
+      ? aggregateStatsWithSchedule(entries, clocks, range, scheduleCtx, unpaid)
+      : aggregateStats(entries, clocks, range, unpaid);
 
-  const statsToday  = aggregateStats(entries, clocks, { start: today, end: today });
+  const statsToday  = aggregateStats(entries, clocks, { start: today, end: today }, unpaid);
   const statsWeek   = rangeStats({ start: weekStart, end: weekEnd });
   const statsPeriod = rangeStats({ start: period.start, end: period.end });
   const statsMonth  = rangeStats({ start: monthStart, end: monthEnd });

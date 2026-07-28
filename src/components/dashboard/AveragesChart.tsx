@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Entry } from "@/lib/types";
 import { fmtHours, type DayDenom } from "@/lib/stats";
 import { getPeriodForDate, addDays } from "@/lib/periods";
+import { flagHoursByDate } from "@/lib/forecast";
 import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
 
 // ---------------------------------------------------------------------------
@@ -80,18 +81,16 @@ function computeWeek(
   mode: Mode,
 ): BarData[] {
   // ── Avg source: day-of-week averages across the 90d window ──────────────
+  // Worked days come from forecast.ts's flagHoursByDate rather than a local
+  // loop. The two used to define "worked" differently — here any entry counted,
+  // there only flagHours > 0 did — which meant the chart and the projection
+  // could disagree about the same week. One shared source, one definition.
   const totalByDow: number[] = new Array(7).fill(0);
   const workedByDow: number[] = new Array(7).fill(0);
-  const workedDates = new Set<string>();
 
-  for (const entry of entries) {
-    if (entry.date < windowStart || entry.date > windowEnd) continue;
-    const jsDay = new Date(entry.date + "T00:00:00").getDay();
-    totalByDow[jsDay] += entry.flagHours;
-    workedDates.add(entry.date);
-  }
-  for (const d of workedDates) {
-    const jsDay = new Date(d + "T00:00:00").getDay();
+  for (const [date, hours] of flagHoursByDate(entries, windowStart, windowEnd)) {
+    const jsDay = new Date(date + "T00:00:00").getDay();
+    totalByDow[jsDay] += hours;
     workedByDow[jsDay]++;
   }
   const avgByDow = totalByDow.map((total, dow) =>

@@ -282,6 +282,8 @@ export type Database = {
       }
       entries: {
         Row: {
+          comeback_of_entry_id: string | null
+          comeback_kind: string | null
           created_at: string
           date: string
           flag_hours: number
@@ -297,6 +299,8 @@ export type Database = {
           vehicle_year: string
         }
         Insert: {
+          comeback_of_entry_id?: string | null
+          comeback_kind?: string | null
           created_at?: string
           date: string
           flag_hours?: number
@@ -312,6 +316,8 @@ export type Database = {
           vehicle_year?: string
         }
         Update: {
+          comeback_of_entry_id?: string | null
+          comeback_kind?: string | null
           created_at?: string
           date?: string
           flag_hours?: number
@@ -326,7 +332,15 @@ export type Database = {
           vehicle_vin?: string
           vehicle_year?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "entries_comeback_of_entry_id_fkey"
+            columns: ["comeback_of_entry_id"]
+            isOneToOne: false
+            referencedRelation: "entries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       entry_op_codes: {
         Row: {
@@ -337,6 +351,7 @@ export type Database = {
           entry_id: string
           flag_hours: number
           id: string
+          is_comeback: boolean
           labor_type: string | null
           notes: string
           op_code_id: string | null
@@ -352,6 +367,7 @@ export type Database = {
           entry_id: string
           flag_hours?: number
           id?: string
+          is_comeback?: boolean
           labor_type?: string | null
           notes?: string
           op_code_id?: string | null
@@ -367,6 +383,7 @@ export type Database = {
           entry_id?: string
           flag_hours?: number
           id?: string
+          is_comeback?: boolean
           labor_type?: string | null
           notes?: string
           op_code_id?: string | null

@@ -10,6 +10,7 @@ import {
   type ShiftDef,
   type WorkSchedule,
 } from "@/lib/schedule";
+import { isUnpaidTimeKind, type UnpaidTimeKind } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -83,16 +84,56 @@ export async function deleteConfirmedZeroDayAction(date: string): Promise<void> 
 
 /** Resolve an empty scheduled workday: a day off is excluded from efficiency,
  * a real zero counts its full scheduled hours against it. */
+// The third resolution, "worked-unpaid", is the whole reason Phase 2 touches
+// this action (bug #2 from the Phase 1 audit — "the forced lie").
+//
+// Before it, a scheduled day with zero flag hours offered two answers and both
+// were false for a day spent on comebacks or waiting on parts:
+//   - "Day off"           → poisons schedule inference; you WERE at the shop
+//   - "Worked, zero flag" → permanently tanks that day's efficiency with no
+//                           record of why, so the number is unexplainable later
+//
+// "Worked — unpaid" reuses the confirmed_zero_day marker (so the day counts as
+// worked for schedule inference and the streak, exactly like the second option)
+// and adds a ledger row saying where the hours actually went.
 export async function resolveZeroDayAction(
   date: string,
-  resolution: "day-off" | "worked-zero",
+  resolution: "day-off" | "worked-zero" | "worked-unpaid",
+  unpaid?: { hours: number; kind: UnpaidTimeKind; note?: string },
 ): Promise<void> {
   if (!DATE_RE.test(date)) throw new Error("Date must be in YYYY-MM-DD format.");
   const supabase = await createClient();
+
   if (resolution === "day-off") {
     await db.addDayOff(supabase, date, date);
-  } else {
-    await db.addConfirmedZeroDay(supabase, date);
+    revalidateScheduleScreens();
+    return;
   }
+
+  if (resolution === "worked-unpaid") {
+    if (!unpaid) throw new Error("Unpaid hours and reason are required.");
+    if (!Number.isFinite(unpaid.hours) || unpaid.hours <= 0)
+      throw new Error("Unpaid hours must be greater than zero.");
+    if (unpaid.hours > 24)
+      throw new Error("Unpaid hours can't exceed 24 in a day.");
+    if (!isUnpaidTimeKind(unpaid.kind))
+      throw new Error("Unrecognized unpaid-time reason.");
+
+    // Ledger row FIRST. If it fails, the day stays unresolved and the card
+    // stays on screen — better than marking the day settled while losing the
+    // only record of why it was empty.
+    await db.createUnpaidTime(supabase, {
+      date,
+      hours: unpaid.hours,
+      kind: unpaid.kind,
+      source: "zero_day",
+      note: unpaid.note?.trim() ?? "",
+    });
+    await db.addConfirmedZeroDay(supabase, date);
+    revalidateScheduleScreens();
+    return;
+  }
+
+  await db.addConfirmedZeroDay(supabase, date);
   revalidateScheduleScreens();
 }

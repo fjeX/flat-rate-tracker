@@ -89,6 +89,44 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
 - Delete one RO you created **tonight only** and verify it's gone. Never delete
   entries from previous nights — they are accumulated test data.
 
+### 2b. Comebacks / unpaid rework (new 2026-07-27)
+A comeback is work you redo for free, so it **flags zero hours**. Log at least
+one most nights.
+
+- On the full log form, add an op-code line, then tap **"Mark as comeback"** on
+  that line. Verify ALL of these:
+  - the flag-hours input snaps to **0 and becomes disabled** (you cannot type in
+    it) — a comeback line that still carries the library's book time is the
+    single most important bug on this screen
+  - the "Total flag hours" figure drops accordingly, and a second amber
+    **"Unpaid rework · N lines"** row appears beneath it
+  - an **"Unpaid rework"** card appears with three "whose work" choices: My own
+    work / Another tech's work / Same-visit rework
+- Pick **"My own work"** → a "Redo of (optional)" RO lookup appears. Type an RO
+  number from a previous night, hit **Find**, and pick a match. Picking
+  **"Another tech's work"** or **"Same-visit rework"** must HIDE that lookup
+  (those have no original RO in this account) — it still showing is a bug.
+- Tapping "Mark as comeback" a second time must **restore the original flag
+  hours**, not leave 0 behind.
+- Fill the line's **actual** hours (a comeback still costs you time — that's the
+  whole point) and save. In history the RO must show **0.0h flag**.
+- Also exercise the toggle from **dashboard Quick Add** — it has the toggle and
+  the three kind chips, but deliberately NO "redo of" lookup. Its absence there
+  is intended, not a bug.
+- Mixed RO: one normal paid line + one comeback line on the same ticket. Total
+  flag must equal ONLY the paid line's hours.
+
+### 2c. "Worked — unpaid" empty days (new 2026-07-27)
+If the dashboard shows the "scheduled day looks empty" card, it now offers a
+**third** button, "Worked — unpaid", alongside "Day off" and "Worked, zero flag".
+- Click it: an hours field, a "Where the time went" reason dropdown (comeback /
+  waiting on parts / waiting on approval / shop time), and an optional note.
+- Saving with hours **0 or blank must be refused** with a visible error.
+- After a successful save the day leaves the list and does NOT come back on
+  reload. Efficiency must NOT change — unpaid hours are reported beside
+  efficiency, never subtracted from it. An efficiency figure that moves after
+  logging unpaid time is a bug.
+
 ### 3. Timers (up to 3 concurrent — reworked 2026-07-24)
 The Timer page runs **up to 3 job timers at once**. The header reads
 "Timers — N of 3". Each timer is bound to one RO and carries a status:

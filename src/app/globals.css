@@ -878,6 +878,108 @@ button.step-head {
 .opc-total .label { font-size: 11px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--fg-3); }
 .opc-total .val   { font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace); font-size: 20px; font-weight: 700; color: var(--brand); }
 
+/* Unpaid rework total. Sits BELOW the flag total and is never subtracted from
+   it — showing free work next to paid work is the entire point; netting them
+   would hide exactly what the tech needs to see. Smaller and warn-coloured so
+   it reads as a caveat to the flag number, not a competing headline. */
+.opc-total-unpaid { border-top: none; padding-top: 4px; margin-top: 2px; }
+.opc-total-unpaid .label { color: var(--warn); }
+.opc-total-unpaid .val   { font-size: 15px; color: var(--warn); }
+
+/* Per-line comeback toggle (unpaid rework). Off state is deliberately quiet —
+   it appears on every line, and a loud control on a rare action is noise. */
+.opc-comeback-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-3);
+  font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.opc-comeback-toggle:hover { color: var(--fg-1); border-color: var(--fg-3); }
+.opc-comeback-toggle[data-on="true"] {
+  color: var(--warn);
+  border-color: color-mix(in oklab, var(--warn) 45%, transparent);
+  background: var(--warn-bg);
+}
+/* The 44px tap floor without inflating the visual chip (same trick as
+   .opc-line .remove::after). */
+.opc-comeback-toggle { position: relative; }
+.opc-comeback-toggle::after {
+  content: ""; position: absolute; left: 0; right: 0;
+  top: 50%; transform: translateY(-50%); height: 44px;
+}
+
+/* ---- Comeback section (entry-level) ---- */
+.cmb-kind {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 9px 11px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.cmb-kind:hover { border-color: var(--fg-3); }
+.cmb-kind[data-on="true"] {
+  border-color: color-mix(in oklab, var(--warn) 50%, transparent);
+  background: var(--warn-bg);
+}
+.cmb-kind input { margin-top: 2px; accent-color: var(--warn); flex-shrink: 0; }
+.cmb-kind-label { display: block; font-size: 13px; font-weight: 600; color: var(--fg-0); }
+.cmb-kind-hint  { display: block; font-size: 11px; color: var(--fg-3); margin-top: 1px; }
+
+.cmb-linked {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 11px;
+  min-height: 44px;
+  border: 1px solid color-mix(in oklab, var(--warn) 40%, transparent);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  font-size: 12px; color: var(--fg-1);
+}
+.cmb-linked .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cmb-unlink {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex-shrink: 0;
+  border: none; border-radius: 6px;
+  background: transparent; color: var(--fg-3); cursor: pointer;
+  position: relative;
+}
+.cmb-unlink:hover { background: var(--bg-3); color: var(--bad); }
+.cmb-unlink::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%); width: 44px; height: 44px;
+}
+
+.cmb-matches {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cmb-match {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg-1);
+  text-align: left;
+  cursor: pointer;
+}
+.cmb-match:last-child { border-bottom: none; }
+.cmb-match:hover { background: var(--bg-3); }
+.cmb-match .grow { flex: 1; min-width: 0; }
+.cmb-match-date    { display: block; font-size: 13px; font-weight: 600; }
+.cmb-match-vehicle { display: block; font-size: 11px; color: var(--fg-3); }
+
 /* Op-code search dropdown */
 .opc-dropdown {
   position: absolute; z-index: 30;

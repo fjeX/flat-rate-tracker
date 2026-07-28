@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { isComebackKind } from "@/lib/types";
 import type { Entry, NewEntry, NewEntryOpCode, RoMatch } from "@/lib/types";
 
 // Create or update an entry. Returns the persisted entry so the client can
@@ -52,8 +53,19 @@ export async function saveEntry(
     )
       throw new Error("Actual hours must be a non-negative number.");
   }
+  if (input.comebackKind != null && !isComebackKind(input.comebackKind))
+    throw new Error("Unrecognized comeback kind.");
 
   const supabase = await createClient();
+
+  // Normalize the comeback invariants server-side rather than trusting the
+  // client. The DB CHECK would reject a comeback line carrying flag hours, but
+  // that surfaces as a raw constraint violation; deciding it here means one
+  // consistent answer no matter which form (or future caller) sent it.
+  const hasComebackLines = input.opCodes.some((l) => l.isComeback);
+  const opCodes = input.opCodes.map((l) =>
+    l.isComeback ? { ...l, flagHours: 0 } : l,
+  );
 
   // RO numbers are intentionally NOT unique — shops recycle them, so the same
   // number can be a different repair months later. Duplicate awareness lives in
@@ -64,6 +76,15 @@ export async function saveEntry(
     ...input,
     roNumber,
     notes: input.notes.trim(),
+    opCodes,
+    // Entry-level comeback metadata without a single marked line describes
+    // nothing. Clearing it here also means EDITING a comeback back into a
+    // normal RO actually clears the columns instead of leaving them stale.
+    comebackKind: hasComebackLines ? (input.comebackKind ?? null) : null,
+    comebackOfEntryId:
+      hasComebackLines && input.comebackKind === "comeback_own"
+        ? (input.comebackOfEntryId ?? null)
+        : null,
   };
 
   const entry = entryId

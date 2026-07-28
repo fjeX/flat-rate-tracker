@@ -37,10 +37,28 @@ function weekdayOf(date: string): number {
 // Worked-days accounting
 // ------------------------------------------------------------------------
 
-// Sum flagged hours per calendar date within [from, to] (inclusive).
-// Only dates with at least one entry appear — a sick day (no entries) never
-// shows up, so it can't drag an average down.
-function flagHoursByDate(
+/**
+ * Sum flagged hours per calendar date within [from, to] (inclusive), for dates
+ * that have at least one logged RO. A sick day (no entries) never appears, so
+ * it can't drag an average down.
+ *
+ * THE definition of "a day you worked", shared app-wide (see below). A date is
+ * present in this map iff an RO was logged that day; the value may be 0.
+ *
+ * This module and AveragesChart used to disagree about what counts as a worked
+ * day: here it was `flagHours > 0`, there it was "any entry exists". The
+ * disagreement was invisible while every logged day flagged something — and
+ * became wrong the moment comebacks could be logged, because a comeback-only
+ * day flags exactly zero.
+ *
+ * "Any RO logged" is the definition that survived. Under the old `> 0` rule a
+ * day spent entirely on unpaid rework was indistinguishable from a day you
+ * didn't show up: it left the worked-day count, so the flag-per-day average
+ * quietly rose to exclude it. That is precisely the blindness the Unpaid Time
+ * Engine exists to remove — if comebacks ate your Tuesdays, your Tuesday
+ * average IS lower, and the forecast should say so.
+ */
+export function flagHoursByDate(
   entries: Entry[],
   from: string,
   to: string,
@@ -71,8 +89,11 @@ export function inferWorkedWeekdays(
   const from = addDays(opts.today, -(lookbackWeeks * 7 - 1));
 
   const worked = new Set<number>();
-  for (const [date, hours] of flagHoursByDate(entries, from, opts.today)) {
-    if (hours > 0) worked.add(weekdayOf(date));
+  // Presence, not hours > 0 — a day spent on unpaid rework is still a day the
+  // tech was at the shop, and inferring the schedule from flag hours alone
+  // would drop those weekdays entirely.
+  for (const date of flagHoursByDate(entries, from, opts.today).keys()) {
+    worked.add(weekdayOf(date));
   }
 
   if (worked.size === 0 && fallbackToDefault) {
@@ -133,7 +154,8 @@ export function recentDailyAverage(
   let workedDays = 0;
   for (const hours of byDate.values()) {
     total += hours;
-    if (hours > 0) workedDays++;
+    // Every date in the map is a worked day, including a 0h comeback day.
+    workedDays++;
   }
 
   if (workedDays < minWorkedDays) return null;
@@ -206,7 +228,6 @@ export function weekdayPattern(
   const workedByDow = new Array(7).fill(0);
 
   for (const [date, hours] of flagHoursByDate(entries, from, opts.today)) {
-    if (hours <= 0) continue;
     const dow = weekdayOf(date);
     totalByDow[dow] += hours;
     workedByDow[dow]++;

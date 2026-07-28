@@ -9,7 +9,7 @@ import {
   type ScheduleContext,
 } from "./stats";
 import { emptyWeek, type ScheduleWeek, type WorkSchedule } from "./schedule";
-import type { DailyClock, Entry } from "./types";
+import type { DailyClock, Entry, UnpaidTime } from "./types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +53,59 @@ function makeClock(date: string, hours: number): DailyClock {
   return { userId: "u1", date, hours };
 }
 
+// An RO carrying a comeback line: flag zero (the DB enforces it), actual hours
+// are what the redo really cost.
+function makeComebackEntry(date: string, actualHours: number): Entry {
+  return {
+    id: "cb-entry",
+    userId: "u1",
+    createdAt: date + "T00:00:00Z",
+    updatedAt: date + "T00:00:00Z",
+    date,
+    roNumber: "CB",
+    vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
+    flagHours: 0,
+    notes: "",
+    comebackKind: "comeback_own",
+    opCodes: [
+      {
+        id: "cb-oc1",
+        opCodeId: null,
+        custom: true,
+        customCode: "CB",
+        customDescription: "Redo",
+        flagHours: 0,
+        actualHours,
+        notes: "",
+        position: 0,
+        subOpCodeId: null,
+        laborType: null,
+        isComeback: true,
+      },
+    ],
+  };
+}
+
+function makeUnpaid(
+  date: string,
+  hours: number,
+  kind: UnpaidTime["kind"],
+): UnpaidTime {
+  return {
+    id: `up-${date}-${kind}`,
+    userId: "u1",
+    date,
+    hours,
+    kind,
+    entryId: null,
+    originalEntryId: null,
+    source: "manual",
+    note: "",
+    createdAt: date + "T00:00:00Z",
+    updatedAt: date + "T00:00:00Z",
+  };
+}
+
 // ── computeEfficiency ──────────────────────────────────────────────────────────
 
 describe("computeEfficiency", () => {
@@ -85,6 +138,73 @@ describe("aggregateStats", () => {
     expect(stats.efficiency).toBeNull();
     expect(stats.roCount).toBe(0);
     expect(stats.actualHours).toBe(0);
+    expect(stats.unpaidHours).toBe(0);
+    expect(stats.comebackHours).toBe(0);
+    expect(stats.waitingHours).toBe(0);
+    expect(stats.shopHours).toBe(0);
+  });
+
+  // ── Unpaid time attribution (Unpaid Time Engine, Phase 2) ────────────────
+  //
+  // The invariant under all of these: efficiency is IDENTICAL with and without
+  // unpaid time. Unpaid hours are reported beside it, never inside it.
+
+  it("counts a comeback line's ACTUAL hours, not its flag hours", () => {
+    // Flag is zero by construction — summing flag would silently report 0 and
+    // make the whole feature look like it found nothing.
+    const stats = aggregateStats([makeComebackEntry("2026-04-05", 2.5)], [], range);
+    expect(stats.comebackHours).toBe(2.5);
+    expect(stats.unpaidHours).toBe(2.5);
+    expect(stats.flagHours).toBe(0);
+  });
+
+  it("does NOT let unpaid time change efficiency", () => {
+    const entries = [makeEntry("2026-04-05", 8), makeComebackEntry("2026-04-05", 3)];
+    const clocks = [makeClock("2026-04-05", 10)];
+    const withUnpaid = aggregateStats(entries, clocks, range, [
+      makeUnpaid("2026-04-05", 4, "wait_parts"),
+    ]);
+    const withoutUnpaid = aggregateStats([makeEntry("2026-04-05", 8)], clocks, range);
+    expect(withUnpaid.efficiency).toBe(withoutUnpaid.efficiency);
+    expect(withUnpaid.efficiency).toBe(80);
+  });
+
+  it("splits ledger rows into comeback / waiting / shop buckets", () => {
+    const unpaid = [
+      makeUnpaid("2026-04-02", 1, "comeback_own"),
+      makeUnpaid("2026-04-03", 2, "comeback_other"),
+      makeUnpaid("2026-04-04", 0.5, "rework_same_visit"),
+      makeUnpaid("2026-04-05", 3, "wait_parts"),
+      makeUnpaid("2026-04-06", 1.5, "wait_approval"),
+      makeUnpaid("2026-04-07", 2, "shop_time"),
+    ];
+    const stats = aggregateStats([], [], range, unpaid);
+    expect(stats.comebackHours).toBe(3.5);
+    expect(stats.waitingHours).toBe(4.5);
+    expect(stats.shopHours).toBe(2);
+    expect(stats.unpaidHours).toBe(10);
+  });
+
+  it("adds RO-side and ledger comeback hours together", () => {
+    // The two never describe the same event: a comeback WITH a ticket is line-
+    // marked, one WITHOUT a ticket is a ledger row. So this is a sum, not a
+    // double count.
+    const stats = aggregateStats(
+      [makeComebackEntry("2026-04-05", 2)],
+      [],
+      range,
+      [makeUnpaid("2026-04-06", 1.5, "comeback_other")],
+    );
+    expect(stats.comebackHours).toBe(3.5);
+  });
+
+  it("excludes ledger rows outside the range", () => {
+    const stats = aggregateStats([], [], range, [
+      makeUnpaid("2026-03-31", 5, "wait_parts"),
+      makeUnpaid("2026-04-01", 2, "wait_parts"),
+      makeUnpaid("2026-04-16", 5, "wait_parts"),
+    ]);
+    expect(stats.waitingHours).toBe(2);
   });
 
   it("excludes entries before the range start", () => {

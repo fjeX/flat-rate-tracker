@@ -81,6 +81,7 @@ export function buildSnapshotStats(
   let bookFlagSum = 0;
   let bookActualSum = 0;
   let bookLines = 0;
+  let comebackHours = 0;
   const opCounts = new Map<string, SnapshotTopOp>();
   const dates = new Set<string>();
 
@@ -88,11 +89,27 @@ export function buildSnapshotStats(
     totalFlagHours += e.flagHours;
     dates.add(e.date);
     for (const line of e.opCodes) {
-      if (line.actualHours !== null && line.flagHours > 0) {
+      // Comeback lines are EXCLUDED from avg-vs-book, deliberately.
+      //
+      // avgVsBook answers one question: "when the book says 2.0h, how long does
+      // it actually take me?" A comeback has no book time to be measured
+      // against — the flag is zero because nobody is paying for the redo, not
+      // because the job is instant. Including it would divide real hours by a
+      // book time that was never quoted, dragging the ratio toward nonsense and
+      // making a tech who eats comebacks look slower at ordinary work.
+      //
+      // The `flagHours > 0` guard already excluded them incidentally; this is
+      // explicit so the exclusion survives someone relaxing that guard. Their
+      // hours are reported separately as comebackHours instead of vanishing.
+      if (line.isComeback) {
+        comebackHours += line.actualHours ?? 0;
+      } else if (line.actualHours !== null && line.flagHours > 0) {
         bookFlagSum += line.flagHours;
         bookActualSum += line.actualHours;
         bookLines += 1;
       }
+      // NB: falls through to the topOps tally either way — you performed the
+      // op whether or not you were paid for it.
       const lib = line.opCodeId ? byId.get(line.opCodeId) : undefined;
       const code = lib?.code ?? line.customCode ?? "";
       if (!code) continue;
@@ -135,6 +152,7 @@ export function buildSnapshotStats(
       bookActualSum >= MIN_BOOK_ACTUAL_HOURS
         ? Math.round((bookActualSum / bookFlagSum) * 100) / 100
         : null,
+    comebackHours: Math.round(comebackHours * 100) / 100,
     photoCount,
     topOps,
     firstDate: sortedDates[0] ?? "",

@@ -12,6 +12,7 @@ import { DuplicateRoDialog } from "./DuplicateRoDialog";
 import { useLogRoForm } from "./useLogRoForm";
 import { RoScanSection } from "./RoScanSection";
 import { OpCodeLines } from "./OpCodeLines";
+import { ComebackSection } from "./ComebackSection";
 import { VehicleFields } from "./VehicleFields";
 
 export function LogRoForm({
@@ -44,6 +45,10 @@ export function LogRoForm({
     pickerRef, filteredLibrary, totalFlag, quickChips, customOpen, setCustomOpen,
     newLibraryOpen, setNewLibraryOpen, newLibraryPending, subPickerOc, setSubPickerOc,
     addFromLibrary, confirmSubPick, addCustomLine, addNewLibraryLine, updateLine, removeLine,
+    hasComebackLines, comebackKind, comebackOfEntryId, selectedOriginal,
+    originalRoSearch, setOriginalRoSearch, originalRoMatches, isFindingOriginal,
+    toggleLineComeback, changeComebackKind, findOriginalRo, chooseOriginalRo,
+    clearOriginalRo,
     vehicleOpen, setVehicleOpen, vehicleSummary, year, setYear, make, handleMakeChange,
     model, setModel, vin, setVin, mileage, setMileage, autoFill, handleAutoFillToggle,
     notesOpen, setNotesOpen, notes, setNotes, isDeleting, isSubmitting, isChecking,
@@ -164,8 +169,26 @@ export function LogRoForm({
         addNewLibraryLine={addNewLibraryLine}
         updateLine={updateLine}
         removeLine={removeLine}
+        toggleLineComeback={toggleLineComeback}
         laborTypeEnabled={laborTypeShown}
       />
+
+      {/* Appears only once a line is marked — a normal paid RO never sees it. */}
+      {hasComebackLines && (
+        <ComebackSection
+          comebackKind={comebackKind}
+          comebackOfEntryId={comebackOfEntryId}
+          selectedOriginal={selectedOriginal}
+          originalRoSearch={originalRoSearch}
+          setOriginalRoSearch={setOriginalRoSearch}
+          originalRoMatches={originalRoMatches}
+          isFindingOriginal={isFindingOriginal}
+          changeComebackKind={changeComebackKind}
+          findOriginalRo={findOriginalRo}
+          chooseOriginalRo={chooseOriginalRo}
+          clearOriginalRo={clearOriginalRo}
+        />
+      )}
 
       {/* ---- Step 3: Vehicle (collapsible) ---- */}
       <VehicleFields

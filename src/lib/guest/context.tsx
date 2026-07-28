@@ -333,21 +333,30 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
       roNumber: input.roNumber,
       vehicle: input.vehicle,
       notes: input.notes,
+      comebackOfEntryId: input.comebackOfEntryId ?? null,
+      comebackKind: input.comebackKind ?? null,
       opCodes: input.opCodes.map((oc, i) => ({
         id: crypto.randomUUID(),
         opCodeId: oc.opCodeId,
         custom: oc.custom,
         customCode: oc.customCode,
         customDescription: oc.customDescription,
-        flagHours: oc.flagHours,
+        // Mirrors the DB CHECK the signed-in path gets for free. Guest mode has
+        // no database to enforce it, so the invariant has to hold here or the
+        // sample data would contradict the rule the real app guarantees.
+        flagHours: oc.isComeback ? 0 : oc.flagHours,
         actualHours: oc.actualHours,
         notes: oc.notes,
         position: i,
         subOpCodeId: oc.subOpCodeId ?? null,
         laborType: oc.laborType ?? null,
         paidHours: oc.paidHours ?? null,
+        isComeback: oc.isComeback ?? false,
       })),
-      flagHours: input.opCodes.reduce((s, oc) => s + (oc.flagHours || 0), 0),
+      flagHours: input.opCodes.reduce(
+        (s, oc) => s + (oc.isComeback ? 0 : oc.flagHours || 0),
+        0,
+      ),
     };
     dispatch({ type: "ADD", entry });
     return entry;

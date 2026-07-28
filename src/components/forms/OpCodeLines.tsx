@@ -5,7 +5,7 @@
 // total, and the three op-code modals (custom line, new library code, sub-op-code
 // picker). Presentational — all state and handlers live in useLogRoForm.
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { Plus, Search, Trash2, X } from "lucide-react";
+import { Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import type { LaborType, OpCode, SubOpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { LABOR_TYPES, LABOR_TYPE_LABELS } from "@/lib/earnings";
@@ -66,6 +66,7 @@ export function OpCodeLines({
   addNewLibraryLine,
   updateLine,
   removeLine,
+  toggleLineComeback,
   laborTypeEnabled,
 }: {
   library: OpCode[];
@@ -91,10 +92,20 @@ export function OpCodeLines({
   addNewLibraryLine: (draft: OpCodeDraft) => Promise<void>;
   updateLine: (key: string, patch: Partial<LineDraft>) => void;
   removeLine: (key: string) => void;
+  toggleLineComeback: (key: string, on: boolean) => void;
   // Show the compact per-line labor-type selector. Off unless the user has
   // priced a rate or set a default, so the form is unchanged for everyone else.
   laborTypeEnabled: boolean;
 }) {
+  const comebackLines = lines.filter((l) => l.isComeback);
+  const comebackLineCount = comebackLines.length;
+  // Actual hours, not flag — flag is zero by construction. This is the number
+  // that answers "how much of my day did the redo eat".
+  const comebackActualHours = comebackLines.reduce(
+    (s, l) => s + (l.actualHours ?? 0),
+    0,
+  );
+
   return (
     <>
       <div className="step-card active">
@@ -299,19 +310,47 @@ export function OpCodeLines({
                           </select>
                         </>
                       )}
+                      {/* Comeback toggle. Per-LINE because a comeback is often
+                          extra lines appended to the original ticket, not a
+                          whole new RO — marking the entry would overstate it. */}
+                      <button
+                        type="button"
+                        onClick={() => toggleLineComeback(line.key, !line.isComeback)}
+                        aria-pressed={line.isComeback ?? false}
+                        className="opc-comeback-toggle"
+                        data-on={line.isComeback ? "true" : undefined}
+                      >
+                        <RotateCcw size={11} aria-hidden="true" />
+                        {line.isComeback ? "Comeback — unpaid" : "Mark as comeback"}
+                      </button>
                     </div>
                     <input
                       type="number"
                       min={0}
                       step={0.1}
-                      value={Number.isFinite(line.flagHours) ? line.flagHours : ""}
+                      value={
+                        line.isComeback
+                          ? 0
+                          : Number.isFinite(line.flagHours)
+                            ? line.flagHours
+                            : ""
+                      }
                       onChange={(e) =>
                         updateLine(line.key, {
                           flagHours: e.target.value === "" ? 0 : Number(e.target.value),
                         })
                       }
+                      // Locked, not just zeroed. A comeback flags nothing by
+                      // definition; leaving the field editable invites someone
+                      // to "correct" it back to the book time, which is the
+                      // exact wrong number.
+                      disabled={line.isComeback}
                       className="opc-hours-input"
-                      title="Flag hours"
+                      title={
+                        line.isComeback
+                          ? "Comebacks flag zero hours"
+                          : "Flag hours"
+                      }
                       aria-label={`Flag hours for ${code || "op code line"}`}
                       placeholder="flag"
                     />
@@ -368,6 +407,23 @@ export function OpCodeLines({
             <div className="opc-total">
               <span className="label">Total flag hours</span>
               <span className="val">{fmtHours(totalFlag)}h</span>
+            </div>
+          )}
+
+          {/* Unpaid rework sits BESIDE the flag total, never subtracted from it
+              — the whole point is to make free work visible without quietly
+              rewriting the efficiency number it sits next to. */}
+          {comebackLineCount > 0 && (
+            <div className="opc-total opc-total-unpaid">
+              <span className="label">
+                Unpaid rework · {comebackLineCount} line
+                {comebackLineCount !== 1 ? "s" : ""}
+              </span>
+              <span className="val">
+                {comebackActualHours > 0
+                  ? `${fmtHours(comebackActualHours)}h`
+                  : "— add actual hrs"}
+              </span>
             </div>
           )}
         </div>

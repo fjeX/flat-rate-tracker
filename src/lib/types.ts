@@ -66,6 +66,15 @@ export type EntryOpCode = {
   // only passes it through on edit). Optional so line literals that predate the
   // reconciliation feature still typecheck; the DB mapper always populates it.
   paidHours?: number | null;
+  // This line is unpaid rework — a comeback. Line-level rather than entry-level
+  // because the shop writes comebacks BOTH ways: a fresh RO (every line is a
+  // comeback) and lines appended to the original ticket (only the new ones are).
+  //
+  // A comeback line ALWAYS flags zero, enforced by the DB CHECK
+  // `entry_op_codes_comeback_zero_flag` — not by this type and not by the form.
+  // Optional so line literals predating Phase 2 still typecheck; the DB mapper
+  // always populates it.
+  isComeback?: boolean;
 };
 
 export type Entry = {
@@ -79,6 +88,17 @@ export type Entry = {
   opCodes: EntryOpCode[];
   flagHours: number; // denormalized sum of opCodes[].flagHours (DB trigger keeps this current)
   notes: string;
+  // The original job this RO is a redo of, when the comeback was written as a
+  // NEW ticket. null for the appended-to-the-original shape (the lines carry the
+  // marking instead) and for a comeback on another tech's work, which has no
+  // original RO in this user's data at all. Optional so Entry literals predating
+  // Phase 2 still typecheck; the DB mapper always populates it.
+  comebackOfEntryId?: string | null;
+  // Whose comeback this is. null when the RO has no comeback lines. NOT
+  // derivable from comebackOfEntryId being null — that one null covers "my work
+  // but the original was never logged", "another tech's work", and "same-visit
+  // rework", which are three different facts.
+  comebackKind?: ComebackKind | null;
 };
 
 // A photographic record attached to an entry (RO ticket photo). captured_at is
@@ -151,6 +171,31 @@ export const UNPAID_TIME_KINDS: readonly UnpaidTimeKind[] = [
 
 export function isUnpaidTimeKind(v: unknown): v is UnpaidTimeKind {
   return typeof v === "string" && (UNPAID_TIME_KINDS as readonly string[]).includes(v);
+}
+
+// The three kinds that can describe a comeback logged as an RO. A strict subset
+// of UnpaidTimeKind on purpose — RO-side and ledger-side comebacks then share
+// one vocabulary and aggregate without a translation table. The wait_* and
+// shop_time kinds are ledger-only; they never describe a repair order.
+export type ComebackKind = Extract<
+  UnpaidTimeKind,
+  "comeback_own" | "comeback_other" | "rework_same_visit"
+>;
+
+export const COMEBACK_KINDS: readonly ComebackKind[] = [
+  "comeback_own",
+  "comeback_other",
+  "rework_same_visit",
+];
+
+export const COMEBACK_KIND_LABELS: Record<ComebackKind, string> = {
+  comeback_own: "My own work",
+  comeback_other: "Another tech's work",
+  rework_same_visit: "Same-visit rework",
+};
+
+export function isComebackKind(v: unknown): v is ComebackKind {
+  return typeof v === "string" && (COMEBACK_KINDS as readonly string[]).includes(v);
 }
 
 /** How the row got here. `timer` rows are written automatically when a slot's
@@ -256,6 +301,8 @@ export type NewEntry = {
   vehicle: Vehicle;
   notes: string;
   opCodes: NewEntryOpCode[];
+  comebackOfEntryId?: string | null;
+  comebackKind?: ComebackKind | null;
 };
 
 export type EntryPatch = Partial<NewEntry>;
@@ -305,6 +352,12 @@ export type SnapshotStats = {
   // sum(actual) / sum(flag) over lines that have actual hours; null when
   // fewer than MIN_BOOK_LINES lines carry actuals (timer not used enough).
   avgVsBook: number | null;
+  // Unpaid rework hours inside this snapshot's range. Reported separately
+  // rather than folded into avgVsBook: a comeback has no book time to be
+  // measured against, so mixing it in would answer a different question than
+  // the one that ratio exists to answer. Absent on snapshots frozen before
+  // Phase 2 — treat undefined as "not measured", not as zero.
+  comebackHours?: number;
   photoCount: number;
   topOps: SnapshotTopOp[]; // up to 3, by line count
   firstDate: string; // "YYYY-MM-DD"

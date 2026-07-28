@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Trash2, X } from "lucide-react";
+import { Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import type { NewEntry, OpCode, RoMatch, SubOpCode } from "@/lib/types";
+import { COMEBACK_KINDS, COMEBACK_KIND_LABELS } from "@/lib/types";
+import type { ComebackKind, NewEntry, OpCode, RoMatch, SubOpCode } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { findDuplicateRos, saveEntry } from "@/app/actions/entries";
@@ -31,6 +32,10 @@ type QuickLine = {
   customDescription: string | null;
   flagHours: number;
   subOpCodeId: string | null;
+  isComeback: boolean;
+  // Book time from before the toggle zeroed it, so un-toggling a misclick
+  // restores it rather than leaving a silent 0. Form-only.
+  flagBeforeComeback?: number;
 };
 
 export function QuickAddModal({
@@ -56,6 +61,10 @@ export function QuickAddModal({
   const [newLibraryOpen, setNewLibraryOpen] = useState(false);
   const [newLibraryPending, setNewLibraryPending] = useState(false);
   const [subPickerOc, setSubPickerOc] = useState<OpCode | null>(null);
+  // Quick-add carries the comeback KIND but not the "redo of" RO picker —
+  // that lookup is a deliberate, slower act and belongs in the full log form.
+  // The kind is one tap and can't be inferred, so it stays.
+  const [comebackKind, setComebackKind] = useState<ComebackKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
   // Same warn-but-allow duplicate flow as the full log form.
@@ -96,6 +105,7 @@ export function QuickAddModal({
       setCustomOpen(false);
       setNewLibraryOpen(false);
       setSubPickerOc(null);
+      setComebackKind(null);
       setTimeout(() => roInputRef.current?.focus(), 60);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,6 +137,7 @@ export function QuickAddModal({
       customDescription: null,
       flagHours: sub ? sub.flagHours : oc.flagHours,
       subOpCodeId: sub ? sub.id : null,
+      isComeback: false,
     };
   }
 
@@ -159,6 +170,7 @@ export function QuickAddModal({
         customDescription: draft.description,
         flagHours: draft.flagHours,
         subOpCodeId: null,
+        isComeback: false,
       },
     ]);
     setCustomOpen(false);
@@ -185,6 +197,31 @@ export function QuickAddModal({
     setLines((ls) =>
       ls.map((l) => (l.key === key ? { ...l, flagHours: val } : l)),
     );
+  }
+
+  // Marking a line zeroes its flag hours in the same update. buildLineFromLibrary
+  // above auto-fills the library's book time the moment a code is picked — that
+  // auto-fill is precisely how logging a comeback the natural way ends up
+  // claiming PAID hours for FREE work. Zeroing here closes it at the source.
+  function toggleLineComeback(key: string, on: boolean) {
+    setLines((ls) =>
+      ls.map((l) =>
+        l.key === key
+          ? {
+              ...l,
+              isComeback: on,
+              flagHours: on ? 0 : (l.flagBeforeComeback ?? l.flagHours),
+              flagBeforeComeback: on ? l.flagHours : undefined,
+            }
+          : l,
+      ),
+    );
+    if (on) {
+      if (comebackKind === null) setComebackKind("comeback_own");
+      return;
+    }
+    const remaining = lines.filter((l) => l.key !== key && l.isComeback);
+    if (remaining.length === 0) setComebackKind(null);
   }
 
   function lineLabel(line: QuickLine): {
@@ -239,17 +276,21 @@ export function QuickAddModal({
         roNumber: roNumber.trim(),
         vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
         notes: "",
+        // Only meaningful when a line is actually marked — otherwise a normal
+        // RO would get labelled a comeback after a toggle-on-then-off.
+        comebackKind: lines.some((l) => l.isComeback) ? comebackKind : null,
         opCodes: lines.map((line, i) => ({
           opCodeId: line.opCodeId,
           custom: line.custom,
           customCode: line.customCode,
           customDescription: line.customDescription,
-          flagHours: line.flagHours,
+          flagHours: line.isComeback ? 0 : line.flagHours,
           actualHours: null,
           notes: "",
           position: i,
           subOpCodeId: line.subOpCodeId,
           laborType: null, // quick-add is a fast path; type on the line stays untyped
+          isComeback: line.isComeback,
         })),
       };
       await saveEntry(input);
@@ -475,19 +516,39 @@ export function QuickAddModal({
                               {description}
                             </div>
                           )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleLineComeback(line.key, !line.isComeback)
+                            }
+                            aria-pressed={line.isComeback}
+                            className="opc-comeback-toggle"
+                            data-on={line.isComeback ? "true" : undefined}
+                          >
+                            <RotateCcw size={11} aria-hidden="true" />
+                            {line.isComeback ? "Comeback — unpaid" : "Mark as comeback"}
+                          </button>
                         </div>
                         <div className="w-16">
                           <input
                             type="number"
                             min={0}
                             step={0.1}
-                            value={Number.isFinite(line.flagHours) ? line.flagHours : ""}
+                            value={
+                              line.isComeback
+                                ? 0
+                                : Number.isFinite(line.flagHours)
+                                  ? line.flagHours
+                                  : ""
+                            }
                             onChange={(e) =>
                               updateFlagHours(
                                 line.key,
                                 e.target.value === "" ? 0 : Number(e.target.value),
                               )
                             }
+                            // Locked, not merely zeroed — see OpCodeLines.
+                            disabled={line.isComeback}
                             aria-label={`Flag hours for ${code || "op code line"}`}
                             className="opc-hours-input on-inset w-full"
                             placeholder="0"
@@ -514,6 +575,31 @@ export function QuickAddModal({
                 <div className="w-6" />
               </div>
             </div>
+          )}
+
+          {/* Kind selector — appears only once a line is marked. No "redo of"
+              RO lookup here: that's a deliberate search, and quick-add exists to
+              be fast. It can be added later from the full log form. */}
+          {lines.some((l) => l.isComeback) && (
+            <fieldset className="mt-3 border-0 p-0">
+              <legend className="mb-1.5 text-xs text-[var(--fg-3)]">
+                Whose work came back?
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
+                {COMEBACK_KINDS.map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => setComebackKind(kind)}
+                    aria-pressed={comebackKind === kind}
+                    className="opc-comeback-toggle"
+                    data-on={comebackKind === kind ? "true" : undefined}
+                  >
+                    {COMEBACK_KIND_LABELS[kind]}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
           )}
         </div>
 

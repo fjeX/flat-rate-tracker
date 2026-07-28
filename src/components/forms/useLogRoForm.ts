@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
+  ComebackKind,
   Entry,
   LaborType,
   NewEntry,
@@ -28,7 +29,13 @@ import type { OcrResult } from "@/lib/ocr";
 import { decodeVin, isValidVin } from "@/lib/vin";
 import { tap } from "@/lib/haptics";
 
-export type LineDraft = NewEntryOpCode & { key: string };
+export type LineDraft = NewEntryOpCode & {
+  key: string;
+  // Flag hours from before the comeback toggle zeroed them, so un-toggling a
+  // misclick restores the book time instead of leaving a silent 0. Form-only —
+  // never sent to the server.
+  flagBeforeComeback?: number;
+};
 
 function linesFromEntry(entry: Entry | undefined): LineDraft[] {
   if (!entry) return [];
@@ -50,6 +57,8 @@ function linesFromEntry(entry: Entry | undefined): LineDraft[] {
     // diff-based update no longer deletes-and-reinserts — the value would fall
     // out of the round-trip. Pure pass-through: the form never edits it.
     paidHours: oc.paidHours ?? null,
+    // Form-owned, unlike paidHours — the toggle below edits this directly.
+    isComeback: oc.isComeback ?? false,
   }));
 }
 
@@ -96,6 +105,26 @@ export function useLogRoForm({
     linesFromEntry(existingEntry),
   );
   const [library, setLibrary] = useState<OpCode[]>(initialOpCodes);
+
+  // --- comeback (unpaid rework) -----------------------------------------
+  // Kind and the "redo of" link are ENTRY-level; which lines were free is
+  // LINE-level (lines[].isComeback). Both are needed because the shop writes
+  // comebacks two ways — a fresh RO, or extra lines on the original ticket.
+  const [comebackKind, setComebackKind] = useState<ComebackKind | null>(
+    existingEntry?.comebackKind ?? null,
+  );
+  const [comebackOfEntryId, setComebackOfEntryId] = useState<string | null>(
+    existingEntry?.comebackOfEntryId ?? null,
+  );
+  // "Redo of…" original-RO lookup, reusing the duplicate-RO search.
+  const [originalRoSearch, setOriginalRoSearch] = useState("");
+  const [originalRoMatches, setOriginalRoMatches] = useState<RoMatch[] | null>(null);
+  const [isFindingOriginal, setIsFindingOriginal] = useState(false);
+  // The picked original, for display. Null in edit mode even when
+  // comebackOfEntryId is set — we have the id but not the summary, and
+  // re-fetching it just to render a label isn't worth a round trip. The UI
+  // says "linked to an earlier RO" in that case rather than inventing detail.
+  const [selectedOriginal, setSelectedOriginal] = useState<RoMatch | null>(null);
 
   const [search, setSearch] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -304,6 +333,82 @@ export function useLogRoForm({
     setLines((ls) => ls.filter((l) => l.key !== key));
   }
 
+  // --- comeback handlers -------------------------------------------------
+
+  const hasComebackLines = lines.some((l) => l.isComeback);
+
+  function clearComebackMeta() {
+    setComebackKind(null);
+    setComebackOfEntryId(null);
+    setSelectedOriginal(null);
+    setOriginalRoSearch("");
+    setOriginalRoMatches(null);
+  }
+
+  // Marking a line as a comeback ZEROES its flag hours in the same update.
+  // This is the fix for the auto-fill trap: picking an op code auto-fills the
+  // library's flag hours, so without this the natural way to log a comeback
+  // claims paid hours for free work. The DB CHECK backs it up, but doing it
+  // here means the running total on screen is right the instant you tap.
+  function toggleLineComeback(key: string, on: boolean) {
+    setLines((ls) =>
+      ls.map((l) =>
+        l.key === key
+          ? {
+              ...l,
+              isComeback: on,
+              flagHours: on ? 0 : (l.flagBeforeComeback ?? l.flagHours),
+              flagBeforeComeback: on ? l.flagHours : undefined,
+            }
+          : l,
+      ),
+    );
+    if (on) {
+      // Default to the common case; the selector below can change it.
+      if (comebackKind === null) setComebackKind("comeback_own");
+      return;
+    }
+    // Unmarking the LAST comeback line makes the entry-level metadata
+    // meaningless — an RO with no free lines is not a comeback.
+    const remaining = lines.filter((l) => l.key !== key && l.isComeback);
+    if (remaining.length === 0) clearComebackMeta();
+  }
+
+  function changeComebackKind(kind: ComebackKind) {
+    setComebackKind(kind);
+    // Only your OWN comeback can point at an original RO in your data. Another
+    // tech's work isn't in here, and same-visit rework never got a second
+    // ticket — keeping a stale link would assert something untrue.
+    if (kind !== "comeback_own") {
+      setComebackOfEntryId(null);
+      setSelectedOriginal(null);
+      setOriginalRoMatches(null);
+    }
+  }
+
+  function findOriginalRo() {
+    const ro = originalRoSearch.trim();
+    if (!ro) return;
+    setIsFindingOriginal(true);
+    findDuplicateRos(ro)
+      .then((matches) => setOriginalRoMatches(matches))
+      .catch(() => setOriginalRoMatches([]))
+      .finally(() => setIsFindingOriginal(false));
+  }
+
+  function chooseOriginalRo(match: RoMatch) {
+    setComebackOfEntryId(match.id);
+    setSelectedOriginal(match);
+    setOriginalRoMatches(null);
+  }
+
+  function clearOriginalRo() {
+    setComebackOfEntryId(null);
+    setSelectedOriginal(null);
+    setOriginalRoMatches(null);
+    setOriginalRoSearch("");
+  }
+
   // --- OCR scan result --------------------------------------------------
 
   function handleScanResult(result: OcrResult) {
@@ -362,6 +467,7 @@ export function useLogRoForm({
     setMileage("");
     setNotes("");
     setLines([]);
+    clearComebackMeta();
     setError(null);
     setVehicleOpen(false);
     setNotesOpen(false);
@@ -392,19 +498,31 @@ export function useLogRoForm({
             mileage: mileage.trim(),
           },
           notes,
+          // Entry-level comeback metadata is only meaningful when at least one
+          // line is actually marked. Sending it otherwise would label a normal
+          // RO a comeback — e.g. after the user toggles a line on, picks a
+          // kind, then toggles it back off.
+          comebackKind: hasComebackLines ? comebackKind : null,
+          comebackOfEntryId:
+            hasComebackLines && comebackKind === "comeback_own"
+              ? comebackOfEntryId
+              : null,
           opCodes: lines.map((line, i) => ({
             id: line.id, // undefined for new lines; existing lines keep their DB id
             opCodeId: line.opCodeId,
             custom: line.custom,
             customCode: line.customCode,
             customDescription: line.customDescription,
-            flagHours: line.flagHours,
+            // Belt and braces with the DB CHECK: a comeback line flags zero no
+            // matter what the input held before it was toggled.
+            flagHours: line.isComeback ? 0 : line.flagHours,
             actualHours: line.actualHours,
             notes: line.notes,
             position: i,
             subOpCodeId: line.subOpCodeId,
             laborType: line.laborType,
             paidHours: line.paidHours ?? null, // pass-through so edits never wipe it
+            isComeback: line.isComeback ?? false,
           })),
         };
         if (onSave) {
@@ -541,6 +659,19 @@ export function useLogRoForm({
     addNewLibraryLine,
     updateLine,
     removeLine,
+    // comeback (unpaid rework)
+    hasComebackLines,
+    comebackKind,
+    comebackOfEntryId,
+    selectedOriginal,
+    originalRoSearch, setOriginalRoSearch,
+    originalRoMatches,
+    isFindingOriginal,
+    toggleLineComeback,
+    changeComebackKind,
+    findOriginalRo,
+    chooseOriginalRo,
+    clearOriginalRo,
     // scan / ocr
     handleScanResult,
     // photo evidence

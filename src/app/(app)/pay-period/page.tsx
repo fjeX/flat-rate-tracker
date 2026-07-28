@@ -54,12 +54,17 @@ export default async function PayPeriodPage({
   ]);
   // Null while the work_schedules migration hasn't been applied —
   // efficiency falls back to clocked-hours-only.
-  const [schedules, daysOff, confirmedZeroDays, shiftOverrides] = await Promise.all([
-    db.listWorkSchedulesSafe(supabase),
-    db.listDaysOffSafe(supabase),
-    db.listConfirmedZeroDaysSafe(supabase),
-    db.listShiftOverridesSafe(supabase),
-  ]);
+  const [schedules, daysOff, confirmedZeroDays, shiftOverrides, unpaidTime] =
+    await Promise.all([
+      db.listWorkSchedulesSafe(supabase),
+      db.listDaysOffSafe(supabase),
+      db.listConfirmedZeroDaysSafe(supabase),
+      db.listShiftOverridesSafe(supabase),
+      // Null until the Phase 2 migration lands — stats then report zero
+      // unpaid hours instead of the page failing.
+      db.listUnpaidTimeSafe(supabase, { from: fromDate }),
+    ]);
+  const unpaid = unpaidTime ?? [];
 
   const firstName =
     (userData.user?.user_metadata?.first_name as string | undefined) ?? "";
@@ -111,11 +116,14 @@ export default async function PayPeriodPage({
             today,
             shiftOverrides: shiftOverrides ?? {},
           },
+          unpaid,
         )
-      : aggregateStats(entries, clocks, {
-          start: selected.start,
-          end: selected.end,
-        });
+      : aggregateStats(
+          entries,
+          clocks,
+          { start: selected.start, end: selected.end },
+          unpaid,
+        );
   const periodEntries = entries.filter(
     (e) => e.date >= selected.start && e.date <= selected.end,
   );

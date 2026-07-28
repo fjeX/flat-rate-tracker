@@ -1,5 +1,5 @@
 // Aggregation of entries + daily clocks over a date range.
-import type { DailyClock, DenomSource, Entry } from "./types";
+import type { DailyClock, DenomSource, Entry, UnpaidTime } from "./types";
 import { addDays } from "./periods";
 import {
   scheduledHoursFor,
@@ -15,6 +15,18 @@ export type Stats = {
   efficiency: number | null; // percentage; null if clockedHours === 0
   roCount: number;
   actualHours: number; // sum of entry_op_codes.actual_hours (where provided)
+  /**
+   * Hours worked or waited that flagged nothing (Unpaid Time Engine).
+   *
+   * ADDITIVE — reported BESIDE efficiency, never folded into it. computeEfficiency
+   * is untouched by design (decision #7): raw efficiency is the number the shop
+   * pays on, and quietly "correcting" it would replace the tech's real figure
+   * with one nobody else agrees with. The point is to show the gap, not hide it.
+   */
+  unpaidHours: number; // comeback + waiting + shop time
+  comebackHours: number; // rework performed free — RO-side lines AND ledger rows
+  waitingHours: number; // wait_parts + wait_approval
+  shopHours: number; // meetings, cleanup, dispatch limbo
 };
 
 export function computeEfficiency(
@@ -33,6 +45,10 @@ export function aggregateStats(
   entries: Entry[],
   clocks: DailyClock[],
   range: { start: string; end: string },
+  // Optional so every existing caller keeps working and simply reports zero
+  // unpaid time. Guest mode has no ledger at all (matching every other pay
+  // feature being signed-in-only), so it never passes this.
+  unpaid: UnpaidTime[] = [],
 ): Stats {
   const includedEntries = entries.filter((e) =>
     inRange(e.date, range.start, range.end),
@@ -49,12 +65,59 @@ export function aggregateStats(
     0,
   );
 
+  // Comeback time arrives from two places that never overlap:
+  //   - RO-side: lines marked isComeback on a ticket. Their ACTUAL hours are
+  //     the cost; flag is zero by construction, so summing flag would report 0.
+  //   - Ledger: comebacks with no ticket at all (another tech's work you never
+  //     wrote up, same-visit rework caught before the car left).
+  // A comeback written as an RO is never also a ledger row, so adding them is
+  // not double counting.
+  const roComebackHours = includedEntries.reduce(
+    (s, e) =>
+      s +
+      e.opCodes.reduce(
+        (ss, oc) => ss + (oc.isComeback ? (oc.actualHours ?? 0) : 0),
+        0,
+      ),
+    0,
+  );
+
+  const includedUnpaid = unpaid.filter((u) =>
+    inRange(u.date, range.start, range.end),
+  );
+  let ledgerComeback = 0;
+  let waitingHours = 0;
+  let shopHours = 0;
+  for (const u of includedUnpaid) {
+    switch (u.kind) {
+      case "comeback_own":
+      case "comeback_other":
+      case "rework_same_visit":
+        ledgerComeback += u.hours;
+        break;
+      case "wait_parts":
+      case "wait_approval":
+        waitingHours += u.hours;
+        break;
+      case "shop_time":
+        shopHours += u.hours;
+        break;
+    }
+  }
+
+  const comebackHours = roComebackHours + ledgerComeback;
+
   return {
     flagHours,
     clockedHours,
+    // Deliberately the SAME call as before — unpaid hours do not enter it.
     efficiency: computeEfficiency(flagHours, clockedHours),
     roCount: includedEntries.length,
     actualHours,
+    unpaidHours: comebackHours + waitingHours + shopHours,
+    comebackHours,
+    waitingHours,
+    shopHours,
   };
 }
 
@@ -132,8 +195,9 @@ export function aggregateStatsWithSchedule(
   clocks: DailyClock[],
   range: { start: string; end: string },
   ctx: ScheduleContext,
+  unpaid: UnpaidTime[] = [],
 ): ScheduleStats {
-  const base = aggregateStats(entries, clocks, range);
+  const base = aggregateStats(entries, clocks, range, unpaid);
 
   const flagByDay = new Map<string, number>();
   for (const e of entries) {
