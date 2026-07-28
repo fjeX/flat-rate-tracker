@@ -114,7 +114,16 @@ one most nights.
   the three kind chips, but deliberately NO "redo of" lookup. Its absence there
   is intended, not a bug.
 - Mixed RO: one normal paid line + one comeback line on the same ticket. Total
-  flag must equal ONLY the paid line's hours.
+  flag must equal ONLY the paid line's hours. Saving this used to crash with
+  `23502 null value in column "is_comeback"` — if any save error appears, report
+  the exact code.
+- **Open the saved RO from history** and check the detail modal (new 2026-07-27):
+  - the comeback line carries a **"Comeback"** badge
+  - under it, **"Unpaid rework — flags no hours"** — NOT a green `$0.00`
+  - with a mixed RO, a row reading **"Unpaid rework · 1 line"** appears beside the
+    totals, showing the *actual* hours spent. It must sit **next to** the flag
+    total, never subtracted from it — if the flag total drops, that's a bug.
+  - Same checks on the guest mirror's RO detail modal, which is a separate fork.
 
 ### 2c. "Worked — unpaid" empty days (new 2026-07-27)
 If the dashboard shows the "scheduled day looks empty" card, it now offers a
