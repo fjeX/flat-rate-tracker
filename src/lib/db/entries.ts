@@ -155,11 +155,26 @@ function toLineInsert(
     flag_hours: comebackSafeFlagHours(line),
     actual_hours: line.actualHours,
     position,
+    // ── NOT NULL columns must ALWAYS be present. Read this before adding one. ──
+    //
+    // createEntry inserts every line in ONE bulk call. PostgREST turns an array
+    // of objects into a single multi-row INSERT over the UNION of their keys —
+    // and a row missing a key in that union gets NULL, *not* the column default.
+    //
+    // So conditionally omitting a NOT NULL column is only safe while every line
+    // agrees. The moment one line has it and another doesn't, the row without it
+    // dies on the not-null constraint. That is exactly what a mixed RO does:
+    // one comeback line (is_comeback true) + one normal line (omitted) → the
+    // normal line inserts NULL → 23502.
+    //
+    // notes has the same shape (NOT NULL DEFAULT '') and was already carrying
+    // this bug latently — any RO with notes on one line but not another.
+    //
+    // Nullable columns below can stay conditional: for them, the NULL that the
+    // union produces IS the intended value.
+    is_comeback: line.isComeback ?? false,
+    notes: line.notes ?? "",
   };
-  // Only include is_comeback when true — same pre-migration guard as the
-  // columns below, and false is the column default anyway.
-  if (line.isComeback) insert.is_comeback = true;
-  if (line.notes) insert.notes = line.notes;
   // Only include sub_op_code_id when set — safe on DBs that haven't run migration yet.
   if (line.subOpCodeId) insert.sub_op_code_id = line.subOpCodeId;
   // Same guard for labor_type: omit when null so inserts still work pre-migration.

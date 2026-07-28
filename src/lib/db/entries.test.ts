@@ -54,6 +54,11 @@ const LINE_DEFAULTS: Row = {
 class FakeStore {
   entries: Row[] = [];
   entry_op_codes: Row[] = [];
+  // Insert payloads EXACTLY as handed to the client, before this fake merges
+  // column defaults in. Everything else here reads post-merge rows, which is
+  // precisely what hid the bulk-insert bug below: the fake fills a default for
+  // a missing key, but real PostgREST inserts NULL.
+  rawLineInserts: Row[][] = [];
 }
 
 class Builder implements PromiseLike<{ data: unknown; error: null }> {
@@ -141,6 +146,9 @@ class Builder implements PromiseLike<{ data: unknown; error: null }> {
     if (this.op === "insert") {
       const defaults = this.table === "entries" ? ENTRY_DEFAULTS : LINE_DEFAULTS;
       const list = Array.isArray(this.payload) ? this.payload : [this.payload];
+      if (this.table === "entry_op_codes") {
+        this.store.rawLineInserts.push(list as Row[]);
+      }
       const inserted = (list as Row[]).map((r) => ({
         ...defaults,
         ...r,
@@ -213,6 +221,101 @@ function newEntry(over: Partial<NewEntry> = {}): NewEntry {
     ...over,
   };
 }
+
+// Regression: a mixed RO (one comeback line + one normal line) crashed on save
+// with 23502, "null value in column is_comeback violates not-null constraint".
+//
+// createEntry bulk-inserts all lines in one call. PostgREST builds a single
+// multi-row INSERT from the UNION of the objects' keys, and any row missing a
+// key gets NULL rather than the column DEFAULT. is_comeback was set only when
+// true, so on a mixed RO the normal line arrived as NULL against a NOT NULL
+// column. The in-memory fake could not catch this on its own — it merges
+// LINE_DEFAULTS for absent keys, which is exactly the behaviour real PostgREST
+// does NOT have. So these assert on the raw payload.
+describe("createEntry bulk insert (PostgREST key-union hazard)", () => {
+  // Every column that is NOT NULL in entry_op_codes. Omitting any of these from
+  // even one line of a multi-line insert is a crash, not a fallback.
+  const NOT_NULL_LINE_COLUMNS = [
+    "entry_id",
+    "custom",
+    "flag_hours",
+    "position",
+    "notes",
+    "is_comeback",
+  ];
+
+  it("sends identical keys for every line of a mixed comeback/normal RO", async () => {
+    const store = new FakeStore();
+    const supabase = makeFakeDb(store);
+
+    await createEntry(
+      supabase,
+      newEntry({
+        opCodes: [
+          {
+            opCodeId: null, custom: true, customCode: "BRK-FR",
+            customDescription: "Front brakes", flagHours: 1.8, actualHours: 2,
+            notes: "", position: 0, subOpCodeId: null, laborType: null,
+          },
+          {
+            opCodeId: null, custom: true, customCode: "BRK-RDO",
+            customDescription: "Redo — comeback", flagHours: 0, actualHours: 1.5,
+            notes: "", position: 1, subOpCodeId: null, laborType: null,
+            isComeback: true,
+          },
+        ],
+      }),
+    );
+
+    const batch = store.rawLineInserts.find((b) => b.length > 1);
+    expect(batch).toBeDefined();
+
+    // The invariant that actually matters: key-homogeneous payload.
+    const keySets = batch!.map((r) => Object.keys(r).sort().join(","));
+    expect(new Set(keySets).size).toBe(1);
+
+    for (const row of batch!) {
+      for (const col of NOT_NULL_LINE_COLUMNS) {
+        expect(row[col], `${col} must be present and non-null`).not.toBe(undefined);
+        expect(row[col], `${col} must be present and non-null`).not.toBeNull();
+      }
+    }
+
+    // And the values are still right, not merely present.
+    expect(batch!.find((r) => r.custom_code === "BRK-FR")!.is_comeback).toBe(false);
+    expect(batch!.find((r) => r.custom_code === "BRK-RDO")!.is_comeback).toBe(true);
+  });
+
+  it("sends identical keys when only SOME lines carry notes", async () => {
+    // Same hazard, pre-existing and unrelated to comebacks: notes is
+    // NOT NULL DEFAULT '' and was also only sent when truthy.
+    const store = new FakeStore();
+    const supabase = makeFakeDb(store);
+
+    await createEntry(
+      supabase,
+      newEntry({
+        opCodes: [
+          {
+            opCodeId: null, custom: true, customCode: "A", customDescription: "",
+            flagHours: 1, actualHours: null, notes: "seized bolt",
+            position: 0, subOpCodeId: null, laborType: null,
+          },
+          {
+            opCodeId: null, custom: true, customCode: "B", customDescription: "",
+            flagHours: 1, actualHours: null, notes: "",
+            position: 1, subOpCodeId: null, laborType: null,
+          },
+        ],
+      }),
+    );
+
+    const batch = store.rawLineInserts.find((b) => b.length > 1)!;
+    const keySets = batch.map((r) => Object.keys(r).sort().join(","));
+    expect(new Set(keySets).size).toBe(1);
+    expect(batch.find((r) => r.custom_code === "B")!.notes).toBe("");
+  });
+});
 
 describe("updateEntry (diff-based line reconciliation)", () => {
   it("keeps actual_hours on a line when an unrelated field (notes) is edited", async () => {
