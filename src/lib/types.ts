@@ -169,6 +169,20 @@ export const UNPAID_TIME_KINDS: readonly UnpaidTimeKind[] = [
   "shop_time",
 ];
 
+// Display labels for every kind, for surfaces that report the ledger back to
+// the user (Phase 3). Capture UIs keep their own wording where the context is
+// already narrowed — a zero-day picker can say "Comeback — my work" because the
+// reader is looking at one day, while a period report needs the label to stand
+// on its own.
+export const UNPAID_TIME_KIND_LABELS: Record<UnpaidTimeKind, string> = {
+  comeback_own: "Comeback — my own work",
+  comeback_other: "Comeback — another tech's work",
+  rework_same_visit: "Same-visit rework",
+  wait_parts: "Waiting on parts",
+  wait_approval: "Waiting on approval",
+  shop_time: "Shop time",
+};
+
 export function isUnpaidTimeKind(v: unknown): v is UnpaidTimeKind {
   return typeof v === "string" && (UNPAID_TIME_KINDS as readonly string[]).includes(v);
 }

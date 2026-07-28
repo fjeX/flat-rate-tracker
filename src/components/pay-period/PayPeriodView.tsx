@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Select } from "@/components/ui/Select";
 import { useRouter } from "next/navigation";
-import type { Bonus, DailyClock, Entry, OpCode } from "@/lib/types";
+import type { Bonus, DailyClock, Entry, OpCode, UnpaidTime } from "@/lib/types";
 import type { PeriodRange } from "@/lib/periods";
 import type { Stats } from "@/lib/stats";
 import {
@@ -15,8 +15,10 @@ import {
 import {
   clockFlagGap,
   effectiveHourly,
+  gapComposition,
   unflaggedTimeValue,
 } from "@/lib/wage-check";
+import { buildUnpaidSummary } from "@/lib/unpaid-summary";
 import { formatPeriodLabel } from "@/lib/periods";
 import { clearPeriodOverrideAction } from "@/app/actions/settings";
 import { RoList } from "@/components/ro/RoList";
@@ -25,6 +27,7 @@ import { ReconciliationCard } from "./ReconciliationCard";
 import { PeriodOverrideModal } from "./PeriodOverrideModal";
 import { PeriodStats } from "./PeriodStats";
 import { SpiffsCard } from "./SpiffsCard";
+import { UnpaidTimeBreakdownCard } from "./UnpaidTimeBreakdownCard";
 import { WageCheckCard } from "./WageCheckCard";
 
 export function PayPeriodView({
@@ -43,6 +46,7 @@ export function PayPeriodView({
   bonusDefaultDate,
   clocks = [],
   referenceRate = null,
+  unpaid = [],
 }: {
   availablePeriods: PeriodRange[];
   currentKey: string;
@@ -59,6 +63,9 @@ export function PayPeriodView({
   bonusDefaultDate?: string;
   clocks?: DailyClock[];
   referenceRate?: number | null;
+  // Ledger rows for the selected period. Empty until the Phase 2 migration
+  // lands, which just means every unpaid-time surface stays hidden.
+  unpaid?: UnpaidTime[];
 }) {
   const router = useRouter();
   // Dollars are additive: null when no rates are priced, so PeriodStats/RoList
@@ -81,6 +88,18 @@ export function PayPeriodView({
     unflaggedDollars !== null
       ? { gapHours, dollars: unflaggedDollars }
       : null;
+  // Unpaid time for the period, built once and shared: the breakdown card lists
+  // it, and the Pay Check-Up uses the same totals to say what the clock-vs-flag
+  // gap is made of. One source so the two can't disagree.
+  const unpaidSummary = buildUnpaidSummary({
+    entries,
+    unpaid,
+    library,
+    rates,
+    range: { start: selected.start, end: selected.end },
+  });
+  const gapParts = gapComposition(gapHours, unpaidSummary);
+
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [resetting, startResetting] = useTransition();
   const [resetError, setResetError] = useState<string | null>(null);
@@ -178,6 +197,11 @@ export function PayPeriodView({
         entryIdsWithPhotos={entryIdsWithPhotos}
       />
 
+      <UnpaidTimeBreakdownCard
+        key={`unpaid-${selected.key}`}
+        summary={unpaidSummary}
+      />
+
       <SpiffsCard
         key={`spiffs-${selected.key}`}
         bonuses={bonuses}
@@ -185,7 +209,11 @@ export function PayPeriodView({
         defaultDate={bonusDefaultDate}
       />
 
-      <WageCheckCard result={wageCheck} referenceRate={referenceRate} />
+      <WageCheckCard
+        result={wageCheck}
+        referenceRate={referenceRate}
+        gapParts={gapParts}
+      />
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-[var(--fg-2)]">

@@ -147,6 +147,47 @@ export function unflaggedTimeValue(
   return cp * gapHours;
 }
 
+// What the clock-vs-flag gap is MADE OF, once the Unpaid Time Engine has some
+// of those hours on record. The gap itself is unchanged — this only splits an
+// existing number into named parts, so the Pay Check-Up can answer "where did
+// those hours go?" with the tech's own records instead of leaving it a mystery.
+//
+// `unaccountedHours` is the remainder nothing explains yet. It is clamped at
+// zero: recorded unpaid time can legitimately EXCEED the gap (comeback actual
+// hours run alongside flagged work on the same day), and a negative "unaccounted"
+// figure would read as a bug rather than as the real relationship.
+export type GapComposition = {
+  gapHours: number;
+  comebackHours: number;
+  waitingHours: number;
+  shopHours: number;
+  trackedHours: number; // comeback + waiting + shop
+  unaccountedHours: number; // gap − tracked, never below zero
+  overTracked: boolean; // tracked meets or exceeds the whole gap
+};
+
+// null when there is no positive gap to explain, or nothing recorded to explain
+// it with — the caller renders no breakdown at all in that case rather than a
+// row of zeros.
+export function gapComposition(
+  gapHours: number,
+  parts: { comebackHours: number; waitingHours: number; shopHours: number },
+): GapComposition | null {
+  if (!Number.isFinite(gapHours) || gapHours <= 0) return null;
+  const trackedHours =
+    parts.comebackHours + parts.waitingHours + parts.shopHours;
+  if (trackedHours <= 0) return null;
+  return {
+    gapHours,
+    comebackHours: parts.comebackHours,
+    waitingHours: parts.waitingHours,
+    shopHours: parts.shopHours,
+    trackedHours,
+    unaccountedHours: Math.max(0, gapHours - trackedHours),
+    overTracked: trackedHours >= gapHours,
+  };
+}
+
 export type FloorComparison = {
   effective: number;
   reference: number;

@@ -5,7 +5,13 @@ import {
   type BuildDisputePackInput,
 } from "./dispute-pack";
 import { ratesToMap } from "./earnings";
-import type { Entry, EntryOpCode, LaborType, OpCode } from "./types";
+import type {
+  Entry,
+  EntryOpCode,
+  LaborType,
+  OpCode,
+  UnpaidTime,
+} from "./types";
 
 function line(over: Partial<EntryOpCode> = {}): EntryOpCode {
   return {
@@ -274,5 +280,110 @@ describe("formatDisputePackText", () => {
     const pack = build({ entries: [] });
     const text = formatDisputePackText(pack);
     expect(text).toContain("No flagged-vs-paid variances");
+  });
+});
+
+// ── Unpaid rework section ────────────────────────────────────────────────────
+
+function ledgerRow(over: Partial<UnpaidTime> = {}): UnpaidTime {
+  return {
+    id: "u1",
+    userId: "u",
+    date: "2026-07-03",
+    hours: 2,
+    kind: "wait_parts",
+    entryId: null,
+    originalEntryId: null,
+    source: "manual",
+    note: "",
+    createdAt: "",
+    updatedAt: "",
+    ...over,
+  };
+}
+
+describe("buildDisputePack — unpaid rework section", () => {
+  it("is null when the period has no unpaid time", () => {
+    const pack = build({
+      entries: [entry([line({ flagHours: 3, paidHours: 1 })])],
+    });
+    expect(pack.unpaidRework).toBeNull();
+  });
+
+  it("collects comeback lines and ledger rows without touching the variance total", () => {
+    const entries = [
+      entry([line({ id: "a", flagHours: 3, paidHours: 1 })], { id: "e1" }),
+      entry(
+        [line({ id: "b", flagHours: 0, actualHours: 2.5, isComeback: true })],
+        { id: "e2", roNumber: "1002", comebackKind: "comeback_own" },
+      ),
+    ];
+    const pack = build({
+      entries,
+      unpaid: [ledgerRow({ hours: 1.5 })],
+    });
+    // The variance report is unchanged: only the short line, only its 2h.
+    expect(pack.lines).toHaveLength(1);
+    expect(pack.totalShortHours).toBe(2);
+    // The unpaid section is separate and totals on its own.
+    expect(pack.unpaidRework).not.toBeNull();
+    expect(pack.unpaidRework!.comebackHours).toBe(2.5);
+    expect(pack.unpaidRework!.waitingHours).toBe(1.5);
+    expect(pack.unpaidRework!.totalHours).toBe(4);
+  });
+
+  it("renders the section in the text export, below the variance report", () => {
+    const entries = [
+      entry([line({ id: "a", flagHours: 3, paidHours: 1 })], { id: "e1" }),
+      entry(
+        [line({ id: "b", flagHours: 0, actualHours: 2, isComeback: true })],
+        { id: "e2", roNumber: "1002", comebackKind: "comeback_own" },
+      ),
+    ];
+    const text = formatDisputePackText(build({ entries }));
+    expect(text).toContain("Unpaid rework performed");
+    expect(text).toContain("Total unpaid time: 2.0h");
+    expect(text.indexOf("Total variance")).toBeLessThan(
+      text.indexOf("Unpaid rework performed"),
+    );
+    expect(text).not.toMatch(/\p{Emoji_Presentation}/u);
+  });
+
+  it("still reports unpaid rework when there is no variance at all", () => {
+    const entries = [
+      entry(
+        [line({ id: "b", flagHours: 0, actualHours: 2, isComeback: true })],
+        { id: "e2", roNumber: "1002", comebackKind: "comeback_own" },
+      ),
+    ];
+    const text = formatDisputePackText(build({ entries }));
+    expect(text).toContain("No flagged-vs-paid variances");
+    expect(text).toContain("Unpaid rework performed");
+  });
+
+  it("says how many hours carry no rate rather than under-totalling silently", () => {
+    const entries = [
+      entry(
+        [
+          line({
+            id: "b",
+            flagHours: 0,
+            actualHours: 2,
+            isComeback: true,
+            laborType: "customer_pay",
+          }),
+        ],
+        { id: "e2", roNumber: "1002", comebackKind: "comeback_own" },
+      ),
+    ];
+    const pack = build({
+      entries,
+      rates: ratesToMap([rateOf("customer_pay", 30)]),
+      unpaid: [ledgerRow({ hours: 4 })],
+    });
+    expect(pack.unpaidRework!.totalDollars).toBe(60); // the RO line only
+    expect(pack.unpaidRework!.unpricedHours).toBe(4);
+    const text = formatDisputePackText(pack);
+    expect(text).toContain("4.0h of the above carries no rate on file");
   });
 });

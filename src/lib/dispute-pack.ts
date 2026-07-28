@@ -11,13 +11,15 @@
 // Dollars are layered on via the per-labor-type rates in lib/earnings: a
 // disputed line is priced by ITS OWN applicable rate, and the whole feature
 // degrades to hours-only when no rates are set.
-import type { Entry, EntryOpCode, OpCode } from "./types";
+import type { Entry, OpCode, UnpaidTime } from "./types";
 import {
   hasAnyRate,
   resolveLineRate,
   type RateMap,
 } from "./earnings";
+import { lineCode, lineDescription } from "./line-label";
 import { payStatus } from "./reconcile";
+import { buildUnpaidSummary, type UnpaidSummary } from "./unpaid-summary";
 
 // One disputed line, flattened with enough context to render a report row
 // without re-deriving anything.
@@ -44,6 +46,12 @@ export type DisputePack = {
   hasRates: boolean;
   disputedRoCount: number; // distinct ROs represented in the pack
   photosAvailable: number; // of those ROs, how many have a photo record
+  // Unpaid rework and non-productive time for the same period, reported as its
+  // OWN section with its own totals — it is a different claim from a flagged-vs-
+  // paid variance and must never be added into the variance total. null when the
+  // period has none (or the caller passed no ledger), so the section disappears
+  // instead of printing a row of zeros.
+  unpaidRework: UnpaidSummary | null;
 };
 
 export type BuildDisputePackInput = {
@@ -63,42 +71,13 @@ export type BuildDisputePackInput = {
   // Entry ids that have at least one photo on file — powers the evidence
   // footer ("Photo record available for N of M disputed ROs").
   entryIdsWithPhotos?: Set<string>;
+  // Unpaid-time ledger rows for the period. Optional: callers that predate the
+  // Phase 2 migration (or the in-app clipboard export) simply get no section.
+  unpaid?: UnpaidTime[];
 };
 
-// Resolve a line's display label the same way RoList / ReconciliationCard do:
-// custom code, library code, or library code plus its sub-op-code variant.
-// Handles null joins for custom lines (no library op code).
-function lineCode(line: EntryOpCode, libraryById: Map<string, OpCode>): string {
-  if (line.custom) return (line.customCode ?? "").trim() || "Custom";
-  if (line.opCodeId) {
-    const oc = libraryById.get(line.opCodeId);
-    if (!oc) return "—";
-    if (line.subOpCodeId) {
-      const sub = oc.subOpCodes.find((s) => s.id === line.subOpCodeId);
-      if (sub) return `${oc.code} · ${sub.code}`;
-    }
-    return oc.code;
-  }
-  return "—";
-}
-
-function lineDescription(
-  line: EntryOpCode,
-  libraryById: Map<string, OpCode>,
-): string {
-  if (line.custom) return (line.customDescription ?? "").trim();
-  if (line.opCodeId) {
-    const oc = libraryById.get(line.opCodeId);
-    if (oc) {
-      if (line.subOpCodeId) {
-        const sub = oc.subOpCodes.find((s) => s.id === line.subOpCodeId);
-        if (sub && sub.description.trim()) return sub.description.trim();
-      }
-      return oc.description.trim();
-    }
-  }
-  return "";
-}
+// Line labelling lives in lib/line-label so this report and the unpaid-rework
+// summary name the same line identically.
 
 // Build the structured dispute pack. Pure — no I/O.
 export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
@@ -113,6 +92,7 @@ export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
     techName = null,
     generatedDate = "",
     entryIdsWithPhotos,
+    unpaid = [],
   } = input;
 
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
@@ -165,6 +145,12 @@ export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
     ? [...disputedEntryIds].filter((id) => entryIdsWithPhotos.has(id)).length
     : 0;
 
+  // Unpaid rework is built from the SAME entries this pack already has plus the
+  // ledger, so a comeback line can appear here without ever touching the
+  // variance table above (it flags zero — it has no paid-vs-flagged variance to
+  // dispute in the first place).
+  const unpaidRework = buildUnpaidSummary({ entries, unpaid, library, rates });
+
   return {
     periodLabel,
     techName,
@@ -175,6 +161,7 @@ export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
     hasRates: rated,
     disputedRoCount: disputedEntryIds.size,
     photosAvailable,
+    unpaidRework: unpaidRework.lines.length > 0 ? unpaidRework : null,
   };
 }
 
@@ -206,6 +193,7 @@ export function formatDisputePackText(pack: DisputePack): string {
 
   if (pack.lines.length === 0) {
     lines.push("No flagged-vs-paid variances in this period.");
+    appendUnpaidSection(lines, pack);
     return lines.join("\n");
   }
 
@@ -250,5 +238,63 @@ export function formatDisputePackText(pack: DisputePack): string {
     );
   }
 
+  appendUnpaidSection(lines, pack);
+
   return lines.join("\n");
+}
+
+// The unpaid-rework section of the text export. Kept separate from the variance
+// report above — deliberately never folded into the variance total, because
+// unpaid rework is not a paid-vs-flagged discrepancy; it is work that flagged
+// nothing at all.
+function appendUnpaidSection(out: string[], pack: DisputePack): void {
+  const u = pack.unpaidRework;
+  if (!u) return;
+
+  const rework = u.lines.filter(
+    (l) =>
+      l.kind === "comeback_own" ||
+      l.kind === "comeback_other" ||
+      l.kind === "rework_same_visit",
+  );
+
+  out.push("");
+  out.push("─".repeat(40));
+  out.push("Unpaid rework performed");
+  out.push("");
+
+  if (rework.length > 0) {
+    out.push(
+      "The following work was performed without flagged hours. It is listed " +
+        "separately and is not included in the variance total above:",
+    );
+    out.push("");
+    for (const l of rework) {
+      const head = l.roNumber ? `RO #${l.roNumber} (${l.date})` : l.date;
+      const what = [l.code, l.description].filter(Boolean).join(" — ");
+      out.push(what ? `${head}  |  ${what}` : head);
+      let detail = `  ${fmtH(l.hours)}h performed, 0.0h flagged`;
+      if (l.dollars !== null) detail += ` (${fmtD(l.dollars)} at the applicable rate)`;
+      out.push(detail);
+      out.push("");
+    }
+  }
+
+  out.push(`Unpaid rework: ${fmtH(u.comebackHours)}h`);
+  if (u.waitingHours > 0) {
+    out.push(`Waiting on parts or approval: ${fmtH(u.waitingHours)}h`);
+  }
+  if (u.shopHours > 0) {
+    out.push(`Other non-productive shop time: ${fmtH(u.shopHours)}h`);
+  }
+  let total = `Total unpaid time: ${fmtH(u.totalHours)}h`;
+  if (u.totalDollars !== null) total += ` (${fmtD(u.totalDollars)})`;
+  out.push(total);
+  if (u.totalDollars !== null && u.unpricedHours > 0) {
+    // Say it out loud rather than letting the dollar figure read as if it
+    // covered every hour listed.
+    out.push(
+      `${fmtH(u.unpricedHours)}h of the above carries no rate on file and is reported as hours only.`,
+    );
+  }
 }

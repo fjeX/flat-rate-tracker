@@ -351,6 +351,10 @@ export default async function DashboardPage() {
           </div>
         )}
 
+        {/* Unpaid time lives on the Pay Period page, not here — the dashboard
+            is the at-a-glance surface and this is detail a tech goes looking
+            for when checking a period, not something to greet them daily. */}
+
         {/* ── Stat tiles ──────────────────────────────────────── */}
         <EntranceGrid className="stat-grid">
           <TodayCard

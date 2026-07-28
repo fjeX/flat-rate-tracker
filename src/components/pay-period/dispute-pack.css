@@ -65,6 +65,23 @@
 .dp-footer p { margin: 4px 0; }
 .dp-empty { font-size: 16px; color: #444; }
 
+/* "Unpaid rework performed" — its own section with its own totals, visually
+   separated from the variance report so the two claims never read as one. */
+.dp-section { margin-top: 32px; padding-top: 20px; border-top: 2px solid #111; }
+.dp-section h2 { font-size: 15px; font-weight: 700; margin: 0 0 6px; }
+.dp-section-lede { font-size: 12px; color: #444; margin: 0 0 14px; }
+.dp-section .dp-note { font-size: 11px; color: #666; margin: 6px 0 0; }
+.dp-section-totals { margin: 14px 0 0; font-size: 13px; }
+.dp-section-totals div { display: flex; justify-content: space-between; gap: 24px; padding: 4px 0; border-bottom: 1px solid #e2e2e2; }
+.dp-section-totals .dp-section-total { border-bottom: none; border-top: 1.5px solid #111; font-weight: 700; padding-top: 8px; }
+.dp-section-totals dt { margin: 0; }
+.dp-section-totals dd { margin: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+@media print {
+  /* Keep the section header with at least the start of its table. */
+  .dp-section { break-inside: avoid-page; }
+}
+
 @media print {
   .dp-root { background: #fff; padding: 0; }
   .dp-toolbar { display: none; }

@@ -158,6 +158,7 @@ export default async function PayPeriodPage({
       bonusDefaultDate={bonusDefaultDate}
       clocks={clocks}
       referenceRate={settings.referenceHourlyRate}
+      unpaid={unpaid}
     />
   );
 }

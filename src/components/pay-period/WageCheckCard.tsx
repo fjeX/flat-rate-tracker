@@ -14,6 +14,7 @@ import {
   clockFlagGap,
   floorComparison,
   type EffectiveHourly,
+  type GapComposition,
 } from "@/lib/wage-check";
 import { formatDateShort } from "@/lib/periods";
 
@@ -42,9 +43,14 @@ function StatCell({ label, value }: { label: string; value: string }) {
 export function WageCheckCard({
   result,
   referenceRate,
+  gapParts = null,
 }: {
   result: EffectiveHourly;
   referenceRate: number | null;
+  // What the clock-vs-flag gap is made of, when the Unpaid Time Engine has any
+  // of those hours on record. null = nothing recorded, so no breakdown is shown.
+  // The gap figure itself is computed exactly as before either way.
+  gapParts?: GapComposition | null;
 }) {
   const [open, setOpen] = useState(false);
   const [explainerOpen, setExplainerOpen] = useState(false);
@@ -174,6 +180,61 @@ export function WageCheckCard({
               value={`${gap >= 0 ? "" : "−"}${fmtHours(Math.abs(gap))}h`}
             />
           </div>
+
+          {/* What that gap is MADE OF — from the tech's own unpaid-time records.
+              Purely explanatory: the gap number above is unchanged, and nothing
+              here re-derives the effective hourly. */}
+          {gapParts !== null && (
+            <div className="card-inset space-y-1 px-3 py-2 text-sm text-[var(--fg-2)]">
+              <p className="text-[var(--fg-1)]">
+                What&apos;s in that {fmtHours(gapParts.gapHours)}h gap
+              </p>
+              <ul className="m-0 list-none space-y-0.5 p-0 text-xs">
+                {gapParts.comebackHours > 0 && (
+                  <li className="flex justify-between gap-3">
+                    <span>Unpaid rework</span>
+                    <span className="mono tabular-nums">
+                      {fmtHours(gapParts.comebackHours)}h
+                    </span>
+                  </li>
+                )}
+                {gapParts.waitingHours > 0 && (
+                  <li className="flex justify-between gap-3">
+                    <span>Waiting on parts or approval</span>
+                    <span className="mono tabular-nums">
+                      {fmtHours(gapParts.waitingHours)}h
+                    </span>
+                  </li>
+                )}
+                {gapParts.shopHours > 0 && (
+                  <li className="flex justify-between gap-3">
+                    <span>Shop time</span>
+                    <span className="mono tabular-nums">
+                      {fmtHours(gapParts.shopHours)}h
+                    </span>
+                  </li>
+                )}
+                {!gapParts.overTracked && (
+                  <li className="flex justify-between gap-3 text-[var(--fg-3)]">
+                    <span>Not accounted for yet</span>
+                    <span className="mono tabular-nums">
+                      {fmtHours(gapParts.unaccountedHours)}h
+                    </span>
+                  </li>
+                )}
+              </ul>
+              {gapParts.overTracked && (
+                // Recorded unpaid time can legitimately exceed the gap — comeback
+                // hours run alongside flagged work on the same day. Say that
+                // rather than printing a negative remainder.
+                <p className="text-xs text-[var(--fg-3)]">
+                  Your recorded unpaid time ({fmtHours(gapParts.trackedHours)}h)
+                  covers the whole gap — some of it overlapped days you also
+                  flagged work.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Missing-day breadcrumb even when a figure IS shown (partial context). */}
           {missingCount > 0 && result.status !== "incomplete_clock" && (

@@ -3,6 +3,7 @@
 import "./dispute-pack.css";
 import Link from "next/link";
 import type { DisputePack } from "@/lib/dispute-pack";
+import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
 
 function fmtH(n: number): string {
   return (Math.round(n * 10) / 10).toFixed(1);
@@ -19,8 +20,106 @@ function fmtD(n: number): string {
 // One-page printable variance report. Styles live in dispute-pack.css so it
 // prints as clean black-on-white regardless of the app theme, and the
 // on-screen toolbar disappears when printed to PDF.
+// The unpaid-rework section. Rendered BELOW the variance table with its own
+// totals and never added into the variance total — unpaid rework is not a
+// paid-vs-flagged discrepancy, it is work that flagged nothing at all. Rows with
+// no rate on file print as hours only; no rate is ever assumed.
+function UnpaidReworkSection({ pack }: { pack: DisputePack }) {
+  const u = pack.unpaidRework;
+  if (!u) return null;
+
+  const rework = u.lines.filter(
+    (l) =>
+      l.kind === "comeback_own" ||
+      l.kind === "comeback_other" ||
+      l.kind === "rework_same_visit",
+  );
+  const priced = u.totalDollars !== null;
+
+  return (
+    <section className="dp-section">
+      <h2>Unpaid rework performed</h2>
+      <p className="dp-section-lede">
+        Work performed during this pay period that flagged no hours. Listed
+        separately from the variance report above and not included in its total.
+      </p>
+
+      {rework.length > 0 && (
+        <div className="dp-table-wrap">
+          <table className="dp-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>RO #</th>
+                <th>Op code</th>
+                <th>Description</th>
+                <th className="dp-num">Performed</th>
+                <th className="dp-num">Flagged</th>
+                {priced && <th className="dp-num">Value</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rework.map((l, i) => (
+                <tr key={`${l.entryId ?? "ledger"}-${i}`}>
+                  <td>{l.date}</td>
+                  <td>{l.roNumber ? `#${l.roNumber}` : "—"}</td>
+                  <td>{l.code ?? UNPAID_TIME_KIND_LABELS[l.kind]}</td>
+                  <td>{l.description || "—"}</td>
+                  <td className="dp-num dp-variance">{fmtH(l.hours)}h</td>
+                  <td className="dp-num">0.0h</td>
+                  {priced && (
+                    <td className="dp-num dp-variance">
+                      {l.dollars === null ? "—" : fmtD(l.dollars)}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <dl className="dp-section-totals">
+        <div>
+          <dt>Unpaid rework</dt>
+          <dd>{fmtH(u.comebackHours)}h</dd>
+        </div>
+        {u.waitingHours > 0 && (
+          <div>
+            <dt>Waiting on parts or approval</dt>
+            <dd>{fmtH(u.waitingHours)}h</dd>
+          </div>
+        )}
+        {u.shopHours > 0 && (
+          <div>
+            <dt>Other non-productive shop time</dt>
+            <dd>{fmtH(u.shopHours)}h</dd>
+          </div>
+        )}
+        <div className="dp-section-total">
+          <dt>Total unpaid time</dt>
+          <dd>
+            {fmtH(u.totalHours)}h
+            {priced ? ` (${fmtD(u.totalDollars as number)})` : ""}
+          </dd>
+        </div>
+      </dl>
+
+      {priced && u.unpricedHours > 0 && (
+        <p className="dp-note">
+          {fmtH(u.unpricedHours)}h of the time above has no rate on file and is
+          reported as hours only.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function DisputePackPrint({ pack }: { pack: DisputePack }) {
   const empty = pack.lines.length === 0;
+  // A period can have no variance at all and still have unpaid rework worth
+  // printing, so the print button follows BOTH sections, not just the table.
+  const nothingToPrint = empty && pack.unpaidRework === null;
 
   return (
     <div className="dp-root">
@@ -33,7 +132,7 @@ export function DisputePackPrint({ pack }: { pack: DisputePack }) {
           type="button"
           onClick={() => window.print()}
           className="dp-btn dp-btn-primary"
-          disabled={empty}
+          disabled={nothingToPrint}
         >
           Print / Save as PDF
         </button>
@@ -137,6 +236,8 @@ export function DisputePackPrint({ pack }: { pack: DisputePack }) {
             </footer>
           </>
         )}
+
+        <UnpaidReworkSection pack={pack} />
       </article>
     </div>
   );

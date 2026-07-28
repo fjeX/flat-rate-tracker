@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   effectiveHourly,
   clockFlagGap,
+  gapComposition,
   unflaggedTimeValue,
   floorComparison,
 } from "./wage-check";
@@ -251,5 +252,52 @@ describe("floorComparison", () => {
 
   it("is null for a non-positive reference rate", () => {
     expect(floorComparison(27.4, 0)).toBeNull();
+  });
+});
+
+// ── gapComposition ───────────────────────────────────────────────────────────
+
+describe("gapComposition", () => {
+  const parts = (c: number, w: number, s: number) => ({
+    comebackHours: c,
+    waitingHours: w,
+    shopHours: s,
+  });
+
+  it("splits the gap into its recorded parts plus an unaccounted remainder", () => {
+    const g = gapComposition(10, parts(2, 3, 1));
+    expect(g).not.toBeNull();
+    expect(g!.trackedHours).toBe(6);
+    expect(g!.unaccountedHours).toBe(4);
+    expect(g!.overTracked).toBe(false);
+  });
+
+  it("does not change the gap it was given", () => {
+    // The Pay Check-Up's gap figure is computed by clockFlagGap and must stay
+    // exactly that — this function only explains it.
+    const gap = clockFlagGap(40, 31.5);
+    expect(gapComposition(gap, parts(1, 1, 1))!.gapHours).toBe(gap);
+  });
+
+  it("clamps the remainder at zero when tracked time exceeds the gap", () => {
+    // Legitimate: comeback hours run alongside flagged work on the same day.
+    const g = gapComposition(4, parts(5, 0, 0));
+    expect(g!.unaccountedHours).toBe(0);
+    expect(g!.overTracked).toBe(true);
+  });
+
+  it("treats tracked exactly equal to the gap as fully accounted for", () => {
+    const g = gapComposition(6, parts(2, 2, 2));
+    expect(g!.unaccountedHours).toBe(0);
+    expect(g!.overTracked).toBe(true);
+  });
+
+  it("is null when there is no positive gap to explain", () => {
+    expect(gapComposition(0, parts(2, 0, 0))).toBeNull();
+    expect(gapComposition(-3, parts(2, 0, 0))).toBeNull();
+  });
+
+  it("is null when nothing is recorded to explain the gap with", () => {
+    expect(gapComposition(8, parts(0, 0, 0))).toBeNull();
   });
 });

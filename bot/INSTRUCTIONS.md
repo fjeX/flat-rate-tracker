@@ -195,6 +195,84 @@ The Timer page runs **up to 3 job timers at once**. The header reads
   exactly what the app says is missing (it should name missing days, not guess).
 - If it computes, sanity-check the effective hourly figure against the period's
   flag pay + bonuses.
+- **New 2026-07-28 — "What's in that Xh gap"**: when the period has unpaid time
+  on record AND the gap is positive, a breakdown block appears under the
+  Clocked/Flagged/Gap tiles.
+  - The listed parts (Unpaid rework / Waiting on parts or approval / Shop time)
+    plus **"Not accounted for yet"** must sum to the **Gap** tile exactly.
+  - **The Gap tile itself must not change** when unpaid time is added. It is
+    clocked − flagged and nothing else. If adding a comeback moves the Gap, the
+    Pay Check-Up math got contaminated — report it as a FAIL, not a nitpick.
+  - If recorded unpaid time exceeds the gap, there must be **no negative
+    number** anywhere. Instead the block says the recorded time "covers the
+    whole gap". A negative "Not accounted for" is a bug.
+  - No dollar figure may appear in this block, and no wage/minimum-wage number
+    may appear anywhere in the card except the reference rate *you* typed in
+    Settings.
+
+### 7b. Unpaid Time surfaces (new 2026-07-28 — Phase 3)
+
+The hours captured in §2b/§2c now get reported back in three places. **This is
+the newest and least-exercised code in the app — hunt it hard.** All three are
+driven by one shared builder, so if two of them disagree about the same period's
+numbers, that is a real bug worth reporting loudly.
+
+**Setup:** make sure the current period has BOTH a comeback RO line (§2b) and a
+ledger row from a "Worked — unpaid" day (§2c). Several checks below only bite
+when both sources are present.
+
+- **Pay Period → "Unpaid Time" card** (between Reconciliation and Spiffs):
+  - Collapsed by default, hours shown on the right. Expand it.
+  - Three tiles — Rework / Waiting / Shop time — must **sum to the "Total
+    unpaid" row** at the bottom.
+  - Every row should trace back to something you actually created tonight: a
+    comeback RO line (shows RO # and op code) or a ledger row (shows the reason
+    label and your note).
+  - A comeback line's hours here are its **actual** hours, not flag hours
+    (a comeback flags zero — if this card shows 0.0h for a comeback you gave
+    actual hours to, that's the bug).
+  - With rates set: RO-side rows show dollars; **ledger rows must never show a
+    dollar figure** (there's no labor type on them to price against — inventing
+    one is the bug). When both are present, a note must say how many hours carry
+    no rate.
+  - Switch the period selector to an older period and back — the card's numbers
+    must follow the selected period, not stay stuck on the current one.
+- **The card must NOT appear on the dashboard.** Unpaid time was deliberately
+  removed from the dashboard on 2026-07-28. If an "Unpaid time this period" card
+  shows up there, report it.
+- **Dispute pack → "Unpaid rework performed"** (print view):
+  - New section **below** the variance table, with its own totals.
+  - **The most important check in this whole section:** the unpaid hours must
+    **not** be included in the **"Total variance"** figure. Add them up by hand.
+    Variance = "paid me less than I flagged"; unpaid rework = "flagged nothing at
+    all". If they're mixed, the document is wrong in a way a service manager
+    would catch — report as FAIL.
+  - Every rework row must read **0.0h flagged**.
+  - A period with **no** variance but **with** a comeback must still print the
+    unpaid section, and the "Print / Save as PDF" button must be **enabled**.
+  - A period with neither must show neither section and a **disabled** print
+    button.
+  - Print-preview it (or render to PDF): the section must not overflow the page
+    or collide with the footer.
+- **Cross-check the three surfaces against each other.** The Pay Period card's
+  "Total unpaid", the Pay Check-Up gap parts, and the dispute pack's "Total
+  unpaid time" all describe the same period. Any disagreement between them is a
+  real bug — say which two disagree and by how much.
+- **Efficiency must not move.** Note the period's efficiency %, add unpaid time,
+  reload, and confirm it is unchanged. This is the core design rule of the whole
+  feature (unpaid hours are reported *beside* efficiency, never subtracted).
+
+**Edge cases worth trying here** (pick 1–2 a night, rotate, and invent your own
+— the point is to find what wasn't thought of):
+- A comeback line with **no actual hours** entered at all — does it render as
+  0.0h without breaking the totals?
+- A **0-hour** ledger row, and a very large one (e.g. 12h) in a single day.
+- A comeback on an RO dated in a **different period** than the ledger row.
+- Unpaid time **greater than the clock-vs-flag gap** (log a big comeback on a
+  day you also flagged a lot) — check the Pay Check-Up wording, not a negative.
+- An **untyped** labor-type comeback line with rates set — must show no dollars.
+- A period with unpaid time but **zero clocked hours**.
+- Rapidly collapsing/expanding the card, and switching periods while it's open.
 
 ### 8. Dashboard & stats sweep
 - Dashboard: pace card / projection shows sane numbers (no NaN, no negative

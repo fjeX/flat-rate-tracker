@@ -40,13 +40,16 @@ export default async function DisputePackPrintPage({
   threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
   const fromDate = tz ? isoDateInTz(tz, threeYearsAgo) : isoDate(threeYearsAgo);
 
-  const [settings, entries, library, laborRates, photoEntryIds] =
+  const [settings, entries, library, laborRates, photoEntryIds, unpaidTime] =
     await Promise.all([
       db.getSettings(supabase),
       db.listEntries(supabase, { from: fromDate }),
       db.listOpCodes(supabase),
       db.listLaborRates(supabase),
       db.listEntryIdsWithPhotos(supabase),
+      // Null until the Phase 2 unpaid-time migration lands — the pack then just
+      // prints without an unpaid-rework section rather than failing to render.
+      db.listUnpaidTimeSafe(supabase, { from: fromDate }),
     ]);
 
   const selected =
@@ -60,6 +63,9 @@ export default async function DisputePackPrintPage({
 
   const periodEntries = entries.filter(
     (e) => e.date >= selected.start && e.date <= selected.end,
+  );
+  const periodUnpaid = (unpaidTime ?? []).filter(
+    (u) => u.date >= selected.start && u.date <= selected.end,
   );
 
   const firstName = (user.user_metadata?.first_name as string | undefined) ?? "";
@@ -77,6 +83,7 @@ export default async function DisputePackPrintPage({
     techName,
     generatedDate: formatDateLong(today),
     entryIdsWithPhotos: new Set(photoEntryIds),
+    unpaid: periodUnpaid,
   });
 
   return <DisputePackPrint pack={pack} />;
