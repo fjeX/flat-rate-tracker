@@ -22,6 +22,9 @@ export function GuestRoDetailModal({
   const opCodesById = new Map(opCodes.map((oc) => [oc.id, oc]));
   const showMoney = hourlyRate !== null && hourlyRate > 0;
   const roEarnings = showMoney ? entry.flagHours * hourlyRate : 0;
+  const comebackLines = entry.opCodes.filter((l) => l.isComeback);
+  const comebackLineCount = comebackLines.length;
+  const comebackActual = comebackLines.reduce((s, l) => s + (l.actualHours ?? 0), 0);
 
   function handleDelete() {
     if (!window.confirm("Delete this RO? This can't be undone.")) return;
@@ -78,6 +81,17 @@ export function GuestRoDetailModal({
                 : "—"}
             </div>
           </div>
+          {comebackLineCount > 0 && (
+            <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-2 text-sm">
+              <span className="text-[var(--warn)]">
+                Unpaid rework · {comebackLineCount} line
+                {comebackLineCount !== 1 ? "s" : ""}
+              </span>
+              <span className="font-medium text-[var(--warn)]">
+                {comebackActual > 0 ? `${fmtHours(comebackActual)}h` : "—"}
+              </span>
+            </div>
+          )}
           {showMoney && (
             <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-2 text-sm">
               <span className="text-[var(--fg-2)]">Earnings</span>
@@ -146,7 +160,19 @@ function GuestLineRow({
         <div className="min-w-0">
           <span className="font-mono text-sm text-[var(--brand)]">{code}</span>
           {line.custom && <Badge className="ml-2">Other</Badge>}
+          {line.isComeback && (
+            <Badge tone="warn" className="ml-2">
+              Comeback
+            </Badge>
+          )}
           {description && <div className="text-xs text-[var(--fg-3)]">{description}</div>}
+          {/* Mirrors RoDetailModal: a 0.0h line with no explanation reads as a
+              mistake. Keep the two in step — they are separate forks. */}
+          {line.isComeback && (
+            <div className="mt-0.5 text-xs text-[var(--warn)]">
+              Unpaid rework — flags no hours
+            </div>
+          )}
         </div>
         <div className="w-16 text-right font-mono text-sm">{fmtHours(line.flagHours)}</div>
         <div className="flex w-20 justify-center">

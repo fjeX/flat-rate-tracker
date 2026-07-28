@@ -43,6 +43,10 @@ export function RoDetailModal({
     0,
   );
   const hasAnyActual = entry.opCodes.some((oc) => oc.actualHours !== null);
+  const comebackLines = entry.opCodes.filter((oc) => oc.isComeback);
+  const comebackLineCount = comebackLines.length;
+  // Actual hours, not flag — flag is zero on these by construction.
+  const comebackActual = comebackLines.reduce((s, oc) => s + (oc.actualHours ?? 0), 0);
   // Dollars only surface once the user has priced at least one rate.
   const showMoney = hasAnyRate(rates);
   const roEarnings = showMoney ? entryEarnings(entry, rates) : 0;
@@ -100,6 +104,21 @@ export function RoDetailModal({
             </div>
             <div />
           </div>
+          {/* Why the flag total is lower than the work looks. Without this, a
+              mixed RO just reads as a smaller number with no explanation —
+              which is the same confusion the per-line badge fixes, one level
+              up. Reported beside the total, never subtracted from it. */}
+          {comebackLineCount > 0 && (
+            <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-2 text-sm">
+              <span className="text-[var(--warn)]">
+                Unpaid rework · {comebackLineCount} line
+                {comebackLineCount !== 1 ? "s" : ""}
+              </span>
+              <span className="font-medium text-[var(--warn)]">
+                {comebackActual > 0 ? `${fmtHours(comebackActual)}h` : "—"}
+              </span>
+            </div>
+          )}
           {showMoney && (
             <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-2 text-sm">
               <span className="text-[var(--fg-2)]">Earnings</span>
@@ -279,11 +298,27 @@ function LineRow({
             </Badge>
           )}
           {line.custom && <Badge className="ml-2">Other</Badge>}
+          {line.isComeback && (
+            <Badge tone="warn" className="ml-2">
+              Comeback
+            </Badge>
+          )}
           {description && <ExpandableDescription text={description} />}
-          {earnings !== null && (
-            <div className="mt-0.5 font-mono text-xs text-[var(--good)]">
-              {fmtMoney(earnings)}
+          {/* A comeback line reads 0.0h and, with rates on, "$0.00" in the
+              same green used for real money — which looks like a mistake or a
+              bug rather than the point. Say what it is instead: the zero is
+              deliberate, and the hours the tech actually spent are in the
+              actual-hours box to the right. */}
+          {line.isComeback ? (
+            <div className="mt-0.5 text-xs text-[var(--warn)]">
+              Unpaid rework — flags no hours
             </div>
+          ) : (
+            earnings !== null && (
+              <div className="mt-0.5 font-mono text-xs text-[var(--good)]">
+                {fmtMoney(earnings)}
+              </div>
+            )
           )}
         </div>
         <div className="text-right font-mono text-sm">
