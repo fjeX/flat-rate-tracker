@@ -17,11 +17,6 @@ type GuestState = { entries: Entry[]; opCodes: OpCode[] };
 export function GuestSyncEffect() {
   const router = useRouter();
 
-  useEffect(() => {
-    void runSync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function runSync() {
     // Consent gate. Guest data in this tab is not permission to write it into
     // the signed-in account — only an explicit hand-off from guest mode is.
@@ -157,6 +152,13 @@ export function GuestSyncEffect() {
 
     router.refresh();
   }
+
+  // Declared after runSync so the effect isn't reaching backwards for it —
+  // hoisting made it work either way, but only one order reads as written.
+  useEffect(() => {
+    void runSync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return null;
 }

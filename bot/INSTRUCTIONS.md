@@ -355,8 +355,40 @@ Tags in the op code library have user-settable colors (8 theme swatches).
   an 8-swatch row + "Auto" appears. Pick a different swatch, verify the row
   tick and filter-chip dot update, then set it back with **Auto** (don't
   leave test colors behind).
+- ⚠️ **Do NOT judge "Auto" by whether the swatch changes color** (this caused a
+  false escalation 2026-07-28). Auto clears the override and falls back to a
+  hash of the tag name — and for some tags the hash IS the slot that was
+  pinned, so the color legitimately does not move. `fluids` hashes to Color 2,
+  so pinning Color 2 and then clearing it look identical.
+  Judge it by the **ring and the Auto button** instead (fixed 2026-07-28):
+  - solid ring on a swatch = that color is **pinned**
+  - soft/faint ring = **auto** happened to land there, nothing is pinned
+  - the **Auto** button itself renders bold/current when no override is set
+  So after clicking Auto: the swatch ring should go from solid to soft, and
+  Auto should become the current-looking option. If the ring stays solid and
+  Auto never reads as current, *that* is the bug.
 - If picking a color errors with "migration needs to run first", report it —
   that means the tag_colors migration is missing from prod.
+
+### 8f. Guest → account carryover gate (fixed 2026-07-28)
+Guest-mode work is carried into an account **only** when the visitor explicitly
+asks for it via the guest banner's "Create a free account" link. Data merely
+sitting in the tab is NOT consent — this used to write guest ROs into whatever
+account the tab was signed into (a real cross-account data leak).
+
+Because you run signed in, this is easy to test and easy to break:
+- **The leak check (must stay clean):** in your signed-in session, visit
+  `/guest/log`, log a throwaway RO, then navigate to `/dashboard`. That RO must
+  **NOT** appear in the account — not in History, not in the RO count, not in
+  the stats. If it shows up, the consent gate has regressed: report it as HIGH.
+- Confirm via devtools that `sessionStorage['frt_guest']` still holds the guest
+  RO while `sessionStorage['frt_guest_claim']` is absent — that pairing is the
+  exact state that used to leak.
+- **Do not** click "Create a free account" from a signed-in session as part of
+  this check; that sets the claim marker on purpose and would sync your
+  throwaway guest data into the bot account for real.
+- Clear `sessionStorage['frt_guest']` when you're done so the next night starts
+  clean.
 
 ### 8e. Footer & Report a Bug (shipped 2026-07-23)
 
