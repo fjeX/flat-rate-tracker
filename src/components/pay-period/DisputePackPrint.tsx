@@ -45,7 +45,16 @@ function UnpaidReworkSection({ pack }: { pack: DisputePack }) {
       </p>
 
       {rework.length > 0 && (
-        <div className="dp-table-wrap">
+        <>
+        <p className="dp-scroll-hint" aria-hidden="true">
+          Swipe the table sideways to see performed, flagged and value.
+        </p>
+        <div
+          className="dp-table-wrap"
+          tabIndex={0}
+          role="region"
+          aria-label="Unpaid rework performed by line"
+        >
           <table className="dp-table">
             <thead>
               <tr>
@@ -77,6 +86,7 @@ function UnpaidReworkSection({ pack }: { pack: DisputePack }) {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <dl className="dp-section-totals">
@@ -167,7 +177,18 @@ export function DisputePackPrint({ pack }: { pack: DisputePack }) {
           </p>
         ) : (
           <>
-            <div className="dp-table-wrap">
+            <p className="dp-scroll-hint" aria-hidden="true">
+              Swipe the table sideways to see paid, variance and amount.
+            </p>
+            {/* tabIndex makes the scroll region reachable without a pointer —
+                a scrollable box that only a swipe can reach strands keyboard
+                and switch users on the columns that carry the dollars. */}
+            <div
+              className="dp-table-wrap"
+              tabIndex={0}
+              role="region"
+              aria-label="Flagged versus paid variance by line"
+            >
             <table className="dp-table">
               <thead>
                 <tr>

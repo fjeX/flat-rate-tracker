@@ -3,7 +3,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
-import { TAG_HUE_SLOTS, tagHueSlot, tagHueVar } from "./tagHue";
+import { TAG_HUE_SLOTS, tagHueOverride, tagHueSlot, tagHueVar } from "./tagHue";
 
 function HoursInput({
   value,
@@ -167,8 +167,14 @@ function TagInput({
       {onSetTagColor && pickerFor && tags.includes(pickerFor) && (
         <div className="flex w-full flex-wrap items-center gap-2 pt-1.5">
           <span className="text-xs text-[var(--fg-3)]">{pickerFor}:</span>
+          {/* "Pinned" and "showing" are different questions. A tag whose hash
+              lands on the slot the user pinned looks identical either way, so
+              a picker keyed on the resolved colour alone made "Auto" appear to
+              do nothing. Solid ring = pinned here; soft ring = auto landed
+              here. */}
           {Array.from({ length: TAG_HUE_SLOTS }, (_, i) => {
-            const active = tagHueSlot(pickerFor, tagColors) === i;
+            const pinned = tagHueOverride(pickerFor, tagColors) === i;
+            const showing = tagHueSlot(pickerFor, tagColors) === i;
             return (
               <button
                 key={i}
@@ -177,25 +183,43 @@ function TagInput({
                   onSetTagColor(pickerFor, i);
                   setPickerFor(null);
                 }}
-                aria-label={`Color ${i + 1}${active ? " (current)" : ""}`}
+                aria-pressed={pinned}
+                aria-label={`Color ${i + 1}${
+                  pinned ? " (current)" : showing ? " (current, automatic)" : ""
+                }`}
                 className="h-5 w-5 rounded-full border border-[var(--line)]"
                 style={{
                   background: `var(--tag-hue-${i})`,
-                  boxShadow: active ? "0 0 0 2px var(--bg-2), 0 0 0 4px var(--fg-2)" : undefined,
+                  boxShadow: pinned
+                    ? "0 0 0 2px var(--bg-2), 0 0 0 4px var(--fg-2)"
+                    : showing
+                      ? "0 0 0 2px var(--bg-2), 0 0 0 4px var(--fg-3)"
+                      : undefined,
                 }}
               />
             );
           })}
-          <button
-            type="button"
-            onClick={() => {
-              onSetTagColor(pickerFor, null);
-              setPickerFor(null);
-            }}
-            className="text-xs text-[var(--fg-2)] underline hover:text-[var(--fg-0)]"
-          >
-            Auto
-          </button>
+          {(() => {
+            const isAuto = tagHueOverride(pickerFor, tagColors) === null;
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  onSetTagColor(pickerFor, null);
+                  setPickerFor(null);
+                }}
+                aria-pressed={isAuto}
+                aria-label={`Auto${isAuto ? " (current)" : ""}`}
+                className={
+                  isAuto
+                    ? "text-xs font-semibold text-[var(--fg-0)] underline"
+                    : "text-xs text-[var(--fg-2)] underline hover:text-[var(--fg-0)]"
+                }
+              >
+                Auto
+              </button>
+            );
+          })()}
         </div>
       )}
       <input

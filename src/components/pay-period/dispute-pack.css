@@ -89,11 +89,23 @@
   @page { margin: 16mm; }
 }
 
+/* Only meaningful where the table actually scrolls — see the phone block. */
+.dp-scroll-hint { display: none; font-size: 11px; color: #666; margin: 0 0 6px; }
+
 /* On-screen phones: let the variance table scroll inside its own container
    instead of widening the page. Print layout is unaffected. */
 @media screen and (max-width: 640px) {
+  /* The sheet's 40px print margin costs 80px of a 390px screen — a third of
+     the room the table has to work with. Dollars and variance are the whole
+     point of the document, so give the columns the width back on phones. */
+  .dp-sheet { padding: 20px 16px; }
   .dp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .dp-table { min-width: 560px; }
+  /* Touch devices paint no persistent scrollbar, so a table that scrolls
+     inside its own box looks simply cut off — the columns are reachable but
+     nothing says so. */
+  .dp-scroll-hint { display: block; }
+  .dp-table-wrap:focus-visible { outline: 2px solid #111; outline-offset: 2px; }
 }
 
 /* On-screen toolbar buttons meet the 44px touch floor (print unaffected) */

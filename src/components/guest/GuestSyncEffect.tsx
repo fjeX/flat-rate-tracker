@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { createLibraryOpCode } from "@/app/actions/op-codes";
 import { saveEntry } from "@/app/actions/entries";
 import { GUEST_SAMPLE_OPCODES } from "@/lib/guest/context";
+import {
+  GUEST_STORAGE_KEY,
+  clearGuestSession,
+  hasGuestClaim,
+} from "@/lib/guest/storage";
 import type { Entry, OpCode, NewEntry, NewEntryOpCode } from "@/lib/types";
-
-const STORAGE_KEY = "frt_guest";
 
 type GuestState = { entries: Entry[]; opCodes: OpCode[] };
 
@@ -20,9 +23,15 @@ export function GuestSyncEffect() {
   }, []);
 
   async function runSync() {
+    // Consent gate. Guest data in this tab is not permission to write it into
+    // the signed-in account — only an explicit hand-off from guest mode is.
+    // Without it we leave sessionStorage untouched so the guest tab keeps
+    // working exactly as it did.
+    if (!hasGuestClaim()) return;
+
     let raw: string | null = null;
     try {
-      raw = sessionStorage.getItem(STORAGE_KEY);
+      raw = sessionStorage.getItem(GUEST_STORAGE_KEY);
     } catch {
       return;
     }
@@ -142,12 +151,9 @@ export function GuestSyncEffect() {
       }
     }
 
-    // All op codes and entries synced successfully — clear guest session
-    try {
-      sessionStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Non-critical — data is already in DB
-    }
+    // All op codes and entries synced successfully — retire the guest session
+    // AND the claim, so a later visit can't re-sync stale data.
+    clearGuestSession();
 
     router.refresh();
   }

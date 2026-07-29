@@ -8,6 +8,30 @@
 
 export const TAG_HUE_SLOTS = 8;
 
+/**
+ * The explicitly pinned slot for a tag, or null when it's on the hash.
+ *
+ * Distinct from `tagHueSlot`, which answers "what colour is this?" — the two
+ * can agree by coincidence (a tag whose hash lands on the same slot the user
+ * pinned), and a picker that only asks the first question can't tell the user
+ * whether "Auto" did anything.
+ */
+export function tagHueOverride(
+  tag: string,
+  overrides?: Record<string, number>,
+): number | null {
+  const chosen = overrides?.[tag.toLowerCase()];
+  if (
+    chosen !== undefined &&
+    Number.isInteger(chosen) &&
+    chosen >= 0 &&
+    chosen < TAG_HUE_SLOTS
+  ) {
+    return chosen;
+  }
+  return null;
+}
+
 export function tagHueSlot(
   tag: string,
   overrides?: Record<string, number>,

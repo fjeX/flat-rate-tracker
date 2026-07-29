@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useReducer } from "react";
 import type { Entry, NewEntry, OpCode, UserSettings } from "@/lib/types";
 import type { OpCodeDraft } from "@/components/forms/OpCodeModals";
 import { STARTER_OP_CODES } from "@/lib/starter-opcodes";
+import { GUEST_STORAGE_KEY } from "@/lib/guest/storage";
 import {
   bucketFor,
   flushAccumulators,
@@ -13,7 +14,6 @@ import {
   type TimerStatus,
 } from "@/lib/timer";
 
-const STORAGE_KEY = "frt_guest";
 
 type GuestState = {
   entries: Entry[];
@@ -297,7 +297,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw = sessionStorage.getItem(GUEST_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<GuestState>;
         dispatch({
@@ -318,7 +318,7 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      sessionStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(state));
     } catch {}
   }, [state]);
 

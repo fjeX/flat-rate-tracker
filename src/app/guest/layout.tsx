@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { GuestStoreProvider } from "@/lib/guest/context";
 import { Header } from "@/components/layout/Header";
 import { GuestNav } from "@/components/guest/GuestNav";
+import { ClaimAccountLink } from "@/components/guest/ClaimAccountLink";
 
 export default function GuestLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -17,9 +17,9 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
           letterSpacing: "0.01em",
         }}>
           Guest mode — ROs won&apos;t be saved after you close this tab.{" "}
-          <Link href="/signup" style={{ color: "var(--warn)", fontWeight: 600, textDecoration: "underline" }}>
+          <ClaimAccountLink href="/signup" style={{ color: "var(--warn)", fontWeight: 600, textDecoration: "underline" }}>
             Create a free account
-          </Link>{" "}
+          </ClaimAccountLink>{" "}
           to keep your data.
         </div>
         <Header userEmail={null} />

@@ -182,10 +182,16 @@ export function TimerSlotCard({
           value={formatElapsed(elapsed.work)}
           className={`timer-slot-time${slot.status === "working" ? "" : " dim"}`}
         />
+        {/* Every non-working status freezes this clock, but they don't mean the
+            same thing — "on hold" is the shop waiting on parts or approval,
+            while "paused" is the tech stepping away. Saying "on hold" for a
+            plain pause misreports why the money stopped. */}
         <div className="timer-slot-caption">
           {slot.status === "working"
             ? "worked"
-            : "worked · not counting while on hold"}
+            : slot.status === "paused"
+              ? "worked · not counting while paused"
+              : "worked · not counting while on hold"}
         </div>
       </div>
 
@@ -221,19 +227,26 @@ export function TimerSlotCard({
         </p>
       )}
 
-      {entry && entry.opCodes.length > 1 && (
+      {/* Show the binding whenever there is one — a single-line RO gets its line
+          bound automatically at attach, and hiding that left the card silent
+          about which line the hours were about to land on. Multi-line ROs also
+          get the row while unbound, because there it's a prompt to act. */}
+      {entry && (line !== null || entry.opCodes.length > 1) && (
         <div className="timer-slot-line">
           <span>Line:</span>
           {line ? (
             <>
               <span className="code">{lineLabelFor(line, libraryById).code}</span>
-              <button
-                type="button"
-                onClick={onPickLine}
-                className="hit-expand text-[var(--fg-3)] hover:text-[var(--fg-1)]"
-              >
-                Change
-              </button>
+              {/* Nothing to switch to on a single-line RO. */}
+              {entry.opCodes.length > 1 && (
+                <button
+                  type="button"
+                  onClick={onPickLine}
+                  className="hit-expand text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+                >
+                  Change
+                </button>
+              )}
             </>
           ) : (
             <button
