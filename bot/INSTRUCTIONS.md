@@ -274,6 +274,60 @@ when both sources are present.
 - A period with unpaid time but **zero clocked hours**.
 - Rapidly collapsing/expanding the card, and switching periods while it's open.
 
+### 7c. Dispute Tracking (new 2026-07-30)
+
+FRT can now record what happened AFTER a dispute pack went out. **Newest code in
+the app — hunt it hard.** Lives on Pay Period, below Reconciliation.
+
+**Setup:** the current period needs at least one **short** line (flag > paid).
+Use §5 to reconcile a line to fewer hours than it flagged.
+
+- Card is titled **"Dispute Tracking"**. With a shortfall and no claim yet it
+  offers **"Track this dispute"** and states the outstanding hours.
+- Tap it. Expect a **"Not sent yet"** pill, a scope label (**"Itemized by RO ·
+  N lines"** or **"Period total"**), and a **Claimed** tile whose hours match the
+  shortfall Reconciliation reports. If the two disagree, that's a real bug.
+- Walk the lifecycle: **"I handed it in"** → pill becomes **"Waiting on a
+  response"**. Then **"They responded"** → **"They responded"** pill.
+- **"Record outcome"** → enter recovered hours, optionally dollars, a note →
+  **"Close out claim"**. The card must immediately show **Closed**, the recovered
+  figure, and an **Outcome** of Paid in full / Partly paid / Denied.
+  - **Critical:** it must NOT still read "Waiting on a response / Recovered 0.0h"
+    after saving. That exact bug was fixed on 2026-07-30 (the form used to close
+    before the refresh landed). If it reappears, report as FAIL.
+  - Leave dollars **blank** on one run — it must record as unknown, never as $0.
+- Recovered hours are deliberately **not capped** at the claimed amount. Entering
+  MORE than claimed is legal (goodwill hours) and must save, not error.
+- **Double-tap protection:** with a live claim open, there must be no second
+  "Track this dispute" offer for the same period.
+- **Recovered money must never move any other number.** Note the period's
+  earnings, flag pay and Pay Check-Up effective hourly BEFORE closing a claim,
+  then re-check after. They must be **identical** — recovery is a separate
+  ledger. If period earnings jumped by the recovered dollars, that's
+  double-counting and a FAIL.
+- **Dashboard → "Recovered with FRT"** card appears once something has been
+  recovered. It shows the lifetime figure and "N closed claim(s) · X% got paid".
+  With nothing ever recovered and no claim awaiting an outcome, the card must be
+  **absent** — not a "$0 recovered" tile.
+
+### 7d. True Time consent (new 2026-07-30)
+
+Settings → **"Contribute to True Time"**. This is the only place a tech's data
+leaves their own account, so the checks are about the OFF state holding.
+
+- The toggle must default to **OFF** for an account that has never touched it.
+  If it is ever found ON without someone turning it on, report as **FAIL** —
+  that is a privacy defect, not a UI nit.
+- Copy must state plainly what is shared (op code, vehicle, book hours, actual
+  hours) and what is not (RO numbers, customer info, shop, name, exact dates),
+  and that turning it off deletes what was contributed.
+- Turn it ON, reload the page — it must still read ON.
+- Turn it OFF, reload — still OFF.
+- **There must be NO pooled/community figures anywhere in the app yet.** The read
+  surface is intentionally unbuilt. If any screen shows an "N techs average…"
+  or cross-user labor time, report it — that would mean the read surface shipped
+  before the dataset was large enough to be anonymous.
+
 ### 8. Dashboard & stats sweep
 - Dashboard: pace card / projection shows sane numbers (no NaN, no negative
   hours, projection roughly consistent with logged history).
