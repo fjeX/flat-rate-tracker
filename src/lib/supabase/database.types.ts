@@ -770,6 +770,132 @@ export type Database = {
         }
         Relationships: []
       }
+      disputes: {
+        Row: {
+          answered_at: string | null
+          claimed_dollars: number | null
+          claimed_hours: number
+          created_at: string
+          generated_at: string
+          id: string
+          note: string
+          period_key: string
+          period_label: string
+          recovered_dollars: number | null
+          recovered_hours: number
+          resolved_at: string | null
+          scope: string
+          status: string
+          submitted_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          answered_at?: string | null
+          claimed_dollars?: number | null
+          claimed_hours?: number
+          created_at?: string
+          generated_at?: string
+          id?: string
+          note?: string
+          period_key: string
+          period_label?: string
+          recovered_dollars?: number | null
+          recovered_hours?: number
+          resolved_at?: string | null
+          scope: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          answered_at?: string | null
+          claimed_dollars?: number | null
+          claimed_hours?: number
+          created_at?: string
+          generated_at?: string
+          id?: string
+          note?: string
+          period_key?: string
+          period_label?: string
+          recovered_dollars?: number | null
+          recovered_hours?: number
+          resolved_at?: string | null
+          scope?: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      dispute_lines: {
+        Row: {
+          claimed_dollars: number | null
+          claimed_hours: number
+          code: string
+          created_at: string
+          description: string
+          dispute_id: string
+          entry_id: string | null
+          flagged_hours: number
+          had_photo: boolean
+          id: string
+          line_id: string | null
+          paid_hours: number | null
+          position: number
+          recovered_dollars: number | null
+          recovered_hours: number
+          ro_number: string
+          updated_at: string
+          user_id: string
+          work_date: string | null
+        }
+        Insert: {
+          claimed_dollars?: number | null
+          claimed_hours?: number
+          code?: string
+          created_at?: string
+          description?: string
+          dispute_id: string
+          entry_id?: string | null
+          flagged_hours?: number
+          had_photo?: boolean
+          id?: string
+          line_id?: string | null
+          paid_hours?: number | null
+          position?: number
+          recovered_dollars?: number | null
+          recovered_hours?: number
+          ro_number?: string
+          updated_at?: string
+          user_id: string
+          work_date?: string | null
+        }
+        Update: {
+          claimed_dollars?: number | null
+          claimed_hours?: number
+          code?: string
+          created_at?: string
+          description?: string
+          dispute_id?: string
+          entry_id?: string | null
+          flagged_hours?: number
+          had_photo?: boolean
+          id?: string
+          line_id?: string | null
+          paid_hours?: number | null
+          position?: number
+          recovered_dollars?: number | null
+          recovered_hours?: number
+          ro_number?: string
+          updated_at?: string
+          user_id?: string
+          work_date?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

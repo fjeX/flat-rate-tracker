@@ -418,3 +418,137 @@ export type BugReportPhoto = {
   byteSize: number;
   createdAt: string;
 };
+
+// ── Dispute Outcome Ledger ────────────────────────────────────────────────────
+// What happened after a dispute pack went out. A Dispute is a FROZEN historical
+// claim: every hours/dollars/label field is copied in at generation time and
+// never recomputed from the live ROs, because the ROs move underneath it (a line
+// gets reconciled, an RO gets edited or deleted, a rate changes). Recompute and
+// the claim would silently shrink to nothing the moment the shop paid you.
+//
+// Recovered amounts are a SEPARATE ledger — never folded into period earnings or
+// the flagged-vs-paid variance. When a short gets paid, that shows up naturally
+// as the line's paidHours going up; counting it here too would double-count.
+export type DisputeStatus =
+  | "generated" // pack built/exported, not handed over yet
+  | "submitted" // given to the service manager / payroll
+  | "answered" // they responded: full, partial, or zero adjustment
+  | "resolved" // closed out; recovered amounts are final
+  | "withdrawn"; // dropped without a resolution
+
+export const DISPUTE_STATUSES: readonly DisputeStatus[] = [
+  "generated",
+  "submitted",
+  "answered",
+  "resolved",
+  "withdrawn",
+];
+
+export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
+  generated: "Not sent yet",
+  submitted: "Waiting on a response",
+  answered: "They responded",
+  resolved: "Closed",
+  withdrawn: "Dropped",
+};
+
+// 'period' = aggregate claim from a standard pay stub (hours only — the stub
+//            shows total clocked and flagged, not per-RO detail).
+// 'lines'  = itemized claim, one DisputeLine per shorted RO line. Only possible
+//            when the tech has the per-RO hours breakdown from payroll.
+export type DisputeScope = "period" | "lines";
+
+export const DISPUTE_SCOPE_LABELS: Record<DisputeScope, string> = {
+  period: "Period total",
+  lines: "Itemized by RO",
+};
+
+export type DisputeLine = {
+  id: string;
+  disputeId: string;
+  // Navigation only, and both nullable: deleting an RO must never delete the
+  // record that you disputed it.
+  entryId: string | null;
+  lineId: string | null;
+  // Frozen identity, so the row still reads as a complete claim after the RO is
+  // relabelled or deleted.
+  roNumber: string;
+  code: string;
+  description: string;
+  workDate: string | null; // "YYYY-MM-DD"
+  flaggedHours: number;
+  // null = the line was still pending (never reconciled) when the claim went
+  // out. Different from "paid zero".
+  paidHours: number | null;
+  claimedHours: number;
+  claimedDollars: number | null; // null when no rate applied to this line
+  recoveredHours: number;
+  recoveredDollars: number | null;
+  // Whether a photo was on file when the claim went out. Frozen because the
+  // photo can be deleted later — this is what answers "do claims with evidence
+  // get paid more often?"
+  hadPhoto: boolean;
+  position: number;
+};
+
+export type Dispute = {
+  id: string;
+  userId: string;
+  periodKey: string;
+  periodLabel: string;
+  scope: DisputeScope;
+  status: DisputeStatus;
+  claimedHours: number;
+  // null = no labor rate was priced when the claim was raised, so the dollar
+  // value is genuinely unknown. Never coerce to 0 — "unknown" and "zero" are
+  // different answers and render differently.
+  claimedDollars: number | null;
+  recoveredHours: number;
+  recoveredDollars: number | null;
+  generatedAt: string;
+  submittedAt: string | null;
+  answeredAt: string | null;
+  resolvedAt: string | null;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+  // Populated only when the caller asked for lines (scope 'period' has none).
+  lines: DisputeLine[];
+};
+
+export type NewDisputeLine = {
+  entryId?: string | null;
+  lineId?: string | null;
+  roNumber: string;
+  code: string;
+  description?: string;
+  workDate?: string | null;
+  flaggedHours: number;
+  paidHours?: number | null;
+  claimedHours: number;
+  claimedDollars?: number | null;
+  hadPhoto?: boolean;
+};
+
+export type NewDispute = {
+  periodKey: string;
+  periodLabel?: string;
+  scope: DisputeScope;
+  claimedHours: number;
+  claimedDollars?: number | null;
+  note?: string;
+  lines?: NewDisputeLine[];
+};
+
+export type DisputePatch = {
+  status?: DisputeStatus;
+  recoveredHours?: number;
+  recoveredDollars?: number | null;
+  note?: string;
+};
+
+export function isDisputeStatus(v: unknown): v is DisputeStatus {
+  return (
+    typeof v === "string" && (DISPUTE_STATUSES as readonly string[]).includes(v)
+  );
+}

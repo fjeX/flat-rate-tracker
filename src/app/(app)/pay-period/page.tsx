@@ -66,6 +66,12 @@ export default async function PayPeriodPage({
     ]);
   const unpaid = unpaidTime ?? [];
 
+  // Null until the dispute-ledger migration lands. Deliberately NOT coerced to
+  // [] — the card must be able to tell "not migrated" (hide entirely, because
+  // its actions would throw) from "migrated, nothing disputed yet" (show the
+  // offer). Not date-filtered: lifetime recovery spans every period.
+  const disputes = await db.listDisputesSafe(supabase);
+
   const firstName =
     (userData.user?.user_metadata?.first_name as string | undefined) ?? "";
   const lastName =
@@ -159,6 +165,15 @@ export default async function PayPeriodPage({
       clocks={clocks}
       referenceRate={settings.referenceHourlyRate}
       unpaid={unpaid}
+      disputes={disputes}
+      openDispute={
+        (disputes ?? []).find(
+          (d) =>
+            d.periodKey === selected.key &&
+            d.status !== "resolved" &&
+            d.status !== "withdrawn",
+        ) ?? null
+      }
     />
   );
 }

@@ -23,6 +23,7 @@ import { StreakCard } from "@/components/dashboard/StreakCard";
 import { UnresolvedDaysCard } from "@/components/dashboard/UnresolvedDaysCard";
 import { CareerOdometerCard } from "@/components/dashboard/CareerOdometerCard";
 import { SnapshotsCard } from "@/components/dashboard/SnapshotsCard";
+import { RecoveredCard } from "@/components/dashboard/RecoveredCard";
 import { RoList } from "@/components/ro/RoList";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
@@ -99,7 +100,7 @@ export default async function DashboardPage() {
     : isoDate(new Date(Date.now() - 90 * 86_400_000));
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
-  const [entries, clocks, library, laborRates, gamification, schedules, daysOff, confirmedZeroDays, shiftOverrides, unpaidTime] = await Promise.all([
+  const [entries, clocks, library, laborRates, gamification, schedules, daysOff, confirmedZeroDays, shiftOverrides, unpaidTime, disputeList] = await Promise.all([
     db.listEntries(supabase, { from: fetchFrom, to: monthEnd }),
     db.listDailyClocks(supabase, { from: fetchFrom, to: monthEnd }),
     db.listOpCodes(supabase),
@@ -116,7 +117,13 @@ export default async function DashboardPage() {
     // Null until the Phase 2 unpaid-time migration lands — stats then report
     // zero unpaid hours rather than the page failing to render.
     db.listUnpaidTimeSafe(supabase, { from: fetchFrom, to: monthEnd }),
+    // Null until the dispute-ledger migration lands — the card hides itself.
+    // Not date-filtered: "recovered with FRT" is a lifetime figure.
+    db.listDisputesSafe(supabase),
   ]);
+  // Null until the dispute-ledger migration lands — kept as null so the card
+  // hides entirely rather than rendering a surface whose links go nowhere.
+  const disputes = disputeList;
 
   // Dollars are additive — computed only when the user has priced a rate.
   const rateMap = ratesToMap(laborRates);
@@ -373,6 +380,12 @@ export default async function DashboardPage() {
           <StatCard label="Pay Period"     stats={statsPeriod} />
           <StatCard label="This Month"     stats={statsMonth} />
         </EntranceGrid>
+
+        {/* ── Lifetime dispute recovery ───────────────────────── */}
+        {/* Its own ledger, never folded into the flag-pay numbers above: when a
+            short gets paid it flows through as the line's paid hours going up.
+            Renders nothing until there's something true to say. */}
+        <RecoveredCard disputes={disputes} />
 
         {/* ── Streak + career odometer ────────────────────────── */}
         {gamification && (

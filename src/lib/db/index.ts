@@ -20,3 +20,4 @@ export * from "./gamification";
 export * from "./schedules";
 export * from "./timers";
 export * from "./unpaid-time";
+export * from "./disputes";

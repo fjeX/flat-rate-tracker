@@ -3,7 +3,14 @@
 import { useState, useTransition } from "react";
 import { Select } from "@/components/ui/Select";
 import { useRouter } from "next/navigation";
-import type { Bonus, DailyClock, Entry, OpCode, UnpaidTime } from "@/lib/types";
+import type {
+  Bonus,
+  DailyClock,
+  Dispute,
+  Entry,
+  OpCode,
+  UnpaidTime,
+} from "@/lib/types";
 import type { PeriodRange } from "@/lib/periods";
 import type { Stats } from "@/lib/stats";
 import {
@@ -22,7 +29,9 @@ import { buildUnpaidSummary } from "@/lib/unpaid-summary";
 import { formatPeriodLabel } from "@/lib/periods";
 import { clearPeriodOverrideAction } from "@/app/actions/settings";
 import { RoList } from "@/components/ro/RoList";
+import { reconcileEntries } from "@/lib/reconcile";
 import { DiscrepancyCard } from "./DiscrepancyCard";
+import { DisputeOutcomeCard } from "./DisputeOutcomeCard";
 import { ReconciliationCard } from "./ReconciliationCard";
 import { PeriodOverrideModal } from "./PeriodOverrideModal";
 import { PeriodStats } from "./PeriodStats";
@@ -47,6 +56,8 @@ export function PayPeriodView({
   clocks = [],
   referenceRate = null,
   unpaid = [],
+  disputes = null,
+  openDispute = null,
 }: {
   availablePeriods: PeriodRange[];
   currentKey: string;
@@ -66,6 +77,15 @@ export function PayPeriodView({
   // Ledger rows for the selected period. Empty until the Phase 2 migration
   // lands, which just means every unpaid-time surface stays hidden.
   unpaid?: UnpaidTime[];
+  // Every dispute ever raised (drives the lifetime figure), plus the live claim
+  // for the viewed period.
+  //
+  // NULL means the dispute-ledger migration hasn't been applied yet — distinct
+  // from [] meaning "migrated, nothing disputed". The card MUST hide on null:
+  // otherwise it would offer a "Track this dispute" button whose action throws
+  // on the missing table. Same null-vs-empty contract as listWorkSchedulesSafe.
+  disputes?: Dispute[] | null;
+  openDispute?: Dispute | null;
 }) {
   const router = useRouter();
   // Dollars are additive: null when no rates are priced, so PeriodStats/RoList
@@ -196,6 +216,17 @@ export function PayPeriodView({
         techName={techName}
         entryIdsWithPhotos={entryIdsWithPhotos}
       />
+
+      {disputes !== null && (
+        <DisputeOutcomeCard
+          key={`dispute-${selected.key}`}
+          periodKey={selected.key}
+          periodLabel={formatPeriodLabel(selected)}
+          openDispute={openDispute}
+          allDisputes={disputes}
+          shortedHours={reconcileEntries(entries).shortedHours}
+        />
+      )}
 
       <UnpaidTimeBreakdownCard
         key={`unpaid-${selected.key}`}
