@@ -387,6 +387,22 @@ export async function addEntryLine(
   if (error) throw new Error(error.message);
 }
 
+// Which RO does this line belong to? Needed by callers that mutate a single
+// line but then have to reconcile something scoped to the whole RO (True Time
+// observations), and a line-level action only ever receives the line id.
+export async function getEntryIdForLine(
+  supabase: DbClient,
+  lineId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("entry_op_codes")
+    .select("entry_id")
+    .eq("id", lineId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.entry_id ?? null;
+}
+
 // Update just a single op code line's actualHours — used by the RO detail
 // modal's "blur to save" behavior, where the tech is typing an absolute value.
 export async function setLineActualHours(

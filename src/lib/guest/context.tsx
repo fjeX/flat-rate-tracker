@@ -54,6 +54,10 @@ const defaultSettings: UserSettings = {
   roTemplates: [],
   defaultLaborType: null,
   referenceHourlyRate: null,
+  // Guests never contribute to True Time: there is no account to attribute an
+  // observation to, and no consent conversation has happened. Hard false, not a
+  // setting a guest can flip.
+  shareLaborTimes: false,
   tagColors: {},
 };
 

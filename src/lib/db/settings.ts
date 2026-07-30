@@ -38,6 +38,9 @@ function toSettings(row: SettingsRow): UserSettings {
     // `?? {}` also covers a pre-migration DB, where select("*") simply
     // doesn't return the column.
     tagColors: (row.tag_colors as Record<string, number> | null) ?? {},
+    // `?? false` also covers a pre-migration DB. Defaulting to false is the
+    // safe direction for a consent flag: an unknown answer is never consent.
+    shareLaborTimes: row.share_labor_times ?? false,
   };
 }
 
@@ -60,6 +63,7 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
       defaultLaborType: null,
       referenceHourlyRate: null,
       tagColors: {},
+      shareLaborTimes: false,
     };
   }
   return toSettings(data);
@@ -73,6 +77,7 @@ export type SettingsPatch = {
   defaultLaborType?: LaborType | null;
   referenceHourlyRate?: number | null;
   tagColors?: Record<string, number>;
+  shareLaborTimes?: boolean;
 };
 
 export async function updateSettings(
@@ -94,6 +99,8 @@ export async function updateSettings(
   if (patch.referenceHourlyRate !== undefined)
     update.reference_hourly_rate = patch.referenceHourlyRate;
   if (patch.tagColors !== undefined) update.tag_colors = patch.tagColors;
+  if (patch.shareLaborTimes !== undefined)
+    update.share_labor_times = patch.shareLaborTimes;
 
   const { data, error } = await supabase
     .from("user_settings")

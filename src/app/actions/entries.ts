@@ -4,7 +4,42 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { isComebackKind } from "@/lib/types";
+import { observationsFromEntry } from "@/lib/true-time";
 import type { Entry, NewEntry, NewEntryOpCode, RoMatch } from "@/lib/types";
+import type { DbClient } from "@/lib/db";
+
+/**
+ * Keep this RO's True Time observations in step with its current state.
+ *
+ * Called after every mutation that can change a line's flag or actual hours.
+ * Entirely best-effort and never allowed to throw: an observation is statistical
+ * side data, and losing one costs the pool a single row, whereas failing the
+ * tech's save costs them their work.
+ *
+ * Reads consent per call rather than caching it, so flipping the setting takes
+ * effect on the very next save instead of at some later session boundary.
+ */
+async function syncObservations(
+  supabase: DbClient,
+  entryId: string,
+): Promise<void> {
+  try {
+    const [settings, entry, library] = await Promise.all([
+      db.getSettings(supabase),
+      db.getEntry(supabase, entryId),
+      db.listOpCodes(supabase),
+    ]);
+    if (!entry) return;
+    await db.syncEntryLaborTimeObservations(
+      supabase,
+      entryId,
+      observationsFromEntry(entry, library),
+      settings.shareLaborTimes,
+    );
+  } catch {
+    // Swallowed on purpose — see the note above.
+  }
+}
 
 // Create or update an entry. Returns the persisted entry so the client can
 // navigate / display success. Throws on validation or DB errors.
@@ -91,6 +126,8 @@ export async function saveEntry(
     ? await db.updateEntry(supabase, entryId, normalized)
     : await db.createEntry(supabase, normalized);
 
+  await syncObservations(supabase, entry.id);
+
   // Revalidate everything that displays entries. NB: "/" is the marketing
   // landing page — the app dashboard lives at "/dashboard" and must be listed
   // explicitly or its Recent-ROs / stats stay stale after a mutation.
@@ -138,6 +175,7 @@ export async function addOpCodeLineToEntryAction(
   } catch (err) {
     throw new Error(err instanceof Error ? err.message : "Failed to add op code.");
   }
+  await syncObservations(supabase, entryId);
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/history");
@@ -150,6 +188,11 @@ export async function setLineActualHoursAction(
 ): Promise<void> {
   const supabase = await createClient();
   await db.setLineActualHours(supabase, lineId, actualHours);
+  // The single most important True Time hook: this is where a timed job's actual
+  // hours actually arrive (the timer saves through here), so it is where most
+  // observations are born — and where clearing the hours must retract one.
+  const owner = await db.getEntryIdForLine(supabase, lineId);
+  if (owner) await syncObservations(supabase, owner);
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/history");

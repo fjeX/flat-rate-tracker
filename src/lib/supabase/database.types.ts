@@ -577,6 +577,7 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          share_labor_times: boolean
           default_labor_type: string | null
           goal_hours: number
           is_admin: boolean
@@ -589,6 +590,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          share_labor_times?: boolean
           default_labor_type?: string | null
           goal_hours?: number
           is_admin?: boolean
@@ -601,6 +603,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          share_labor_times?: boolean
           default_labor_type?: string | null
           goal_hours?: number
           is_admin?: boolean
@@ -896,6 +899,96 @@ export type Database = {
         }
         Relationships: []
       }
+      labor_time_observations: {
+        Row: {
+          actual_hours: number
+          code_norm: string
+          created_at: string
+          entry_id: string | null
+          flag_hours: number
+          id: string
+          line_id: string | null
+          make_norm: string
+          model_norm: string
+          observed_month: string
+          updated_at: string
+          user_id: string
+          vehicle_year: number | null
+        }
+        Insert: {
+          actual_hours: number
+          code_norm: string
+          created_at?: string
+          entry_id?: string | null
+          flag_hours: number
+          id?: string
+          line_id?: string | null
+          make_norm?: string
+          model_norm?: string
+          observed_month: string
+          updated_at?: string
+          user_id: string
+          vehicle_year?: number | null
+        }
+        Update: {
+          actual_hours?: number
+          code_norm?: string
+          created_at?: string
+          entry_id?: string | null
+          flag_hours?: number
+          id?: string
+          line_id?: string | null
+          make_norm?: string
+          model_norm?: string
+          observed_month?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_year?: number | null
+        }
+        Relationships: []
+      }
+      labor_time_aggregates: {
+        Row: {
+          code_norm: string
+          contributor_count: number
+          make_norm: string
+          median_actual_hours: number
+          median_flag_hours: number
+          median_ratio: number
+          model_norm: string
+          observation_count: number
+          p25_ratio: number
+          p75_ratio: number
+          refreshed_at: string
+        }
+        Insert: {
+          code_norm: string
+          contributor_count: number
+          make_norm?: string
+          median_actual_hours: number
+          median_flag_hours: number
+          median_ratio: number
+          model_norm?: string
+          observation_count: number
+          p25_ratio: number
+          p75_ratio: number
+          refreshed_at?: string
+        }
+        Update: {
+          code_norm?: string
+          contributor_count?: number
+          make_norm?: string
+          median_actual_hours?: number
+          median_flag_hours?: number
+          median_ratio?: number
+          model_norm?: string
+          observation_count?: number
+          p25_ratio?: number
+          p75_ratio?: number
+          refreshed_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -906,6 +999,10 @@ export type Database = {
           updates: Json
         }
         Returns: undefined
+      }
+      refresh_labor_time_aggregates: {
+        Args: Record<string, never>
+        Returns: number
       }
     }
     Enums: {

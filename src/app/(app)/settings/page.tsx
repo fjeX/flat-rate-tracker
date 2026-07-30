@@ -10,6 +10,7 @@ import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
 import { RoTemplateCard } from "@/components/settings/RoTemplateCard";
 import { TimezoneCard } from "@/components/settings/TimezoneCard";
 import { QuickAddCard } from "@/components/settings/QuickAddCard";
+import { TrueTimeCard } from "@/components/settings/TrueTimeCard";
 import Link from "next/link";
 
 export default async function SettingsPage() {
@@ -38,6 +39,7 @@ export default async function SettingsPage() {
           <ReferenceRateCard initialRate={settings.referenceHourlyRate} />
           <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
           <TimezoneCard initialTimezone={timezone} />
+          <TrueTimeCard initialShare={settings.shareLaborTimes} />
           <section className="card padded-lg">
             <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>
               Work Schedule & Days Off

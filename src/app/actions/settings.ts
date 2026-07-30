@@ -95,6 +95,26 @@ export async function setReferenceRateAction(
   revalidatePath("/pay-period");
 }
 
+// True Time opt-in. Turning it OFF also purges the user's stored observations.
+//
+// The aggregation function already filters on this flag, so flipping it false is
+// enough to stop the user being counted. But leaving their raw rows behind would
+// mean "stop sharing" deleted nothing, which is not what that phrase means to a
+// person — and it would silently resume contributing the moment they toggled it
+// back on, including measurements from a period they thought was private.
+export async function setShareLaborTimesAction(
+  share: boolean,
+): Promise<void> {
+  const supabase = await createClient();
+  await db.updateSettings(supabase, { shareLaborTimes: share });
+  if (!share) {
+    // Tolerates a pre-migration DB — revoking consent must never error out.
+    await db.clearAllLaborTimeObservations(supabase);
+  }
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
 export async function setSplitDayAction(splitDay: number): Promise<void> {
   if (!Number.isInteger(splitDay) || splitDay < 1 || splitDay > 30) {
     throw new Error("Split day must be an integer between 1 and 30.");
@@ -358,6 +378,7 @@ export async function clearAllDataAction(): Promise<void> {
   await db.clearAllTimerSlots(supabase);
   await db.clearAllUnpaidTime(supabase);
   await db.clearAllDisputes(supabase);
+  await db.clearAllLaborTimeObservations(supabase);
 
   revalidateAll();
 }
