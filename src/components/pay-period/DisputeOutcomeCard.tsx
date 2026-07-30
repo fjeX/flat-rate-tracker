@@ -84,13 +84,19 @@ function OutcomeForm({
           note,
           status: "resolved",
         });
-        // refresh BEFORE closing the form. This page refetches three years of
-        // entries, so the round trip is slow enough that closing first leaves the
-        // tech staring at the pre-resolve state wondering if it saved. Both calls
-        // sit inside the transition, so the button stays "Saving…" until the new
-        // data is actually in.
+        // Deliberately NO onDone() here. router.refresh() is not awaitable —
+        // it schedules a refresh, so closing the form from this callback (in
+        // either order) unmounts it before the resolved data arrives, and the
+        // tech sees "Waiting on a response / Recovered 0.0h" right after saving
+        // and concludes it failed. Verified against prod: reordering did not fix
+        // it, because ordering was never the problem.
+        //
+        // Instead the form is data-driven: it stays mounted (with the button on
+        // "Saving…", since refresh() inside a transition holds isPending until
+        // the new payload lands) and the parent unmounts it once the dispute
+        // actually reads as closed. The UI can then never show a state the
+        // server hasn't confirmed.
         router.refresh();
-        onDone();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to save.");
       }
@@ -326,7 +332,10 @@ export function DisputeOutcomeCard({
 
           {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
 
-          {recording ? (
+          {/* `&& !isClosed` is what actually closes the form: once the refresh
+              lands and the dispute reads as resolved, this unmounts it. See the
+              comment in OutcomeForm.save() for why it isn't closed imperatively. */}
+          {recording && !isClosed(dispute.status) ? (
             <OutcomeForm dispute={dispute} onDone={() => setRecording(false)} />
           ) : (
             !isClosed(dispute.status) && (
