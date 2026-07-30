@@ -135,6 +135,8 @@ export function ReconciliationCard({
   periodLabel = "",
   techName = null,
   entryIdsWithPhotos,
+  embedded = false,
+  title = "Pay Reconciliation",
 }: {
   entries: Entry[];
   library?: OpCode[];
@@ -143,6 +145,11 @@ export function ReconciliationCard({
   periodLabel?: string;
   techName?: string | null;
   entryIdsWithPhotos?: Set<string>;
+  // Rendered as a drill-down INSIDE PaidCheckCard rather than as its own card
+  // on the page. Drops the card chrome and restyles the toggle as a row; all
+  // behaviour below is identical either way.
+  embedded?: boolean;
+  title?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -226,15 +233,21 @@ export function ReconciliationCard({
     }
   }
 
+  const Root = embedded ? "div" : "section";
+
   return (
-    <section className="card padded-lg space-y-3">
+    <Root className={embedded ? "space-y-3" : "card padded-lg space-y-3"}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
+        className={
+          embedded
+            ? "flex min-h-[44px] w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] bg-[var(--bg-2)] px-3 py-2 text-left hover:bg-[var(--bg-3)]"
+            : "flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
+        }
       >
-        <h2 className="text-sm font-medium">Pay Reconciliation</h2>
+        <h2 className="text-sm font-medium">{title}</h2>
         <span className="flex items-center gap-2 text-[var(--fg-3)]">
           {!open && summary.shortedHours > 0 && (
             <span className="mono text-sm font-medium tabular-nums text-[var(--bad)]">
@@ -360,6 +373,6 @@ export function ReconciliationCard({
       )}
       </div>
       )}
-    </section>
+    </Root>
   );
 }

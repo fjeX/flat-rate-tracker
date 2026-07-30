@@ -10,10 +10,14 @@ export function DiscrepancyCard({
   periodKey,
   stats,
   initialPaid,
+  embedded = false,
 }: {
   periodKey: string;
   stats: Stats;
   initialPaid: number | null;
+  // Rendered as the period-level figures INSIDE PaidCheckCard. Drops the card
+  // chrome and its own heading, since the family card owns both.
+  embedded?: boolean;
 }) {
   const [paidText, setPaidText] = useState<string>(toText(initialPaid));
   const [savedPaid, setSavedPaid] = useState<number | null>(initialPaid);
@@ -50,11 +54,13 @@ export function DiscrepancyCard({
           ? "text-[var(--good)]"
           : "text-[var(--fg-3)]";
 
+  const Root = embedded ? "div" : "section";
+
   return (
-    <section className="card padded-lg space-y-3">
-      <h2 className="text-sm font-medium">
-        Pay Discrepancy Check
-      </h2>
+    <Root className={embedded ? "space-y-3" : "card padded-lg space-y-3"}>
+      {!embedded && (
+        <h2 className="text-sm font-medium">Pay Discrepancy Check</h2>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="block">
@@ -114,6 +120,6 @@ export function DiscrepancyCard({
           logged ROs as proof when you talk to your service manager.
         </div>
       )}
-    </section>
+    </Root>
   );
 }

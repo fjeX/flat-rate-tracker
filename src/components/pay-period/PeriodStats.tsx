@@ -26,8 +26,14 @@ export function PeriodStats({
   earnings = null,
   warrantyLoss = null,
   unflaggedTime = null,
+  hideFlagHours = false,
 }: {
   stats: Stats & { denomSource?: DenomSource | null };
+  // The in-progress and awaiting-pay heroes already carry flagged hours as
+  // their headline figure, so repeating it as a tile directly underneath is
+  // noise. The settled hero shows the shortfall instead, and there the tile
+  // still earns its place.
+  hideFlagHours?: boolean;
   // Both null unless the user has priced rates — when null, nothing dollar-based
   // renders and the grid looks exactly as it did before this feature.
   earnings?: number | null;
@@ -41,11 +47,13 @@ export function PeriodStats({
     <div className="space-y-2">
       <EntranceGrid className="stat-grid">
         <Cell label="ROs" value={String(stats.roCount)} />
-        <Cell
-          label="Flag hrs"
-          value={`${fmtHours(stats.flagHours)}h`}
-          highlighted={earnings === null}
-        />
+        {!hideFlagHours && (
+          <Cell
+            label="Flag hrs"
+            value={`${fmtHours(stats.flagHours)}h`}
+            highlighted={earnings === null}
+          />
+        )}
         <Cell label="Clocked hrs" value={`${fmtHours(stats.clockedHours)}h`} />
         <Cell
           label={

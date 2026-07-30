@@ -9,6 +9,7 @@ import {
   type PeriodRange,
 } from "@/lib/periods";
 import { aggregateStats, aggregateStatsWithSchedule } from "@/lib/stats";
+import { computeForecast } from "@/lib/forecast";
 import { ratesToMap } from "@/lib/earnings";
 import { filterBonusesInRange } from "@/lib/bonuses";
 import { PayPeriodView } from "@/components/pay-period/PayPeriodView";
@@ -147,6 +148,22 @@ export default async function PayPeriodPage({
   const bonusDefaultDate =
     today >= selected.start && today <= selected.end ? today : selected.end;
 
+  // Forward projection for the in-progress hero ("on this pace you land at…").
+  // Only computed for a period that is actually still running — projecting a
+  // closed period has no meaning, and computeForecast's day-remaining maths
+  // assumes today falls inside the range. Derived from entries already loaded
+  // above; no extra fetch.
+  const goalHours = settings.goalHours ?? 0;
+  const forecast =
+    selected.end >= today && goalHours > 0
+      ? computeForecast(entries, {
+          today,
+          periodEnd: selected.end,
+          current: stats.flagHours,
+          goal: goalHours,
+        })
+      : null;
+
   return (
     <PayPeriodView
       availablePeriods={availablePeriods}
@@ -174,6 +191,9 @@ export default async function PayPeriodPage({
             d.status !== "withdrawn",
         ) ?? null
       }
+      today={today}
+      goalHours={goalHours}
+      forecast={forecast}
     />
   );
 }

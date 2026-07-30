@@ -26,16 +26,31 @@ export function RoList({
   rates = {},
   emptyState,
   onRowClick,
+  maxRows,
 }: {
   entries: Entry[];
   library?: OpCode[];
   rates?: RateMap;
   emptyState?: React.ReactNode;
   onRowClick?: (entry: Entry) => void;
+  // Cap the visible rows behind a "Show all N" toggle. Undefined (the default)
+  // renders every entry, which is what the dashboard and guest page want — a
+  // busy semi-monthly period is 50-90 ROs, so only the Pay Period page needs
+  // this, and only once the period is settled and reconciliation has become
+  // the real drill-down.
+  maxRows?: number;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+  // Resolve against the FULL list, not the visible slice — the detail modal
+  // must still open for a row that a later collapse would hide.
   const openEntry = openId ? entries.find((e) => e.id === openId) : null;
+
+  const capped =
+    maxRows !== undefined && !showAll && entries.length > maxRows;
+  const visible = capped ? entries.slice(0, maxRows) : entries;
+  const hiddenCount = entries.length - visible.length;
 
   if (entries.length === 0) {
     return emptyState ? (
@@ -54,7 +69,7 @@ export function RoList({
   return (
     <>
       <div className="ro-list">
-        {entries.map((e) => {
+        {visible.map((e) => {
           const vehicle = [e.vehicle.year, e.vehicle.make, e.vehicle.model]
             .filter(Boolean)
             .join(" ")
@@ -106,6 +121,17 @@ export function RoList({
           );
         })}
       </div>
+
+      {capped && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="ro-show-all"
+        >
+          Show all {entries.length} ROs
+          <span className="text-[var(--fg-3)]"> · {hiddenCount} hidden</span>
+        </button>
+      )}
 
       {!onRowClick && openEntry && (
         <RoDetailModal

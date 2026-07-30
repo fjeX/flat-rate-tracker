@@ -1,0 +1,1490 @@
+<title>FRT — Pay Period redesign</title>
+
+<style>
+  /* ══════════════════════════════════════════════════════════════
+     VIEWER CHROME — deliberately NOT FRT-styled, so the toolbar is
+     never mistaken for part of the design being evaluated.
+     Responds to the reader's own light/dark preference.
+     ══════════════════════════════════════════════════════════════ */
+  :root {
+    --ui-bg: #eceae6;
+    --ui-panel: #ffffff;
+    --ui-fg: #23211d;
+    --ui-fg-2: #625d55;
+    --ui-line: rgba(20, 18, 14, 0.14);
+    --ui-accent: #7a4a1e;
+    --ui-accent-ink: #ffffff;
+    --ui-well: #dedbd4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ui-bg: #17181b;
+      --ui-panel: #202226;
+      --ui-fg: #e9e7e3;
+      --ui-fg-2: #9d988f;
+      --ui-line: rgba(255, 255, 255, 0.12);
+      --ui-accent: #d98b4a;
+      --ui-accent-ink: #1a1509;
+      --ui-well: #2a2d32;
+    }
+  }
+  :root[data-theme="light"] {
+    --ui-bg: #eceae6;
+    --ui-panel: #ffffff;
+    --ui-fg: #23211d;
+    --ui-fg-2: #625d55;
+    --ui-line: rgba(20, 18, 14, 0.14);
+    --ui-accent: #7a4a1e;
+    --ui-accent-ink: #ffffff;
+    --ui-well: #dedbd4;
+  }
+  :root[data-theme="dark"] {
+    --ui-bg: #17181b;
+    --ui-panel: #202226;
+    --ui-fg: #e9e7e3;
+    --ui-fg-2: #9d988f;
+    --ui-line: rgba(255, 255, 255, 0.12);
+    --ui-accent: #d98b4a;
+    --ui-accent-ink: #1a1509;
+    --ui-well: #2a2d32;
+  }
+
+  body {
+    margin: 0;
+    background: var(--ui-bg);
+    color: var(--ui-fg);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .viewer-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: color-mix(in oklab, var(--ui-bg) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--ui-line);
+  }
+  .viewer-title {
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin-right: 2px;
+  }
+  .toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .toggle-group > .group-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ui-fg-2);
+    margin-right: 3px;
+    font-weight: 600;
+  }
+  .toggle-group button {
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 4px 11px;
+    border-radius: 999px;
+    border: 1px solid var(--ui-line);
+    background: transparent;
+    color: var(--ui-fg-2);
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+  .toggle-group button:hover {
+    background: var(--ui-well);
+    color: var(--ui-fg);
+  }
+  .toggle-group button[aria-pressed="true"] {
+    background: var(--ui-accent);
+    border-color: var(--ui-accent);
+    color: var(--ui-accent-ink);
+    font-weight: 600;
+  }
+  .toggle-group button:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+  }
+  .toggle-group[data-inert="true"] {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .stage { padding: 20px 20px 10px; }
+  .stage-note {
+    max-width: 66rem;
+    margin: 0 auto 12px;
+    font-size: 12.5px;
+    color: var(--ui-fg-2);
+  }
+  .stage-note b { color: var(--ui-fg); font-weight: 620; }
+  .viewport {
+    max-width: 66rem;
+    margin: 0 auto;
+    border: 1px solid var(--ui-line);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  }
+
+  .notes {
+    max-width: 66rem;
+    margin: 0 auto;
+    padding: 26px 20px 56px;
+  }
+  .notes h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ui-fg-2);
+    margin: 26px 0 10px;
+    font-weight: 650;
+  }
+  .notes h2:first-child { margin-top: 0; }
+  .notes ul { margin: 0; padding-left: 18px; }
+  .notes li { margin-bottom: 7px; font-size: 13.5px; }
+  .notes li strong { font-weight: 620; }
+  .notes code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    background: var(--ui-well);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .rule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .rule-table th,
+  .rule-table td {
+    text-align: left;
+    padding: 7px 10px 7px 0;
+    border-bottom: 1px solid var(--ui-line);
+    vertical-align: top;
+  }
+  .rule-table th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ui-fg-2);
+    font-weight: 650;
+  }
+  .compare {
+    display: grid;
+    gap: 14px;
+    margin-top: 4px;
+  }
+  @media (min-width: 720px) { .compare { grid-template-columns: 1fr 1fr; } }
+  .compare > div {
+    border: 1px solid var(--ui-line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--ui-panel);
+  }
+  .compare h3 {
+    font-size: 13px;
+    margin: 0 0 4px;
+    font-weight: 650;
+  }
+  .compare p { font-size: 12.5px; color: var(--ui-fg-2); margin: 0; }
+
+  /* ══════════════════════════════════════════════════════════════
+     FRT SCOPE — real tokens lifted verbatim from src/app/globals.css.
+     Driven ONLY by the mockup's own theme toggle, independent of the
+     reader's OS theme, because both FRT themes are being evaluated.
+     ══════════════════════════════════════════════════════════════ */
+  .frt {
+    --bg-0: #141519;
+    --bg-1: #1d1f24;
+    --bg-2: #24262c;
+    --bg-3: #2d3038;
+    --bg-4: #383c45;
+    --line: rgba(255, 255, 255, 0.06);
+    --fg-0: #f4f3f1;
+    --fg-1: #d8d5d1;
+    --fg-2: #a9a59f;
+    --fg-3: #8d8983;
+    --brand: oklch(0.73 0.14 55);
+    --brand-soft: oklch(0.30 0.10 50 / 0.45);
+    --brand-bg: oklch(0.30 0.08 50 / 0.18);
+    --brand-ink: oklch(0.18 0.04 50);
+    --good: oklch(0.78 0.16 150);
+    --good-strong: oklch(0.65 0.17 150);
+    --good-bg: oklch(0.30 0.10 150 / 0.18);
+    --bad: oklch(0.72 0.18 25);
+    --bad-bg: oklch(0.30 0.12 25 / 0.20);
+    --warn: oklch(0.82 0.15 80);
+    --warn-bg: oklch(0.30 0.09 80 / 0.20);
+    --info: oklch(0.75 0.13 230);
+    --info-bg: oklch(0.30 0.08 230 / 0.20);
+    --radius: 18px;
+    --radius-sm: 12px;
+    --shadow-card: 0 1px 2px rgba(0,0,0,0.25), 0 10px 30px rgba(0,0,0,0.28);
+
+    background: var(--bg-0);
+    color: var(--fg-0);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 620px;
+    padding: 0 0 40px;
+  }
+  .frt[data-frt-theme="light"] {
+    --bg-0: #f6f5f3;
+    --bg-1: #ffffff;
+    --bg-2: #f1f0ed;
+    --bg-3: #e9e7e3;
+    --bg-4: #dedbd5;
+    --line: rgba(28, 25, 20, 0.07);
+    --fg-0: #201d19;
+    --fg-1: #3a362f;
+    --fg-2: #605b53;
+    --fg-3: #767066;
+    --brand: oklch(0.47 0.17 52);
+    --brand-soft: oklch(0.50 0.10 50 / 0.35);
+    --brand-bg: oklch(0.90 0.08 55 / 0.15);
+    --good: oklch(0.39 0.16 150);
+    --good-strong: oklch(0.36 0.17 150);
+    --good-bg: oklch(0.90 0.08 150 / 0.15);
+    --bad: oklch(0.43 0.18 25);
+    --bad-bg: oklch(0.90 0.08 25 / 0.15);
+    --warn: oklch(0.41 0.15 80);
+    --warn-bg: oklch(0.90 0.08 80 / 0.15);
+    --info: oklch(0.39 0.13 230);
+    --info-bg: oklch(0.90 0.08 230 / 0.15);
+    --shadow-card: 0 1px 2px rgba(0,0,0,0.05), 0 8px 24px rgba(0,0,0,0.07);
+  }
+
+  .frt .tabular { font-variant-numeric: tabular-nums; }
+
+  /* ── Page title row: period IS the title ───────────────── */
+  .frt-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 16px 4px;
+  }
+  .frt-titlebar .step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex: none;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--fg-2);
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .frt-titlebar .step:hover { background: var(--bg-2); color: var(--fg-0); }
+  .frt-title-main { display: flex; flex-direction: column; min-width: 0; }
+  .frt-title-main h1 {
+    font-size: 19px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .frt-title-sub { font-size: 12px; color: var(--fg-3); margin-top: 1px; }
+  .frt-titlebar .spacer { flex: 1; }
+  .frt-titlebar .more {
+    width: 30px;
+    height: 30px;
+    flex: none;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--fg-3);
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .frt-titlebar .more:hover { background: var(--bg-2); color: var(--fg-0); }
+
+  /* ── Body container: the layout toggle acts here ───────── */
+  .frt-body {
+    padding: 8px 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .frt[data-layout="single"] .frt-body,
+  .frt[data-layout="single"] .frt-titlebar {
+    max-width: 48rem; /* ≈ max-w-3xl */
+    margin: 0 auto;
+    width: 100%;
+  }
+  .top-band,
+  .col-main,
+  .col-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  @media (min-width: 860px) {
+    .frt[data-layout="two"] .frt-body {
+      display: grid;
+      grid-template-columns: 1.65fr 1fr;
+      align-items: start;
+      gap: 14px;
+    }
+    .frt[data-layout="two"] .top-band { grid-column: 1 / -1; }
+  }
+  .rail-divider {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 11.5px;
+    color: var(--fg-3);
+    margin-top: 4px;
+  }
+  .rail-divider::after {
+    content: "";
+    height: 1px;
+    flex: 1;
+    background: var(--line);
+  }
+  .frt[data-layout="two"] .rail-divider { margin-top: 0; }
+
+  /* ── FRT primitives ────────────────────────────────────── */
+  .frt .card {
+    background: var(--bg-1);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+  }
+  .frt .card-inset {
+    background: var(--bg-2);
+    border-radius: var(--radius-sm);
+  }
+
+  /* Stat grids — band version is a wide row, rail version is a 2×2 */
+  .frt .stats-band {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  @media (min-width: 600px) {
+    .frt .stats-band { grid-template-columns: repeat(4, 1fr); }
+  }
+  .frt .stats-rail {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  /* The stats toggle only has meaning in two-column; single column always
+     puts the stat row directly under the hero. */
+  .frt[data-stats="band"] .stats-rail { display: none; }
+  .frt[data-stats="rail"] .stats-band { display: none; }
+  .frt[data-layout="single"] .stats-rail { display: none; }
+  .frt[data-layout="single"] .stats-band { display: grid; }
+  @media (max-width: 859px) {
+    .frt .stats-rail { display: none !important; }
+    .frt .stats-band { display: grid !important; }
+  }
+
+  .frt .stat {
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    background: var(--bg-1);
+    border: 1px solid transparent;
+    box-shadow: var(--shadow-card);
+    position: relative;
+    overflow: hidden;
+  }
+  .frt .stat-label { font-size: 12.5px; color: var(--fg-3); font-weight: 550; }
+  .frt .stat-value {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-top: 4px;
+    line-height: 1;
+  }
+  .frt .stat-value .unit {
+    font-size: 13px;
+    color: var(--fg-2);
+    margin-left: 1px;
+    font-weight: 500;
+  }
+  .frt .stat.featured {
+    background: linear-gradient(180deg, var(--brand-bg), transparent 100%), var(--bg-1);
+    border-color: var(--brand-soft);
+  }
+  .frt .stat.featured .stat-label,
+  .frt .stat.featured .stat-value { color: var(--brand); }
+  .frt .stat.eff-good::before,
+  .frt .stat.eff-warn::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 2px;
+  }
+  .frt .stat.eff-good::before { background: var(--good); }
+  .frt .stat.eff-warn::before { background: var(--warn); }
+  .frt .stat.eff-good .stat-value { color: var(--good); }
+  .frt .stat.eff-warn .stat-value { color: var(--warn); }
+
+  /* ── Hero ──────────────────────────────────────────────── */
+  .frt .hero {
+    background: linear-gradient(180deg, var(--brand-bg), transparent 100%), var(--bg-1);
+    border: 1px solid var(--brand-soft);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    padding: 18px 18px 16px;
+  }
+  .frt .hero.settled-short {
+    background: linear-gradient(180deg, var(--bad-bg), transparent 100%), var(--bg-1);
+    border-color: color-mix(in oklab, var(--bad) 34%, transparent);
+  }
+  .frt .hero-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fg-3);
+  }
+  .frt .hero.settled-short .hero-eyebrow { color: var(--bad); }
+  .frt .hero-figure {
+    font-size: 38px;
+    font-weight: 650;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin-top: 5px;
+  }
+  .frt .hero-figure .unit {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--fg-2);
+    margin-left: 2px;
+  }
+  .frt .hero.settled-short .hero-figure { color: var(--bad); }
+  .frt .hero-support {
+    margin-top: 8px;
+    font-size: 13.5px;
+    color: var(--fg-2);
+    line-height: 1.45;
+    max-width: 46ch;
+  }
+  .frt .hero-support strong { color: var(--fg-0); font-weight: 620; }
+
+  .frt .pacebar {
+    margin-top: 12px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--bg-3);
+    overflow: hidden;
+    max-width: 46ch;
+  }
+  .frt .pacebar > i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--brand);
+  }
+
+  .frt .hero-action {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+    margin-top: 12px;
+    max-width: 42rem;
+  }
+  .frt .hero-action .field { flex: 1 1 190px; min-width: 0; }
+  .frt .field-label {
+    font-size: 13px;
+    color: var(--fg-2);
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 550;
+  }
+  .frt .input {
+    width: 100%;
+    min-height: 46px;
+    padding: 11px 13px;
+    font-size: 15px;
+    background: var(--bg-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--fg-0);
+    font-family: inherit;
+  }
+  .frt .input::placeholder { color: var(--fg-3); }
+  .frt .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 46px;
+    padding: 8px 18px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: var(--bg-3);
+    color: var(--fg-0);
+    cursor: pointer;
+  }
+  .frt .btn-primary {
+    background: var(--brand);
+    color: var(--brand-ink);
+    font-weight: 600;
+  }
+
+  /* ── Collapsible card header ───────────────────────────── */
+  .frt .card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px 16px;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+  .frt .card-head h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .frt .card-head .spacer { flex: 1; }
+  .frt .chev {
+    color: var(--fg-3);
+    font-size: 11px;
+    flex: none;
+    transition: transform 150ms ease;
+  }
+  .frt details[open] > summary .chev { transform: rotate(180deg); }
+  .frt details > summary { list-style: none; }
+  .frt details > summary::-webkit-details-marker { display: none; }
+  .frt .card-body { padding: 0 16px 16px; }
+
+  .frt .pill {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--good-bg);
+    color: var(--good);
+    font-weight: 550;
+    flex: none;
+  }
+  .frt .pill.bad { background: var(--bad-bg); color: var(--bad); }
+  .frt .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .frt .pill.neutral { background: var(--bg-3); color: var(--fg-2); }
+  .frt .pill.brand { background: var(--brand-bg); color: var(--brand); }
+
+  /* ── Drill-down rows inside "Did I get paid?" ──────────── */
+  .frt .drill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 13px;
+    margin-top: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 13.5px;
+    color: var(--fg-1);
+    cursor: pointer;
+    text-align: left;
+  }
+  .frt .drill:hover { background: var(--bg-3); }
+  .frt .drill .spacer { flex: 1; }
+  .frt .drill .arrow { color: var(--fg-3); flex: none; }
+  .frt .drill.primary {
+    background: var(--brand-bg);
+    border-color: var(--brand-soft);
+    color: var(--brand);
+    font-weight: 600;
+  }
+
+  .frt .kv-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13.5px;
+  }
+  .frt .kv-row:last-child { border-bottom: 0; }
+  .frt .kv-row .k { color: var(--fg-2); }
+  .frt .kv-row .spacer { flex: 1; }
+  .frt .kv-row .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .frt .split3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .frt .split3 > div {
+    background: var(--bg-2);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+  .frt .split3 .k { font-size: 12px; color: var(--fg-3); font-weight: 550; }
+  .frt .split3 .v {
+    font-size: 17px;
+    font-weight: 620;
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .frt .degrade {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--info-bg);
+    font-size: 12.5px;
+    color: var(--fg-2);
+    line-height: 1.45;
+  }
+  .frt .degrade a {
+    color: var(--info);
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .frt .degrade a:hover { text-decoration: underline; }
+
+  /* ── RO list ───────────────────────────────────────────── */
+  .frt .ro-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13.5px;
+  }
+  .frt .ro-row:last-child { border-bottom: 0; }
+  .frt .ro-num {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+    color: var(--fg-2);
+    flex: none;
+    width: 58px;
+  }
+  .frt .ro-desc {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .frt .ro-hrs {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    flex: none;
+  }
+  .frt .ro-more {
+    padding: 12px 14px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--brand);
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    width: 100%;
+    font-family: inherit;
+  }
+  .frt .ro-more:hover { background: var(--bg-2); }
+
+  .frt .muted-note {
+    font-size: 12.5px;
+    color: var(--fg-3);
+    margin-top: 9px;
+    line-height: 1.45;
+  }
+
+  .mode-panel { display: none; }
+  .mode-panel.on { display: block; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+</style>
+
+<header class="viewer-bar">
+  <span class="viewer-title">FRT — Pay Period redesign</span>
+
+  <div class="toggle-group" id="g-mode">
+    <span class="group-label">Mode</span>
+    <button type="button" data-val="progress" aria-pressed="true">In progress</button>
+    <button type="button" data-val="awaiting" aria-pressed="false">Awaiting pay</button>
+    <button type="button" data-val="settled" aria-pressed="false">Settled</button>
+  </div>
+
+  <div class="toggle-group" id="g-layout">
+    <span class="group-label">Layout</span>
+    <button type="button" data-val="two" aria-pressed="true">Two col</button>
+    <button type="button" data-val="single" aria-pressed="false">Single col</button>
+  </div>
+
+  <div class="toggle-group" id="g-stats">
+    <span class="group-label">Stats</span>
+    <button type="button" data-val="band" aria-pressed="true">Full width</button>
+    <button type="button" data-val="rail" aria-pressed="false">In rail</button>
+  </div>
+
+  <div class="toggle-group" id="g-theme">
+    <span class="group-label">Theme</span>
+    <button type="button" data-val="dark" aria-pressed="true">Dark</button>
+    <button type="button" data-val="light" aria-pressed="false">Light</button>
+  </div>
+</header>
+
+<div class="stage">
+  <p class="stage-note">
+    <b>Stats</b> is the open question — flip it while in <b>Settled</b> mode to
+    compare. “Full width” gives the four numbers a proper row under the hero;
+    “In rail” packs them into a 2×2 at the top of the right column. The toggle
+    only applies to two-column at ≥860px; below that the stat row always sits
+    under the hero.
+  </p>
+
+  <div class="viewport">
+    <div class="frt" id="frt" data-layout="two" data-stats="band" data-frt-theme="dark">
+
+      <!-- ═══════════════ MODE: IN PROGRESS ═══════════════ -->
+      <div class="mode-panel on" data-mode="progress">
+        <div class="frt-titlebar">
+          <button class="step" type="button" aria-label="Previous period">‹</button>
+          <div class="frt-title-main">
+            <h1>Jul 16 – 31</h1>
+            <span class="frt-title-sub">Current period · day 6 of 11</span>
+          </div>
+          <button class="step" type="button" aria-label="Next period">›</button>
+          <span class="spacer"></span>
+          <button class="more" type="button" aria-label="Period options">⋮</button>
+        </div>
+
+        <div class="frt-body">
+          <div class="top-band">
+            <div class="hero">
+              <div class="hero-eyebrow">Flagged so far</div>
+              <div class="hero-figure tabular">42.1<span class="unit">h</span></div>
+              <div class="hero-support">
+                96% efficiency · on this pace you land at
+                <strong>77h</strong> of your <strong>88h</strong> goal.
+              </div>
+              <div class="pacebar"><i style="width:48%"></i></div>
+            </div>
+
+            <div class="stats-band">
+              <div class="stat">
+                <div class="stat-label">ROs</div>
+                <div class="stat-value tabular">31</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Clocked</div>
+                <div class="stat-value tabular">44.0<span class="unit">h</span></div>
+              </div>
+              <div class="stat eff-good">
+                <div class="stat-label">Efficiency</div>
+                <div class="stat-value tabular">96%</div>
+              </div>
+              <div class="stat featured">
+                <div class="stat-label">Earnings</div>
+                <div class="stat-value tabular">$1,347</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-main">
+            <details class="card" open>
+              <summary class="card-head">
+                <h2>What did the work cost me?</h2>
+                <span class="spacer"></span>
+                <span class="pill warn">1.8h unpaid</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div class="card-body">
+                <div class="kv-row">
+                  <span class="k">Effective hourly</span>
+                  <span class="spacer"></span>
+                  <span class="v">$30.61</span>
+                </div>
+                <div class="kv-row">
+                  <span class="k">Clocked with nothing flagged</span>
+                  <span class="spacer"></span>
+                  <span class="v">1.9h</span>
+                </div>
+                <div class="split3">
+                  <div><div class="k">Rework</div><div class="v">1.8h</div></div>
+                  <div><div class="k">Waiting</div><div class="v">0.0h</div></div>
+                  <div><div class="k">Shop time</div><div class="v">0.0h</div></div>
+                </div>
+                <div class="degrade">
+                  <span>
+                    Effective hourly excludes 1 day with no clocked hours logged
+                    (Jul 19). <a href="#">Add clock hours</a>
+                  </span>
+                </div>
+              </div>
+            </details>
+
+            <section class="card">
+              <div class="card-head" style="cursor:default">
+                <h2>ROs in this period</h2>
+                <span class="spacer"></span>
+                <span class="pill neutral">31 · 42.1h</span>
+              </div>
+              <div class="ro-row">
+                <span class="ro-num">#99418</span>
+                <span class="ro-desc">Brake pads &amp; rotors — front</span>
+                <span class="ro-hrs">2.4h</span>
+              </div>
+              <div class="ro-row">
+                <span class="ro-num">#99412</span>
+                <span class="ro-desc">Diagnose no-start, replace starter</span>
+                <span class="ro-hrs">3.1h</span>
+              </div>
+              <div class="ro-row">
+                <span class="ro-num">#99407</span>
+                <span class="ro-desc">Oil service + multipoint inspection</span>
+                <span class="ro-hrs">0.7h</span>
+              </div>
+              <div class="ro-row">
+                <span class="ro-num">#99401</span>
+                <span class="ro-desc">A/C not cooling — recharge &amp; leak test</span>
+                <span class="ro-hrs">1.9h</span>
+              </div>
+              <div class="ro-row">
+                <span class="ro-num">#99396</span>
+                <span class="ro-desc">Timing cover reseal</span>
+                <span class="ro-hrs">6.2h</span>
+              </div>
+              <div class="ro-row" style="color:var(--fg-3)">
+                <span class="ro-num">…</span>
+                <span class="ro-desc">26 more, all shown mid-period</span>
+                <span class="ro-hrs"></span>
+              </div>
+            </section>
+          </div>
+
+          <div class="col-rail">
+            <div class="stats-rail">
+              <div class="stat">
+                <div class="stat-label">ROs</div>
+                <div class="stat-value tabular">31</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Clocked</div>
+                <div class="stat-value tabular">44.0<span class="unit">h</span></div>
+              </div>
+              <div class="stat eff-good">
+                <div class="stat-label">Efficiency</div>
+                <div class="stat-value tabular">96%</div>
+              </div>
+              <div class="stat featured">
+                <div class="stat-label">Earnings</div>
+                <div class="stat-value tabular">$1,347</div>
+              </div>
+            </div>
+
+            <div class="rail-divider">Reference</div>
+
+            <details class="card">
+              <summary class="card-head">
+                <h2>Spiffs &amp; bonuses</h2>
+                <span class="spacer"></span>
+                <span class="pill brand">$85</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div class="card-body">
+                <div class="kv-row">
+                  <span class="k">Tire sales bonus</span>
+                  <span class="spacer"></span>
+                  <span class="v">$60</span>
+                </div>
+                <div class="kv-row">
+                  <span class="k">Alignment spiff</span>
+                  <span class="spacer"></span>
+                  <span class="v">$25</span>
+                </div>
+              </div>
+            </details>
+
+            <details class="card">
+              <summary class="card-head">
+                <h2>Did I get paid?</h2>
+                <span class="spacer"></span>
+                <span class="pill neutral">Not yet</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div class="card-body">
+                <p class="muted-note" style="margin-top:0">
+                  This period is still running. Once it closes and your stub
+                  arrives, log what you were actually paid and the reconciliation
+                  opens up here.
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ MODE: AWAITING PAY ═══════════════ -->
+      <div class="mode-panel" data-mode="awaiting">
+        <div class="frt-titlebar">
+          <button class="step" type="button" aria-label="Previous period">‹</button>
+          <div class="frt-title-main">
+            <h1>Jul 1 – 15</h1>
+            <span class="frt-title-sub">Closed Jul 15 · waiting on pay</span>
+          </div>
+          <button class="step" type="button" aria-label="Next period">›</button>
+          <span class="spacer"></span>
+          <button class="more" type="button" aria-label="Period options">⋮</button>
+        </div>
+
+        <div class="frt-body">
+          <div class="top-band">
+            <div class="hero">
+              <div class="hero-eyebrow">This period is done — got your stub?</div>
+              <div class="hero-figure tabular">76.4<span class="unit">h flagged</span></div>
+              <div class="hero-support">
+                Enter what you were actually paid and FRT will check it line by
+                line against these <strong>58 ROs</strong>.
+              </div>
+              <div class="hero-action">
+                <div class="field">
+                  <label class="field-label" for="paid-input">Paid flag hours</label>
+                  <input class="input tabular" id="paid-input" type="text"
+                         inputmode="decimal" placeholder="e.g. 74.2" />
+                </div>
+                <button class="btn btn-primary" type="button">Check my pay</button>
+              </div>
+            </div>
+
+            <div class="stats-band">
+              <div class="stat">
+                <div class="stat-label">ROs</div>
+                <div class="stat-value tabular">58</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Clocked</div>
+                <div class="stat-value tabular">81.5<span class="unit">h</span></div>
+              </div>
+              <div class="stat eff-warn">
+                <div class="stat-label">Efficiency</div>
+                <div class="stat-value tabular">94%</div>
+              </div>
+              <div class="stat featured">
+                <div class="stat-label">Earnings</div>
+                <div class="stat-value tabular">$2,445</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-main">
+            <section class="card">
+              <div class="card-head" style="cursor:default">
+                <h2>ROs in this period</h2>
+                <span class="spacer"></span>
+                <span class="pill neutral">58 · 76.4h</span>
+              </div>
+              <div class="ro-row">
+                <span class="ro-num">#99388</span>
+                <span class="ro-desc">Transmission service + filter</span>
+                <span class="ro-hrs">2.8h</span>
+              </div>
+              <div class="ro-row">
+                <span class="ro-num">#99374</span>
+                <span class="ro-desc">Water pump &amp; thermostat</span>
+                <span class="ro-hrs">4.5h</span>
+              </div>
+              <div class="ro-row">
+                <span class="ro-num">#99361</span>
+                <span class="ro-desc">Rear main seal — warranty</span>
+                <span class="ro-hrs">5.1h</span>
+              </div>
+              <div class="ro-row" style="color:var(--fg-3)">
+                <span class="ro-num">…</span>
+                <span class="ro-desc">55 more</span>
+                <span class="ro-hrs"></span>
+              </div>
+              <button class="ro-more" type="button">Show all 58</button>
+            </section>
+          </div>
+
+          <div class="col-rail">
+            <div class="stats-rail">
+              <div class="stat">
+                <div class="stat-label">ROs</div>
+                <div class="stat-value tabular">58</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Clocked</div>
+                <div class="stat-value tabular">81.5<span class="unit">h</span></div>
+              </div>
+              <div class="stat eff-warn">
+                <div class="stat-label">Efficiency</div>
+                <div class="stat-value tabular">94%</div>
+              </div>
+              <div class="stat featured">
+                <div class="stat-label">Earnings</div>
+                <div class="stat-value tabular">$2,445</div>
+              </div>
+            </div>
+
+            <div class="rail-divider">Reference</div>
+
+            <details class="card" open>
+              <summary class="card-head">
+                <h2>What did the work cost me?</h2>
+                <span class="spacer"></span>
+                <span class="pill warn">5.1h unpaid</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div class="card-body">
+                <div class="kv-row">
+                  <span class="k">Effective hourly</span>
+                  <span class="spacer"></span>
+                  <span class="v">$31.78</span>
+                </div>
+                <div class="split3">
+                  <div><div class="k">Rework</div><div class="v">2.1h</div></div>
+                  <div><div class="k">Waiting</div><div class="v">2.3h</div></div>
+                  <div><div class="k">Shop</div><div class="v">0.7h</div></div>
+                </div>
+                <p class="muted-note">
+                  Your 5.1h clock-vs-flag gap is fully accounted for.
+                </p>
+              </div>
+            </details>
+
+            <details class="card">
+              <summary class="card-head">
+                <h2>Spiffs &amp; bonuses</h2>
+                <span class="spacer"></span>
+                <span class="pill brand">$145</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div class="card-body">
+                <div class="kv-row">
+                  <span class="k">Tire sales bonus</span>
+                  <span class="spacer"></span>
+                  <span class="v">$120</span>
+                </div>
+                <div class="kv-row">
+                  <span class="k">Alignment spiff</span>
+                  <span class="spacer"></span>
+                  <span class="v">$25</span>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ MODE: SETTLED ═══════════════ -->
+      <div class="mode-panel" data-mode="settled">
+        <div class="frt-titlebar">
+          <button class="step" type="button" aria-label="Previous period">‹</button>
+          <div class="frt-title-main">
+            <h1>Jul 1 – 15</h1>
+            <span class="frt-title-sub">Paid Jul 20 · 74.2h of 76.4h</span>
+          </div>
+          <button class="step" type="button" aria-label="Next period">›</button>
+          <span class="spacer"></span>
+          <button class="more" type="button" aria-label="Period options">⋮</button>
+        </div>
+
+        <div class="frt-body">
+          <div class="top-band">
+            <div class="hero settled-short">
+              <div class="hero-eyebrow">Short on this period</div>
+              <div class="hero-figure tabular">2.2<span class="unit">h</span></div>
+              <div class="hero-support">
+                Paid <strong>74.2h</strong> against <strong>76.4h</strong> logged
+                — about <strong>$70</strong> at your customer-pay rate.
+              </div>
+            </div>
+
+            <div class="stats-band">
+              <div class="stat">
+                <div class="stat-label">ROs</div>
+                <div class="stat-value tabular">58</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Clocked</div>
+                <div class="stat-value tabular">81.5<span class="unit">h</span></div>
+              </div>
+              <div class="stat eff-warn">
+                <div class="stat-label">Efficiency</div>
+                <div class="stat-value tabular">94%</div>
+              </div>
+              <div class="stat featured">
+                <div class="stat-label">Earnings</div>
+                <div class="stat-value tabular">$2,445</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-main">
+            <details class="card" open>
+              <summary class="card-head">
+                <h2>Did I get paid?</h2>
+                <span class="spacer"></span>
+                <span class="pill bad">2.2h short</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div class="card-body">
+                <div class="kv-row">
+                  <span class="k">Flagged</span>
+                  <span class="spacer"></span>
+                  <span class="v">76.4h</span>
+                </div>
+                <div class="kv-row">
+                  <span class="k">Paid</span>
+                  <span class="spacer"></span>
+                  <span class="v">74.2h</span>
+                </div>
+                <div class="kv-row">
+                  <span class="k">Difference</span>
+                  <span class="spacer"></span>
+                  <span class="v" style="color:var(--bad)">−2.2h</span>
+                </div>
+
+                <details>
+                  <summary class="drill">
+                    <span>Which lines came up short?</span>
+                    <span class="spacer"></span>
+                    <span class="pill bad">13</span>
+                    <span class="arrow">›</span>
+                  </summary>
+                  <div style="padding-top:8px">
+                    <div class="ro-row" style="padding-left:0;padding-right:0">
+                      <span class="ro-num">#99374</span>
+                      <span class="ro-desc">Water pump — flagged 4.5h</span>
+                      <span class="ro-hrs" style="color:var(--bad)">−0.4h</span>
+                    </div>
+                    <div class="ro-row" style="padding-left:0;padding-right:0">
+                      <span class="ro-num">#99361</span>
+                      <span class="ro-desc">Rear main seal — flagged 5.1h</span>
+                      <span class="ro-hrs" style="color:var(--bad)">−0.6h</span>
+                    </div>
+                    <div class="ro-row" style="padding-left:0;padding-right:0;color:var(--fg-3)">
+                      <span class="ro-num">…</span>
+                      <span class="ro-desc">11 more shorted lines</span>
+                      <span class="ro-hrs"></span>
+                    </div>
+                  </div>
+                </details>
+
+                <button class="drill primary" type="button">
+                  <span>Track this as a dispute</span>
+                  <span class="spacer"></span>
+                  <span class="arrow">›</span>
+                </button>
+
+                <p class="muted-note">
+                  Builds a dispute pack from those 13 lines, then tracks whether
+                  you actually got paid.
+                </p>
+              </div>
+            </details>
+
+            <details class="card" open>
+              <summary class="card-head">
+                <h2>What did the work cost me?</h2>
+                <span class="spacer"></span>
+                <span class="pill warn">5.1h unpaid</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div class="card-body">
+                <div class="kv-row">
+                  <span class="k">Effective hourly</span>
+                  <span class="spacer"></span>
+                  <span class="v">$31.78</span>
+                </div>
+                <div class="kv-row">
+                  <span class="k">Clocked with nothing flagged</span>
+                  <span class="spacer"></span>
+                  <span class="v">5.1h</span>
+                </div>
+                <div class="split3">
+                  <div><div class="k">Rework</div><div class="v">2.1h</div></div>
+                  <div><div class="k">Waiting</div><div class="v">2.3h</div></div>
+                  <div><div class="k">Shop time</div><div class="v">0.7h</div></div>
+                </div>
+                <div class="degrade">
+                  <span>
+                    No reference rate set, so there's nothing to compare your
+                    effective hourly against. <a href="#">Set one in settings</a>
+                  </span>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div class="col-rail">
+            <div class="stats-rail">
+              <div class="stat">
+                <div class="stat-label">ROs</div>
+                <div class="stat-value tabular">58</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Clocked</div>
+                <div class="stat-value tabular">81.5<span class="unit">h</span></div>
+              </div>
+              <div class="stat eff-warn">
+                <div class="stat-label">Efficiency</div>
+                <div class="stat-value tabular">94%</div>
+              </div>
+              <div class="stat featured">
+                <div class="stat-label">Earnings</div>
+                <div class="stat-value tabular">$2,445</div>
+              </div>
+            </div>
+
+            <div class="rail-divider">Reference</div>
+
+            <details class="card">
+              <summary class="card-head">
+                <h2>Spiffs &amp; bonuses</h2>
+                <span class="spacer"></span>
+                <span class="pill brand">$145</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div class="card-body">
+                <div class="kv-row">
+                  <span class="k">Tire sales bonus</span>
+                  <span class="spacer"></span>
+                  <span class="v">$120</span>
+                </div>
+                <div class="kv-row">
+                  <span class="k">Alignment spiff</span>
+                  <span class="spacer"></span>
+                  <span class="v">$25</span>
+                </div>
+              </div>
+            </details>
+
+            <details class="card">
+              <summary class="card-head">
+                <h2>ROs in this period</h2>
+                <span class="spacer"></span>
+                <span class="pill neutral">58</span>
+                <span class="chev">▼</span>
+              </summary>
+              <div style="padding-bottom:4px">
+                <div class="ro-row">
+                  <span class="ro-num">#99388</span>
+                  <span class="ro-desc">Transmission service</span>
+                  <span class="ro-hrs">2.8h</span>
+                </div>
+                <div class="ro-row">
+                  <span class="ro-num">#99374</span>
+                  <span class="ro-desc">Water pump &amp; thermostat</span>
+                  <span class="ro-hrs">4.5h</span>
+                </div>
+                <div class="ro-row" style="color:var(--fg-3)">
+                  <span class="ro-num">…</span>
+                  <span class="ro-desc">48 hidden</span>
+                  <span class="ro-hrs"></span>
+                </div>
+                <button class="ro-more" type="button">Show all 58</button>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>The open question: where the stat row goes</h2>
+  <div class="compare">
+    <div>
+      <h3>Full width (default)</h3>
+      <p>
+        Hero and the four stats form a header band across both columns, then the
+        cards split below. The numbers get a proper row instead of a cramped 2×2,
+        and both columns start at the same line. Cost: on a settled period the
+        rail holds only Spiffs and the RO list, so it can run short while the
+        left column runs long.
+      </p>
+    </div>
+    <div>
+      <h3>In rail</h3>
+      <p>
+        Stats sit at the top of the right column as a 2×2, keeping the rail full
+        on every period. Cost: four numbers in a narrow column, the hero is left
+        alone spanning only part of the width, and the two columns start on
+        different footings.
+      </p>
+    </div>
+  </div>
+
+  <h2>The three states</h2>
+  <table class="rule-table">
+    <thead>
+      <tr><th>State</th><th>Trigger</th><th>Hero answers</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>In progress</strong></td>
+        <td><code>end &gt;= today</code></td>
+        <td>Am I on pace?</td>
+      </tr>
+      <tr>
+        <td><strong>Awaiting pay</strong></td>
+        <td><code>end &lt; today</code> + no paid hours</td>
+        <td>Did the check come?</td>
+      </tr>
+      <tr>
+        <td><strong>Settled</strong></td>
+        <td><code>paidFlagHours</code> is set</td>
+        <td>Was it right?</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Rules this mockup is demonstrating</h2>
+  <ul>
+    <li>
+      <strong>Soft modes.</strong> Mode changes emphasis, order, and what's
+      expanded — never what exists. Demoted content sits under the “Reference”
+      divider, which becomes the right rail in two-column.
+    </li>
+    <li>
+      <strong>Nine peers → two families.</strong> Discrepancy, Reconciliation and
+      Dispute collapse into <em>“Did I get paid?”</em> as one progressive
+      drill-down. Unpaid Time and Pay Check-Up merge into <em>“What did the work
+      cost me?”</em> — they already share a computation in code.
+    </li>
+    <li>
+      <strong>Scope decides the surface.</strong> If a number needs data from
+      outside this period, it isn't on this page. Trends go to
+      <code>/insights</code>; in-the-moment prompts go to the timer.
+    </li>
+    <li>
+      <strong>Degrade out loud.</strong> A card that can't compute says what's
+      missing and links the fix. Two live examples above — one in “In progress”,
+      one in “Settled”.
+    </li>
+    <li>
+      <strong>The period is the page title.</strong> The old “Pay Period” heading
+      and the whole picker card are gone; <code>‹ ›</code> steps through periods,
+      <code>⋮</code> holds custom dates and reset.
+    </li>
+    <li>
+      <strong>RO list follows the mode.</strong> Fully expanded mid-period when
+      it's your working log; capped with “Show all 58” once the period is settled
+      and Reconciliation is the real drill-down.
+    </li>
+  </ul>
+
+  <h2>Deliberately not fixed here</h2>
+  <ul>
+    <li>
+      Discrepancy (0.1 period-level tolerance) and Reconciliation (0.05 per-line)
+      can disagree. Merging them makes it visible — the fix is a product
+      decision, not a layout one.
+    </li>
+    <li>
+      <code>/insights</code> has to exist before Warranty mix-shift (11.5) and
+      comeback-rate analytics (11.9) have anywhere to land.
+    </li>
+    <li>
+      The in-progress hero's projection overlaps the dashboard's pace bar and
+      forecast line. Logged, not resolved.
+    </li>
+    <li>
+      The “recovered all-time” figure comes out of the dispute card — the
+      dashboard already owns it.
+    </li>
+  </ul>
+
+  <h2>Fidelity notes</h2>
+  <ul>
+    <li>
+      Colours, radii, shadows and semantic tokens are lifted verbatim from
+      <code>src/app/globals.css</code>, both themes.
+    </li>
+    <li>
+      Type is a system stack — IBM Plex Sans and JetBrains Mono can't load here,
+      so exact metrics will shift slightly in the real build.
+    </li>
+    <li>
+      Numbers are representative, not from your database. The two closed-period
+      modes describe the same period so you can compare them directly.
+    </li>
+  </ul>
+</div>
+
+<script>
+  (function () {
+    var frt = document.getElementById("frt");
+    var statsGroup = document.getElementById("g-stats");
+
+    function syncStatsAvailability() {
+      var inert = frt.getAttribute("data-layout") !== "two";
+      statsGroup.setAttribute("data-inert", String(inert));
+    }
+
+    function wire(groupId, apply) {
+      var group = document.getElementById(groupId);
+      group.addEventListener("click", function (event) {
+        var btn = event.target.closest("button[data-val]");
+        if (!btn || !group.contains(btn)) return;
+        var buttons = group.querySelectorAll("button[data-val]");
+        for (var i = 0; i < buttons.length; i++) {
+          buttons[i].setAttribute("aria-pressed", String(buttons[i] === btn));
+        }
+        apply(btn.getAttribute("data-val"));
+      });
+    }
+
+    wire("g-mode", function (value) {
+      var panels = frt.querySelectorAll(".mode-panel");
+      for (var i = 0; i < panels.length; i++) {
+        panels[i].classList.toggle("on", panels[i].getAttribute("data-mode") === value);
+      }
+    });
+
+    wire("g-layout", function (value) {
+      frt.setAttribute("data-layout", value);
+      syncStatsAvailability();
+    });
+
+    wire("g-stats", function (value) {
+      frt.setAttribute("data-stats", value);
+    });
+
+    wire("g-theme", function (value) {
+      frt.setAttribute("data-frt-theme", value);
+    });
+
+    syncStatsAvailability();
+  })();
+</script>

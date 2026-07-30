@@ -175,6 +175,8 @@ export function DisputeOutcomeCard({
   openDispute,
   allDisputes,
   shortedHours,
+  embedded = false,
+  title = "Dispute Tracking",
 }: {
   periodKey: string;
   periodLabel: string;
@@ -185,6 +187,10 @@ export function DisputeOutcomeCard({
   // Outstanding hours for the viewed period, so the card knows whether there is
   // anything worth claiming yet.
   shortedHours: number;
+  // Rendered as a section INSIDE PaidCheckCard rather than as its own card on
+  // the page. Drops the card chrome only — behaviour is identical.
+  embedded?: boolean;
+  title?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -232,18 +238,17 @@ export function DisputeOutcomeCard({
   const waiting = dispute ? daysWaiting(dispute) : null;
   const next = dispute && !isClosed(dispute.status) ? nextStatus(dispute.status) : null;
 
+  const Root = embedded ? "div" : "section";
+
   return (
-    <section className="card padded-lg space-y-3">
+    <Root className={embedded ? "space-y-3" : "card padded-lg space-y-3"}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">Dispute Tracking</h2>
-        {lifetime.recoveredHours > 0 && (
-          <span className="mono text-sm font-medium tabular-nums text-[var(--good)]">
-            {lifetime.recoveredDollars !== null
-              ? fmtMoney(lifetime.recoveredDollars)
-              : `${fmtHours(lifetime.recoveredHours)}h`}{" "}
-            recovered all-time
-          </span>
-        )}
+        <h2 className="text-sm font-medium">{title}</h2>
+        {/* The lifetime "recovered all-time" figure used to sit here. It is
+            cross-period data, so under the page's scope rule it belongs on a
+            surface that owns lifetime numbers — and the dashboard's
+            RecoveredCard already showed the identical figure. Removed rather
+            than mirrored. */}
       </div>
 
       {!dispute && (
@@ -381,6 +386,12 @@ export function DisputeOutcomeCard({
         </div>
       )}
 
+      {/* TODO(insights): the two blocks below are cross-period and therefore
+          belong on /insights under this page's scope rule. Kept here for now
+          because /insights does not exist yet and deleting them would lose the
+          only surface for hourRecoveryRate and the outcome insights — the
+          dashboard's RecoveredCard covers closedCount and winRate but neither
+          of those. Move, don't mirror, when /insights ships. */}
       {lifetime.closedCount > 0 && (
         <div className="border-t border-[var(--line)] pt-3 text-xs text-[var(--fg-3)]">
           {lifetime.closedCount} claim{lifetime.closedCount === 1 ? "" : "s"}{" "}
@@ -408,6 +419,6 @@ export function DisputeOutcomeCard({
           ))}
         </div>
       )}
-    </section>
+    </Root>
   );
 }
