@@ -23,6 +23,26 @@
 import type { Bonus, DailyClock, Entry } from "./types";
 import { hasAnyRate, periodEarnings, type RateMap } from "./earnings";
 import { sumBonuses } from "./bonuses";
+import {
+  scheduledHoursFor,
+  type ShiftOverrideMap,
+  type WorkSchedule,
+} from "./schedule";
+import { expandDaysOff } from "./streak";
+
+/**
+ * The subset of ScheduleContext effectiveHourly needs to fill unclocked days.
+ * Structurally compatible with lib/stats' ScheduleContext, so a caller can pass
+ * the same object to both and they cannot drift apart.
+ */
+export type ScheduleFallback = {
+  schedules: WorkSchedule[];
+  daysOff: { startDate: string; endDate: string }[];
+  /** Today in the user's timezone — the fallback never applies to a day still
+   *  in progress, or to the future. */
+  today: string;
+  shiftOverrides?: ShiftOverrideMap;
+};
 
 function inRange(date: string, start: string, end: string): boolean {
   return date >= start && date <= end;
@@ -45,16 +65,28 @@ export type WageCheckStatus =
   | "no_rates";
 
 export type EffectiveHourly = {
-  // (flagPay + bonuses) ÷ clockedHours. null unless status === "ok".
+  // (flagPay + bonuses) ÷ denomHours. null unless status === "ok".
   hourly: number | null;
   flagPay: number | null; // null when no rates are priced (dollars unknown)
   bonusTotal: number; // always real — spiffs need no rates
   totalPay: number | null; // flagPay + bonuses; null when flagPay is null
   flagHours: number;
-  clockedHours: number;
+  clockedHours: number; // hours from real clock entries ONLY
+  // The denominator actually used: clocked hours, plus scheduled shift hours
+  // for completed days that have flagged work but no clock entry. Equals
+  // clockedHours when no schedule context is supplied.
+  denomHours: number;
+  // Where denomHours came from, for honest labelling. null when there is no
+  // denominator at all.
+  denomSource: "clocked" | "scheduled" | "mixed" | null;
   workDays: string[]; // distinct dates that had flagged work (an RO)
   clockDays: string[]; // distinct dates with clocked hours > 0
-  missingClockDays: string[]; // workDays with no clock entry — the incomplete set
+  // Work days filled in from the schedule rather than a clock entry.
+  scheduledDays: string[];
+  // Work days with NEITHER a clock entry nor a schedule to fall back on — the
+  // genuinely unknown set. A scheduled day is not missing: the schedule IS the
+  // answer, which is the whole reason the shift-override exists.
+  missingClockDays: string[];
   status: WageCheckStatus;
 };
 
@@ -67,6 +99,20 @@ export function effectiveHourly(
   bonuses: Bonus[],
   rates: RateMap,
   range: { start: string; end: string },
+  // Optional schedule fallback, mirroring aggregateStatsWithSchedule exactly.
+  //
+  // Without it this function only knows about real clock entries, and any day
+  // with flagged work but no clock entry blocks the rate entirely. That was
+  // wrong: efficiency has ALWAYS filled those days from the work schedule, so
+  // the same period could show a schedule-derived efficiency alongside "no
+  // effective hourly yet" — two functions disagreeing about the same hours.
+  //
+  // A scheduled day is a known-good default, not missing data. The shift
+  // override on the dashboard and schedule pages exists precisely so the tech
+  // can correct it when a day wasn't normal.
+  //
+  // Omitted → identical behaviour to before (denomHours === clockedHours).
+  schedule?: ScheduleFallback | null,
 ): EffectiveHourly {
   const includedEntries = entries.filter((e) =>
     inRange(e.date, range.start, range.end),
@@ -92,17 +138,54 @@ export function effectiveHourly(
     includedClocks.filter((c) => c.hours > 0).map((c) => c.date),
   );
   const clockDaySet = new Set(clockDays);
-  const missingClockDays = workDays.filter((d) => !clockDaySet.has(d));
+
+  // Fill unclocked work days from the schedule, on exactly the terms
+  // aggregateStatsWithSchedule uses: completed days only (never today, which is
+  // mid-shift, and never the future), and never an explicit day off.
+  const scheduledDays: string[] = [];
+  let scheduledHours = 0;
+  if (schedule) {
+    const off = expandDaysOff(schedule.daysOff);
+    for (const d of workDays) {
+      if (clockDaySet.has(d)) continue;
+      if (d >= schedule.today || off.has(d)) continue;
+      const hours = scheduledHoursFor(
+        schedule.schedules,
+        d,
+        schedule.shiftOverrides ?? {},
+      );
+      if (hours === null || hours <= 0) continue;
+      scheduledDays.push(d);
+      scheduledHours += hours;
+    }
+  }
+  const scheduledDaySet = new Set(scheduledDays);
+
+  // Only days with neither a clock entry nor a schedule are genuinely unknown.
+  const missingClockDays = workDays.filter(
+    (d) => !clockDaySet.has(d) && !scheduledDaySet.has(d),
+  );
+
+  const denomHours = clockedHours + scheduledHours;
+  const denomSource: EffectiveHourly["denomSource"] =
+    clockedHours > 0 && scheduledHours > 0
+      ? "mixed"
+      : clockedHours > 0
+        ? "clocked"
+        : scheduledHours > 0
+          ? "scheduled"
+          : null;
 
   // Resolve the reason we can (or can't) show a figure, in priority order.
   let status: WageCheckStatus;
   let hourly: number | null;
-  if (clockedHours <= 0) {
+  if (denomHours <= 0) {
     status = "no_clock";
     hourly = null;
   } else if (missingClockDays.length > 0) {
-    // A day of flagged work with no clock entry would inflate effective hourly —
-    // never average over an incomplete denominator. Show the gap, hide the rate.
+    // A day of flagged work with NO clock entry and NO schedule would inflate
+    // effective hourly — never average over an incomplete denominator. Show the
+    // gap, hide the rate.
     status = "incomplete_clock";
     hourly = null;
   } else if (totalPay === null) {
@@ -110,7 +193,7 @@ export function effectiveHourly(
     hourly = null;
   } else {
     status = "ok";
-    hourly = totalPay / clockedHours;
+    hourly = totalPay / denomHours;
   }
 
   return {
@@ -120,8 +203,11 @@ export function effectiveHourly(
     totalPay,
     flagHours,
     clockedHours,
+    denomHours,
+    denomSource,
     workDays,
     clockDays,
+    scheduledDays,
     missingClockDays,
     status,
   };

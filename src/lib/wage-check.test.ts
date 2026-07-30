@@ -5,9 +5,11 @@ import {
   gapComposition,
   unflaggedTimeValue,
   floorComparison,
+  type ScheduleFallback,
 } from "./wage-check";
 import type { Bonus, DailyClock, Entry, LaborType } from "./types";
 import type { RateMap } from "./earnings";
+import type { WorkSchedule } from "./schedule";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -299,5 +301,233 @@ describe("gapComposition", () => {
 
   it("is null when nothing is recorded to explain the gap with", () => {
     expect(gapComposition(8, parts(0, 0, 0))).toBeNull();
+  });
+});
+
+// ── Schedule fallback ────────────────────────────────────────────────────────
+//
+// Regression cover for a real bug: aggregateStatsWithSchedule has always filled
+// unclocked work days from the schedule, so a period could show a
+// schedule-derived efficiency while effectiveHourly reported "no effective
+// hourly yet — 10 days have no clock entry". Two functions disagreeing about
+// the same hours. A scheduled day is a known-good default, not missing data.
+
+// Mon–Fri 08:00–16:30 with a 30-minute unpaid break = 8.0 paid hours.
+const DAY_SHIFT = { start: "08:00", end: "16:30", breakMin: 30 };
+
+function schedule5x8(effectiveFrom = "2026-01-01"): WorkSchedule {
+  return {
+    id: "s1",
+    effectiveFrom,
+    rotationWeeks: 1,
+    // 2026-01-05 is a Monday.
+    anchorMonday: "2026-01-05",
+    weeks: [
+      {
+        mon: DAY_SHIFT,
+        tue: DAY_SHIFT,
+        wed: DAY_SHIFT,
+        thu: DAY_SHIFT,
+        fri: DAY_SHIFT,
+        sat: null,
+        sun: null,
+      },
+    ],
+    createdAt: "2026-01-01T00:00:00Z",
+  };
+}
+
+// 2026-07-20 and 2026-07-21 are a Monday and Tuesday.
+const RANGE = { start: "2026-07-16", end: "2026-07-31" };
+const RATES: RateMap = { customer_pay: 30 };
+
+function fallback(over: Partial<ScheduleFallback> = {}): ScheduleFallback {
+  return {
+    schedules: [schedule5x8()],
+    daysOff: [],
+    today: "2026-07-25",
+    ...over,
+  };
+}
+
+describe("effectiveHourly — schedule fallback", () => {
+  it("is unchanged when no schedule context is passed", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+    );
+    expect(r.status).toBe("no_clock");
+    expect(r.hourly).toBeNull();
+    expect(r.denomHours).toBe(0);
+    expect(r.denomSource).toBeNull();
+    expect(r.missingClockDays).toEqual(["2026-07-20"]);
+  });
+
+  it("fills an unclocked work day from the schedule and yields a rate", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback(),
+    );
+    expect(r.status).toBe("ok");
+    expect(r.denomHours).toBe(8);
+    expect(r.denomSource).toBe("scheduled");
+    expect(r.scheduledDays).toEqual(["2026-07-20"]);
+    expect(r.missingClockDays).toEqual([]);
+    // 9 flag hours x $30 = $270 over an 8h scheduled shift.
+    expect(r.hourly).toBeCloseTo(270 / 8, 6);
+  });
+
+  it("keeps clockedHours reporting real clock entries only", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback(),
+    );
+    expect(r.clockedHours).toBe(0);
+    expect(r.denomHours).toBe(8);
+  });
+
+  it("prefers a real clock entry over the schedule", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [clock("2026-07-20", 10)],
+      [],
+      RATES,
+      RANGE,
+      fallback(),
+    );
+    expect(r.denomHours).toBe(10);
+    expect(r.denomSource).toBe("clocked");
+    expect(r.scheduledDays).toEqual([]);
+  });
+
+  it("reports mixed provenance when some days clock and others fall back", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9), entry("2026-07-21", 7)],
+      [clock("2026-07-20", 10)],
+      [],
+      RATES,
+      RANGE,
+      fallback(),
+    );
+    expect(r.denomHours).toBe(18); // 10 clocked + 8 scheduled
+    expect(r.denomSource).toBe("mixed");
+    expect(r.scheduledDays).toEqual(["2026-07-21"]);
+    expect(r.status).toBe("ok");
+  });
+
+  it("never fills today — the shift is still in progress", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-20" }),
+    );
+    expect(r.scheduledDays).toEqual([]);
+    expect(r.missingClockDays).toEqual(["2026-07-20"]);
+    expect(r.status).toBe("no_clock");
+  });
+
+  it("never fills a future day", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-21", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-20" }),
+    );
+    expect(r.scheduledDays).toEqual([]);
+    expect(r.status).toBe("no_clock");
+  });
+
+  it("never fills an explicit day off, even with flagged work on it", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({
+        daysOff: [{ startDate: "2026-07-20", endDate: "2026-07-20" }],
+      }),
+    );
+    expect(r.scheduledDays).toEqual([]);
+    expect(r.missingClockDays).toEqual(["2026-07-20"]);
+  });
+
+  it("leaves a pattern-off day (Saturday) as genuinely missing", () => {
+    // 2026-07-25 is a Saturday, which this schedule has as null.
+    const r = effectiveHourly(
+      [entry("2026-07-18", 4)], // Saturday
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback(),
+    );
+    expect(r.scheduledDays).toEqual([]);
+    expect(r.missingClockDays).toEqual(["2026-07-18"]);
+    expect(r.status).toBe("no_clock");
+  });
+
+  it("a one-day shift override wins over the pattern", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-18", 4)], // Saturday — normally off
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({
+        shiftOverrides: {
+          "2026-07-18": { start: "08:00", end: "12:00", breakMin: 0 },
+        },
+      }),
+    );
+    expect(r.denomHours).toBe(4);
+    expect(r.scheduledDays).toEqual(["2026-07-18"]);
+    expect(r.status).toBe("ok");
+  });
+
+  it("still blocks the rate when ONE day has neither clock nor schedule", () => {
+    // Mon fills from the schedule; Sat does not — the denominator is genuinely
+    // incomplete, so no rate is shown.
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9), entry("2026-07-18", 4)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback(),
+    );
+    expect(r.scheduledDays).toEqual(["2026-07-20"]);
+    expect(r.missingClockDays).toEqual(["2026-07-18"]);
+    expect(r.status).toBe("incomplete_clock");
+    expect(r.hourly).toBeNull();
+  });
+
+  it("reports no_rates once hours resolve but nothing is priced", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      {},
+      RANGE,
+      fallback(),
+    );
+    expect(r.denomHours).toBe(8);
+    expect(r.status).toBe("no_rates");
   });
 });

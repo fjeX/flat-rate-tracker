@@ -16,7 +16,7 @@
 // reference rate is one the user typed into Settings.
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { Modal } from "@/components/ui/Modal";
+import { InfoBubble } from "@/components/ui/InfoBubble";
 import { fmtHours } from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
 import { formatDateShort } from "@/lib/periods";
@@ -68,20 +68,20 @@ export function WorkCostCard({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [recordsOpen, setRecordsOpen] = useState(false);
-  const [explainerOpen, setExplainerOpen] = useState(false);
 
-  const gap = clockFlagGap(result.clockedHours, result.flagHours);
+  const gap = clockFlagGap(result.denomHours, result.flagHours);
   const comparison = floorComparison(result.hourly, referenceRate);
   const missingCount = result.missingClockDays.length;
   const hasUnpaid = unpaid.totalHours > 0 || unpaid.lines.length > 0;
 
   return (
     <section className="card padded space-y-3">
+      <div className="card-head-row">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
+        className="flex min-h-[44px] flex-1 items-center justify-between gap-2 text-left"
       >
         <div>
           <h2 className="text-sm font-medium text-[var(--fg-1)]">
@@ -110,6 +110,74 @@ export function WorkCostCard({
         </span>
       </button>
 
+      <InfoBubble title="What did the work cost me?">
+        <p>
+          Flag hours tell you what you were paid for. This card is about
+          everything else — the hours you were at the shop that flagged nothing,
+          and what your pay works out to once those hours are counted.
+        </p>
+        <h3>Effective hourly</h3>
+        <p>
+          Your total pay for the period — flag pay plus spiffs — divided by the
+          hours you were actually at the shop. It answers a question flag pay
+          alone cannot: for every hour of your life the shop had, how much did
+          you earn? A 130% efficiency week can still be a bad week if you sat
+          around for six hours waiting on parts.
+        </p>
+        <h3>Where the hours come from</h3>
+        <p>
+          Clocked hours if you logged them. If you did not, FRT falls back to
+          your normal shift from the Schedule page, because a day with flagged
+          work on it was obviously a day you worked. You can correct any single
+          day with a shift override on the dashboard or schedule page.
+        </p>
+        <h3>The gap, and what is in it</h3>
+        <p>
+          The difference between hours at the shop and hours flagged. Rework you
+          were not paid for, waiting on parts or approval, and shop time all get
+          listed separately so the gap is not just a mystery number.
+        </p>
+        <p>
+          These hours are shown <strong>beside</strong> your efficiency and are
+          never subtracted from it. Hiding unpaid time inside efficiency would
+          defeat the point of tracking it.
+        </p>
+        <h3>Why flat rate makes this matter</h3>
+        <p>
+          Flat-rate (piece-rate) pay rewards flagged jobs, but a workday also
+          includes time that flags nothing. Under California&apos;s piece-rate
+          rules that non-productive time and rest periods are their own category
+          of paid time, rather than something flag pay can average over.
+        </p>
+        <h3>The reference comparison</h3>
+        <p>
+          If you enter a reference hourly rate in Settings — your local minimum
+          wage, or a rate you would take elsewhere — this shows whether you came
+          in above or below it. FRT never fills in a wage figure for you:
+          minimum wage changes every year and differs by city and county, so the
+          number you compare against is always one you chose.
+        </p>
+        <p>
+          California&apos;s Department of Industrial Relations publishes a
+          plain-language explanation of piece-rate pay:{" "}
+          <a
+            href="https://www.dir.ca.gov/pieceratebackpayelection/AB_1513_FAQs.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            DIR piece-rate FAQ
+          </a>
+          .
+        </p>
+        <p className="card-inset px-3 py-2">
+          This shows numbers from your own records for your information. It does
+          not provide legal advice or reach any legal conclusion. For your
+          specific situation, consult a qualified attorney or the California
+          Labor Commissioner&apos;s Office.
+        </p>
+      </InfoBubble>
+      </div>
+
       {open && (
         <div className="space-y-3 border-t border-[var(--line)] pt-3">
           {/* Effective hourly — the headline, or an honest reason it's absent.
@@ -127,37 +195,64 @@ export function WorkCostCard({
               <p className="mt-1 text-xs text-[var(--fg-3)]">
                 Total pay{" "}
                 {result.totalPay !== null ? fmtMoney(result.totalPay) : "—"} ÷{" "}
-                {fmtHours(result.clockedHours)} clocked hours.
+                {fmtHours(result.denomHours)}{" "}
+                {result.denomSource === "scheduled"
+                  ? "scheduled hours"
+                  : result.denomSource === "mixed"
+                    ? "hours at the shop"
+                    : "clocked hours"}
+                .
               </p>
+              {/* Say plainly when a figure leans on the schedule rather than a
+                  real clock entry — the number is a good default, not a
+                  measurement, and the tech can override any day. */}
+              {result.scheduledDays.length > 0 && (
+                <p className="mt-1 text-xs text-[var(--fg-3)]">
+                  {result.scheduledDays.length === 1
+                    ? "1 day had flagged work but no clock entry"
+                    : `${result.scheduledDays.length} days had flagged work but no clock entry`}
+                  , so your normal scheduled shift was used for{" "}
+                  {result.scheduledDays.length === 1 ? "it" : "them"}. Set a
+                  shift override on any day that wasn&apos;t normal.
+                </p>
+              )}
             </div>
           ) : (
             <div className="card-inset px-3 py-2 text-sm text-[var(--fg-2)]">
+              {/* These only fire for days with NEITHER a clock entry NOR a
+                  schedule to fall back on. Once a work schedule exists, a
+                  normal shift fills the day automatically — so the fix being
+                  offered is the schedule, not 10 days of manual clock entry. */}
               {result.status === "no_clock" &&
                 (missingCount > 0 ? (
                   <>
                     {missingCount === 1
-                      ? "1 day this period has flagged work but no clock entry"
-                      : `${missingCount} days this period have flagged work but no clock entry`}
-                    , so there&apos;s no effective hourly yet. Add clock hours for{" "}
+                      ? "1 day this period has flagged work but no hours on it"
+                      : `${missingCount} days this period have flagged work but no hours on them`}
+                    , so there&apos;s no effective hourly yet. Set your normal
+                    shift on the schedule page and days like these fill in
+                    automatically — or add clock hours for{" "}
                     {result.missingClockDays.map(formatDateShort).join(", ")} on
-                    the dashboard to see it.
+                    the dashboard.
                   </>
                 ) : (
                   <>
-                    No clocked hours logged for this period yet. Effective hourly
-                    needs the time you spent at the shop — add your clock hours on
-                    the dashboard to see it.
+                    No hours logged for this period yet. Effective hourly needs
+                    the time you spent at the shop — set your normal shift on the
+                    schedule page, or add clock hours on the dashboard.
                   </>
                 ))}
               {result.status === "incomplete_clock" && (
                 <>
                   {missingCount === 1
-                    ? "1 day this period has flagged work but no clock entry"
-                    : `${missingCount} days this period have flagged work but no clock entry`}
+                    ? "1 day this period has flagged work but no hours on it"
+                    : `${missingCount} days this period have flagged work but no hours on them`}
                   , so the effective hourly isn&apos;t shown — it would average
-                  over an incomplete number of hours. Add clock hours for{" "}
-                  {result.missingClockDays.map(formatDateShort).join(", ")} to see
-                  it.
+                  over an incomplete number of hours.{" "}
+                  {result.missingClockDays.map(formatDateShort).join(", ")}{" "}
+                  {missingCount === 1 ? "falls" : "fall"} outside your scheduled
+                  shifts, so add clock hours or a shift override for{" "}
+                  {missingCount === 1 ? "it" : "them"}.
                 </>
               )}
               {result.status === "no_rates" && (
@@ -200,9 +295,16 @@ export function WorkCostCard({
             </p>
           )}
 
-          {/* Clocked vs flagged — always available, hours-only, no rates needed. */}
+          {/* Hours at the shop vs flagged — always available, hours-only, no
+              rates needed. Uses the resolved denominator so a scheduled day
+              counts, matching how efficiency has always been computed. */}
           <div className="grid grid-cols-3 gap-2">
-            <Cell label="Clocked" value={`${fmtHours(result.clockedHours)}h`} />
+            <Cell
+              label={
+                result.denomSource === "scheduled" ? "Scheduled" : "At the shop"
+              }
+              value={`${fmtHours(result.denomHours)}h`}
+            />
             <Cell label="Flagged" value={`${fmtHours(result.flagHours)}h`} />
             <Cell
               label="Gap"
@@ -359,22 +461,17 @@ export function WorkCostCard({
             </div>
           )}
 
-          {/* Missing-day breadcrumb even when a figure IS shown. */}
+          {/* Breadcrumb for days that couldn't be resolved at all, even when a
+              figure IS shown. Scheduled days are deliberately absent here —
+              they're accounted for, and listing them would read as a problem. */}
           {missingCount > 0 && result.status !== "incomplete_clock" && (
             <p className="text-xs text-[var(--fg-3)]">
-              Days with flagged work but no clock entry:{" "}
+              Days with flagged work but no hours and no scheduled shift:{" "}
               {result.missingClockDays.map(formatDateShort).join(", ")}.
             </p>
           )}
 
-          <div className="flex items-center justify-between gap-2 border-t border-[var(--line)] pt-2">
-            <button
-              type="button"
-              onClick={() => setExplainerOpen(true)}
-              className="text-xs text-[var(--brand)] underline"
-            >
-              What does this mean?
-            </button>
+          <div className="flex items-center justify-end gap-2 border-t border-[var(--line)] pt-2">
             <span className="text-xs text-[var(--fg-3)]">
               Informational only — not legal advice.
             </span>
@@ -382,91 +479,6 @@ export function WorkCostCard({
         </div>
       )}
 
-      {explainerOpen && (
-        <Modal
-          open
-          onClose={() => setExplainerOpen(false)}
-          title="About these numbers"
-        >
-          <div className="space-y-4 text-sm leading-relaxed text-[var(--fg-2)]">
-            <div>
-              <h3 className="mb-1 font-semibold text-[var(--fg-1)]">
-                What effective hourly means
-              </h3>
-              <p>
-                Your effective hourly rate is your total pay for a period — flag
-                pay plus any spiffs or bonuses — divided by the number of hours
-                you were actually clocked in at the shop. It answers a simple
-                question: for every hour you were on the clock, how much did you
-                earn?
-              </p>
-            </div>
-            <div>
-              <h3 className="mb-1 font-semibold text-[var(--fg-1)]">
-                Why clocked hours matter
-              </h3>
-              <p>
-                Flat-rate (piece-rate) pay rewards flagged jobs, but a workday
-                also includes time that flags nothing — waiting for parts,
-                cleaning up, or slow periods. Under California&apos;s piece-rate
-                rules, that non-productive time and rest periods are treated as
-                their own category of paid time rather than something flag pay
-                can average over. Comparing your flagged hours to your clocked
-                hours shows how much of your day fell outside flagged work.
-              </p>
-            </div>
-            <div>
-              <h3 className="mb-1 font-semibold text-[var(--fg-1)]">
-                Unpaid time is shown beside efficiency, never inside it
-              </h3>
-              <p>
-                Rework, waiting and shop time are recorded as their own hours.
-                They are never subtracted from your flagged hours and never
-                change your efficiency figure — hiding them inside efficiency
-                would defeat the point of tracking them at all.
-              </p>
-            </div>
-            <div>
-              <h3 className="mb-1 font-semibold text-[var(--fg-1)]">
-                The reference comparison
-              </h3>
-              <p>
-                If you enter a reference hourly rate in Settings — for example,
-                your local minimum wage — this view shows whether your effective
-                hourly came in above or below it. The app never fills in a wage
-                figure for you: minimum wage changes each year and differs by
-                city, county, and state, so the number you compare against is
-                always one you choose.
-              </p>
-            </div>
-            <div>
-              <h3 className="mb-1 font-semibold text-[var(--fg-1)]">Learn more</h3>
-              <p>
-                California&apos;s Department of Industrial Relations publishes a
-                plain-language explanation of piece-rate pay and how
-                non-productive time is compensated:{" "}
-                <a
-                  href="https://www.dir.ca.gov/pieceratebackpayelection/AB_1513_FAQs.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
-                  style={{ color: "var(--brand)" }}
-                >
-                  DIR piece-rate FAQ
-                </a>
-                .
-              </p>
-            </div>
-            <p className="card-inset px-3 py-2 text-sm text-[var(--fg-2)]">
-              This tool presents numbers from your own records for your
-              information. It does not provide legal advice or reach any legal
-              conclusion. For guidance on your specific situation, consult a
-              qualified attorney or the California Labor Commissioner&apos;s
-              Office.
-            </p>
-          </div>
-        </Modal>
-      )}
     </section>
   );
 }

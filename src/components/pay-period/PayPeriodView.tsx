@@ -48,6 +48,7 @@ import {
   effectiveHourly,
   gapComposition,
   unflaggedTimeValue,
+  type ScheduleFallback,
 } from "@/lib/wage-check";
 import { buildUnpaidSummary } from "@/lib/unpaid-summary";
 import { formatPeriodLabel } from "@/lib/periods";
@@ -78,19 +79,25 @@ const LAYOUT: Record<
     roCap?: number;
   }
 > = {
-  // Mid-period the page is a work log: what have I produced, what is it costing
-  // me. There is no stub to check yet, so the pay-correctness family demotes.
+  // The rail is the SAME in every mode — spiffs and the RO list are always
+  // reference. Only the order of the two family cards in `main` changes, plus
+  // what starts expanded. The RO list in particular never leads: it is long,
+  // and burying "what did the work cost me?" under 50 rows meant scrolling past
+  // the whole period to reach the number that matters.
+  //
+  // Mid-period the page is about what the work is costing you — there is no
+  // stub to check yet, so the pay-correctness family sits second, collapsed.
   in_progress: {
-    main: ["workCost", "roList"],
-    rail: ["spiffs", "paidCheck"],
+    main: ["workCost", "paidCheck"],
+    rail: ["spiffs", "roList"],
     open: { workCost: true },
+    roCap: 10,
   },
-  // The period is closed and the hero IS the call to action. The RO list is the
-  // evidence you're about to check the stub against, so it leads — capped,
-  // because you check it against a number, not by reading 58 rows.
+  // Closed, waiting on the stub. The hero IS the call to action, so the body
+  // stays the same shape as mid-period.
   awaiting_pay: {
-    main: ["roList", "workCost"],
-    rail: ["spiffs", "paidCheck"],
+    main: ["workCost", "paidCheck"],
+    rail: ["spiffs", "roList"],
     open: { workCost: true },
     roCap: 10,
   },
@@ -126,6 +133,7 @@ export function PayPeriodView({
   today,
   goalHours = 0,
   forecast = null,
+  schedule = null,
 }: {
   availablePeriods: PeriodRange[];
   currentKey: string;
@@ -161,6 +169,10 @@ export function PayPeriodView({
   // Null when the period isn't the current one — projecting a closed period is
   // meaningless, so the page doesn't compute it.
   forecast?: Forecast | null;
+  // Lets effective hourly fill unclocked work days from the work schedule, on
+  // exactly the terms the efficiency denominator already uses. Null when no
+  // schedule exists — then only real clock entries count.
+  schedule?: ScheduleFallback | null;
 }) {
   const router = useRouter();
   // Dollars are additive: null when no rates are priced, so PeriodStats/RoList
@@ -171,13 +183,21 @@ export function PayPeriodView({
 
   // Pay Check-Up math. effectiveHourly re-filters to the range defensively, so
   // passing period-scoped entries/bonuses plus the full clock list is fine.
-  const wageCheck = effectiveHourly(entries, clocks, bonuses, rates, {
-    start: selected.start,
-    end: selected.end,
-  });
+  const wageCheck = effectiveHourly(
+    entries,
+    clocks,
+    bonuses,
+    rates,
+    { start: selected.start, end: selected.end },
+    schedule,
+  );
   // Efficiency cross-link: reframe a low-efficiency period as unflagged time
-  // with a dollar value. Only when clocked > flagged AND customer-pay is priced.
-  const gapHours = clockFlagGap(wageCheck.clockedHours, wageCheck.flagHours);
+  // with a dollar value. Only when worked > flagged AND customer-pay is priced.
+  //
+  // Uses denomHours, not clockedHours: a scheduled-but-unclocked day is time you
+  // were at the shop, and excluding it would understate the gap on exactly the
+  // days the tech forgot to clock.
+  const gapHours = clockFlagGap(wageCheck.denomHours, wageCheck.flagHours);
   const unflaggedDollars = unflaggedTimeValue(gapHours, rates);
   const unflaggedTime =
     unflaggedDollars !== null ? { gapHours, dollars: unflaggedDollars } : null;

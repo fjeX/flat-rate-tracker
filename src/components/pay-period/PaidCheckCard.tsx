@@ -19,6 +19,7 @@
 // the reconciliation math, dispute lifecycle, or their tests move.
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { InfoBubble } from "@/components/ui/InfoBubble";
 import type { Dispute, Entry, OpCode } from "@/lib/types";
 import type { Stats } from "@/lib/stats";
 import { fmtHours } from "@/lib/stats";
@@ -73,11 +74,12 @@ export function PaidCheckCard({
 
   return (
     <section className="card padded space-y-3">
+      <div className="card-head-row">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
+        className="flex min-h-[44px] flex-1 items-center justify-between gap-2 text-left"
       >
         <div>
           <h2 className="text-sm font-medium text-[var(--fg-1)]">
@@ -112,6 +114,39 @@ export function PaidCheckCard({
           )}
         </span>
       </button>
+
+      <InfoBubble title="Did I get paid?">
+        <p>
+          Your shop tells you what it paid you. This card checks that against
+          what you actually logged, so you find out from your own records rather
+          than from memory.
+        </p>
+        <h3>It works at three levels</h3>
+        <p>
+          <strong>The period total</strong> — you enter the flag hours from your
+          stub and it compares them to everything you logged. That catches a
+          whole job going missing.
+        </p>
+        <p>
+          <strong>Line by line</strong> — mark what each RO actually paid, and
+          shorted lines are listed individually. That catches a job paid at
+          fewer hours than it flagged, which the period total can hide when
+          another job happens to be paid over.
+        </p>
+        <p>
+          <strong>The outcome</strong> — when you raise a claim, this tracks
+          whether the money actually arrived. Most tools stop at &ldquo;here is
+          what you are owed&rdquo;; whether you got it is the part that matters.
+        </p>
+        <h3>Why it matters</h3>
+        <p>
+          A couple of hours short in a pay period is easy to miss and adds up to
+          real money over a year. Logging as you go means that when you do go
+          and ask, you are holding dated records of specific ROs instead of a
+          feeling that something was off.
+        </p>
+      </InfoBubble>
+      </div>
 
       {open && (
         <div className="space-y-3 border-t border-[var(--line)] pt-3">

@@ -15,20 +15,21 @@ import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatPeriodLabel, type PeriodRange } from "@/lib/periods";
 import type { PeriodMode } from "@/lib/period-mode";
 
-function subtitleFor(
+// The status is a pill, not fine print: on a page whose whole shape changes
+// with the mode, "which kind of period am I looking at" is the first thing a
+// user needs and the easiest thing to miss. Colour carries it too, so it reads
+// before the words do.
+function statusFor(
   mode: PeriodMode,
   isCurrent: boolean,
-  hasOverride: boolean,
-): string {
-  const base =
-    mode === "settled"
-      ? "Paid — reconciled below"
-      : mode === "awaiting_pay"
-        ? "Closed · waiting on pay"
-        : isCurrent
-          ? "Current period"
-          : "In progress";
-  return hasOverride ? `${base} · custom dates` : base;
+): { label: string; tone: string } {
+  if (mode === "settled") return { label: "Paid", tone: "" };
+  if (mode === "awaiting_pay")
+    return { label: "Closed — waiting on pay", tone: "warn" };
+  return {
+    label: isCurrent ? "Current pay period" : "In progress",
+    tone: "brand",
+  };
 }
 
 export function PeriodTitleBar({
@@ -86,6 +87,8 @@ export function PeriodTitleBar({
     onPick(key);
   }
 
+  const status = statusFor(mode, selected.key === currentKey);
+
   return (
     <div className="period-titlebar">
       <button
@@ -93,9 +96,10 @@ export function PeriodTitleBar({
         className="period-step"
         onClick={() => olderKey && onPick(olderKey)}
         disabled={olderKey === null}
-        aria-label="Previous pay period"
+        aria-label="Last pay period"
       >
-        <ChevronLeft className="h-4 w-4" />
+        <ChevronLeft className="h-4 w-4 shrink-0" />
+        <span className="period-step-label">Last pay period</span>
       </button>
 
       <div className="period-title-main">
@@ -109,8 +113,9 @@ export function PeriodTitleBar({
           <h1>{formatPeriodLabel(selected)}</h1>
           <ChevronDown className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
         </button>
-        <p className="period-title-sub">
-          {subtitleFor(mode, selected.key === currentKey, hasOverride)}
+        <p className="period-title-status">
+          <span className={`pill ${status.tone}`}>{status.label}</span>
+          {hasOverride && <span className="pill neutral">Custom dates</span>}
         </p>
       </div>
 
@@ -121,7 +126,8 @@ export function PeriodTitleBar({
         disabled={newerKey === null}
         aria-label="Next pay period"
       >
-        <ChevronRight className="h-4 w-4" />
+        <span className="period-step-label">Next pay period</span>
+        <ChevronRight className="h-4 w-4 shrink-0" />
       </button>
 
       {menuOpen && (

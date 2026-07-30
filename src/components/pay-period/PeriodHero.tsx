@@ -39,10 +39,17 @@ function InProgressHero({
         {efficiency !== null && <>{fmtPct(efficiency)} efficiency</>}
         {efficiency !== null && projection.kind !== "none" && " · "}
         {projection.kind === "projected" && (
+          // Each figure keeps its unit — and "goal" keeps its number — on one
+          // line. Without this the sentence orphans "goal" onto its own row.
           <>
             on this pace you land at{" "}
-            <strong>{fmtHours(projection.projected)}h</strong> of your{" "}
-            <strong>{fmtHours(projection.goal)}h</strong> goal
+            <strong className="whitespace-nowrap">
+              {fmtHours(projection.projected)}h
+            </strong>{" "}
+            of your{" "}
+            <strong className="whitespace-nowrap">
+              {fmtHours(projection.goal)}h goal
+            </strong>
           </>
         )}
         {projection.kind === "no_history" && (

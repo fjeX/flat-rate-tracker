@@ -9,6 +9,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Plus, Link2, Pencil, Trash2 } from "lucide-react";
+import { InfoBubble } from "@/components/ui/InfoBubble";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import type { Bonus } from "@/lib/types";
@@ -37,11 +38,12 @@ export function SpiffsCard({
 
   return (
     <section className="card padded space-y-3">
+      <div className="card-head-row">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
+        className="flex min-h-[44px] flex-1 items-center justify-between gap-2 text-left"
       >
         <h2 className="text-sm font-medium text-[var(--fg-2)]">Spiffs &amp; Bonuses</h2>
         <span className="flex items-center gap-2 text-[var(--fg-3)]">
@@ -57,6 +59,30 @@ export function SpiffsCard({
           )}
         </span>
       </button>
+
+      <InfoBubble title="Spiffs & Bonuses">
+        <p>
+          Money you earned this period that did not come from flag hours —
+          tire sales, alignments, battery or wiper spiffs, a monthly CSI bonus,
+          anything your shop pays on top of the labour rate.
+        </p>
+        <h3>Why log it here</h3>
+        <p>
+          Spiffs are part of your pay, so leaving them out makes you look like
+          you earn less than you do. They are added into your total pay when
+          your effective hourly is worked out, which is the number that answers
+          &ldquo;what am I really making per hour I am at the shop?&rdquo;
+        </p>
+        <h3>They are kept separate from flag pay on purpose</h3>
+        <p>
+          Your efficiency and flag hours never change when you add a spiff — a
+          $60 tire bonus is not two hours of flagged work. Keeping the two apart
+          means you can see how much of your pay depends on production and how
+          much comes from selling, which is worth knowing before you accept a
+          change to your pay plan.
+        </p>
+      </InfoBubble>
+      </div>
 
       {open && (
       <div className="space-y-3 border-t border-[var(--line)] pt-3">

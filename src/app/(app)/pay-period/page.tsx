@@ -194,6 +194,19 @@ export default async function PayPeriodPage({
       today={today}
       goalHours={goalHours}
       forecast={forecast}
+      schedule={
+        // Same context the efficiency denominator uses, so the effective-hourly
+        // figure and the efficiency figure can never disagree about which hours
+        // a day was worked. Null pre-migration → clock entries only.
+        schedules !== null && schedules.length > 0
+          ? {
+              schedules,
+              daysOff: daysOff ?? [],
+              today,
+              shiftOverrides: shiftOverrides ?? {},
+            }
+          : null
+      }
     />
   );
 }

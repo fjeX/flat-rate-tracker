@@ -1890,15 +1890,25 @@ a { color: inherit; }
   padding: 16px 0 10px;
 }
 .period-step {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: var(--tap-min); height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: var(--tap-min); height: var(--tap-min);
+  padding: 0;
   flex: none;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: transparent;
   color: var(--fg-2);
   cursor: pointer;
+  font: inherit;
+  font-size: 13px; font-weight: 550;
   transition: background 120ms, color 120ms;
+}
+/* Icon-only on phones (the row has no width to spare); named on desktop, so
+   nobody has to guess which direction an arrow goes in a pay cycle. */
+.period-step-label { display: none; }
+@media (min-width: 900px) {
+  .period-step { padding: 0 14px; }
+  .period-step-label { display: inline; white-space: nowrap; }
 }
 .period-step:hover:not(:disabled) { background: var(--bg-2); color: var(--fg-0); }
 .period-step:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -1922,7 +1932,10 @@ a { color: inherit; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .period-title-btn:hover h1 { color: var(--brand); }
-.period-title-sub { font-size: 12px; color: var(--fg-3); margin: 1px 0 0; }
+.period-title-status {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 5px 0 0;
+}
 
 /* ── Period menu: jump list + custom-date actions in one place ─── */
 .period-menu-scrim {
@@ -2056,3 +2069,39 @@ a { color: inherit; }
   margin: 8px 0 0;
   font-size: 12.5px; color: var(--bad);
 }
+
+/* ── Card header row: toggle + info bubble ─────────────────────────
+   The ⓘ is a SIBLING of the expand/collapse button, never nested inside it —
+   a button within a button is invalid and breaks keyboard navigation. */
+.card-head-row {
+  display: flex; align-items: flex-start; gap: 4px;
+}
+
+.info-bubble {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--tap-min); height: var(--tap-min);
+  flex: none;
+  margin-right: -6px;           /* optical: pull back to the card's padding edge */
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.info-bubble:hover { background: var(--bg-2); color: var(--brand); }
+.info-bubble:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* Long-form explanation inside the ⓘ modal. Scoped so these element selectors
+   can't leak into other modals. */
+.info-bubble-body {
+  font-size: 14px; line-height: 1.6; color: var(--fg-2);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.info-bubble-body h3 {
+  font-size: 13px; font-weight: 650; color: var(--fg-1);
+  margin: 4px 0 -6px;
+}
+.info-bubble-body p { margin: 0; }
+.info-bubble-body strong { color: var(--fg-1); font-weight: 620; }
+.info-bubble-body a { color: var(--brand); text-decoration: underline; }
