@@ -426,7 +426,7 @@ describe("effectiveHourly — schedule fallback", () => {
     expect(r.status).toBe("ok");
   });
 
-  it("never fills today — the shift is still in progress", () => {
+  it("never fills today from the schedule — the shift is still in progress", () => {
     const r = effectiveHourly(
       [entry("2026-07-20", 9)],
       [],
@@ -436,7 +436,9 @@ describe("effectiveHourly — schedule fallback", () => {
       fallback({ today: "2026-07-20" }),
     );
     expect(r.scheduledDays).toEqual([]);
-    expect(r.missingClockDays).toEqual(["2026-07-20"]);
+    // Today is in-progress, NOT missing data — see the in-progress suite below.
+    expect(r.missingClockDays).toEqual([]);
+    expect(r.ongoingDays).toEqual(["2026-07-20"]);
     expect(r.status).toBe("no_clock");
   });
 
@@ -529,5 +531,114 @@ describe("effectiveHourly — schedule fallback", () => {
     );
     expect(r.denomHours).toBe(8);
     expect(r.status).toBe("no_rates");
+  });
+});
+
+// ── In-progress day ──────────────────────────────────────────────────────────
+//
+// A day at or after "today" with no clock entry is a shift still running, not
+// missing data. Reported as a bug: a period showed "1 day this period has
+// flagged work but no hours on it" for TODAY, blocking the rate all day.
+
+describe("effectiveHourly — in-progress day", () => {
+  it("does not report today as missing", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8), entry("2026-07-22", 5)],
+      [clock("2026-07-20", 8)],
+      [],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.missingClockDays).toEqual([]);
+    expect(r.ongoingDays).toEqual(["2026-07-22"]);
+    expect(r.status).toBe("ok");
+  });
+
+  it("excludes today from BOTH sides, so the rate can't inflate", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8), entry("2026-07-22", 5)],
+      [clock("2026-07-20", 8)],
+      [],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.denomHours).toBe(8);
+    expect(r.countedFlagHours).toBe(8); // today's 5h excluded
+    expect(r.flagHours).toBe(13); // full period still reported for display
+    // 8 flagged hours x $30 over 8 counted hours — NOT (8+5)x30/8.
+    expect(r.hourly).toBeCloseTo(30, 6);
+  });
+
+  it("counts today normally once it has a clock entry", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8), entry("2026-07-22", 5)],
+      [clock("2026-07-20", 8), clock("2026-07-22", 4)],
+      [],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.ongoingDays).toEqual([]);
+    expect(r.denomHours).toBe(12);
+    expect(r.countedFlagHours).toBe(13);
+  });
+
+  it("excludes a future day's flagged work too", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8), entry("2026-07-24", 6)],
+      [clock("2026-07-20", 8)],
+      [],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.ongoingDays).toEqual(["2026-07-24"]);
+    expect(r.countedFlagHours).toBe(8);
+  });
+
+  it("excludes today's spiffs from the rate as well", () => {
+    // Otherwise a bonus logged today lands on a denominator that has no hours
+    // for today — the same inflation, by another route.
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8)],
+      [clock("2026-07-20", 8)],
+      [bonus("2026-07-22", 100)],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.hourly).toBeCloseTo(30, 6);
+    expect(r.bonusTotal).toBe(100); // still reported in full
+  });
+
+  it("reports no_clock when the ONLY work day is today", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-22", 5)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.ongoingDays).toEqual(["2026-07-22"]);
+    expect(r.missingClockDays).toEqual([]);
+    expect(r.denomHours).toBe(0);
+    expect(r.status).toBe("no_clock");
+  });
+
+  it("handles today with no schedule at all — the array can be empty", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8), entry("2026-07-22", 5)],
+      [clock("2026-07-20", 8)],
+      [],
+      RATES,
+      RANGE,
+      { schedules: [], daysOff: [], today: "2026-07-22" },
+    );
+    expect(r.ongoingDays).toEqual(["2026-07-22"]);
+    expect(r.scheduledDays).toEqual([]);
+    expect(r.status).toBe("ok");
   });
 });

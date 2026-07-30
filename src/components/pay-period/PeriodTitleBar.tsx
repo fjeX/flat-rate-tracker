@@ -102,6 +102,10 @@ export function PeriodTitleBar({
         <span className="period-step-label">Last pay period</span>
       </button>
 
+      {/* Status sits BESIDE the date, not under it: it reads as part of the
+          title ("Jul 16 – 31, current pay period") rather than as a caption,
+          and it keeps the header one line tall. Wraps below the title only when
+          the viewport genuinely can't fit both. */}
       <div className="period-title-main">
         <button
           type="button"
@@ -113,10 +117,8 @@ export function PeriodTitleBar({
           <h1>{formatPeriodLabel(selected)}</h1>
           <ChevronDown className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
         </button>
-        <p className="period-title-status">
-          <span className={`pill ${status.tone}`}>{status.label}</span>
-          {hasOverride && <span className="pill neutral">Custom dates</span>}
-        </p>
+        <span className={`pill ${status.tone}`}>{status.label}</span>
+        {hasOverride && <span className="pill neutral">Custom dates</span>}
       </div>
 
       <button

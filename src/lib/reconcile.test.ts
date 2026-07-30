@@ -5,6 +5,8 @@ import {
   unreconciledLines,
   shortfallDollars,
   PAY_EPS,
+  sortUnreconciledLines,
+  type UnreconciledLine,
 } from "./reconcile";
 import { ratesToMap } from "./earnings";
 import type { Entry, EntryOpCode, LaborType } from "./types";
@@ -158,5 +160,98 @@ describe("shortfallDollars", () => {
     ];
     // hasAnyRate is true (warranty priced), but this line's type is unpriced → 0
     expect(shortfallDollars(entries, rates)).toBe(0);
+  });
+});
+
+describe("sortUnreconciledLines", () => {
+  // Shops hand out a printed sheet in RO-number order; the list has to be
+  // readable alongside it.
+  function row(
+    roNumber: string,
+    date: string,
+    flag: number,
+    paid: number | null = null,
+    position = 0,
+  ): UnreconciledLine {
+    const l = line({
+      id: `${roNumber}-${position}`,
+      flagHours: flag,
+      paidHours: paid,
+      position,
+    });
+    const e = entry([l], { id: `${roNumber}-${date}`, roNumber, date });
+    return { entry: e, line: l, status: paid === null ? "pending" : "short" };
+  }
+
+  it("orders by RO number ascending by default", () => {
+    const rows = [row("99231", "2026-07-20", 2), row("99044", "2026-07-18", 3)];
+    expect(sortUnreconciledLines(rows).map((r) => r.entry.roNumber)).toEqual([
+      "99044",
+      "99231",
+    ]);
+  });
+
+  it("sorts RO numbers numerically, not as strings", () => {
+    // "9910" < "993" as a string, but 993 comes first on the shop's sheet.
+    const rows = [row("9910", "2026-07-20", 2), row("993", "2026-07-18", 3)];
+    expect(sortUnreconciledLines(rows, "ro").map((r) => r.entry.roNumber)).toEqual(
+      ["993", "9910"],
+    );
+  });
+
+  it("keeps recycled RO numbers together, ordered by date", () => {
+    // This shop reuses 5-digit RO numbers, so the same number can appear twice
+    // in one period as genuinely different jobs.
+    const rows = [
+      row("99231", "2026-07-24", 2),
+      row("99231", "2026-07-19", 3),
+    ];
+    expect(sortUnreconciledLines(rows, "ro").map((r) => r.entry.date)).toEqual([
+      "2026-07-19",
+      "2026-07-24",
+    ]);
+  });
+
+  it("orders multiple lines on one RO by their position", () => {
+    const rows = [
+      row("99231", "2026-07-20", 2, null, 2),
+      row("99231", "2026-07-20", 3, null, 0),
+    ];
+    expect(sortUnreconciledLines(rows, "ro").map((r) => r.line.position)).toEqual(
+      [0, 2],
+    );
+  });
+
+  it("sorts unparseable RO numbers last rather than first", () => {
+    const rows = [row("SUBLET", "2026-07-20", 2), row("99044", "2026-07-18", 3)];
+    expect(sortUnreconciledLines(rows, "ro").map((r) => r.entry.roNumber)).toEqual(
+      ["99044", "SUBLET"],
+    );
+  });
+
+  it("sorts by date newest first", () => {
+    const rows = [row("99044", "2026-07-18", 3), row("99231", "2026-07-24", 2)];
+    expect(sortUnreconciledLines(rows, "date").map((r) => r.entry.date)).toEqual([
+      "2026-07-24",
+      "2026-07-18",
+    ]);
+  });
+
+  it("sorts by biggest shortfall first, with pending lines below", () => {
+    const rows = [
+      row("99001", "2026-07-18", 3, 2.5), // 0.5h short
+      row("99002", "2026-07-19", 5, null), // pending — unknown
+      row("99003", "2026-07-20", 4, 1), // 3h short
+    ];
+    expect(
+      sortUnreconciledLines(rows, "shortfall").map((r) => r.entry.roNumber),
+    ).toEqual(["99003", "99001", "99002"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const rows = [row("99231", "2026-07-20", 2), row("99044", "2026-07-18", 3)];
+    const before = rows.map((r) => r.entry.roNumber);
+    sortUnreconciledLines(rows, "ro");
+    expect(rows.map((r) => r.entry.roNumber)).toEqual(before);
   });
 });

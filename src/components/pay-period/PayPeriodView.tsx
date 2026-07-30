@@ -91,7 +91,7 @@ const LAYOUT: Record<
     main: ["workCost", "paidCheck"],
     rail: ["spiffs", "roList"],
     open: { workCost: true },
-    roCap: 10,
+    roCap: 7,
   },
   // Closed, waiting on the stub. The hero IS the call to action, so the body
   // stays the same shape as mid-period.
@@ -99,7 +99,7 @@ const LAYOUT: Record<
     main: ["workCost", "paidCheck"],
     rail: ["spiffs", "roList"],
     open: { workCost: true },
-    roCap: 10,
+    roCap: 7,
   },
   // Paid. Now the whole page is an audit, and reconciliation — not the raw list
   // — is the real drill-down.
@@ -107,7 +107,7 @@ const LAYOUT: Record<
     main: ["paidCheck", "workCost"],
     rail: ["spiffs", "roList"],
     open: { paidCheck: true, workCost: true },
-    roCap: 10,
+    roCap: 7,
   },
 };
 
@@ -196,8 +196,12 @@ export function PayPeriodView({
   //
   // Uses denomHours, not clockedHours: a scheduled-but-unclocked day is time you
   // were at the shop, and excluding it would understate the gap on exactly the
-  // days the tech forgot to clock.
-  const gapHours = clockFlagGap(wageCheck.denomHours, wageCheck.flagHours);
+  // days the tech forgot to clock. Paired with countedFlagHours so both sides
+  // cover the same days — an in-progress shift is excluded from each.
+  const gapHours = clockFlagGap(
+    wageCheck.denomHours,
+    wageCheck.countedFlagHours,
+  );
   const unflaggedDollars = unflaggedTimeValue(gapHours, rates);
   const unflaggedTime =
     unflaggedDollars !== null ? { gapHours, dollars: unflaggedDollars } : null;

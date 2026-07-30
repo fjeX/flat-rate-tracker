@@ -70,7 +70,11 @@ export type EffectiveHourly = {
   flagPay: number | null; // null when no rates are priced (dollars unknown)
   bonusTotal: number; // always real — spiffs need no rates
   totalPay: number | null; // flagPay + bonuses; null when flagPay is null
-  flagHours: number;
+  flagHours: number; // every flagged hour in the period, for display continuity
+  // Flagged hours over the days actually counted — excludes an in-progress day
+  // (see ongoingDays). Pair this with denomHours; mixing flagHours and
+  // denomHours would compare a full period against a partial denominator.
+  countedFlagHours: number;
   clockedHours: number; // hours from real clock entries ONLY
   // The denominator actually used: clocked hours, plus scheduled shift hours
   // for completed days that have flagged work but no clock entry. Equals
@@ -83,6 +87,12 @@ export type EffectiveHourly = {
   clockDays: string[]; // distinct dates with clocked hours > 0
   // Work days filled in from the schedule rather than a clock entry.
   scheduledDays: string[];
+  // Work days at or after "today" with no clock entry — the shift is still
+  // running, so they're excluded from BOTH sides of the average rather than
+  // counted as missing data. Counting their flagged hours against a denominator
+  // that has no hours for them yet would inflate the rate all day and settle
+  // only after the tech clocks out.
+  ongoingDays: string[];
   // Work days with NEITHER a clock entry nor a schedule to fall back on — the
   // genuinely unknown set. A scheduled day is not missing: the schedule IS the
   // answer, which is the whole reason the shift-override exists.
@@ -111,7 +121,9 @@ export function effectiveHourly(
   // override on the dashboard and schedule pages exists precisely so the tech
   // can correct it when a day wasn't normal.
   //
-  // Omitted → identical behaviour to before (denomHours === clockedHours).
+  // Omitted → identical behaviour to before (denomHours === clockedHours, and
+  // no in-progress day is excluded). Pass it with an empty `schedules` array to
+  // get the today handling without any schedule fill.
   schedule?: ScheduleFallback | null,
 ): EffectiveHourly {
   const includedEntries = entries.filter((e) =>
@@ -161,10 +173,42 @@ export function effectiveHourly(
   }
   const scheduledDaySet = new Set(scheduledDays);
 
-  // Only days with neither a clock entry nor a schedule are genuinely unknown.
+  // A work day at or after "today" with no clock entry is a shift still in
+  // progress, not missing data. It is excluded from BOTH sides of the average:
+  // its flagged hours would otherwise be divided by a denominator that has no
+  // hours for it yet, inflating the rate all day and only settling once the
+  // tech clocks out. aggregateStatsWithSchedule already skips such a day for
+  // exactly this reason (stats.ts) — this keeps the two consistent.
+  //
+  // Defined as a predicate over DATES, not over work days: a spiff logged today
+  // has to be excluded too, and it can sit on a day with no RO on it. Deriving
+  // this from work days alone let that bonus land on a denominator with no
+  // hours for today — the same inflation by another route.
+  const isOngoing = (date: string): boolean =>
+    schedule !== null &&
+    schedule !== undefined &&
+    date >= schedule.today &&
+    !clockDaySet.has(date);
+  const ongoingDays = workDays.filter(isOngoing);
+
+  // Only days with neither a clock entry nor a schedule are genuinely unknown —
+  // and an in-progress day is never one of them.
   const missingClockDays = workDays.filter(
-    (d) => !clockDaySet.has(d) && !scheduledDaySet.has(d),
+    (d) => !clockDaySet.has(d) && !scheduledDaySet.has(d) && !isOngoing(d),
   );
+
+  // Pay is re-derived over the counted days only, so the numerator and the
+  // denominator describe the same stretch of time.
+  const countedEntries = includedEntries.filter((e) => !isOngoing(e.date));
+  const countedFlagHours = countedEntries.reduce((s, e) => s + e.flagHours, 0);
+  const countedFlagPay = hasAnyRate(rates)
+    ? periodEarnings(countedEntries, rates)
+    : null;
+  const countedBonuses = sumBonuses(
+    includedBonuses.filter((b) => !isOngoing(b.date)),
+  );
+  const countedPay =
+    countedFlagPay === null ? null : countedFlagPay + countedBonuses;
 
   const denomHours = clockedHours + scheduledHours;
   const denomSource: EffectiveHourly["denomSource"] =
@@ -188,12 +232,12 @@ export function effectiveHourly(
     // gap, hide the rate.
     status = "incomplete_clock";
     hourly = null;
-  } else if (totalPay === null) {
+  } else if (countedPay === null) {
     status = "no_rates";
     hourly = null;
   } else {
     status = "ok";
-    hourly = totalPay / denomHours;
+    hourly = countedPay / denomHours;
   }
 
   return {
@@ -202,12 +246,14 @@ export function effectiveHourly(
     bonusTotal,
     totalPay,
     flagHours,
+    countedFlagHours,
     clockedHours,
     denomHours,
     denomSource,
     workDays,
     clockDays,
     scheduledDays,
+    ongoingDays,
     missingClockDays,
     status,
   };

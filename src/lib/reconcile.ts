@@ -100,6 +100,67 @@ export function unreconciledLines(entries: Entry[]): UnreconciledLine[] {
   return out;
 }
 
+// How the reconciliation list is ordered while the tech works through it.
+//
+// "ro" is the default and the reason this exists: shops hand out a printed
+// sheet of ROs and flagged lines in RO-number order. Reading down that sheet
+// while the app lists rows newest-date-first means hunting for every line.
+export type ReconcileSort = "ro" | "date" | "shortfall";
+
+// Leading digits of an RO number, for numeric ordering. RO numbers are strings
+// and can carry prefixes/suffixes; NaN sorts last so odd formats don't jump the
+// queue. NOTE: RO numbers are NOT unique — this shop recycles 5-digit numbers —
+// so ties always fall through to date and line position.
+function roSortKey(roNumber: string): number {
+  const digits = roNumber.match(/\d+/);
+  return digits ? Number(digits[0]) : Number.NaN;
+}
+
+function compareNumbers(a: number, b: number): number {
+  const aBad = !Number.isFinite(a);
+  const bBad = !Number.isFinite(b);
+  if (aBad && bBad) return 0;
+  if (aBad) return 1; // unparseable RO numbers sort last
+  if (bBad) return -1;
+  return a - b;
+}
+
+/**
+ * Order unreconciled rows for display. Pure and total — returns a new array and
+ * never mutates the input.
+ *
+ * Every comparator ends on the same tiebreak chain (date, then RO number string,
+ * then line position) so the order is stable and deterministic: re-sorting after
+ * marking a line paid can't shuffle the rows around the tech's place on the page.
+ */
+export function sortUnreconciledLines(
+  rows: UnreconciledLine[],
+  sort: ReconcileSort = "ro",
+): UnreconciledLine[] {
+  const tiebreak = (a: UnreconciledLine, b: UnreconciledLine): number =>
+    a.entry.date.localeCompare(b.entry.date) ||
+    a.entry.roNumber.localeCompare(b.entry.roNumber) ||
+    a.line.position - b.line.position;
+
+  return [...rows].sort((a, b) => {
+    if (sort === "ro") {
+      return (
+        compareNumbers(roSortKey(a.entry.roNumber), roSortKey(b.entry.roNumber)) ||
+        tiebreak(a, b)
+      );
+    }
+    if (sort === "date") {
+      // Newest first — the app's usual convention everywhere else.
+      return b.entry.date.localeCompare(a.entry.date) || tiebreak(a, b);
+    }
+    // Biggest gap first, so the money is at the top. A pending line has no
+    // known shortfall yet, so it counts as 0 and sinks below real shorts.
+    const gap = (r: UnreconciledLine) =>
+      r.status === "short" ? r.line.flagHours - (r.line.paidHours ?? 0) : 0;
+    return gap(b) - gap(a) || tiebreak(a, b);
+  });
+}
+
 // Total dollars left on the table across every shorted line, pricing each line
 // by its OWN labor-type rate. null when no rates are priced at all (so the UI
 // hides dollars entirely and shows hours only). Shorted lines whose specific

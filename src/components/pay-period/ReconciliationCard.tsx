@@ -10,7 +10,10 @@ import {
   reconcileEntries,
   unreconciledLines,
   shortfallDollars,
+  sortUnreconciledLines,
+  type ReconcileSort,
 } from "@/lib/reconcile";
+import { Select } from "@/components/ui/Select";
 import { buildDisputePack, formatDisputePackText } from "@/lib/dispute-pack";
 import { getExportedAt, recordExport } from "@/lib/dispute-exports";
 import { setLinePaidHoursAction } from "@/app/actions/entries";
@@ -153,6 +156,7 @@ export function ReconciliationCard({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [sort, setSort] = useState<ReconcileSort>("ro");
   const [markingAll, setMarkingAll] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -166,7 +170,7 @@ export function ReconciliationCard({
 
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
   const summary = reconcileEntries(entries);
-  const rows = unreconciledLines(entries);
+  const rows = sortUnreconciledLines(unreconciledLines(entries), sort);
   const showMoney = hasAnyRate(rates);
   const dollars = showMoney ? shortfallDollars(entries, rates) : null;
 
@@ -310,6 +314,26 @@ export function ReconciliationCard({
         </p>
       ) : (
         <div className="space-y-2">
+          {/* Ordering matters more here than anywhere else on the page: most
+              shops hand out a printed sheet of ROs and flagged lines in RO-number
+              order, and working down that sheet against a date-sorted list means
+              hunting for every line. RO order is the default for that reason. */}
+          <div className="recon-sort">
+            <label className="field-label" htmlFor="recon-sort">
+              Sort by
+            </label>
+            <Select
+              id="recon-sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as ReconcileSort)}
+              className="text-sm"
+            >
+              <option value="ro">RO number — matches your shop&apos;s sheet</option>
+              <option value="date">Date — newest first</option>
+              <option value="shortfall">Biggest shortfall first</option>
+            </Select>
+          </div>
+
           {rows.map(({ entry, line, status }) => (
             <ReconLineRow
               key={line.id}

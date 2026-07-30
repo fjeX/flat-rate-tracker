@@ -194,19 +194,19 @@ export default async function PayPeriodPage({
       today={today}
       goalHours={goalHours}
       forecast={forecast}
-      schedule={
+      schedule={{
         // Same context the efficiency denominator uses, so the effective-hourly
         // figure and the efficiency figure can never disagree about which hours
-        // a day was worked. Null pre-migration → clock entries only.
-        schedules !== null && schedules.length > 0
-          ? {
-              schedules,
-              daysOff: daysOff ?? [],
-              today,
-              shiftOverrides: shiftOverrides ?? {},
-            }
-          : null
-      }
+        // a day was worked.
+        //
+        // Passed even when no schedule exists (empty array): `today` is what
+        // lets an in-progress shift be excluded rather than flagged as missing
+        // data, and that matters to every user, schedule or not.
+        schedules: schedules ?? [],
+        daysOff: daysOff ?? [],
+        today,
+        shiftOverrides: shiftOverrides ?? {},
+      }}
     />
   );
 }

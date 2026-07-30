@@ -1913,7 +1913,10 @@ a { color: inherit; }
 .period-step:hover:not(:disabled) { background: var(--bg-2); color: var(--fg-0); }
 .period-step:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.period-title-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.period-title-main {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  min-width: 0; flex: 1;
+}
 .period-title-btn {
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 32px;
@@ -1932,10 +1935,7 @@ a { color: inherit; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .period-title-btn:hover h1 { color: var(--brand); }
-.period-title-status {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-  margin: 5px 0 0;
-}
+
 
 /* ── Period menu: jump list + custom-date actions in one place ─── */
 .period-menu-scrim {
@@ -2056,7 +2056,9 @@ a { color: inherit; }
 .period-hero-support {
   margin: 8px 0 0;
   font-size: 13.5px; color: var(--fg-2); line-height: 1.45;
-  max-width: 52ch;
+  /* No max-width. The hero spans the full header band, and a ch-based cap made
+     these one-line sentences wrap at ~52 characters — orphaning "goal" and
+     "rate" onto a line of their own. Narrow viewports still wrap naturally. */
 }
 .period-hero-support strong { color: var(--fg-0); font-weight: 620; }
 .period-hero-action {
@@ -2105,3 +2107,34 @@ a { color: inherit; }
 .info-bubble-body p { margin: 0; }
 .info-bubble-body strong { color: var(--fg-1); font-weight: 620; }
 .info-bubble-body a { color: var(--brand); text-decoration: underline; }
+
+/* ── Reconciliation sort control ──────────────────────────────────
+   Most shops hand out a printed sheet in RO-number order, so that's the
+   default; working down the sheet against a date-sorted list means hunting. */
+.recon-sort {
+  display: flex; align-items: center; gap: 8px;
+  padding-bottom: 2px;
+}
+.recon-sort .field-label { margin-bottom: 0; flex: none; }
+.recon-sort select { max-width: 22rem; }
+
+/* ── Jump-to-the-day links for unresolved dates ───────────────────── */
+.missing-day-links {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 10px 0 0;
+}
+.missing-day-links .field-label { margin-bottom: 0; flex: none; }
+.missing-day-link {
+  display: inline-flex; align-items: center;
+  min-height: 30px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  color: var(--brand);
+  font-size: 12.5px; font-weight: 550;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.missing-day-link:hover { background: var(--bg-3); }
+.missing-day-link:focus-visible { outline: none; box-shadow: var(--ring); }

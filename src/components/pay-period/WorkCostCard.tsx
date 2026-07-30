@@ -15,6 +15,7 @@
 // ONLY. No verdicts, no legal framing, no hardcoded wage figure. The only
 // reference rate is one the user typed into Settings.
 import { useState } from "react";
+import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { InfoBubble } from "@/components/ui/InfoBubble";
 import { fmtHours } from "@/lib/stats";
@@ -38,6 +39,33 @@ function fmtRate(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+// One tap per unresolved day, straight to that day's month on the schedule
+// page. Telling a tech "Jul 18, Jul 22 and Jul 26 need hours" and leaving them
+// to navigate there and find each date is the kind of small friction that means
+// the days never get fixed.
+//
+// The schedule page navigates by MONTH (`?m=YYYY-MM`) — it has no concept of a
+// focused date — so these land on the right month rather than the exact day.
+// Adding a `?date=` param it doesn't read would look like it worked and quietly
+// dump the user on the current month instead.
+function MissingDayLinks({ days }: { days: string[] }) {
+  if (days.length === 0) return null;
+  return (
+    <p className="missing-day-links">
+      <span className="field-label">Fix on the schedule</span>
+      {days.map((d) => (
+        <Link
+          key={d}
+          href={`/schedule?m=${d.slice(0, 7)}`}
+          className="missing-day-link"
+        >
+          {formatDateShort(d)}
+        </Link>
+      ))}
+    </p>
+  );
 }
 
 function Cell({ label, value }: { label: string; value: string }) {
@@ -69,7 +97,7 @@ export function WorkCostCard({
   const [open, setOpen] = useState(defaultOpen);
   const [recordsOpen, setRecordsOpen] = useState(false);
 
-  const gap = clockFlagGap(result.denomHours, result.flagHours);
+  const gap = clockFlagGap(result.denomHours, result.countedFlagHours);
   const comparison = floorComparison(result.hourly, referenceRate);
   const missingCount = result.missingClockDays.length;
   const hasUnpaid = unpaid.totalHours > 0 || unpaid.lines.length > 0;
@@ -231,9 +259,7 @@ export function WorkCostCard({
                       : `${missingCount} days this period have flagged work but no hours on them`}
                     , so there&apos;s no effective hourly yet. Set your normal
                     shift on the schedule page and days like these fill in
-                    automatically — or add clock hours for{" "}
-                    {result.missingClockDays.map(formatDateShort).join(", ")} on
-                    the dashboard.
+                    automatically — or add clock hours for them on the dashboard.
                   </>
                 ) : (
                   <>
@@ -249,12 +275,11 @@ export function WorkCostCard({
                     : `${missingCount} days this period have flagged work but no hours on them`}
                   , so the effective hourly isn&apos;t shown — it would average
                   over an incomplete number of hours.{" "}
-                  {result.missingClockDays.map(formatDateShort).join(", ")}{" "}
-                  {missingCount === 1 ? "falls" : "fall"} outside your scheduled
-                  shifts, so add clock hours or a shift override for{" "}
-                  {missingCount === 1 ? "it" : "them"}.
+                  {missingCount === 1 ? "It falls" : "They fall"} outside your
+                  scheduled shifts, so add clock hours or a shift override.
                 </>
               )}
+              {missingCount > 0 && <MissingDayLinks days={result.missingClockDays} />}
               {result.status === "no_rates" && (
                 <>
                   Set a pay rate in Settings to see your effective hourly in
@@ -305,12 +330,32 @@ export function WorkCostCard({
               }
               value={`${fmtHours(result.denomHours)}h`}
             />
-            <Cell label="Flagged" value={`${fmtHours(result.flagHours)}h`} />
+            <Cell
+              label="Flagged"
+              value={`${fmtHours(result.countedFlagHours)}h`}
+            />
             <Cell
               label="Gap"
               value={`${gap >= 0 ? "" : "−"}${fmtHours(Math.abs(gap))}h`}
             />
           </div>
+
+          {/* An in-progress shift is excluded from both sides of the average, so
+              say so. Without this the gap looks wrong all day and only settles
+              once the tech clocks out — which reads as a bug, not as design. */}
+          {result.ongoingDays.length > 0 && (
+            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+              {result.ongoingDays.length === 1
+                ? `${formatDateShort(result.ongoingDays[0])} isn't counted yet`
+                : `${result.ongoingDays.map(formatDateShort).join(", ")} aren't counted yet`}
+              {" — "}
+              {result.ongoingDays.length === 1 ? "that shift is" : "those shifts are"}{" "}
+              still in progress. Flagged work on{" "}
+              {result.ongoingDays.length === 1 ? "it" : "them"} is left out of the
+              figures above until there are hours to divide it by, so the gap will
+              move once you clock out.
+            </p>
+          )}
 
           {/* What that gap is MADE OF. Purely explanatory — the gap figure above
               is unchanged and nothing here re-derives the effective hourly. */}
