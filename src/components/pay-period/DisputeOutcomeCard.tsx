@@ -84,8 +84,13 @@ function OutcomeForm({
           note,
           status: "resolved",
         });
-        onDone();
+        // refresh BEFORE closing the form. This page refetches three years of
+        // entries, so the round trip is slow enough that closing first leaves the
+        // tech staring at the pre-resolve state wondering if it saved. Both calls
+        // sit inside the transition, so the button stays "Saving…" until the new
+        // data is actually in.
         router.refresh();
+        onDone();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to save.");
       }
