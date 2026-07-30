@@ -172,13 +172,61 @@ The Timer page runs **up to 3 job timers at once**. The header reads
   stop are plausible; only a wrong *saved* value is a bug.
 - You are testing the mechanism, not the duration — never run it long.
 
+### 3z. Pay Period page shape (REDESIGNED 2026-07-30 — read before §4–§7)
+
+The whole page was restructured. Nine peer cards became a header band plus two
+columns. **Read this before reporting anything on §4–§7 as missing** — most
+"missing" cards have moved, not gone.
+
+**Three modes.** The page changes shape with where the period sits in the pay
+cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
+
+| Mode | When | Hero shows |
+|---|---|---|
+| In progress | period still running | flagged so far + pace projection |
+| Awaiting pay | period closed, no paid hours logged | an INPUT: "got your stub?" |
+| Settled | paid hours recorded | paid vs logged, and the shortfall |
+
+- The status is a **coloured pill beside the date** — "Current pay period" /
+  "Closed — waiting on pay" / "Paid".
+- **Nothing is ever hidden by mode.** Cards the mode de-prioritises move below a
+  **"Reference"** divider (the right-hand column on desktop). If a card is
+  genuinely absent rather than demoted, that IS a bug — check the rail before
+  reporting it.
+- The old "Pay Period" heading and the period picker card are gone. The period
+  IS the title; click it for the jump list and the custom-date actions.
+- **Two-column at ≥900px**, single column below. Check both widths.
+
+**Entering paid hours from the awaiting-pay hero writes to the database.** Use a
+period you're willing to reconcile, and note it in "Data created tonight".
+
+**Info bubbles (ⓘ)** sit beside the collapse chevron on "Did I get paid?",
+"Spiffs & Bonuses" and "What did the work cost me?". Open each one: it must open
+a modal and must NOT toggle the card open/closed. If tapping ⓘ also expands the
+card, report it.
+
+**RO list** is capped at 7 rows with a "Show all N ROs" reveal, and lives in the
+Reference rail in every mode.
+
 ### 4. Pay discrepancy check
-- Open the discrepancy feature and run it against the current pay period.
+> **Moved 2026-07-30.** This is no longer its own card. It is the first thing
+> inside **"Did I get paid?"** — see §3z for the page's new shape.
+- Open **"Did I get paid?"** and run the check against the current pay period.
 - Verify the math: does flagged-vs-paid line up with the ROs you can see?
   Spot-check one number by hand.
 
 ### 5. Pay reconciliation
-- On the pay period page, open the Reconciliation card.
+> **Moved 2026-07-30.** Now a drill-down row inside "Did I get paid?", labelled
+> **"Which lines came up short?"**.
+- Open "Did I get paid?" → "Which lines came up short?".
+- **Sort control (new 2026-07-30).** Defaults to **RO number**, because shops
+  hand out a printed sheet in RO order. Check all three options:
+  - **RO number** must sort NUMERICALLY, not as text — RO 993 comes BEFORE
+    RO 9910. If 9910 sorts first, that's the bug.
+  - **Date** is newest-first. **Biggest shortfall first** puts the largest gap
+    on top and pushes not-yet-reconciled ("pending") lines to the bottom.
+  - Change the sort, then mark a line paid. The remaining rows must keep their
+    order — if the list reshuffles under you, report it.
 - Mark 1–2 lines as paid (full amount) and mark one line **short-paid**
   (e.g. paid 1.5 of 2.0 hrs). Verify statuses update (pending/paid/short)
   and shortfall dollars appear if pay rates are set.
@@ -190,9 +238,26 @@ The Timer page runs **up to 3 job timers at once**. The header reads
   "tire spiff $10", etc.). Link it to one of tonight's ROs if the UI allows.
 - Verify it shows on the pay period's Spiffs card and on the RO's detail view.
 
-### 7. Pay Check-Up (CA wage math)
-- Open the Pay Check-Up card. If clock hours are required and missing, note
-  exactly what the app says is missing (it should name missing days, not guess).
+### 7. "What did the work cost me?" (CA wage math + unpaid time)
+> **Renamed and merged 2026-07-30.** Was "Pay Check-Up". The old separate
+> "Unpaid Time" card is now a drill-down inside this one ("Every unpaid record").
+- Open the card. If hours are required and missing, note exactly what the app
+  says is missing (it should name the days, not guess).
+- **Schedule fallback (new 2026-07-30).** A completed day with flagged work but
+  no clock entry is filled from your normal shift on the Schedule page. So:
+  - The card must NOT say a day is missing when your schedule covers it. If it
+    lists a string of ordinary working days as missing, that's the bug that was
+    fixed on 2026-07-30 — report it as a FAIL.
+  - When the fallback is used, the card says so ("your normal scheduled shift
+    was used for them") and offers **tappable date links** to that month on the
+    Schedule page. Follow one — it must land on the right MONTH (it does not
+    focus the individual day; that's a known limitation, not a bug).
+  - Only days with NEITHER a clock entry NOR a scheduled shift count as missing.
+- **Today is never "missing" (new 2026-07-30).** The current day's shift is
+  still running, so it is excluded from BOTH sides of the average and the card
+  says "isn't counted yet — that shift is still in progress". If the card ever
+  reports TODAY as a day with no hours, report it as a FAIL — that is the exact
+  bug fixed on 2026-07-30.
 - If it computes, sanity-check the effective hourly figure against the period's
   flag pay + bonuses.
 - **New 2026-07-28 — "What's in that Xh gap"**: when the period has unpaid time
@@ -201,8 +266,14 @@ The Timer page runs **up to 3 job timers at once**. The header reads
   - The listed parts (Unpaid rework / Waiting on parts or approval / Shop time)
     plus **"Not accounted for yet"** must sum to the **Gap** tile exactly.
   - **The Gap tile itself must not change** when unpaid time is added. It is
-    clocked − flagged and nothing else. If adding a comeback moves the Gap, the
-    Pay Check-Up math got contaminated — report it as a FAIL, not a nitpick.
+    (hours at the shop) − (flagged hours over the same days) and nothing else.
+    If adding a comeback moves the Gap, the maths got contaminated — report it
+    as a FAIL, not a nitpick.
+    - **Changed 2026-07-30:** "hours at the shop" is no longer clocked hours
+      alone. A completed day with flagged work and no clock entry is filled
+      from your work schedule, exactly as efficiency has always done. So the
+      Gap can legitimately be non-zero on a day you never clocked. That is
+      correct, not a bug.
   - If recorded unpaid time exceeds the gap, there must be **no negative
     number** anywhere. Instead the block says the recorded time "covers the
     whole gap". A negative "Not accounted for" is a bug.
@@ -221,8 +292,10 @@ numbers, that is a real bug worth reporting loudly.
 ledger row from a "Worked — unpaid" day (§2c). Several checks below only bite
 when both sources are present.
 
-- **Pay Period → "Unpaid Time" card** (between Reconciliation and Spiffs):
-  - Collapsed by default, hours shown on the right. Expand it.
+- **Pay Period → "What did the work cost me?" → "Every unpaid record"**
+  (was a standalone "Unpaid Time" card until 2026-07-30):
+  - The card header shows total unpaid hours. Expand it, then expand
+    **"Every unpaid record"**.
   - Three tiles — Rework / Waiting / Shop time — must **sum to the "Total
     unpaid" row** at the bottom.
   - Every row should trace back to something you actually created tonight: a
@@ -277,13 +350,19 @@ when both sources are present.
 ### 7c. Dispute Tracking (new 2026-07-30)
 
 FRT can now record what happened AFTER a dispute pack went out. **Newest code in
-the app — hunt it hard.** Lives on Pay Period, below Reconciliation.
+the app — hunt it hard.**
+
+> **Moved 2026-07-30.** No longer its own card. It is the last section inside
+> **"Did I get paid?"**, headed **"Did the claim get paid?"**.
 
 **Setup:** the current period needs at least one **short** line (flag > paid).
 Use §5 to reconcile a line to fewer hours than it flagged.
 
-- Card is titled **"Dispute Tracking"**. With a shortfall and no claim yet it
-  offers **"Track this dispute"** and states the outstanding hours.
+- With a shortfall and no claim yet it offers **"Track this dispute"** and
+  states the outstanding hours.
+- **The "recovered all-time" line is GONE from this page** (removed 2026-07-30 —
+  it duplicated the dashboard's "Recovered with FRT" card). If a lifetime
+  recovery figure reappears on Pay Period, report it.
 - Tap it. Expect a **"Not sent yet"** pill, a scope label (**"Itemized by RO ·
   N lines"** or **"Period total"**), and a **Claimed** tile whose hours match the
   shortfall Reconciliation reports. If the two disagree, that's a real bug.
