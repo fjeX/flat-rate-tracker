@@ -12,17 +12,21 @@
 
 import type { Database } from "@/lib/supabase/database.types";
 import type { NewLaborTimeObservation } from "@/lib/true-time";
+import { reportServerError } from "@/lib/report-error-server";
 import { getCurrentUserId, isMissingTable, type DbClient } from "./_client";
 
 type ObservationRow =
   Database["public"]["Tables"]["labor_time_observations"]["Insert"];
 
 /**
- * Upsert observations for one RO, keyed on line_id.
+ * Insert observations for one RO.
  *
- * Upsert rather than insert because a tech correcting their actual hours must
- * REPLACE the measurement, not add a second one for the same job — otherwise a
- * single edited line would count twice in the pool and skew its own bucket.
+ * A PLAIN insert, not an upsert: syncEntryLaborTimeObservations() deletes the
+ * RO's existing rows first, so there is nothing to conflict with. The original
+ * version used `ON CONFLICT (line_id)`, which failed against the partial unique
+ * index the first migration created (Postgres can only infer a partial index
+ * when the statement repeats its WHERE clause) — every write errored, silently.
+ * The unique index on line_id still stands as a correctness backstop.
  */
 export async function upsertLaborTimeObservations(
   supabase: DbClient,
@@ -43,19 +47,20 @@ export async function upsertLaborTimeObservations(
     observed_month: o.observedMonth,
     updated_at: new Date().toISOString(),
   }));
-  const { error } = await supabase
-    .from("labor_time_observations")
-    .upsert(rows, { onConflict: "line_id" });
+  const { error } = await supabase.from("labor_time_observations").insert(rows);
   if (error) throw error;
 }
 
 /**
  * Best-effort variant used by the RO save path. Returns false when the write was
- * dropped (pre-migration DB, or any other failure) so callers can carry on.
+ * dropped so callers can carry on.
  *
- * Swallowing broadly is deliberate here and NOT the usual pattern: an
- * observation is statistical side data. Losing one costs the pool a single row;
- * failing the tech's RO save costs them their work.
+ * Swallowing is deliberate — an observation is statistical side data, and losing
+ * one costs the pool a row while failing the tech's RO save costs them their
+ * work. But it is REPORTED, not silent: an early version swallowed silently and
+ * a broken index meant every single write failed with nobody the wiser until
+ * live verification found zero rows. A swallowed error still has to be visible
+ * somewhere.
  */
 export async function upsertLaborTimeObservationsSafe(
   supabase: DbClient,
@@ -64,7 +69,8 @@ export async function upsertLaborTimeObservationsSafe(
   try {
     await upsertLaborTimeObservations(supabase, observations);
     return true;
-  } catch {
+  } catch (err) {
+    await reportServerError(err, { url: "true-time/upsert" });
     return false;
   }
 }
@@ -116,7 +122,9 @@ export async function syncEntryLaborTimeObservations(
     if (!shareEnabled || observations.length === 0) return true;
     await upsertLaborTimeObservations(supabase, observations);
     return true;
-  } catch {
+  } catch (err) {
+    // Reported, never silent — see upsertLaborTimeObservationsSafe.
+    await reportServerError(err, { url: "true-time/sync" });
     return false;
   }
 }

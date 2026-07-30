@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { isComebackKind } from "@/lib/types";
 import { observationsFromEntry } from "@/lib/true-time";
+import { reportServerError } from "@/lib/report-error-server";
 import type { Entry, NewEntry, NewEntryOpCode, RoMatch } from "@/lib/types";
 import type { DbClient } from "@/lib/db";
 
@@ -36,8 +37,11 @@ async function syncObservations(
       observationsFromEntry(entry, library),
       settings.shareLaborTimes,
     );
-  } catch {
-    // Swallowed on purpose — see the note above.
+  } catch (err) {
+    // Swallowed so the tech's save still succeeds — but REPORTED, because a
+    // silently swallowed error here once hid a write path that was failing 100%
+    // of the time.
+    await reportServerError(err, { url: "true-time/syncObservations" });
   }
 }
 
