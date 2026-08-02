@@ -46,6 +46,11 @@ export const ROUTES: RouteSpec[] = [
   // month rolls over — mask both sections, keep header/nav/intro copy.
   { name: "schedule", path: "/schedule", auth: true, mask: ["main section", ...NUMBERS] },
   { name: "snapshots", path: "/snapshots", auth: true, mask: [".gami-sheet", ...NUMBERS] },
+  // Every figure on /insights is derived from the bot's nightly data — the ops
+  // table, the day bars, the trend readout and the claim tiles all move. Mask
+  // the card interiors wholesale (same call as /schedule and /account) and keep
+  // the frame: nav, page heading, section titles, range chips, card geometry.
+  { name: "insights", path: "/insights", auth: true, mask: ["main .card", ...NUMBERS, ...DATES] },
   { name: "settings", path: "/settings", auth: true, mask: ["input", "select", ...NUMBERS] },
   { name: "dispute-pack", path: "/pay-period/dispute-pack", auth: true, mask: [".dp-meta", ".dp-table-wrap", ".dp-header", ".dp-footer"] },
 ];

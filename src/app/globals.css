@@ -96,6 +96,10 @@ body {
   font-family: var(--font-plex, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  /* Set by TimerPip while the floating panel is docked at the bottom, so page
+     content can scroll clear of it instead of ending underneath. Unset — and
+     therefore 0 — whenever no timer is running or the panel has been dragged. */
+  padding-bottom: var(--pip-reserve, 0px);
 }
 
 .mono { font-family: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace); }
@@ -1580,7 +1584,22 @@ a { color: inherit; }
 
 @media (max-width: 899px) {
   .r-tab, .r-mode-btn, .r-sub-btn { min-height: var(--tap-min); }
-  .section-title .link { display: inline-flex; align-items: center; min-height: var(--tap-min); }
+  /* Every .link, not just the ones in a .section-title. Scoping this to
+     .section-title left the same 12px text link failing the floor anywhere
+     else it was used (dashboard RecoveredCard, InsightsView,
+     DisputeOutcomeCard) — the class is the control, its container isn't. */
+  .link { display: inline-flex; align-items: center; min-height: var(--tap-min); }
+  /* Footer links are already 44 tall; it's the WIDTH that falls short —
+     "FAQ" renders 25px. Real min-width rather than a .hit-expand ::after,
+     because the footer's 20px gap is narrower than the expander's 26px and
+     adjacent links would swallow each other's taps. */
+  .footer-link { min-width: var(--tap-min); justify-content: center; }
+  /* Pay Period redesign controls: both set a desktop-density min-height
+     (32px / 30px) and neither had a mobile floor to grow into.
+     Qualified by tag on purpose — both are defined LOWER in this file than
+     this block, and a media query adds no specificity, so a bare class
+     selector loses to the later rule and silently does nothing. */
+  button.period-title-btn, a.missing-day-link { min-height: var(--tap-min); }
   .opc-dropdown-close { min-height: var(--tap-min); }
 }
 

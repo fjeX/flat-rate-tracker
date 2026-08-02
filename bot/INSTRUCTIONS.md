@@ -193,6 +193,22 @@ start and save in the same breath records ~0 and proves nothing.
   costs nothing — it is time you were spending anyway — but never stall to make
   it longer, and never start it and immediately save.
 
+#### 3c. The floating mini-timer (two bugs fixed 2026-08-02 — re-check both)
+While the §3a timer is armed, a floating panel rides along on every page except
+/timer. Your §3z–§5 walk is the only part of the run that exercises it, so check
+these as you go — both of these were real, and both came from your own reports:
+- **No hydration errors.** Watch the browser console across those navigations.
+  `#418` / "server rendered text didn't match" is a bug. It used to fire on
+  roughly HALF of navigations, so several clean pages do not mean it is gone —
+  judge it across the whole walk, not one load.
+- **It must cover nothing.** On any page, scroll to the very bottom. The panel
+  should sit in reserved space *below* the last content, not on top of it —
+  the footer row and the last calendar row on /schedule are where it used to
+  land. Report anything rendering underneath it.
+- It reserves that space only while **docked**. If you drag it, the reservation
+  is released on purpose — content sliding back under a panel you moved yourself
+  is expected, not a bug.
+
 ### 3z. Pay Period page shape (REDESIGNED 2026-07-30 — read before §4–§7)
 
 **Before this section: §3a should already be done and a timer running.** If it

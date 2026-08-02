@@ -26,7 +26,7 @@ export function Footer({ isAdmin = false }: { isAdmin?: boolean }) {
             <Link
               key={l.label}
               href={l.href}
-              className="inline-flex min-h-[44px] items-center whitespace-nowrap font-mono text-sm text-[var(--fg-3)] no-underline transition-colors hover:text-[var(--fg-1)]"
+              className="footer-link inline-flex min-h-[44px] items-center whitespace-nowrap font-mono text-sm text-[var(--fg-3)] no-underline transition-colors hover:text-[var(--fg-1)]"
             >
               {l.label}
             </Link>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
@@ -27,6 +27,11 @@ import { useTickingNow } from "@/lib/use-ticking-now";
 // per-panel, so the existing localStorage keys keep their meaning.
 
 type PipSize = { w: number; h: number };
+
+// Module-level so the subscribe identity is stable across renders. Nothing ever
+// changes after hydration, so there's nothing to subscribe to — the store exists
+// only to answer "server or client?" without a setState-in-effect.
+const subscribeNoop = () => () => {};
 
 const DEFAULT_W = 340;
 const MIN_W = 280;
@@ -95,6 +100,16 @@ export function TimerPip({
   const anyAccruing = slots.some(isAccruing);
   const now = useTickingNow(anyAccruing);
 
+  // Client-only render. `useTickingNow` seeds its state with Date.now() during
+  // render, so the server stamps one second into the HTML and the client
+  // hydrates with another — React #418 (text-content mismatch), and only when a
+  // second boundary happens to fall between the two, which is why it fired on
+  // roughly half of navigations rather than all of them. Gating on mount makes
+  // the server and first client render agree on "nothing here". Safe for this
+  // component specifically because it's a floating overlay — it occupies no
+  // layout, so appearing one frame late shifts nothing.
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
+
   // Keep pos clamped if the window is resized and the panel would go off-screen
   useEffect(() => {
     function clamp() {
@@ -115,7 +130,33 @@ export function TimerPip({
   // Nothing to float when there are no timers, and the timer page already IS
   // this. (Previously gated on a single READY status — with N slots the test is
   // "are there any at all".)
-  if (pathname === "/timer" || slots.length === 0) return null;
+  const hidden = pathname === "/timer" || slots.length === 0;
+
+  // Reserve room underneath the docked panel. Fixed positioning takes it out of
+  // flow, so anything reaching the bottom of the page renders *under* it — it
+  // was covering the last calendar row on /schedule. Measured rather than
+  // hard-coded because the panel's height changes when it expands and when it's
+  // resized. Only while docked: once dragged, the user has placed it deliberately
+  // and reflowing the page under them would be worse than the overlap.
+  useEffect(() => {
+    const el = containerRef.current;
+    const clear = () => document.body.style.removeProperty("--pip-reserve");
+    if (hidden || !mounted || pos !== null || !el) {
+      clear();
+      return clear;
+    }
+    const set = () =>
+      document.body.style.setProperty("--pip-reserve", `${el.offsetHeight + 32}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      clear();
+    };
+  }, [hidden, mounted, pos, expanded, size]);
+
+  if (hidden || !mounted) return null;
 
   const entryById = new Map(entries.map((e) => [e.id, e]));
 
