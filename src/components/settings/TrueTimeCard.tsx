@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setShareLaborTimesAction } from "@/app/actions/settings";
+import { Switch } from "@/components/ui/Switch";
 
 /**
  * True Time consent. Off by default, and the copy has to earn the yes.
@@ -67,26 +68,14 @@ export function TrueTimeCard({ initialShare }: { initialShare: boolean }) {
           )}
         </div>
 
-        <button
-          type="button"
-          role="switch"
-          aria-checked={share}
+        <Switch
+          checked={share}
+          onChange={toggle}
           disabled={isPending}
-          onClick={() => toggle(!share)}
-          className="relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 after:absolute after:-inset-2.5 after:content-['']"
-          style={{ background: share ? "var(--brand)" : "var(--bg-4)" }}
-          aria-label={
+          label={
             share ? "Stop contributing to True Time" : "Contribute to True Time"
           }
-        >
-          <span
-            className="pointer-events-none inline-block h-5 w-5 transform rounded-full shadow transition-transform"
-            style={{
-              background: "var(--fg-0)",
-              transform: `translateX(${share ? "20px" : "0px"})`,
-            }}
-          />
-        </button>
+        />
       </div>
     </section>
   );

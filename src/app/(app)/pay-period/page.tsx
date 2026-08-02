@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import {
+  addDays,
   getPeriodForDate,
   getRangeForPeriodKey,
   isoDate,
@@ -134,6 +135,15 @@ export default async function PayPeriodPage({
   const periodEntries = entries.filter(
     (e) => e.date >= selected.start && e.date <= selected.end,
   );
+  // A margin either side of the period, for the custom-dates impact preview.
+  // 45 days comfortably covers any real boundary correction (a pay period is
+  // about a fortnight) without shipping the whole 3-year history to the client.
+  const PREVIEW_MARGIN_DAYS = 45;
+  const previewFrom = addDays(selected.start, -PREVIEW_MARGIN_DAYS);
+  const previewTo = addDays(selected.end, PREVIEW_MARGIN_DAYS);
+  const neighborEntries = entries.filter(
+    (e) => e.date >= previewFrom && e.date <= previewTo,
+  );
   const paidForSelected =
     paidList.find((p) => p.periodKey === selected.key)?.paidFlagHours ?? null;
   const hasOverride = Boolean(settings.periodOverrides[selected.key]);
@@ -173,6 +183,7 @@ export default async function PayPeriodPage({
       stats={stats}
       paidFlagHours={paidForSelected}
       entries={periodEntries}
+      neighborEntries={neighborEntries}
       library={library}
       rates={ratesToMap(laborRates)}
       techName={techName}

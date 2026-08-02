@@ -7,9 +7,12 @@
 // full card holding the period <select> plus the custom-date buttons.
 //
 // The period IS the title. Stepping to the neighbouring period — by far the
-// common case — is one tap on the chevrons. Everything else (jumping to an old
-// period, custom dates, reset) lives in one menu behind the title, so there's a
-// single place to look rather than a card and a dropdown.
+// common case — is one tap on the chevrons. Jumping to an old period, and
+// resetting custom dates, live in the menu behind the title.
+//
+// Custom dates do NOT: they sit beside the status pill. A tech reading their
+// paystub and correcting FRT to match is doing the ordinary thing this page
+// exists for, and a menu is where you put the things people rarely need.
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatPeriodLabel, type PeriodRange } from "@/lib/periods";
@@ -118,7 +121,33 @@ export function PeriodTitleBar({
           <ChevronDown className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
         </button>
         <span className={`pill ${status.tone}`}>{status.label}</span>
-        {hasOverride && <span className="pill neutral">Custom dates</span>}
+        {/* Setting the real dates off a paystub is a routine task, not an
+            advanced one — it was buried behind the title menu, which read as
+            "somewhere in settings". It sits beside the status now, where the
+            question "what dates is this actually covering?" gets asked.
+            When dates are already custom the pill states that, so the button
+            only has to offer the verb. */}
+        {hasOverride ? (
+          <>
+            <span className="pill neutral">Custom dates</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={onEditDates}
+              aria-label="Edit custom period dates"
+            >
+              Edit
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost"
+            onClick={onEditDates}
+          >
+            Set custom dates
+          </button>
+        )}
       </div>
 
       <button
@@ -158,19 +187,12 @@ export function PeriodTitleBar({
                 </button>
               ))}
             </div>
-            <div className="period-menu-actions">
-              <button
-                type="button"
-                role="menuitem"
-                className="period-menu-item"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onEditDates();
-                }}
-              >
-                {hasOverride ? "Edit custom dates" : "Set custom dates"}
-              </button>
-              {hasOverride && (
+            {/* Custom dates moved out to the title row. Leaving a second entry
+                here would mean two paths to one modal — and the one in the menu
+                would be the one nobody found. Reset stays: it only exists once
+                dates are custom, and it belongs next to the list it undoes. */}
+            {hasOverride && (
+              <div className="period-menu-actions">
                 <button
                   type="button"
                   role="menuitem"
@@ -183,8 +205,8 @@ export function PeriodTitleBar({
                 >
                   {resetting ? "Resetting…" : "Reset to default dates"}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </>
       )}

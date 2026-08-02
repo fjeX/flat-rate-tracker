@@ -119,6 +119,7 @@ export function PayPeriodView({
   stats,
   paidFlagHours,
   entries,
+  neighborEntries,
   library,
   rates = {},
   techName = null,
@@ -142,6 +143,12 @@ export function PayPeriodView({
   stats: Stats;
   paidFlagHours: number | null;
   entries: Entry[];
+  // Entries spanning a margin either side of the selected period, for the
+  // custom-dates impact preview only. It has to see the work that would move IN
+  // if the boundary moved outward, which `entries` (period-scoped) cannot show.
+  // Bounded rather than the full history: this is client payload, and nobody
+  // corrects a pay-period boundary by more than a few days.
+  neighborEntries?: Entry[];
   library: OpCode[];
   rates?: RateMap;
   techName?: string | null;
@@ -280,6 +287,12 @@ export function PayPeriodView({
         disputes={disputes}
         openDispute={openDispute}
         shortedHours={reconciled.shortedHours}
+        pendingCount={reconciled.pendingCount}
+        pendingHours={reconciled.pendingHours}
+        // The literal calendar question, not `mode !== "in_progress"`: recording
+        // paid hours early makes a still-running period read as settled, and a
+        // claim can't include pending lines before the period is actually over.
+        periodEnded={today > selected.end}
         defaultOpen={layout.open.paidCheck ?? false}
       />
     ),
@@ -392,6 +405,25 @@ export function PayPeriodView({
           open={overrideOpen}
           periodKey={selected.key}
           initialRange={selected}
+          // Falls back to the period-scoped set when the page didn't supply a
+          // wider one: the preview then under-reports what moves IN, which is
+          // still better than crashing. The page always supplies it.
+          entries={neighborEntries ?? entries}
+          clocks={clocks}
+          unpaid={unpaid}
+          schedule={
+            schedule && schedule.schedules.length > 0
+              ? {
+                  schedules: schedule.schedules,
+                  daysOff: schedule.daysOff,
+                  confirmedZeroDays: [],
+                  today,
+                  shiftOverrides: schedule.shiftOverrides,
+                }
+              : null
+          }
+          rates={rates}
+          paidFlagHours={paidFlagHours}
           onClose={() => setOverrideOpen(false)}
         />
       )}

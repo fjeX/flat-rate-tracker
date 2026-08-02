@@ -13,9 +13,16 @@ deliberate: only interact with tracker.slimelab.cc.
 **⛔ Never yield or end your turn until the report file is written.** You run
 headless (`claude -p`): the instant you background a wait or hand your turn back,
 the runner treats the session as finished and exits — losing the entire run with
-no report (this exact hang happened 2026-07-23). Any pause you need (e.g. the
-timer test) must be a **single foreground, blocking `sleep`** in one Bash call —
-never a background timer, scheduled wake-up, or async wait that ends the turn.
+no report (this hang cost the runs of 2026-07-23 and 2026-07-30).
+
+**⛔ Never wait. There is nothing to wait for.** Do not call `sleep`, and do not
+reach for a background task, monitor, scheduled wake-up, or any other async wait
+— every one of them ends your turn and kills the run, and the harness blocks a
+long `sleep` outright. The checklist is ordered so that the one step that needs
+elapsed time (the timer test, §3) gets it from the work you do in §3z–§5 while
+the timer runs. If you ever find yourself wanting to pause, you have misread the
+order: go do the next section and come back.
+
 Work in one continuous turn straight through to writing `bot/reports/$RUN_DATE.md`.
 
 ## Credentials & environment
@@ -141,13 +148,25 @@ The Timer page runs **up to 3 job timers at once**. The header reads
 "Timers — N of 3". Each timer is bound to one RO and carries a status:
 **Working · Parts · Approval · Pause** (a 4-button row on each card).
 
-- Put an RO on a timer ("Start a timer" / "Add another timer"), wait
-  **60–90 seconds**, then Save it to a line.
-- **How to wait:** run `sleep 75` as a single foreground, blocking Bash call and
-  let it finish. Do NOT background it, and do NOT use any timer/scheduled-wait
-  tool that yields your turn — headless `claude -p` exits on a yielded turn and
-  the run dies before the report is written (see the ⛔ rule at the top).
-- Verify the elapsed time recorded is plausible (~1–2 min, not 0, not hours).
+**This section is split in two on purpose. Do §3a, then leave the page and do
+§3z–§5, then come back for §3b.** The timer needs real elapsed time and you are
+never allowed to wait for it (see the ⛔ rules at the top) — so it accumulates
+while you test the Pay Period page. This is not optional sequencing: a timer you
+start and save in the same breath records ~0 and proves nothing.
+
+#### 3a. Arm the timer — do this FIRST, before §3z
+- Put an RO on a timer ("Start a timer"), confirm it is **Working**, and note the
+  wall-clock time from `date -u` in one Bash call.
+- Then **go straight to §3z and work through §5.** Do not linger on this page.
+
+#### 3b. Close it out — after you finish §5, return to /timer
+- Note `date -u` again. The gap since §3a is your expected elapsed time; it will
+  be several minutes, which is fine and better than the old fixed wait.
+- Save the timer to a line and verify the recorded actual hours are **plausible
+  against that gap** — not 0, not hours longer than the gap. An exact match is
+  not required (see the throttling note below); an order-of-magnitude mismatch
+  is a bug.
+- Everything below applies to §3b unless it obviously belongs to arming.
 - **The big number is WORKED time only, and it is SUPPOSED to stop moving when
   the status is Parts / Approval / Pause.** A frozen readout while on hold is
   correct behavior, not a bug. Waiting time counts on its own line underneath
@@ -170,9 +189,14 @@ The Timer page runs **up to 3 job timers at once**. The header reads
   environment artifact of the automation harness, **NOT a product bug. Do NOT
   flag timer display lag.** Instead verify the **saved actual hours** after you
   stop are plausible; only a wrong *saved* value is a bug.
-- You are testing the mechanism, not the duration — never run it long.
+- You are testing the mechanism, not the duration. Letting it run across §3z–§5
+  costs nothing — it is time you were spending anyway — but never stall to make
+  it longer, and never start it and immediately save.
 
 ### 3z. Pay Period page shape (REDESIGNED 2026-07-30 — read before §4–§7)
+
+**Before this section: §3a should already be done and a timer running.** If it
+isn't, go back and arm it now — it needs these sections' worth of elapsed time.
 
 The whole page was restructured. Nine peer cards became a header band plus two
 columns. **Read this before reporting anything on §4–§7 as missing** — most
@@ -189,6 +213,27 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
 
 - The status is a **coloured pill beside the date** — "Current pay period" /
   "Closed — waiting on pay" / "Paid".
+- **Custom dates moved OUT of the title menu (2026-08-02).** Beside the status
+  pill there is now either a **"Set custom dates"** button, or — when the period
+  already has custom dates — a **"Custom dates"** pill followed by an **"Edit"**
+  button. The title menu holds only the period jump list plus "Reset to default
+  dates" (reset appears only when dates are custom). A "Set/Edit custom dates"
+  entry back inside the menu is a regression.
+- **The custom-dates modal previews its own impact.** Change either date and it
+  must show a before → after block for Logged ROs, Flagged hours, Clocked hours,
+  Efficiency and Earnings, plus the re-filing warning. Unchanged dates show no
+  preview and **Save is disabled**. Sanity-check one figure: widening the end
+  date by a day you know has ROs must raise the RO count by exactly that many.
+- **Periods are a chain (2026-08-02).** Setting one period's end moves the NEXT
+  period's start to the following day automatically — the next period does not
+  need to exist or be edited. Log an RO dated the day after a period's custom
+  end and confirm it lands in the FOLLOWING period, not the one that closed.
+  Work landing in a period whose displayed dates exclude it is the bug this
+  fixed; report any recurrence.
+- The hero tile beside Efficiency reads **"Hours · sched"** (or "· mixed") when
+  the denominator came from the work schedule rather than typed clock entries,
+  and plain **"Clocked hrs"** otherwise. It must never read 0.0h next to a
+  non-zero schedule-derived efficiency — that pairing was a bug.
 - **Nothing is ever hidden by mode.** Cards the mode de-prioritises move below a
   **"Reference"** divider (the right-hand column on desktop). If a card is
   genuinely absent rather than demoted, that IS a bug — check the rail before
@@ -232,6 +277,10 @@ Reference rail in every mode.
   and shortfall dollars appear if pay rates are set.
 - If a dispute-pack export exists for short lines, open it and confirm the
   print view renders with the short lines listed.
+
+**➡️ Now go back to /timer and do §3b.** The timer you armed in §3a has been
+running through §3z–§5 and that is its whole elapsed time. Close it out and
+verify the saved hours before continuing to §6.
 
 ### 6. Spiffs & bonuses
 - Add one spiff via the quick-add flow (plausible: "alignment spiff $25",
@@ -358,11 +407,20 @@ the app — hunt it hard.**
 **Setup:** the current period needs at least one **short** line (flag > paid).
 Use §5 to reconcile a line to fewer hours than it flagged.
 
-- With a shortfall and no claim yet it offers **"Track this dispute"** and
-  states the outstanding hours.
-- **The "recovered all-time" line is GONE from this page** (removed 2026-07-30 —
-  it duplicated the dashboard's "Recovered with FRT" card). If a lifetime
-  recovery figure reappears on Pay Period, report it.
+- With a shortfall and no claim yet it offers **"Track this dispute · N.Nh"**,
+  where **N.Nh must equal the shortfall Reconciliation reports**. When there is
+  no shortfall the button reads plain "Track this dispute" and is disabled.
+- **Pending lines are NOT claimed by default (2026-08-02).** A line with no paid
+  hours recorded means "not reconciled yet", not "not paid". On an ENDED period
+  with pending lines there is an opt-in checkbox — "Also claim N lines you never
+  marked paid (+X.Xh)" — and ticking it must raise the button's figure by exactly
+  that amount. A claim that silently comes out larger than the reported shortfall
+  is the bug this fixed.
+- **ALL lifetime/recovery figures are GONE from this page** (moved to /insights
+  2026-08-02, after being flagged two nights running). Pay Period may show only
+  THIS period's claim, plus a "How your claims tend to go →" link. Any lifetime
+  figure here — claims closed, % got paid, % of hours recovered — is a
+  regression, including on periods with no claim of their own.
 - Tap it. Expect a **"Not sent yet"** pill, a scope label (**"Itemized by RO ·
   N lines"** or **"Period total"**), and a **Claimed** tile whose hours match the
   shortfall Reconciliation reports. If the two disagree, that's a real bug.
@@ -406,6 +464,38 @@ leaves their own account, so the checks are about the OFF state holding.
   surface is intentionally unbuilt. If any screen shows an "N techs average…"
   or cross-user labor time, report it — that would mean the read surface shipped
   before the dataset was large enough to be anonymous.
+
+### 7e. Insights page (NEW 2026-08-02 — newest code, hunt it hard)
+
+A new `/insights` page. Reachable from the desktop top tabs and, on mobile, the
+lightbulb icon in the header (NOT the bottom bar — that stays at 5 items).
+
+It answers the cross-period questions Pay Period is not allowed to: which jobs
+run long, which days are strongest, how efficiency is trending, and what FRT has
+recovered. Sections appear only when they have something to say.
+
+- **Window chips** — Week · Period · Month · All (All is the default). They
+  re-scope "Where your time goes" and "Best days" ONLY. Trend deliberately
+  ignores them and says so. Pick a window with no work in it and the page must
+  say "No work recorded in this…" — a blank page or a lone chart is a bug.
+- **Where your time goes** — op-code table, `actual ÷ flag`, LOWER is better.
+  Every column header is a sort control: click to sort, click again to reverse,
+  and the arrow (`↕ ↑ ↓`) must follow. Codes never timed read **"never timed"**
+  and must stay at the BOTTOM in both sort directions. A ratio of `0.00×` is a
+  bug — a job cannot take zero time.
+- **Best days** — seven weekday tiles with a By day / By efficiency sort toggle.
+  Tiles count only days the app knows the length of, so the day count under each
+  is real. Check a weekday's figure is not wildly out of line with the dashboard.
+- **Trend** — last six pay periods. The current period must be dimmed and
+  labelled **"in progress"**, and the sentence underneath must compare the last
+  two FINISHED periods, never the running one. A caption claiming a huge drop
+  the day after a period rolls over is exactly the bug this fixed.
+- **Claims and recovery** — the lifetime figures that used to live on Pay
+  Period. With no closed claims it must still render, showing "Nothing recovered
+  yet" and how it fills in. It must NOT be missing entirely.
+- The dashboard's "Recovered with FRT" card is now just the headline dollar
+  figure plus an "Insights →" link, keeping its stale/needs-outcome nudges. If
+  the closed count or win rate reappears there, it is duplicating /insights.
 
 ### 8. Dashboard & stats sweep
 - Dashboard: pace card / projection shows sane numbers (no NaN, no negative

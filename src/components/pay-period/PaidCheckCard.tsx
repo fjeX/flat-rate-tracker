@@ -43,6 +43,9 @@ export function PaidCheckCard({
   disputes,
   openDispute,
   shortedHours,
+  pendingCount,
+  pendingHours,
+  periodEnded,
   defaultOpen = false,
 }: {
   periodKey: string;
@@ -61,7 +64,11 @@ export function PaidCheckCard({
   // missing table. Same null-vs-empty contract as listWorkSchedulesSafe.
   disputes: Dispute[] | null;
   openDispute: Dispute | null;
+  // Step 3's claim scope — passed straight through. See DisputeOutcomeCard.
   shortedHours: number;
+  pendingCount: number;
+  pendingHours: number;
+  periodEnded: boolean;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -194,6 +201,9 @@ export function PaidCheckCard({
               openDispute={openDispute}
               allDisputes={disputes}
               shortedHours={shortedHours}
+              pendingCount={pendingCount}
+              pendingHours={pendingHours}
+              periodEnded={periodEnded}
               embedded
               title="Did the claim get paid?"
             />

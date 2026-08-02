@@ -28,7 +28,7 @@ export function PeriodStats({
   unflaggedTime = null,
   hideFlagHours = false,
 }: {
-  stats: Stats & { denomSource?: DenomSource | null };
+  stats: Stats & { denomSource?: DenomSource | null; denomHours?: number };
   // The in-progress and awaiting-pay heroes already carry flagged hours as
   // their headline figure, so repeating it as a tile directly underneath is
   // noise. The settled hero shows the shortfall instead, and there the tile
@@ -54,7 +54,24 @@ export function PeriodStats({
             highlighted={earnings === null}
           />
         )}
-        <Cell label="Clocked hrs" value={`${fmtHours(stats.clockedHours)}h`} />
+        {/* The DENOMINATOR, not the raw clock rows.
+            `stats.clockedHours` only sums daily_clock_hours entries, so on a
+            schedule-driven period this tile read "0.0h" directly beside
+            "Efficiency · sched 112%" — the same contradiction WorkCostCard had
+            before it moved to denomHours. A scheduled workday is time you were
+            at the shop whether or not you typed a clock figure, and it is
+            already the denominator the efficiency beside it divides by.
+            Falls back to clockedHours when there's no schedule at all. */}
+        <Cell
+          label={
+            stats.denomSource === "scheduled"
+              ? "Hours · sched"
+              : stats.denomSource === "mixed"
+                ? "Hours · mixed"
+                : "Clocked hrs"
+          }
+          value={`${fmtHours(stats.denomHours ?? stats.clockedHours)}h`}
+        />
         <Cell
           label={
             stats.denomSource === "scheduled"

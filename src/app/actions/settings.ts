@@ -4,12 +4,14 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { addDays, formatDateLong, getNeighborPeriodKeys } from "@/lib/periods";
 import type { Bonus, Entry, EntryPhoto, OpCode, DailyClock, PaidPeriod, PeriodOverride } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function revalidatePeriodScreens() {
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/history");
   revalidatePath("/");
 }
@@ -20,6 +22,7 @@ function revalidateAll() {
   revalidatePath("/log");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/timer");
   revalidatePath("/op-codes");
   revalidatePath("/settings");
@@ -37,6 +40,28 @@ export async function setPeriodOverrideAction(
 
   const supabase = await createClient();
   const settings = await db.getSettings(supabase);
+
+  // Periods are a chain (see the header in lib/periods.ts). Moving one period's
+  // boundary is allowed to move its neighbors' — that's what makes the day after
+  // an early close roll into the next period on its own. What isn't allowed is
+  // opening a hole against a neighbor the tech has already pinned down by hand:
+  // those days would belong to no period, and no resolver can invent an answer.
+  const neighbors = getNeighborPeriodKeys(periodKey);
+  if (neighbors) {
+    const prev = settings.periodOverrides[neighbors.prev];
+    if (prev && start > addDays(prev.end, 1)) {
+      throw new Error(
+        `${orphanedDays(addDays(prev.end, 1), addDays(start, -1))} would belong to no pay period. The previous one ends ${formatDateLong(prev.end)}, so this one has to start ${formatDateLong(addDays(prev.end, 1))} or earlier.`,
+      );
+    }
+    const next = settings.periodOverrides[neighbors.next];
+    if (next && end < addDays(next.start, -1)) {
+      throw new Error(
+        `${orphanedDays(addDays(end, 1), addDays(next.start, -1))} would belong to no pay period. The next one starts ${formatDateLong(next.start)}, so this one has to end ${formatDateLong(addDays(next.start, -1))} or later.`,
+      );
+    }
+  }
+
   const next = {
     ...settings.periodOverrides,
     [periodKey]: { start, end },
@@ -44,6 +69,13 @@ export async function setPeriodOverrideAction(
   await db.updateSettings(supabase, { periodOverrides: next });
 
   revalidatePeriodScreens();
+}
+
+// "Jul 31" for a one-day hole, "Jul 31 – Aug 2" for a longer one.
+function orphanedDays(from: string, to: string): string {
+  return from === to
+    ? formatDateLong(from)
+    : `${formatDateLong(from)} – ${formatDateLong(to)}`;
 }
 
 export async function clearPeriodOverrideAction(
@@ -93,6 +125,7 @@ export async function setReferenceRateAction(
   await db.updateSettings(supabase, { referenceHourlyRate: rate });
   revalidatePath("/settings");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
 }
 
 // True Time opt-in. Turning it OFF also purges the user's stored observations.

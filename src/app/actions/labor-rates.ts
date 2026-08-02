@@ -35,6 +35,7 @@ export async function setLaborRatesAction(
   revalidatePath("/settings");
   revalidatePath("/");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/history");
 }
 

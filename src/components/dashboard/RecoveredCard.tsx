@@ -13,10 +13,6 @@ import type { Dispute } from "@/lib/types";
 // cycle to react; nagging on day 2 would train the tech to ignore this.
 const NUDGE_AFTER_DAYS = 7;
 
-function pct(n: number): string {
-  return `${Math.round(n * 100)}%`;
-}
-
 // The headline figure: dollars when the claims were priced, hours otherwise.
 // Never "$0" for an unpriced claim — that reads as "you recovered nothing".
 function headline(l: LifetimeRecovery): string {
@@ -26,16 +22,25 @@ function headline(l: LifetimeRecovery): string {
 }
 
 /**
- * Lifetime dispute recovery — the "this app paid for itself" surface.
+ * Lifetime dispute recovery — the "this app paid for itself" line.
  *
  * Deliberately a SEPARATE ledger from every other dashboard number: recovered
  * money is not added into flag pay or period earnings (when a short gets paid,
- * the line's paid hours go up and that flows through normally). Showing it here
- * as its own figure is the whole point — it is the only number in the app that
- * says what FRT itself got back for the tech.
+ * the line's paid hours go up and that flows through normally). It is the only
+ * number in the app that says what FRT itself got back for the tech.
  *
- * Renders nothing until there is something true to say, so a new user never sees
- * an empty "recovered $0" tile.
+ * SCOPE (2026-08-02): this card used to also carry the closed count, the win
+ * rate and a breakdown — the same three figures /insights now reports. Two
+ * components deriving one figure is how they end up disagreeing, so the
+ * analysis moved to /insights wholesale and what's left here is the headline
+ * and a way through to it.
+ *
+ * The nudges stay. They are not lifetime figures, they are a to-do — "you have
+ * a response waiting to be recorded" is time-sensitive and belongs where the
+ * tech looks daily, not on a page they visit when curious.
+ *
+ * Renders nothing when there is neither a figure nor a nudge, so a new user
+ * never sees an empty "recovered $0" tile.
  */
 export function RecoveredCard({
   disputes,
@@ -70,23 +75,15 @@ export function RecoveredCard({
     <section className="card padded-lg mt-4 space-y-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium">Recovered with FRT</h2>
-        <Link href="/pay-period" className="link text-xs">
-          Dispute tracking →
+        <Link href="/insights" className="link text-xs">
+          Insights →
         </Link>
       </div>
 
       {!nothingRecovered && (
-        <>
-          <div className="mono text-2xl font-semibold tabular-nums text-[var(--good)]">
-            {headline(lifetime)}
-          </div>
-          <p className="text-xs text-[var(--fg-3)]">
-            {fmtHours(lifetime.recoveredHours)}h back across{" "}
-            {lifetime.closedCount} closed claim
-            {lifetime.closedCount === 1 ? "" : "s"}
-            {lifetime.winRate !== null && ` · ${pct(lifetime.winRate)} got paid`}
-          </p>
-        </>
+        <div className="mono text-2xl font-semibold tabular-nums text-[var(--good)]">
+          {headline(lifetime)}
+        </div>
       )}
 
       {needsOutcome.length > 0 && (

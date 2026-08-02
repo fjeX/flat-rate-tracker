@@ -14,6 +14,7 @@ function isBonusCategory(v: string): v is BonusCategory {
 
 function revalidateBonusScreens() {
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/dashboard");
   revalidatePath("/history");
 }

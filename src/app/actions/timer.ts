@@ -43,6 +43,7 @@ function revalidateAfterSave() {
   revalidateTimerScreens();
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/");
 }
 

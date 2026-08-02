@@ -310,3 +310,30 @@ export function dailyDenominators(
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// One rule for "which aggregator applies"
+// ---------------------------------------------------------------------------
+
+/**
+ * Aggregate a range using the schedule when there is one, plain clocked hours
+ * when there isn't.
+ *
+ * The choice used to be made inline at each call site. That was fine while the
+ * pay-period page was the only caller; it stopped being fine the moment a second
+ * surface (the custom-dates impact preview) had to predict the very numbers that
+ * page would show. Two copies of "is there a schedule?" is exactly how a preview
+ * ends up promising a figure the page then contradicts.
+ */
+export function aggregateStatsAuto(
+  entries: Entry[],
+  clocks: DailyClock[],
+  range: { start: string; end: string },
+  unpaid: UnpaidTime[] = [],
+  schedule: ScheduleContext | null = null,
+): Stats & { denomHours?: number; denomSource?: DenomSource | null } {
+  if (schedule && schedule.schedules.length > 0) {
+    return aggregateStatsWithSchedule(entries, clocks, range, schedule, unpaid);
+  }
+  return aggregateStats(entries, clocks, range, unpaid);
+}

@@ -139,6 +139,7 @@ export async function saveEntry(
   revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/log");
 
   return entry;
@@ -151,6 +152,7 @@ export async function deleteEntryLineAction(lineId: string): Promise<void> {
   revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
 }
 
 export async function deleteEntryAction(id: string): Promise<void> {
@@ -166,6 +168,7 @@ export async function deleteEntryAction(id: string): Promise<void> {
   revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
 }
 
 export async function addOpCodeLineToEntryAction(
@@ -184,6 +187,7 @@ export async function addOpCodeLineToEntryAction(
   revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
 }
 
 export async function setLineActualHoursAction(
@@ -201,6 +205,7 @@ export async function setLineActualHoursAction(
   revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
 }
 
 // Record (or clear) the flag hours the shop actually paid on a single RO line.
@@ -222,4 +227,5 @@ export async function setLinePaidHoursAction(
   revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
 }

@@ -16,5 +16,6 @@ export async function setPaidPeriodHoursAction(
   await db.upsertPaidPeriod(supabase, periodKey, hours);
 
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/");
 }

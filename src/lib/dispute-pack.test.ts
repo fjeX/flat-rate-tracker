@@ -5,6 +5,7 @@ import {
   type BuildDisputePackInput,
 } from "./dispute-pack";
 import { ratesToMap } from "./earnings";
+import { reconcileEntries } from "./reconcile";
 import type {
   Entry,
   EntryOpCode,
@@ -385,5 +386,58 @@ describe("buildDisputePack — unpaid rework section", () => {
     expect(pack.unpaidRework!.unpricedHours).toBe(4);
     const text = formatDisputePackText(pack);
     expect(text).toContain("4.0h of the above carries no rate on file");
+  });
+});
+
+// The claim a tech freezes has to be the claim the page showed them. These two
+// numbers drifted apart in production: Reconciliation reported a 21.2h shortfall
+// while the frozen dispute recorded 80.7h, because the pack was built with
+// pending lines swept in and Reconciliation counts only genuine shorts.
+describe("claim scope agrees with reconciliation", () => {
+  const entries = [
+    entry(
+      [
+        line({ id: "a", flagHours: 5, paidHours: null }), // never marked
+        line({ id: "b", flagHours: 4, paidHours: null }), // never marked
+        line({ id: "c", flagHours: 3, paidHours: 1 }), // short by 2
+      ],
+      { date: "2026-07-05" },
+    ),
+  ];
+  const dates = { periodEnd: "2026-07-15", today: "2026-07-20" };
+
+  it("excludes never-marked lines by default, matching shortedHours", () => {
+    const pack = buildDisputePack({ entries, periodLabel: "Jul", ...dates });
+    expect(pack.totalShortHours).toBeCloseTo(
+      reconcileEntries(entries).shortedHours,
+      5,
+    );
+    expect(pack.lines).toHaveLength(1);
+  });
+
+  it("adds exactly pendingHours when the tech opts in", () => {
+    const summary = reconcileEntries(entries);
+    const pack = buildDisputePack({
+      entries,
+      periodLabel: "Jul",
+      includePending: true,
+      ...dates,
+    });
+    expect(pack.totalShortHours).toBeCloseTo(
+      summary.shortedHours + summary.pendingHours,
+      5,
+    );
+    expect(pack.lines).toHaveLength(3);
+  });
+
+  it("still refuses pending lines mid-period even when opted in", () => {
+    const pack = buildDisputePack({
+      entries,
+      periodLabel: "Jul",
+      includePending: true,
+      periodEnd: "2026-07-15",
+      today: "2026-07-10",
+    });
+    expect(pack.totalShortHours).toBeCloseTo(2, 5);
   });
 });

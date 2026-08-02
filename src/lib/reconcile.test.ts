@@ -96,8 +96,23 @@ describe("reconcileEntries", () => {
     expect(s.totalPaid).toBeCloseTo(5.5, 5);
     expect(s.shortedHours).toBeCloseTo(1.5, 5);
     expect(s.pendingCount).toBe(1);
+    expect(s.pendingHours).toBeCloseTo(2, 5);
     expect(s.shortLineCount).toBe(1);
     expect(s.overCount).toBe(1);
+  });
+
+  it("keeps pending hours out of the shortfall", () => {
+    // The dispute-ledger bug in miniature: adding these together produced a
+    // claim four times the size of the shortfall the page reported.
+    const s = reconcileEntries([
+      entry([
+        line({ id: "a", flagHours: 5, paidHours: null }),
+        line({ id: "b", flagHours: 4, paidHours: null }),
+        line({ id: "c", flagHours: 3, paidHours: 1 }),
+      ]),
+    ]);
+    expect(s.shortedHours).toBeCloseTo(2, 5);
+    expect(s.pendingHours).toBeCloseTo(9, 5);
   });
 
   it("empty entries → all zeros", () => {
@@ -107,6 +122,7 @@ describe("reconcileEntries", () => {
       totalPaid: 0,
       shortedHours: 0,
       pendingCount: 0,
+      pendingHours: 0,
       shortLineCount: 0,
       overCount: 0,
     });

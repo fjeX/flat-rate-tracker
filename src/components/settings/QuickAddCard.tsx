@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Switch } from "@/components/ui/Switch";
 
 const KEY = "frt:quick_add_enabled";
 
@@ -29,22 +30,15 @@ export function QuickAddCard() {
           </p>
         </div>
 
-        {/* Toggle switch */}
+        {/* Rendered only after mount: the stored preference lives in
+            localStorage, and rendering the default first would flip the switch
+            under the user on hydration. */}
         {mounted && (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            onClick={() => handleToggle(!enabled)}
-            className="relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 after:absolute after:-inset-2.5 after:content-['']"
-            style={{ background: enabled ? "var(--brand)" : "var(--bg-4)" }}
-            aria-label={enabled ? "Disable quick add" : "Enable quick add"}
-          >
-            <span
-              className="pointer-events-none inline-block h-5 w-5 transform rounded-full shadow transition-transform"
-              style={{ background: "var(--fg-0)", transform: `translateX(${enabled ? "20px" : "0px"})` }}
-            />
-          </button>
+          <Switch
+            checked={enabled}
+            onChange={handleToggle}
+            label={enabled ? "Disable quick add" : "Enable quick add"}
+          />
         )}
       </div>
     </section>

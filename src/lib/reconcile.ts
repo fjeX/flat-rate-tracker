@@ -40,6 +40,11 @@ export type ReconcileSummary = {
   totalPaid: number; // sum of paid hours (pending/null lines excluded)
   shortedHours: number; // sum of (flag − paid) over lines with status "short"
   pendingCount: number; // lines not yet reconciled
+  // Flag hours sitting on those pending lines. NOT part of shortedHours and
+  // never to be added to it: "not marked paid" is not the same claim as "paid
+  // less than flagged". A tech who logs the period stub but never marks
+  // individual lines has a pile of pending hours that were, in fact, paid.
+  pendingHours: number;
   shortLineCount: number; // lines paid less than flagged
   overCount: number; // lines paid MORE than flagged (still reconciled)
 };
@@ -50,6 +55,7 @@ export function reconcileEntries(entries: Entry[]): ReconcileSummary {
     totalPaid: 0,
     shortedHours: 0,
     pendingCount: 0,
+    pendingHours: 0,
     shortLineCount: 0,
     overCount: 0,
   };
@@ -62,6 +68,7 @@ export function reconcileEntries(entries: Entry[]): ReconcileSummary {
       switch (status) {
         case "pending":
           summary.pendingCount += 1;
+          summary.pendingHours += line.flagHours;
           break;
         case "short":
           summary.shortLineCount += 1;

@@ -20,5 +20,6 @@ export async function upsertDailyClockHoursAction(
   revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/schedule");
 }

@@ -19,6 +19,7 @@ function revalidateScheduleScreens() {
   revalidatePath("/dashboard");
   revalidatePath("/settings");
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/schedule");
 }
 

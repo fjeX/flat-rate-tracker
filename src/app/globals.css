@@ -713,8 +713,30 @@ body {
   border-top: 1px solid var(--line); border-bottom: none;
   font-size: 12.5px; color: var(--fg-3); font-weight: 550;
 }
-.table-num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Numeric column: header and values share one alignment so the heading sits
+   directly over its figures. `tabular-nums` keeps every digit the same width,
+   so a centred column still reads as a column rather than as ragged text.
+   The `.table th` qualifier is required, not redundant — `.table th` (0,1,1)
+   out-specifies a bare `.table-num` (0,1,0), which is why <Th num> headers
+   silently stayed left-aligned over centred cells. */
+.table-num { text-align: center; font-variant-numeric: tabular-nums; }
+.table th.table-num { text-align: center; }
 .table-dim { color: var(--fg-3); }
+
+/* Sortable header. The button fills the cell (which drops its own padding) so
+   the whole heading is the target and it clears the 44px tap minimum. */
+.table th:has(.table-sort) { padding: 0; }
+.table .table-sort {
+  appearance: none; background: none; border: 0; color: inherit; font: inherit;
+  display: inline-flex; align-items: center; gap: 5px;
+  width: 100%; min-height: var(--tap-min); padding: 4px 14px;
+  cursor: pointer; text-align: inherit;
+}
+.table th.table-num .table-sort { justify-content: center; }
+.table .table-sort:hover { color: var(--fg-1); }
+.table .table-sort[data-active="true"] { color: var(--brand); }
+.table .table-sort-arrow { font-size: 10px; opacity: 0.75; }
+.table .table-sort[data-active="true"] .table-sort-arrow { opacity: 1; }
 
 /* ── Log RO step cards ───────────────────────────────── */
 .step-card {

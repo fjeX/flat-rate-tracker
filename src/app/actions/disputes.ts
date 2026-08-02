@@ -11,6 +11,7 @@ import { isDisputeStatus, type Dispute, type DisputeStatus } from "@/lib/types";
 
 function revalidateDisputeScreens() {
   revalidatePath("/pay-period");
+  revalidatePath("/insights");
   revalidatePath("/dashboard");
 }
 
@@ -36,10 +37,23 @@ function validDollars(n: number | null | undefined, label: string): void {
  * The claim is rebuilt here rather than accepted from the client on purpose: the
  * ledger's whole value is that it records what was actually owed, so the numbers
  * must come from the user's own rows, not from a payload a caller could shape.
- * The client only names the period.
+ * The client only names the period and chooses the scope.
+ *
+ * `includePending` defaults to FALSE, and that default is the whole point. A
+ * "pending" line is one with no paid hours recorded — which usually means the
+ * tech never got around to marking it, NOT that the shop refused to pay it.
+ * Claiming those as owed produced a claim four times the size of the shortfall
+ * the page reported (80.7h against a 21.2h shortfall and a 58h stub), and the
+ * printable pack — which has always defaulted pending OFF — disagreed with the
+ * ledger about the same claim. Now the frozen claim matches the number the tech
+ * was shown, and sweeping in never-marked lines is a decision they make out loud.
  */
-export async function openDisputeAction(periodKey: string): Promise<Dispute> {
+export async function openDisputeAction(
+  periodKey: string,
+  options: { includePending?: boolean } = {},
+): Promise<Dispute> {
   if (!periodKey) throw new Error("Period is required.");
+  const includePending = options.includePending ?? false;
   const supabase = await createClient();
 
   // A live dispute already exists for this period — hand it back instead of
@@ -72,9 +86,10 @@ export async function openDisputeAction(periodKey: string): Promise<Dispute> {
     periodLabel: formatPeriodLabel(range),
     library,
     rates,
-    // A claim is only worth raising once the period is over; buildDisputePack
-    // gates pending lines on exactly this, so pass the dates through.
-    includePending: true,
+    // Off unless the tech asked for it (see the doc comment). Still gated on the
+    // period being over even then — buildDisputePack refuses pending lines
+    // mid-period, because a line nobody has been paid for yet isn't a dispute.
+    includePending,
     periodEnd: range.end,
     today,
     entryIdsWithPhotos,

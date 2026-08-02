@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fmtHours } from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
@@ -10,7 +11,6 @@ import {
   isClosed,
   lifetimeRecovery,
   nextStatus,
-  outcomeInsights,
 } from "@/lib/disputes";
 import {
   DISPUTE_SCOPE_LABELS,
@@ -32,10 +32,6 @@ const STATUS_TONE: Record<Dispute["status"], string> = {
   resolved: "good",
   withdrawn: "",
 };
-
-function pct(n: number): string {
-  return `${Math.round(n * 100)}%`;
-}
 
 function OutcomeForm({
   dispute,
@@ -175,6 +171,9 @@ export function DisputeOutcomeCard({
   openDispute,
   allDisputes,
   shortedHours,
+  pendingCount,
+  pendingHours,
+  periodEnded,
   embedded = false,
   title = "Dispute Tracking",
 }: {
@@ -185,8 +184,19 @@ export function DisputeOutcomeCard({
   // Every dispute the user has ever raised — drives the lifetime figure.
   allDisputes: Dispute[];
   // Outstanding hours for the viewed period, so the card knows whether there is
-  // anything worth claiming yet.
+  // anything worth claiming yet. This is Reconciliation's shortfall — lines paid
+  // LESS than flagged — and it is exactly what the claim freezes by default.
   shortedHours: number;
+  // Lines with no paid hours recorded at all, and what they flagged. Offered as
+  // an explicit opt-in below rather than folded into the claim, because an
+  // unmarked line usually means "not reconciled yet", not "not paid".
+  pendingCount: number;
+  pendingHours: number;
+  // Whether the period is actually over. Pending lines are only claimable then —
+  // matches the gate in buildDisputePack, so the checkbox can never promise
+  // hours the server would drop. Deliberately not derived from PeriodMode:
+  // entering paid hours early makes a still-running period read as `settled`.
+  periodEnded: boolean;
   // Rendered as a section INSIDE PaidCheckCard rather than as its own card on
   // the page. Drops the card chrome only — behaviour is identical.
   embedded?: boolean;
@@ -196,9 +206,15 @@ export function DisputeOutcomeCard({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  // Opt-in, never the default: see the doc comment on openDisputeAction.
+  const [claimPending, setClaimPending] = useState(false);
+
+  const canOfferPending = periodEnded && pendingCount > 0;
+  // What the claim will actually freeze. Shown on the button so the figure the
+  // tech sees and the figure the ledger records are the same number.
+  const claimTotal = shortedHours + (claimPending ? pendingHours : 0);
 
   const lifetime = lifetimeRecovery(allDisputes);
-  const insights = outcomeInsights(allDisputes);
   // The closed claim for this period, if the live one is already gone. Lets a
   // finished period still show its outcome instead of offering a fresh claim.
   const closedForPeriod = allDisputes.find(
@@ -207,7 +223,14 @@ export function DisputeOutcomeCard({
   const dispute = openDispute ?? closedForPeriod ?? null;
 
   // Nothing to claim, nothing ever claimed — the card has nothing to say.
-  if (!dispute && shortedHours <= 0 && lifetime.disputeCount === 0) return null;
+  if (
+    !dispute &&
+    shortedHours <= 0 &&
+    !canOfferPending &&
+    lifetime.disputeCount === 0
+  ) {
+    return null;
+  }
 
   function advance(to: Dispute["status"]) {
     if (!dispute) return;
@@ -226,7 +249,7 @@ export function DisputeOutcomeCard({
     setError(null);
     startTransition(async () => {
       try {
-        await openDisputeAction(periodKey);
+        await openDisputeAction(periodKey, { includePending: claimPending });
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to start tracking.");
@@ -251,20 +274,68 @@ export function DisputeOutcomeCard({
             than mirrored. */}
       </div>
 
-      {!dispute && (
+      {!dispute && (shortedHours > 0 || canOfferPending) && (
         <div className="space-y-2">
           <p className="text-sm text-[var(--fg-2)]">
-            You&apos;re short {fmtHours(shortedHours)}h in {periodLabel}. Track
-            the claim and FRT will remember what you asked for and what actually
-            came back.
+            {shortedHours > 0 ? (
+              <>
+                You&apos;re short {fmtHours(shortedHours)}h in {periodLabel}.
+                Track the claim and FRT will remember what you asked for and
+                what actually came back.
+              </>
+            ) : (
+              <>
+                Nothing in {periodLabel} was paid short, but {pendingCount} line
+                {pendingCount === 1 ? " has" : "s have"} no paid hours recorded
+                at all.
+              </>
+            )}
           </p>
+
+          {canOfferPending && (
+            <label className="card-inset flex cursor-pointer items-start gap-2 px-3 py-2 text-xs">
+              <input
+                type="checkbox"
+                checked={claimPending}
+                onChange={(e) => setClaimPending(e.target.checked)}
+                className="mt-0.5 h-4 w-4 flex-shrink-0 accent-[var(--brand)]"
+              />
+              <span>
+                <span className="font-medium text-[var(--fg-1)]">
+                  Also claim {pendingCount} line
+                  {pendingCount === 1 ? "" : "s"} you never marked paid (+
+                  {fmtHours(pendingHours)}h)
+                </span>
+                <span className="mt-0.5 block text-[var(--fg-3)]">
+                  Only if your stub really left them out. An unmarked line
+                  usually just means you haven&apos;t reconciled it yet — and a
+                  claim for hours you were paid is the one that costs you
+                  credibility.
+                </span>
+              </span>
+            </label>
+          )}
+
+          {/* The only place this error could surface. It used to render solely
+              inside the `dispute` branch below, so a failed "Track this
+              dispute" was completely silent — the button just did nothing. */}
+          {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
+
           <button
             type="button"
             onClick={open}
-            disabled={isPending}
+            disabled={isPending || claimTotal <= 0}
             className="btn btn-sm btn-primary min-h-11"
           >
-            {isPending ? "Starting…" : "Track this dispute"}
+            {/* No figure until there IS one. When the period has no shortfall
+                and the only route is the opt-in above, the resting state read
+                "Track this dispute · 0.0h" on a disabled button, which looks
+                like a broken total rather than "tick the box first". */}
+            {isPending
+              ? "Starting…"
+              : claimTotal > 0
+                ? `Track this dispute · ${fmtHours(claimTotal)}h`
+                : "Track this dispute"}
           </button>
         </div>
       )}
@@ -386,37 +457,17 @@ export function DisputeOutcomeCard({
         </div>
       )}
 
-      {/* TODO(insights): the two blocks below are cross-period and therefore
-          belong on /insights under this page's scope rule. Kept here for now
-          because /insights does not exist yet and deleting them would lose the
-          only surface for hourRecoveryRate and the outcome insights — the
-          dashboard's RecoveredCard covers closedCount and winRate but neither
-          of those. Move, don't mirror, when /insights ships. */}
+      {/* Lifetime recovery rates and the "which kind of claim gets paid?"
+          comparisons used to render here. They are cross-period, so under this
+          page's scope rule they belong on /insights — and while they lived here
+          they reported the same "2 claims closed · 100% got paid" on EVERY
+          period a tech opened, including periods with no claim at all. Moved,
+          not mirrored: this is a link, never a second copy of the figures. */}
       {lifetime.closedCount > 0 && (
-        <div className="border-t border-[var(--line)] pt-3 text-xs text-[var(--fg-3)]">
-          {lifetime.closedCount} claim{lifetime.closedCount === 1 ? "" : "s"}{" "}
-          closed
-          {lifetime.winRate !== null && ` · ${pct(lifetime.winRate)} got paid`}
-          {lifetime.hourRecoveryRate !== null &&
-            ` · ${pct(lifetime.hourRecoveryRate)} of claimed hours recovered`}
-        </div>
-      )}
-
-      {insights.length > 0 && (
-        <div className="space-y-1 border-t border-[var(--line)] pt-3">
-          {insights.map((i) => (
-            <p key={i.id} className="text-xs text-[var(--fg-2)]">
-              <span className="font-medium text-[var(--fg-1)]">
-                {i.betterLabel}
-              </span>{" "}
-              claims get paid {pct(i.betterRate)} of the time ({i.betterCount}{" "}
-              closed) vs {pct(i.worseRate)} for{" "}
-              <span className="font-medium text-[var(--fg-1)]">
-                {i.worseLabel.toLowerCase()}
-              </span>{" "}
-              ({i.worseCount} closed).
-            </p>
-          ))}
+        <div className="border-t border-[var(--line)] pt-3">
+          <Link href="/insights" className="link text-xs">
+            How your claims tend to go →
+          </Link>
         </div>
       )}
     </Root>
