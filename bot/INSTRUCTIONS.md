@@ -499,6 +499,15 @@ recovered. Sections appear only when they have something to say.
   and the arrow (`↕ ↑ ↓`) must follow. Codes never timed read **"never timed"**
   and must stay at the BOTTOM in both sort directions. A ratio of `0.00×` is a
   bug — a job cannot take zero time.
+  - **Changed 2026-08-03.** A line with actual hours under **0.1h (6 min)** is a
+    timer tapped and saved by accident, not a measurement, so it no longer
+    counts toward the ratio — its code reads **"never timed"** even though a
+    timer was technically saved against it. That is CORRECT, not missing data.
+  - `<0.01×` is also correct output, not a bug: it means a real measurement is
+    smaller than two decimals can show. Only a literal `0.00×` is the defect.
+    (Twice-escalated as `insights-zero-ratio-display`; the first fix guarded
+    `actualHours > 0`, but `actual_hours` is `numeric(5,2)` so a mis-saved timer
+    stores `0.01` and walked straight through it.)
 - **Best days** — seven weekday tiles with a By day / By efficiency sort toggle.
   Tiles count only days the app knows the length of, so the day count under each
   is real. Check a weekday's figure is not wildly out of line with the dashboard.
@@ -536,6 +545,18 @@ The dashboard has three new cards; sanity-check each:
   every 100), a new numbered snapshot sheet must appear — check /snapshots
   lists it and its stats look sane (RO count = the threshold, dates plausible).
   Snapshots from previous nights must never change — they are frozen records.
+  **Two exceptions added 2026-08-03 — do NOT escalate either as a bug:**
+  - A snapshot is now only frozen once the ROs behind it have sat still for an
+    **hour**. So crossing a threshold tonight will NOT mint the sheet during
+    this run — it appears on a later load. Absence right after crossing is
+    expected; absence a day later is a bug.
+  - A snapshot claiming MORE ROs than the account currently has is **withdrawn**
+    (it disappears). That only happens when ROs behind it were deleted — e.g.
+    your own disposable test RO was the 100th. Its content never changes; the
+    row is simply removed, and returns if the count is legitimately reached
+    again. A snapshot at or below the current RO count vanishing IS a bug.
+  - Corollary for your own cleanup: if you create test ROs that cross a
+    threshold and then delete them, expect the sheet to vanish on a later load.
   "Avg vs book: —" is the CORRECT display when actual-hours data is too thin
   (fewer than 5 lines with actuals, or under 1h summed) — do not flag "—" as
   missing data, and do not expect implausible ratios like 0.01× to render.
