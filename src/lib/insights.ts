@@ -30,9 +30,9 @@ export type OpCodePerformance = {
   // Lines behind `ratio`: a real measurement against real book time. Three
   // kinds of line are counted in `uses` and excluded here:
   //   - never timed (actualHours null) — nothing to measure
-  //   - actualHours 0 — no job takes zero time; that is a timer saved empty,
-  //     and letting it through renders "0.00×", which reads as a job that costs
-  //     nothing and outranks every genuine measurement on the page
+  //   - actualHours below MIN_MEASURED_HOURS — a timer tapped and saved, not a
+  //     job. Letting it through renders "0.00×", which reads as a job that
+  //     costs nothing and outranks every genuine measurement on the page
   //   - flagHours 0 — a comeback (the DB forces those to zero flag) or a
   //     goodwill job, which would divide by zero
   timedUses: number;
@@ -42,6 +42,22 @@ export type OpCodePerformance = {
   // the job eats 40% more clock than it pays. null when never timed.
   ratio: number | null;
 };
+
+/**
+ * The shortest actual-hours value that can be a real measurement, in hours.
+ *
+ * SIX MINUTES. Nothing on a flat-rate ticket — not a battery, not an oil
+ * change — is opened, worked and closed in less than that, so anything under it
+ * is a timer that was started and saved by accident.
+ *
+ * This exists because guarding `actualHours > 0` was not enough. actual_hours is
+ * numeric(5,2), so a mis-saved timer lands on 0.01 rather than exactly 0 and
+ * walks straight through a `> 0` check — then 0.01h against a 14h head gasket
+ * divides to 0.0007 and prints as "0.00×". The production data splits cleanly
+ * either side of this number: 34 lines sit at 0.01–0.09 (0.09h against an 18h
+ * job), the next value up is 0.30, and there is nothing in between.
+ */
+export const MIN_MEASURED_HOURS = 0.1;
 
 // A line's grouping identity. Sub-op-code variants roll up to their PARENT
 // library code — a tech thinks "brakes", not "brakes, front, ceramic" — but each
@@ -111,7 +127,11 @@ export function opCodePerformance(
         byKey.set(id.key, row);
       }
       row.uses += 1;
-      if (line.actualHours !== null && line.actualHours > 0 && line.flagHours > 0) {
+      if (
+        line.actualHours !== null &&
+        line.actualHours >= MIN_MEASURED_HOURS &&
+        line.flagHours > 0
+      ) {
         row.timedUses += 1;
         row.flagTotal += line.flagHours;
         row.actualTotal += line.actualHours;
@@ -130,6 +150,20 @@ export function opCodePerformance(
     if (b.ratio === null) return -1;
     return b.ratio - a.ratio || b.uses - a.uses;
   });
+}
+
+/**
+ * An actual÷flag ratio as it appears on the page, WITHOUT the "×".
+ *
+ * The backstop for the invariant that a displayed ratio is never "0.00". A row
+ * only reaches this function because it cleared MIN_MEASURED_HOURS, but the
+ * floor is per line and the ratio is an aggregate, so a single 0.10h line
+ * against a 74h flag total still rounds to zero at two decimals. Zero is not a
+ * possible answer to "how long did this take" — say the measurement is smaller
+ * than the page can show, rather than that the job was free.
+ */
+export function formatRatio(ratio: number): string {
+  return ratio > 0 && ratio < 0.01 ? "<0.01" : ratio.toFixed(2);
 }
 
 export type RatioTier = "good" | "warn" | "bad";

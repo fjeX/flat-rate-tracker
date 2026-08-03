@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   dataRange,
+  formatRatio,
   opCodePerformance,
   periodTrend,
   ratioTier,
@@ -208,6 +209,50 @@ describe("opCodePerformance", () => {
     expect(rows[0].uses).toBe(1);
     expect(rows[0].timedUses).toBe(0);
     expect(rows[0].ratio).toBeNull();
+  });
+
+  it("treats a tapped-and-saved timer as never timed, not as an instant job", () => {
+    // The 0.01 case, which is the one that actually shipped. actual_hours is
+    // numeric(5,2), so a mis-saved timer lands on 0.01 rather than exactly 0 and
+    // clears a `> 0` guard — this is production data: 36 seconds recorded
+    // against a 14-hour head gasket.
+    const rows = opCodePerformance(
+      [entry([line({ id: "a", opCodeId: "oc1", flagHours: 14, actualHours: 0.01 })])],
+      library,
+    );
+    expect(rows[0].uses).toBe(1);
+    expect(rows[0].timedUses).toBe(0);
+    expect(rows[0].ratio).toBeNull();
+  });
+
+  it("keeps a genuinely fast job — a low ratio is a result, not a fault", () => {
+    // The floor must not swallow beating book time. 0.30h against a 0.30h flag
+    // is the smallest real measurement in production and reads 1.00×; a tech
+    // who halves a job should still see 0.50×.
+    const rows = opCodePerformance(
+      [
+        entry([line({ id: "a", opCodeId: "oc1", flagHours: 0.3, actualHours: 0.3 })]),
+        entry([line({ id: "b", opCodeId: "oc2", flagHours: 4, actualHours: 2 })], {
+          id: "e2",
+        }),
+      ],
+      library,
+    );
+    const byCode = new Map(rows.map((r) => [r.code, r]));
+    expect(byCode.get("B12")!.ratio).toBeCloseTo(1, 5);
+    expect(byCode.get("LOF")!.ratio).toBeCloseTo(0.5, 5);
+  });
+
+  it("never lets a surviving ratio display as 0.00", () => {
+    // The invariant, checked at the boundary the page actually renders. The
+    // per-line floor is not enough on its own: it is per line, the ratio is an
+    // aggregate, and one floor-value line against a large flag total still
+    // rounds to zero at two decimals.
+    expect(formatRatio(0.1 / 74)).toBe("<0.01");
+    expect(formatRatio(0.004)).toBe("<0.01");
+    expect(formatRatio(0.01)).toBe("0.01");
+    expect(formatRatio(1)).toBe("1.00");
+    expect(formatRatio(1.43)).toBe("1.43");
   });
 
   it("keeps lines pointing at a deleted library code separate", () => {

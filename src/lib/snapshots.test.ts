@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildSnapshotStats, chronological } from "./snapshots";
+import {
+  buildSnapshotStats,
+  chronological,
+  settledThresholds,
+  unbackedSnapshots,
+} from "./snapshots";
 import { snapshotSeqForThreshold } from "./career";
 import type { Entry, EntryOpCode, OpCode } from "./types";
 
@@ -159,5 +164,85 @@ describe("snapshotSeqForThreshold", () => {
     expect(snapshotSeqForThreshold(200)).toBe(5);
     expect(snapshotSeqForThreshold(700)).toBe(10);
     expect(() => snapshotSeqForThreshold(150)).toThrow();
+  });
+});
+
+describe("settledThresholds", () => {
+  const HOUR = 60 * 60 * 1000;
+  const at = (iso: string) => Date.parse(iso);
+  // 10 ROs, all logged well in the past.
+  const settled = Array.from({ length: 10 }, (_, i) =>
+    mk("2026-07-01", [line({ flagHours: 1 })], `2026-07-01T0${i}:00:00Z`),
+  );
+
+  it("freezes a threshold whose rows have stopped moving", () => {
+    expect(settledThresholds(settled, [10], at("2026-07-02T00:00:00Z"))).toEqual([10]);
+  });
+
+  it("holds back a threshold whose last RO is minutes old", () => {
+    // The production case: the 10th RO was just created, and may yet be
+    // deleted. Freezing now risks a permanent record of a milestone that
+    // never happened.
+    const fresh = [
+      ...settled.slice(0, 9),
+      mk("2026-07-01", [line({ flagHours: 1 })], "2026-07-01T23:59:00Z"),
+    ];
+    expect(settledThresholds(fresh, [10], at("2026-07-02T00:00:00Z"))).toEqual([]);
+  });
+
+  it("holds back when a BACKDATED RO lands inside an already-crossed window", () => {
+    // Logged today but dated last month, so chronological() sorts it into the
+    // first 10 — which changes what "the first 10 ROs" means. Keyed on the
+    // newest createdAt in the window, not on the 10th row alone.
+    const withBackdated = chronological([
+      ...settled.slice(0, 9),
+      mk("2026-06-01", [line({ flagHours: 1 })], "2026-07-01T23:59:00Z"),
+    ]);
+    expect(settledThresholds(withBackdated, [10], at("2026-07-02T00:00:00Z"))).toEqual([]);
+  });
+
+  it("never freezes a threshold the tech has not actually reached", () => {
+    expect(settledThresholds(settled, [25], at("2030-01-01T00:00:00Z"))).toEqual([]);
+  });
+
+  it("settles rather than blocks on an unparseable timestamp", () => {
+    const bad = Array.from({ length: 10 }, () =>
+      mk("2026-07-01", [line({ flagHours: 1 })], "not-a-date"),
+    );
+    expect(settledThresholds(bad, [10], at("2026-07-02T00:00:00Z"))).toEqual([10]);
+  });
+
+  it("releases the threshold once the settle window has passed", () => {
+    const fresh = [
+      ...settled.slice(0, 9),
+      mk("2026-07-01", [line({ flagHours: 1 })], "2026-07-01T23:00:00Z"),
+    ];
+    const justBefore = at("2026-07-01T23:59:00Z");
+    const justAfter = at("2026-07-02T00:00:00Z") + HOUR;
+    expect(settledThresholds(fresh, [10], justBefore)).toEqual([]);
+    expect(settledThresholds(fresh, [10], justAfter)).toEqual([10]);
+  });
+});
+
+describe("unbackedSnapshots", () => {
+  const snap = (roThreshold: number) => ({ roThreshold });
+
+  it("withdraws a snapshot claiming more ROs than the tech has", () => {
+    // The production case: RO #100 was a disposable test, froze snapshot #4 at
+    // 100, then was deleted — leaving the dashboard showing "99/100" beneath a
+    // frozen snapshot of 100.
+    expect(unbackedSnapshots([snap(10), snap(25), snap(50), snap(100)], 99)).toEqual([
+      snap(100),
+    ]);
+  });
+
+  it("keeps every snapshot a legitimate deletion still clears", () => {
+    // A tech at 149 who deletes one RO has NOT lost the 100 milestone. Only
+    // thresholds above the current count are contradictions.
+    expect(unbackedSnapshots([snap(10), snap(25), snap(50), snap(100)], 148)).toEqual([]);
+  });
+
+  it("treats a snapshot exactly at the current count as backed", () => {
+    expect(unbackedSnapshots([snap(100)], 100)).toEqual([]);
   });
 });

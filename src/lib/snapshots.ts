@@ -59,6 +59,65 @@ export function snapshotEfficiency(
   };
 }
 
+/**
+ * How long the rows behind a snapshot must sit still before it is frozen.
+ *
+ * A snapshot is permanent, so it must not be minted from an RO that is about to
+ * be taken back. Production case: a disposable test RO was the 100th, froze
+ * "Portfolio snapshot #4" at 100 ROs on the next dashboard load, and was deleted
+ * seconds later — leaving a permanent record of a milestone that never happened.
+ *
+ * An hour is the trade. It is far longer than the "logged it, spotted the
+ * mistake, deleted it" window that causes this, and short enough that a tech who
+ * really does hit RO #100 still sees it before the end of the shift. Deferring
+ * costs nothing: the next dashboard load picks the threshold up again.
+ */
+export const SNAPSHOT_SETTLE_MS = 60 * 60 * 1000;
+
+/**
+ * The subset of `missing` whose underlying rows have stopped moving.
+ *
+ * Keyed on the NEWEST createdAt among the first N, not on the Nth row alone: a
+ * backdated RO inserted today can land inside an earlier threshold's window and
+ * change what "the first 100" even means. Both cases are the same question —
+ * has anything behind this snapshot changed recently — so they get one rule.
+ *
+ * An unparseable createdAt settles rather than blocks; a bad timestamp should
+ * not freeze a tech's milestones out forever.
+ */
+export function settledThresholds(
+  all: Entry[],
+  missing: number[],
+  nowMs: number,
+): number[] {
+  return missing.filter((threshold) => {
+    if (all.length < threshold) return false;
+    let newest = 0;
+    for (const e of all.slice(0, threshold)) {
+      const t = Date.parse(e.createdAt);
+      if (Number.isFinite(t) && t > newest) newest = t;
+    }
+    if (newest === 0) return true; // nothing parseable to wait on
+    return nowMs - newest >= SNAPSHOT_SETTLE_MS;
+  });
+}
+
+/**
+ * Snapshots claiming more ROs than the tech currently has.
+ *
+ * The rows such a snapshot froze have since been deleted, so it records a
+ * milestone that did not happen. STRICTLY greater-than is the safety property
+ * worth stating outright: a tech at 149 ROs who deletes one keeps every
+ * snapshot up to 100, because those thresholds are still genuinely cleared.
+ * Only the contradiction case is caught.
+ */
+export function unbackedSnapshots<T extends { roThreshold: number }>(
+  existing: T[],
+  roCount: number,
+): T[] {
+  return existing.filter((s) => s.roThreshold > roCount);
+}
+
 /** Sort entries into log order: date asc, then created_at asc. */
 export function chronological(entries: Entry[]): Entry[] {
   return entries

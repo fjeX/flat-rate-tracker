@@ -25,7 +25,9 @@ import {
 import {
   buildSnapshotStats,
   chronological,
+  settledThresholds,
   snapshotEfficiency,
+  unbackedSnapshots,
   type SnapshotScheduleData,
 } from "@/lib/snapshots";
 import { addDays } from "@/lib/periods";
@@ -231,11 +233,45 @@ async function listAllPhotoEntryIds(supabase: DbClient): Promise<string[]> {
 // Snapshot generation — rare path, only when a threshold is newly crossed
 // ------------------------------------------------------------------------
 
+/**
+ * Drop snapshots that claim more ROs than the tech now has.
+ *
+ * Snapshots are immutable in CONTENT — nothing here rewrites a frozen stat. But
+ * a snapshot at threshold 100 held by an account with 99 ROs is a record of
+ * something that did not happen: the rows it froze have since been deleted. It
+ * also puts the dashboard in open contradiction with itself ("Next: Snapshot #5
+ * · 99/100" sitting under a frozen snapshot of 100).
+ *
+ * Only snapshots ABOVE the current count are withdrawn, which is what keeps this
+ * safe: a tech at 149 ROs who deletes one still has every snapshot up to 100,
+ * because those thresholds are still genuinely cleared. Nothing is lost either
+ * way — a snapshot is derived data, rebuilt from the first N entries the moment
+ * the count is legitimately reached again.
+ */
+async function withdrawUnbackedSnapshots(
+  supabase: DbClient,
+  roCount: number,
+  existing: PortfolioSnapshot[],
+): Promise<PortfolioSnapshot[]> {
+  const unbacked = unbackedSnapshots(existing, roCount);
+  if (unbacked.length === 0) return existing;
+  const { error } = await supabase
+    .from("portfolio_snapshots")
+    .delete()
+    .in(
+      "id",
+      unbacked.map((s) => s.id),
+    );
+  if (error) throw error;
+  return existing.filter((s) => s.roThreshold <= roCount);
+}
+
 async function generateMissingSnapshots(
   supabase: DbClient,
   roCount: number,
   existing: PortfolioSnapshot[],
   today: string,
+  nowMs: number,
 ): Promise<PortfolioSnapshot[]> {
   const due = snapshotThresholdsReached(roCount);
   const have = new Set(existing.map((s) => s.roThreshold));
@@ -250,6 +286,11 @@ async function generateMissingSnapshots(
     // Null pre-migration; empty when no schedule is set up yet.
     listWorkSchedulesSafe(supabase),
   ]);
+
+  // Freeze only what has stopped moving. A threshold held back here is not
+  // lost — it is picked up by the next dashboard load once it settles.
+  const ready = settledThresholds(all, missing, nowMs);
+  if (ready.length === 0) return existing;
 
   // Schedule-aware overall efficiency is only worth freezing once a schedule
   // exists — the extra fetches are skipped otherwise (rare path regardless).
@@ -273,7 +314,7 @@ async function generateMissingSnapshots(
     };
   }
 
-  for (const threshold of missing) {
+  for (const threshold of ready) {
     const stats = buildSnapshotStats(
       all.slice(0, threshold),
       library,
@@ -374,7 +415,9 @@ export type GamificationData = {
  */
 export async function getGamificationData(
   supabase: DbClient,
-  opts: { today: string },
+  // nowMs is injectable so the snapshot settle window can be tested without
+  // waiting an hour; production callers pass today only.
+  opts: { today: string; nowMs?: number },
 ): Promise<GamificationData | null> {
   try {
     const [entryDays, daysOff, storedMilestones, snapshots] = await Promise.all([
@@ -411,9 +454,19 @@ export async function getGamificationData(
       (a, b) => a - b,
     );
 
+    // Withdraw first, then generate: a snapshot whose rows were deleted has to
+    // go before the same threshold can be re-earned and refrozen from the
+    // entries that actually exist now.
+    const backed = await withdrawUnbackedSnapshots(supabase, roCount, snapshots);
     const freshSnapshots = await backfillSnapshotEfficiency(
       supabase,
-      await generateMissingSnapshots(supabase, roCount, snapshots, opts.today),
+      await generateMissingSnapshots(
+        supabase,
+        roCount,
+        backed,
+        opts.today,
+        opts.nowMs ?? Date.now(),
+      ),
       opts.today,
     );
 

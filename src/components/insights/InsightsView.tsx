@@ -15,6 +15,7 @@ import {
   startOfWeek,
 } from "@/lib/periods";
 import {
+  formatRatio,
   opCodePerformance,
   periodTrend,
   ratioTier,
@@ -200,7 +201,7 @@ function TimeGoesSection({
                       <span className="text-xs text-[var(--fg-3)]">never timed</span>
                     ) : (
                       <span className={`pill${tier === "good" ? "" : ` ${tier}`}`}>
-                        {row.ratio.toFixed(2)}×
+                        {formatRatio(row.ratio)}×
                       </span>
                     )}
                   </Td>
