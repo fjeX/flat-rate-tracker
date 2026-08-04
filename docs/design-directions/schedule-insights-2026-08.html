@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRT — Schedule &amp; Insights redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════════════
+   VIEWER CHROME — deliberately NOT FRT-styled, so the toolbar can never be
+   mistaken for part of the design under review. Same convention as
+   pay-period-redesign.html.
+   ══════════════════════════════════════════════════════════════════════ */
+:root{
+  --ui-bg:#eceae6; --ui-panel:#fff; --ui-fg:#23211d; --ui-fg-2:#625d55;
+  --ui-line:rgba(20,18,14,.14); --ui-accent:#7a4a1e; --ui-accent-ink:#fff; --ui-well:#dedbd4;
+}
+@media (prefers-color-scheme:dark){
+  :root{--ui-bg:#17181b;--ui-panel:#202226;--ui-fg:#e9e7e3;--ui-fg-2:#9d988f;
+        --ui-line:rgba(255,255,255,.12);--ui-accent:#d98b4a;--ui-accent-ink:#1a1509;--ui-well:#2a2d32;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ui-bg);color:var(--ui-fg);
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.5}
+.viewer-bar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:16px;
+  padding:10px 20px;background:color-mix(in oklab,var(--ui-bg) 92%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--ui-line)}
+.viewer-title{font-size:13px;font-weight:650;letter-spacing:-.01em}
+.tg{display:flex;align-items:center;gap:6px}
+.tg > span{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--ui-fg-2)}
+.tg button{font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;border:1px solid var(--ui-line);
+  background:var(--ui-panel);color:var(--ui-fg-2);cursor:pointer}
+.tg button.on{background:var(--ui-accent);border-color:var(--ui-accent);color:var(--ui-accent-ink);font-weight:600}
+.wrap{padding:20px 20px 64px}
+.cols{display:grid;gap:20px;align-items:start;grid-template-columns:repeat(3,max-content);justify-content:center}
+@media (max-width:1300px){.cols{grid-template-columns:1fr;justify-content:stretch}}
+.col > h2{font-size:15px;margin:0 0 2px}
+.col > .thesis{font-size:13px;color:var(--ui-fg-2);margin:0 0 4px;max-width:390px}
+.col > .roll{font-size:12px;color:var(--ui-accent);margin:0 0 10px;font-weight:600}
+.note{max-width:820px;margin:0 auto 24px;font-size:13.5px;color:var(--ui-fg-2);
+  background:var(--ui-panel);border:1px solid var(--ui-line);border-radius:10px;padding:12px 16px}
+.note strong{color:var(--ui-fg)}
+.note code{background:var(--ui-well);padding:1px 5px;border-radius:4px;font-size:12.5px}
+
+/* ══════════════════════════════════════════════════════════════════════
+   FRT DESIGN SYSTEM — verbatim subset of src/app/globals.css. Do not
+   "improve" values here; if they diverge, globals.css is right.
+   ══════════════════════════════════════════════════════════════════════ */
+.frt{
+  --bg-0:#141519;--bg-1:#1d1f24;--bg-2:#24262c;--bg-3:#2d3038;--bg-4:#383c45;
+  --line:rgba(255,255,255,.06);--line-soft:rgba(255,255,255,.04);
+  --fg-0:#f4f3f1;--fg-1:#d8d5d1;--fg-2:#a9a59f;--fg-3:#9b9791;
+  --brand:oklch(.73 .14 55);--brand-strong:oklch(.66 .16 50);
+  --brand-soft:oklch(.30 .10 50/.45);--brand-bg:oklch(.30 .08 50/.18);--brand-ink:oklch(.18 .04 50);
+  --good:oklch(.78 .16 150);--good-strong:oklch(.65 .17 150);--good-bg:oklch(.30 .10 150/.18);
+  --bad:oklch(.72 .18 25);--bad-bg:oklch(.30 .12 25/.20);
+  --warn:oklch(.82 .15 80);--warn-bg:oklch(.30 .09 80/.20);
+  --info:oklch(.75 .13 230);--info-bg:oklch(.30 .08 230/.20);
+  --radius:18px;--radius-sm:12px;
+  --shadow-card:0 1px 2px rgba(0,0,0,.25),0 10px 30px rgba(0,0,0,.28);
+  --shadow-pop:0 18px 48px rgba(0,0,0,.5);
+  --ring:0 0 0 3px oklch(.73 .14 55/.3);
+  --bar-bg:rgba(20,21,25,.85);--tap-min:44px;
+  color-scheme:dark;
+  background:var(--bg-0);color:var(--fg-0);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  container-type:inline-size;
+}
+/* Device frame is VIEWER furniture, not FRT design — kept outside .frt so no
+   off-system radius or chrome token ever lives inside the reviewed scope. */
+.col > .frt{border-radius:14px;overflow:hidden;border:1px solid var(--ui-line)}
+.frt.light{
+  --bg-0:#f6f5f3;--bg-1:#fff;--bg-2:#f1f0ed;--bg-3:#e9e7e3;--bg-4:#dedbd5;
+  --line:rgba(28,25,20,.07);--line-soft:rgba(28,25,20,.05);
+  --fg-0:#201d19;--fg-1:#3a362f;--fg-2:#605b53;--fg-3:#6d675d;
+  --brand:oklch(.47 .17 52);--brand-strong:oklch(.42 .18 48);
+  --brand-soft:oklch(.50 .10 50/.35);--brand-bg:oklch(.90 .08 55/.15);--brand-ink:oklch(.99 .005 50);
+  --good:oklch(.39 .16 150);--good-strong:oklch(.36 .17 150);--good-bg:oklch(.90 .08 150/.15);
+  --bad:oklch(.43 .18 25);--bad-bg:oklch(.90 .08 25/.15);
+  --warn:oklch(.41 .15 80);--warn-bg:oklch(.90 .08 80/.15);
+  --info:oklch(.39 .13 230);--info-bg:oklch(.90 .08 230/.15);
+  --shadow-card:0 1px 2px rgba(28,25,20,.05),0 10px 30px rgba(28,25,20,.07);
+  --shadow-pop:0 18px 48px rgba(28,25,20,.16);
+  --ring:0 0 0 3px oklch(.43 .165 55/.25);
+  --bar-bg:rgba(246,245,243,.88);
+  color-scheme:light;
+}
+.frt .mono{font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace}
+.frt .tabular{font-variant-numeric:tabular-nums}
+.frt .card{background:var(--bg-1);border:1px solid transparent;border-radius:var(--radius);box-shadow:var(--shadow-card)}
+.frt .card.flush{padding:0;overflow:hidden}
+.frt .card.padded{padding:14px}
+.frt .card.padded-lg{padding:16px}
+.frt .card-inset{background:var(--bg-2);border:1px solid transparent;border-radius:var(--radius-sm)}
+.frt .section-title{font-size:13px;color:var(--fg-2);font-weight:550;margin:0 0 8px 2px;
+  display:flex;justify-content:space-between;align-items:baseline}
+.frt .pill{font-size:12px;padding:4px 11px;border-radius:999px;background:var(--good-bg);color:var(--good);
+  border:1px solid transparent;font-weight:550;display:inline-block;white-space:nowrap}
+.frt .pill.warn{background:var(--warn-bg);color:var(--warn)}
+.frt .pill.bad{background:var(--bad-bg);color:var(--bad)}
+.frt .pill.brand{background:var(--brand-bg);color:var(--brand)}
+.frt .pill.neutral{background:var(--bg-3);color:var(--fg-2)}
+.frt .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;font-size:12px;font-weight:550;
+  border-radius:999px;white-space:nowrap}
+.frt .badge-neutral{background:var(--bg-3);color:var(--fg-2)}
+.frt .badge-warn{background:var(--warn-bg);color:var(--warn)}
+.frt .badge-bad{background:var(--bad-bg);color:var(--bad)}
+.frt .badge-good{background:var(--good-bg);color:var(--good)}
+.frt .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:var(--tap-min);
+  padding:8px 18px;font:inherit;font-size:14px;font-weight:500;letter-spacing:-.005em;border-radius:999px;
+  border:1px solid transparent;background:var(--bg-3);color:var(--fg-0);cursor:pointer;
+  transition:background 120ms,border-color 120ms}
+.frt .btn:hover:not(:disabled){background:var(--bg-4)}
+.frt .btn-primary{background:var(--brand);color:var(--brand-ink);font-weight:600}
+.frt .btn-primary:hover{filter:brightness(1.06)}
+.frt .btn-ghost{background:transparent;border-color:transparent;color:var(--fg-2)}
+.frt .btn-ghost:hover{background:var(--bg-3)}
+.frt .btn-sm{min-height:var(--tap-min);padding:5px 14px;font-size:13px}
+.frt .btn:active{transform:scale(.96)}
+.frt .btn:focus-visible,.frt .filter-chip:focus-visible,.frt .daycell:focus-visible{outline:none;box-shadow:var(--ring)}
+.frt .input{width:100%;min-height:46px;padding:11px 13px;font:inherit;font-size:16px;background:var(--bg-2);
+  border:1px solid transparent;border-radius:var(--radius-sm);color:var(--fg-0);
+  transition:border-color 120ms,box-shadow 120ms}
+.frt .input:focus{outline:none;border-color:var(--brand);box-shadow:var(--ring)}
+.frt .field-label{font-size:13px;color:var(--fg-2);display:block;margin-bottom:6px;font-weight:550}
+.frt .filter-row{display:flex;gap:6px;overflow-x:auto;margin:0 -16px 14px;padding:0 16px;scrollbar-width:none}
+.frt .filter-row::-webkit-scrollbar{display:none}
+.frt .filter-chip{flex-shrink:0;display:inline-flex;align-items:center;min-height:var(--tap-min);padding:8px 16px;
+  font:inherit;font-size:14px;border:1px solid transparent;background:var(--bg-1);color:var(--fg-1);
+  border-radius:999px;cursor:pointer;transition:background 120ms}
+.frt .filter-chip:hover{background:var(--bg-2)}
+.frt .filter-chip.active{background:var(--brand-bg);border-color:color-mix(in oklab,var(--brand) 35%,transparent);
+  color:var(--brand);font-weight:600}
+.frt .table{width:100%;border-collapse:collapse;font-size:14px}
+.frt .table th{text-align:left;padding:9px 14px;font-size:13px;font-weight:550;color:var(--fg-3)}
+.frt .table td{padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+.frt .table tbody tr:last-child td{border-bottom:none}
+.frt .table-num{text-align:center;font-variant-numeric:tabular-nums}
+.frt .table th.table-num{text-align:center}
+.frt .table-dim{color:var(--fg-3)}
+.frt .link{color:var(--brand);text-decoration:none;font-weight:500}
+.frt h1{font-size:20px;font-weight:600;line-height:1.25;letter-spacing:-.01em;margin:0;color:var(--fg-0)}
+.frt h2{font-size:20px;font-weight:600;line-height:1.25;margin:0;color:var(--fg-0)}
+.frt h3{font-size:14px;font-weight:600;margin:0;color:var(--fg-0)}
+.frt p{margin:0}
+.frt svg{display:block}
+
+/* app chrome, so a comp reads as a screen and not a floating fragment */
+.frt .appbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;
+  padding:8px 16px;border-bottom:1px solid var(--line);background:var(--bar-bg);backdrop-filter:blur(12px)}
+.frt .brandmark{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;
+  background:var(--brand-strong);color:var(--brand-ink)}
+.frt .brandname{font-weight:600;letter-spacing:-.01em;font-size:14px;line-height:1.1}
+.frt .brandsub{display:block;font-size:11px;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;line-height:1;margin-top:2px}
+.frt .pg{padding:16px 16px 28px;display:flex;flex-direction:column}
+@container (min-width:700px){.frt .pg{padding:24px 28px 40px;max-width:760px;margin:0 auto}}
+
+/* ── comp-local helpers (all values on the closed scale / 4px grid) ── */
+.frt .lede{font-size:14px;line-height:1.5;color:var(--fg-2);margin-top:4px}
+.frt .monthnav{display:flex;align-items:center;gap:2px}
+.frt .monthnav .lbl{font-size:14px;font-weight:550;color:var(--fg-1);min-width:104px;text-align:center;
+  font-variant-numeric:tabular-nums}
+.frt .iconbtn{width:44px;height:44px;display:grid;place-items:center;border:1px solid transparent;background:transparent;
+  color:var(--fg-2);border-radius:999px;cursor:pointer}
+.frt .iconbtn:hover{background:var(--bg-3)}
+.frt .rule{height:1px;background:var(--line);margin:0}
+.frt .dow{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-bottom:6px}
+.frt .dow span{font-size:11px;font-weight:550;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-3);
+  text-align:center}
+.frt .grid7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+/* Calendar cell: NO border. Scheduled days are a tonal step up from the flat
+   page ground; everything else is the ground itself. */
+.frt .daycell{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  gap:3px;min-height:52px;padding:6px 2px 5px;border:none;border-radius:var(--radius-sm);
+  background:var(--bg-1);color:var(--fg-1);cursor:pointer;font:inherit;
+  transition:background 120ms}
+.frt .daycell:hover{background:var(--bg-2)}
+.frt .daycell.out{background:transparent;opacity:.4}
+.frt .daycell.off{background:transparent}
+.frt .daycell.sel{background:var(--brand-bg);box-shadow:inset 0 0 0 1px var(--brand)}
+.frt .daycell.today .dnum{color:var(--brand);font-weight:700}
+.frt .daycell .dnum{font-size:13px;font-weight:550;font-variant-numeric:tabular-nums;
+  font-family:"JetBrains Mono",ui-monospace,monospace;line-height:1}
+.frt .daycell .dsub{font-size:11px;line-height:1;color:var(--fg-3);
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.frt .dot{width:6px;height:6px;border-radius:999px;display:block}
+.frt .dot.warnd{background:var(--warn)}
+.frt .dot.goodd{background:var(--good)}
+.frt .dot.brandd{background:var(--brand)}
+.frt .legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px;padding:0 2px}
+.frt .legend span{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-3)}
+.frt .legend i{font-style:normal;font-variant-numeric:tabular-nums}
+.frt .stack{display:flex;flex-direction:column}
+.frt .row{display:flex;align-items:center}
+.frt .between{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.frt .wrapchips{display:flex;flex-wrap:wrap;gap:6px}
+.frt .chipbtn{display:inline-flex;align-items:center;justify-content:center;min-height:var(--tap-min);
+  padding:6px 14px;font:inherit;font-size:13px;font-weight:550;border-radius:999px;border:1px solid transparent;
+  background:var(--bg-3);color:var(--fg-1);cursor:pointer;transition:background 120ms}
+.frt .chipbtn:hover{background:var(--bg-4)}
+.frt .chipbtn.go{background:var(--brand);color:var(--brand-ink);font-weight:600}
+.frt .num-lg{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  font-size:34px;font-weight:700;line-height:1.1;letter-spacing:-.02em;color:var(--fg-0)}
+.frt .num-md{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  font-size:26px;font-weight:700;line-height:1.15;color:var(--fg-0)}
+.frt .num-sm{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  font-size:16px;font-weight:600;color:var(--fg-1)}
+.frt .cap{font-size:11px;font-weight:550;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-3)}
+.frt .fine{font-size:12px;color:var(--fg-3);line-height:1.45}
+.frt .body{font-size:14px;color:var(--fg-2);line-height:1.5}
+.frt .alltime-head{display:flex;align-items:baseline;gap:10px;margin-bottom:2px}
+.frt .track{height:8px;border-radius:999px;background:var(--bg-3);overflow:hidden}
+.frt .track > i{display:block;height:100%;border-radius:999px;background:var(--brand)}
+.frt .track > i.bad{background:var(--bad)}
+.frt .track > i.warn{background:var(--warn)}
+.frt .deck{display:flex;gap:4px;padding:4px;background:var(--bg-2);border-radius:999px}
+.frt .deck button{flex:1;min-height:var(--tap-min);border:none;border-radius:999px;background:transparent;
+  color:var(--fg-2);font:inherit;font-size:14px;font-weight:550;cursor:pointer;transition:background 120ms}
+.frt .deck button[aria-selected="true"]{background:var(--bg-0);color:var(--fg-0);font-weight:600;
+  box-shadow:var(--shadow-card)}
+.frt.light .deck button[aria-selected="true"]{background:var(--bg-1)}
+.frt .sheet{position:sticky;bottom:0;z-index:6;background:var(--bg-1);border-radius:var(--radius) var(--radius) 0 0;
+  box-shadow:var(--shadow-pop);padding:14px 16px 18px;margin:16px -16px -28px}
+@container (min-width:700px){.frt .sheet{position:static;margin:16px 0 0;border-radius:var(--radius);
+  box-shadow:var(--shadow-card)}}
+.frt .grabber{width:36px;height:4px;border-radius:999px;background:var(--bg-4);margin:0 auto 10px}
+@container (min-width:700px){.frt .grabber{display:none}}
+.frt .rank{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  font-size:12px;font-weight:700;color:var(--fg-3);width:16px;flex-shrink:0}
+.frt .weekhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
+.frt .bars{display:flex;align-items:flex-end;gap:8px;height:112px}
+.frt .barcol{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px}
+.frt .bar{width:100%;border-radius:4px 4px 0 0;background:var(--bg-4)}
+.frt .bar.now{background:var(--brand)}
+.frt .bar.running{opacity:.55}
+.frt .optable{display:none}
+@container (min-width:700px){.frt .optable{display:block}.frt .oplist{display:none}}
+.frt .statgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@container (min-width:700px){.frt .statgrid{grid-template-columns:repeat(4,1fr)}}
+.frt .stat{padding:10px 12px}
+.frt .daygrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@container (min-width:700px){.frt .daygrid{grid-template-columns:repeat(7,1fr)}}
+.frt .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.frt *{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="viewer-bar">
+  <span class="viewer-title">FRT — Schedule &amp; Insights redesign</span>
+  <div class="tg" id="g-page"><span>Page</span></div>
+  <div class="tg" id="g-theme"><span>Theme</span></div>
+  <div class="tg" id="g-width"><span>Width</span></div>
+</div>
+
+<div class="wrap">
+  <div class="note">
+    <strong>Sample data, not your real numbers.</strong> Every figure here is authored demonstration
+    content at production fidelity — op codes, hours, claims and dates are invented so the layouts can be
+    judged at realistic density. <strong>All six are live HTML on FRT's real tokens</strong>
+    (<code>globals.css</code> subset, verbatim), so what you see is what the build inherits.
+    The deck switch on Insights&nbsp;2 and the day cells on Schedule&nbsp;3 actually work — tap them.
+  </div>
+  <div class="cols" id="cols"></div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   ICONS — lucide geometry (24px box, stroke 2, round caps), matching the
+   library FRT already uses. No emoji, no unicode glyphs standing in.
+   ══════════════════════════════════════════════════════════════════════ */
+const ico = (paths, size = 16) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const I = {
+  alert: s => ico('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>', s),
+  left:  s => ico('<path d="m15 18-6-6 6-6"/>', s),
+  right: s => ico('<path d="m9 18 6-6-6-6"/>', s),
+  down:  s => ico('<path d="m6 9 6 6 6-6"/>', s),
+  check: s => ico('<path d="M20 6 9 17l-5-5"/>', s),
+  clock: s => ico('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', s),
+  cal:   s => ico('<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>', s),
+  wrench:s => ico('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>', s),
+};
+
+/* ── Chrome shared by every comp, so each frame reads as a real screen ── */
+const appbar = `
+  <div class="appbar">
+    <div class="row" style="gap:10px">
+      <span class="brandmark">${I.wrench(18)}</span>
+      <span><span class="brandname">Flat Rate Tracker</span><span class="brandsub">Shop floor</span></span>
+    </div>
+    <button class="iconbtn" aria-label="Account">${ico('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',20)}</button>
+  </div>`;
+
+const monthNav = `
+  <div class="monthnav">
+    <button class="iconbtn" aria-label="Previous month">${I.left(18)}</button>
+    <span class="lbl">August 2026</span>
+    <button class="iconbtn" aria-label="Next month">${I.right(18)}</button>
+  </div>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   SAMPLE MONTH — August 2026, today = Thu Aug 20. Grid starts Sun Jul 26.
+   state: out | off | sched | logged | unresolved | zero | today
+   ══════════════════════════════════════════════════════════════════════ */
+const DAYS = [
+  // Jul 26 – Aug 1
+  {d:26,out:1},{d:27,out:1},{d:28,out:1},{d:29,out:1},{d:30,out:1},{d:31,out:1},{d:1,off:1},
+  // Aug 2 – 8
+  {d:2,off:1},{d:3,h:'9.2'},{d:4,h:'8.4'},{d:5,unres:1},{d:6,h:'10.1'},{d:7,h:'7.8'},{d:8,off:1},
+  // Aug 9 – 15
+  {d:9,off:1},{d:10,h:'8.9'},{d:11,h:'11.2'},{d:12,unres:1},{d:13,h:'9.6'},{d:14,unres:1},{d:15,off:1},
+  // Aug 16 – 22
+  {d:16,off:1},{d:17,h:'8.1'},{d:18,unres:1},{d:19,h:'10.4'},{d:20,h:'6.2',today:1},{d:21,sched:1},{d:22,off:1},
+  // Aug 23 – 29
+  {d:23,off:1},{d:24,sched:1},{d:25,sched:1},{d:26,sched:1},{d:27,sched:1},{d:28,sched:1},{d:29,off:1},
+  // Aug 30 – Sep 5
+  {d:30,off:1},{d:31,sched:1},{d:1,out:1},{d:2,out:1},{d:3,out:1},{d:4,out:1},{d:5,out:1},
+];
+
+function cell(x, i, opts = {}) {
+  const cls = ['daycell'];
+  if (x.out) cls.push('out');
+  if (x.off) cls.push('off');
+  if (x.today) cls.push('today');
+  if (opts.sel === i) cls.push('sel');
+  let sub = '', dot = '';
+  if (x.off && !x.out)      sub = `<span class="dsub">off</span>`;
+  else if (x.h)             sub = `<span class="dsub">${x.h}</span>`;
+  else if (x.unres)       { dot = `<span class="dot warnd"></span>`; }
+  else if (x.sched)         sub = `<span class="dsub" style="opacity:.55">8.0</span>`;
+  const label = x.unres ? ', needs a decision' : x.off && !x.out ? ', day off' : '';
+  return `<button class="${cls.join(' ')}" data-i="${i}" aria-label="August ${x.d}${label}">
+      <span class="dnum">${x.d}</span>${sub}${dot}
+    </button>`;
+}
+
+const dowRow = `<div class="dow">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  .map(d => `<span>${d[0]}<span class="sr">${d.slice(1)}</span></span>`).join('')}</div>`;
+
+/* Legend entries mirror exactly what a cell renders — an amber dot, dim
+   scheduled hours, bright logged hours. Nothing in here describes a mark the
+   grid doesn't actually draw. */
+const legend = `
+  <div class="legend">
+    <span><i class="dot warnd"></i>Needs a decision</span>
+    <span><i class="mono" style="color:var(--fg-3);opacity:.55;font-size:11px">8.0</i>Scheduled</span>
+    <span><i class="mono" style="color:var(--fg-3);font-size:11px">9.2</i>Hours you logged</span>
+  </div>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   SCHEDULE 1 — "Settle first"
+   The unsettled days ARE the page. Calendar demoted to the map you fix
+   them on; weekly pattern collapses to a one-line summary.
+   ══════════════════════════════════════════════════════════════════════ */
+const S1 = `
+${appbar}
+<main class="pg">
+  <div class="between" style="align-items:flex-start">
+    <h1>Schedule</h1>
+    ${monthNav}
+  </div>
+  <p class="lede" style="margin-bottom:20px">Tap any day to record what you actually worked.</p>
+
+  <section style="margin-bottom:28px">
+    <div class="card padded-lg" style="display:flex;flex-direction:column;gap:14px">
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <span style="color:var(--warn);flex-shrink:0;margin-top:1px">${I.alert(18)}</span>
+        <div>
+          <h2 style="font-size:16px">4 days need a decision</h2>
+          <p class="body" style="margin-top:4px">Each one is a scheduled workday with nothing on it.
+            Until you answer, your efficiency divides by hours you might not have worked.</p>
+        </div>
+      </div>
+
+      <div class="stack" style="gap:8px">
+        ${[
+          {day:'Wed, Aug 5',  ctx:'Scheduled 8.0h · nothing logged'},
+          {day:'Wed, Aug 12', ctx:'Scheduled 8.0h · nothing logged'},
+        ].map(r => `
+        <div class="card-inset" style="padding:12px">
+          <div class="between" style="margin-bottom:10px">
+            <h3>${r.day}</h3>
+            <span class="fine mono">${r.ctx.split(' · ')[0]}</span>
+          </div>
+          <div class="wrapchips">
+            <button class="chipbtn go">Worked 8.0h</button>
+            <button class="chipbtn">Day off</button>
+            <button class="chipbtn">Worked, zero flag</button>
+            <button class="chipbtn">Other…</button>
+          </div>
+        </div>`).join('')}
+
+        ${['Fri, Aug 14','Tue, Aug 18'].map(d => `
+        <button class="card-inset" style="padding:12px;display:flex;align-items:center;justify-content:space-between;
+          gap:8px;width:100%;border:none;cursor:pointer;color:inherit;font:inherit;min-height:var(--tap-min);text-align:left">
+          <span><span style="font-size:14px;font-weight:600;color:var(--fg-0)">${d}</span>
+            <span class="fine" style="display:block;margin-top:2px">Scheduled 8.0h · nothing logged</span></span>
+          <span style="color:var(--fg-3)">${I.down(18)}</span>
+        </button>`).join('')}
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-bottom:28px">
+    <div class="section-title"><span>August</span><span class="fine mono">142.5h flag</span></div>
+    ${dowRow}
+    <div class="grid7">${DAYS.map((x,i) => cell(x,i)).join('')}</div>
+    ${legend}
+  </section>
+
+  <section>
+    <div class="section-title">Weekly pattern</div>
+    <div class="card padded between">
+      <span><span class="num-sm">Mon–Fri</span>
+        <span class="fine" style="display:block;margin-top:2px">8:00 → 17:00 · 1h lunch · 8.0h paid</span></span>
+      <button class="btn btn-sm">Edit</button>
+    </div>
+  </section>
+</main>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   SCHEDULE 2 — "Week strips"  ← the roll's assignment
+   Time runs vertically as weeks. Cells carry a number and a dot only;
+   all TEXT moves to the week's own summary line, which is where the
+   52px-wide-cell problem actually goes away. Selecting a day expands
+   inside its own week, so the panel can never scroll offscreen.
+   ══════════════════════════════════════════════════════════════════════ */
+const WEEKS = [
+  {label:'Jul 27 – Aug 2', flag:'36.4', eff:'94%', tier:'', unres:0, days:DAYS.slice(0,7)},
+  {label:'Aug 3 – Aug 9',  flag:'38.2', eff:'96%', tier:'', unres:1, days:DAYS.slice(7,14), open:1},
+  {label:'Aug 10 – Aug 16',flag:'41.7', eff:'112%',tier:'', unres:2, days:DAYS.slice(14,21)},
+  {label:'Aug 17 – Aug 23',flag:'24.7', eff:'88%', tier:'warn',unres:1, days:DAYS.slice(21,28)},
+  {label:'Aug 24 – Aug 30',flag:'—',    eff:'—',   tier:'neutral',unres:0, days:DAYS.slice(28,35), future:1},
+];
+
+const S2 = `
+${appbar}
+<main class="pg">
+  <div class="between" style="align-items:flex-start">
+    <h1>Schedule</h1>
+    ${monthNav}
+  </div>
+  <p class="lede">Tap any day to record what you actually worked.</p>
+
+  <div class="card-inset row" style="gap:10px;padding:12px 14px;margin:16px 0 20px;min-height:var(--tap-min)">
+    <span style="color:var(--warn);flex-shrink:0">${I.alert(18)}</span>
+    <span style="font-size:14px;color:var(--fg-1);flex:1">
+      <strong style="color:var(--fg-0);font-weight:600">4 days unsettled</strong> — they're dividing your
+      efficiency by hours you might not have worked.</span>
+  </div>
+
+  <div class="stack" style="gap:14px">
+  ${WEEKS.map((w,wi) => `
+    <section class="card padded">
+      <div class="weekhead">
+        <h3 style="font-size:14px">${w.label}</h3>
+        <span class="row" style="gap:8px">
+          <span class="fine mono">${w.flag}h flag</span>
+          <span class="pill ${w.tier}">${w.eff}</span>
+        </span>
+      </div>
+
+      <div class="grid7">${w.days.map((x,i) => cell(x, wi*7+i, {sel: w.open && i===3 ? wi*7+i : -1})).join('')}</div>
+
+      ${w.open ? `
+      <div class="card-inset" style="padding:12px;margin-top:10px">
+        <div class="between" style="margin-bottom:10px">
+          <h3>Wednesday, August 5</h3>
+          <span class="badge badge-warn">Needs a decision</span>
+        </div>
+        <label class="field-label" for="s2h">Actual hours worked</label>
+        <div class="row" style="gap:8px;margin-bottom:10px">
+          <input class="input mono tabular" id="s2h" style="width:96px;flex:0 0 auto" value="8.0" inputmode="decimal">
+          <button class="btn btn-primary btn-sm">Save</button>
+        </div>
+        <div class="wrapchips">
+          <button class="chipbtn">Day off</button>
+          <button class="chipbtn">Worked, zero flag</button>
+          <button class="chipbtn">Change shift</button>
+        </div>
+        <p class="fine" style="margin-top:10px">Stayed late? Left early? This is the truth — it beats the
+          schedule. 0 clears it.</p>
+      </div>` : `
+      <p class="fine" style="margin-top:8px">
+        ${w.future ? 'Nothing logged yet.' : w.unres
+          ? `<span style="color:var(--warn)">${w.unres} day${w.unres>1?'s':''} unsettled</span>`
+          : 'All settled.'}
+      </p>`}
+    </section>`).join('')}
+  </div>
+
+  <section style="margin-top:28px">
+    <div class="section-title">Weekly pattern</div>
+    <div class="card padded between">
+      <span><span class="num-sm">Mon–Fri</span>
+        <span class="fine" style="display:block;margin-top:2px">8:00 → 17:00 · 1h lunch · 8.0h paid</span></span>
+      <button class="btn btn-sm">Edit</button>
+    </div>
+  </section>
+</main>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   SCHEDULE 3 — "Calendar + docked inspector"
+   Closest to today's page, with its two real mechanical failures fixed:
+   the panel docks instead of rendering below six rows of grid, and a
+   stepper walks you through the unsettled days without hunting for them.
+   ══════════════════════════════════════════════════════════════════════ */
+const S3 = `
+${appbar}
+<main class="pg">
+  <div class="between" style="align-items:flex-start">
+    <h1>Schedule</h1>
+    ${monthNav}
+  </div>
+  <p class="lede">Tap any day to record what you actually worked.</p>
+
+  <div class="card-inset between" style="padding:8px 8px 8px 14px;margin:16px 0 18px">
+    <span class="row" style="gap:8px;min-width:0">
+      <span style="color:var(--warn);flex-shrink:0">${I.alert(16)}</span>
+      <span style="font-size:14px;color:var(--fg-1)">4 unsettled</span>
+    </span>
+    <span class="row" style="gap:2px">
+      <button class="iconbtn" aria-label="Previous unsettled day">${I.left(16)}</button>
+      <span class="fine mono" style="min-width:44px;text-align:center">1 of 4</span>
+      <button class="iconbtn" aria-label="Next unsettled day">${I.right(16)}</button>
+    </span>
+  </div>
+
+  ${dowRow}
+  <!-- Selection starts on the FIRST unsettled day (Aug 5, index 10) so the ring,
+       the sheet and the "1 of 4" stepper all describe the same day. -->
+  <div class="grid7" id="s3grid">${DAYS.map((x,i) => cell(x,i,{sel:10})).join('')}</div>
+  ${legend}
+
+  <section style="margin-top:24px">
+    <div class="section-title">Weekly pattern</div>
+    <div class="card padded between">
+      <span><span class="num-sm">Mon–Fri</span>
+        <span class="fine" style="display:block;margin-top:2px">8:00 → 17:00 · 1h lunch · 8.0h paid</span></span>
+      <button class="btn btn-sm">Edit</button>
+    </div>
+  </section>
+
+  <div class="sheet">
+    <div class="grabber"></div>
+    <div class="between" style="margin-bottom:12px">
+      <h3 style="font-size:16px" id="s3title">Wednesday, August 5</h3>
+      <span class="badge badge-warn" id="s3badge">Needs a decision</span>
+    </div>
+    <label class="field-label" for="s3h">Actual hours worked</label>
+    <div class="row" style="gap:8px;margin-bottom:12px">
+      <input class="input mono tabular" id="s3h" style="width:96px;flex:0 0 auto" value="8.0" inputmode="decimal">
+      <button class="btn btn-primary btn-sm">Save</button>
+    </div>
+    <div class="wrapchips">
+      <button class="chipbtn">Day off</button>
+      <button class="chipbtn">Worked, zero flag</button>
+      <button class="chipbtn">Change shift</button>
+    </div>
+  </div>
+</main>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   SHARED INSIGHTS BLOCKS
+   ══════════════════════════════════════════════════════════════════════ */
+const OPCODES = [
+  {c:'DIAG-90', d:'Drivability diagnosis', u:12, f:'18.0', a:'28.8', r:'1.60×', t:'bad'},
+  {c:'WARR-CB', d:'Warranty comeback',     u:6,  f:'0.0',  a:'3.3',  r:'unpaid rework', t:'bad', unpaid:1},
+  {c:'ALIGN-4', d:'Four-wheel alignment',  u:19, f:'19.0', a:'21.7', r:'1.14×', t:'warn'},
+  {c:'OIL-SYN', d:'Synthetic oil change',  u:61, f:'30.5', a:'26.2', r:'0.86×', t:''},
+  {c:'BRK-FR',  d:'Front brake service',   u:34, f:'40.8', a:'33.5', r:'0.82×', t:''},
+  {c:'AC-EVAC', d:'A/C evac & recharge',   u:8,  f:'—',    a:'—',    r:'never timed', t:'none'},
+];
+
+/* A 5-column table does not fit 390px — the shipped page clips its last column,
+   which is the ratio, i.e. the only column the section exists for. Below 700px
+   the same data renders as rows with the ratio pinned right; the real table
+   returns on desktop where it fits. */
+const opList = `
+  <div class="card flush oplist">
+    ${OPCODES.map((o,i) => `
+    <div style="padding:12px 14px${i?';border-top:1px solid var(--line-soft)':''}">
+      <div class="between" style="align-items:flex-start;gap:10px">
+        <span style="min-width:0">
+          <span style="font-size:14px;font-weight:500;color:var(--fg-1)">${o.c}</span>
+          <span class="fine" style="display:block;margin-top:2px">${o.d}</span>
+        </span>
+        ${o.t==='none'
+          ? `<span class="fine" style="flex-shrink:0">never timed</span>`
+          : `<span class="pill ${o.t}" style="flex-shrink:0">${o.r}</span>`}
+      </div>
+      <p class="fine mono" style="margin-top:6px">${o.u} uses${o.f==='—'?'':` · ${o.f}h flag → ${o.a}h actual`}</p>
+    </div>`).join('')}
+  </div>`;
+
+const opTable = `
+  ${opList}
+  <div class="card flush optable">
+    <table class="table">
+      <thead><tr>
+        <th>Op code</th><th class="table-num">Uses</th>
+        <th class="table-num">Flag</th><th class="table-num">Actual</th><th class="table-num">vs flag</th>
+      </tr></thead>
+      <tbody>${OPCODES.map(o => `
+        <tr>
+          <td><span style="font-weight:500;color:var(--fg-1)">${o.c}</span>
+            <span class="fine" style="display:block">${o.d}</span></td>
+          <td class="table-num table-dim">${o.u}</td>
+          <td class="table-num table-dim mono">${o.f}${o.f!=='—'?'h':''}</td>
+          <td class="table-num table-dim mono">${o.a}${o.a!=='—'?'h':''}</td>
+          <td class="table-num">${o.t==='none'
+            ? `<span class="fine">never timed</span>`
+            : `<span class="pill ${o.t}" style="font-family:${o.unpaid?'inherit':'\'JetBrains Mono\',monospace'}">${o.r}</span>`}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+
+const WD = [['Mon','88%',''],['Tue','104%',''],['Wed','96%',''],['Thu','118%',''],
+            ['Fri','121%','best'],['Sat','92%',''],['Sun','—','none']];
+const bestDays = `
+  <div class="card padded">
+    <div class="daygrid">${WD.map(([d,v,s]) => `
+      <div class="card-inset" style="padding:10px 6px;text-align:center${s==='best'?';box-shadow:inset 0 0 0 1px var(--good)':''}">
+        <div class="cap">${d}</div>
+        <div class="num-sm" style="margin-top:4px;color:${s==='best'?'var(--good)':s==='none'?'var(--fg-3)':'var(--fg-1)'}">${v}</div>
+      </div>`).join('')}
+    </div>
+    <p class="fine" style="margin-top:12px">
+      <span style="color:var(--fg-1);font-weight:550">Friday</span> is your strongest day at 121%;
+      monday runs 88%.</p>
+  </div>`;
+
+const TREND = [['Jun 1',102,0],['Jun 16',96,0],['Jul 1',111,0],['Jul 16',94,0],['Aug 1',118,0],['Aug 16',84,1]];
+const trendCard = `
+  <div class="card padded">
+    <div class="bars">${TREND.map(([l,v,run],i) => `
+      <div class="barcol">
+        <span class="fine mono">${v}%</span>
+        <div class="bar ${i===TREND.length-1?'now':''} ${run?'running':''}" style="height:${Math.max(4,(v/118)*82)}px"></div>
+        <span class="fine" style="text-align:center">${l}</span>
+        ${/* plain, not .cap — uppercase + .12em tracking overflows a 48px column */''}
+        ${run?`<span class="fine" style="font-size:11px">Running</span>`:''}
+      </div>`).join('')}
+    </div>
+    <p class="fine" style="margin-top:12px;color:var(--fg-2)">
+      Aug 1–15 came in at <span style="color:var(--fg-1);font-weight:550">118%</span>,
+      up from <span style="color:var(--fg-1);font-weight:550">94%</span> in Jul 16–31.</p>
+  </div>`;
+
+const claimsCard = `
+  <div class="card padded">
+    <div class="statgrid">
+      ${[['Claims closed','7','var(--fg-1)'],['Got paid','71%','var(--fg-1)'],
+         ['Hours recovered','64%','var(--fg-1)'],['Recovered','$1,842','var(--good)']]
+        .map(([k,v,c]) => `
+        <div class="card-inset stat">
+          <div class="cap">${k}</div>
+          <div class="num-sm" style="margin-top:4px;color:${c}">${v}</div>
+        </div>`).join('')}
+    </div>
+    <p class="fine" style="margin-top:12px;color:var(--fg-2)">
+      <span style="color:var(--fg-1);font-weight:550">Photographed</span> claims get paid 86% of the time
+      (5 closed) vs 40% for <span style="color:var(--fg-1);font-weight:550">verbal</span> (2 closed).</p>
+  </div>`;
+
+const windowChips = active => `
+  <div class="filter-row">${['Week','Period','Month','All']
+    .map(c => `<button class="filter-chip${c===active?' active':''}">${c}</button>`).join('')}</div>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   INSIGHTS 1 — "Verdict + evidence"
+   The page states a conclusion before it shows an instrument. A hard rule
+   and a real h2 separate the windowed half from the all-time half, so no
+   caption has to apologise for the chips' reach.
+   ══════════════════════════════════════════════════════════════════════ */
+const N1 = `
+${appbar}
+<main class="pg">
+  <h1>Insights</h1>
+  <p class="lede">What your own history says, across every pay period.</p>
+
+  <section style="margin:24px 0 28px">
+    <div class="num-lg" style="color:var(--bad)">3.3h</div>
+    <p style="font-size:16px;font-weight:600;color:var(--fg-0);margin-top:4px;line-height:1.3">
+      worked for free this month</p>
+    <p class="body" style="margin-top:8px;max-width:60ch">
+      Six comeback lines under <span class="mono" style="color:var(--fg-1)">WARR-CB</span> flagged zero
+      hours. That's the single biggest thing your history is telling you right now.</p>
+    <div class="row" style="gap:8px;margin-top:14px">
+      <button class="btn btn-primary btn-sm">See the six lines</button>
+    </div>
+    <p class="body" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);max-width:60ch">
+      Next worst: <span class="mono" style="color:var(--fg-1)">DIAG-90</span> runs
+      <span class="mono" style="color:var(--bad);font-weight:600">1.60×</span> book — 10.8h over the clock
+      across 12 jobs.</p>
+  </section>
+
+  <section style="margin-bottom:28px">
+    <div class="alltime-head" style="margin-bottom:12px"><h2>The evidence</h2></div>
+    ${windowChips('Month')}
+    <div class="section-title">Where your time goes</div>
+    ${opTable}
+    <p class="fine" style="margin:8px 2px 0">Actual ÷ flag over jobs you put on a timer —
+      <strong style="color:var(--fg-2)">lower is better</strong>.</p>
+    <div class="section-title" style="margin-top:24px">Best days</div>
+    ${bestDays}
+  </section>
+
+  <div class="rule" style="margin:8px 0 24px"></div>
+
+  <section>
+    <div class="alltime-head" style="margin-bottom:14px">
+      <h2>All time</h2>
+      <span class="fine">Ignores the window above</span>
+    </div>
+    <div class="section-title">Trend · last six pay periods</div>
+    ${trendCard}
+    <div class="section-title" style="margin-top:24px">Claims and recovery</div>
+    ${claimsCard}
+  </section>
+</main>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   INSIGHTS 2 — "Two-deck"  ← the roll's assignment
+   The split becomes a control instead of a caption. You are never looking
+   at windowed and lifetime numbers at the same time, so the chips can
+   never appear to scope something they don't. The switch is live.
+   ══════════════════════════════════════════════════════════════════════ */
+const N2 = `
+${appbar}
+<main class="pg">
+  <h1>Insights</h1>
+  <p class="lede">What your own history says, across every pay period.</p>
+
+  <div class="card padded" style="margin:18px 0 20px;display:flex;gap:12px;align-items:flex-start">
+    <span style="color:var(--bad);flex-shrink:0;margin-top:2px">${I.alert(18)}</span>
+    <div style="min-width:0">
+      <p style="font-size:14px;color:var(--fg-2);line-height:1.5">
+        <span class="mono" style="font-size:16px;font-weight:700;color:var(--bad)">3.3h</span>
+        <span style="color:var(--fg-0);font-weight:600"> worked for free this month</span> —
+        six comeback lines under <span class="mono" style="color:var(--fg-1)">WARR-CB</span> flagged zero.</p>
+      <a class="link" href="#" style="font-size:13px;display:inline-block;margin-top:6px;min-height:44px;line-height:44px">See the six lines →</a>
+    </div>
+  </div>
+
+  <div class="deck" role="tablist" data-deck style="margin-bottom:16px">
+    <button role="tab" aria-selected="true"  data-panel="win">This window</button>
+    <button role="tab" aria-selected="false" data-panel="all">All time</button>
+  </div>
+
+  <div data-panelname="win">
+    ${windowChips('Month')}
+    <div class="section-title">Where your time goes</div>
+    ${opTable}
+    <p class="fine" style="margin:8px 2px 0">Actual ÷ flag over jobs you put on a timer —
+      <strong style="color:var(--fg-2)">lower is better</strong>.</p>
+    <div class="section-title" style="margin-top:24px">Best days</div>
+    ${bestDays}
+    <p class="fine" style="margin:8px 2px 0">Counted only over days the app knows the length of.</p>
+  </div>
+
+  <div data-panelname="all" hidden>
+    <div class="section-title">Trend · last six pay periods</div>
+    ${trendCard}
+    <div class="section-title" style="margin-top:24px">Claims and recovery</div>
+    ${claimsCard}
+    <p class="fine" style="margin:8px 2px 0">Lifetime figures across every claim you have ever raised.</p>
+  </div>
+</main>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   INSIGHTS 3 — "Leaderboard of leaks"
+   One ranked list in a single currency — hours lost — so op-code overrun,
+   unpaid rework and a weak weekday finally compare to each other instead
+   of living in three sections that can't be weighed against one another.
+   ══════════════════════════════════════════════════════════════════════ */
+/* Every figure derives from the same op-code table the other two concepts show:
+   overrun is actual − flag (DIAG-90 28.8−18.0, ALIGN-4 21.7−19.0), rework is the
+   3.3h that flagged zero. Total 18.0h. Ranked by hours, which is why this
+   concept leads with DIAG-90 where the other two lead with unpaid work — that
+   ordering is the actual choice on the table. */
+const LEAKS = [
+  {n:1,t:'DIAG-90',       s:'12 jobs at 1.60× book — 10.8h over',        h:'10.8', pct:100, tier:'bad'},
+  {n:2,t:'Unpaid rework', s:'6 comeback lines under WARR-CB, zero flag', h:'3.3',  pct:31,  tier:'bad'},
+  {n:3,t:'ALIGN-4',       s:'19 jobs at 1.14× book — 2.7h over',         h:'2.7',  pct:25,  tier:'warn'},
+  {n:4,t:'Mondays',       s:'88% — 1.2h under your average day',         h:'1.2',  pct:11,  tier:'warn'},
+];
+
+const N3 = `
+${appbar}
+<main class="pg">
+  <h1>Insights</h1>
+  <p class="lede">What your own history says, across every pay period.</p>
+
+  <section style="margin:24px 0 24px">
+    <div class="row" style="gap:12px;align-items:baseline">
+      <span class="num-lg" style="color:var(--bad)">18.0h</span>
+      <span style="font-size:16px;font-weight:600;color:var(--fg-0)">leaked this month</span>
+    </div>
+    <p class="body" style="margin-top:8px;max-width:60ch">
+      Time you were on the clock for and didn't get paid for, from every source the app can see —
+      ranked by what it cost you.</p>
+  </section>
+
+  ${windowChips('Month')}
+
+  <section style="margin-bottom:28px">
+    <div class="section-title">What's costing you</div>
+    <div class="card flush">
+      ${LEAKS.map((l,i) => `
+      <div style="padding:14px${i?';border-top:1px solid var(--line-soft)':''}">
+        <div class="row" style="gap:10px;align-items:baseline;margin-bottom:8px">
+          <span class="rank">${l.n}</span>
+          <span style="flex:1;min-width:0">
+            <span style="font-size:14px;font-weight:600;color:var(--fg-0)">${l.t}</span>
+            <span class="fine" style="display:block;margin-top:2px">${l.s}</span>
+          </span>
+          <span class="mono tabular" style="font-size:16px;font-weight:700;color:var(--${l.tier})">${l.h}h</span>
+        </div>
+        <div class="track" style="margin-left:26px"><i class="${l.tier}" style="width:${l.pct}%"></i></div>
+      </div>`).join('')}
+    </div>
+    <p class="fine" style="margin:8px 2px 0">Overrun is actual minus flag on jobs you timed.
+      Unpaid rework has no ratio because it flags zero — the hours are the whole finding.</p>
+  </section>
+
+  <section style="margin-bottom:28px">
+    <div class="section-title"><span>Where you're winning</span><a class="link" href="#" style="font-size:12px">Full table</a></div>
+    <div class="card padded">
+      <div class="stack" style="gap:10px">
+        ${[['BRK-FR','34 jobs at 0.82× book','+7.3h'],['Fridays','121% — your strongest day','+4.1h']]
+          .map(([t,s,v]) => `
+        <div class="row" style="gap:10px;align-items:baseline">
+          <span style="flex:1;min-width:0">
+            <span style="font-size:14px;font-weight:600;color:var(--fg-0)">${t}</span>
+            <span class="fine" style="display:block;margin-top:2px">${s}</span>
+          </span>
+          <span class="mono tabular" style="font-size:14px;font-weight:600;color:var(--good)">${v}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+  </section>
+
+  <div class="rule" style="margin:8px 0 24px"></div>
+
+  <section>
+    <div class="alltime-head" style="margin-bottom:14px">
+      <h2>All time</h2>
+      <span class="fine">Ignores the window above</span>
+    </div>
+    <div class="section-title">Trend · last six pay periods</div>
+    ${trendCard}
+    <div class="section-title" style="margin-top:24px">Claims and recovery</div>
+    ${claimsCard}
+  </section>
+</main>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   VIEWER
+   ══════════════════════════════════════════════════════════════════════ */
+const COMPS = {
+  schedule: [
+    {n:'Schedule 1 — Settle first', roll:'', t:'The unsettled days become the page. A decision block leads with all four and answers each in one tap; the calendar drops to the map you fix them on, and the weekly pattern collapses to one line.'},
+    {n:'Schedule 2 — Week strips',  roll:'Dealt by the concept roll', t:'No month grid. Weeks stack vertically, each with its own flag total and efficiency. Cells carry a number and a dot only — every word moves to the week summary, which is how the 52px cell stops being crammed. Tapping a day opens it inside its own week.'},
+    {n:'Schedule 3 — Docked inspector', roll:'', t:"Today's page with its two mechanical failures fixed: the day panel docks to the bottom instead of rendering below six rows of grid, and a stepper walks you through the unsettled days instead of making you hunt for amber."},
+  ],
+  insights: [
+    {n:'Insights 1 — Verdict first', roll:'', t:'States a conclusion before it shows an instrument: the biggest number you lost, in words, at display size. Evidence follows underneath, then a hard rule and a real heading for the all-time half.'},
+    {n:'Insights 2 — Two decks', roll:'Dealt by the concept roll', t:'The window/lifetime split becomes a control instead of a caption. You never see windowed and all-time numbers at once, so the chips can never appear to scope something they don\'t. The switch is live — try it.'},
+    {n:'Insights 3 — Leaderboard', roll:'', t:'One ranked list in a single currency: hours lost. Op-code overrun, unpaid rework and a weak weekday finally compare to each other instead of sitting in three sections that can\'t be weighed.'},
+  ],
+};
+const MARKUP = {schedule:[S1,S2,S3], insights:[N1,N2,N3]};
+const state = {page:'schedule', theme:'dark', width:'phone'};
+
+function seg(id, opts, key, labels){
+  const g = document.getElementById(id);
+  opts.forEach((o,i) => {
+    const b = document.createElement('button');
+    b.textContent = labels ? labels[i] : o;
+    b.dataset.v = o;
+    b.onclick = () => { state[key] = o; render(); };
+    g.appendChild(b);
+  });
+}
+seg('g-page',  ['schedule','insights'], 'page',  ['Schedule','Insights']);
+seg('g-theme', ['dark','light'],        'theme', ['Dark','Light']);
+seg('g-width', ['phone','desktop'],     'width', ['Phone 390','Desktop 900']);
+
+function render(){
+  document.querySelectorAll('.tg button').forEach(b => {
+    const k = b.parentElement.id === 'g-page' ? 'page' : b.parentElement.id === 'g-theme' ? 'theme' : 'width';
+    b.classList.toggle('on', state[k] === b.dataset.v);
+  });
+  const w = state.width === 'phone' ? 390 : 900;
+  const cols = document.getElementById('cols');
+  cols.style.gridTemplateColumns = state.width === 'phone'
+    ? 'repeat(3, 390px)' : '900px';
+  cols.innerHTML = COMPS[state.page].map((c,i) => `
+    <div class="col">
+      <h2>${c.n}</h2>
+      ${c.roll ? `<p class="roll">${c.roll}</p>` : ''}
+      <p class="thesis" style="max-width:${w}px">${c.t}</p>
+      <div class="frt${state.theme === 'light' ? ' light' : ''}" style="width:${w}px">
+        ${MARKUP[state.page][i]}
+      </div>
+    </div>`).join('');
+  wireLive();
+}
+
+/* Live bits: the deck switch and the calendar selection actually work, because
+   a still image cannot show what a two-state control feels like. */
+function wireLive(){
+  document.querySelectorAll('[data-deck]').forEach(deck => {
+    deck.querySelectorAll('button').forEach(btn => {
+      btn.onclick = () => {
+        const root = deck.closest('.pg');
+        deck.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b === btn)));
+        root.querySelectorAll('[data-panelname]').forEach(p => {
+          p.hidden = p.dataset.panelname !== btn.dataset.panel;
+        });
+      };
+    });
+  });
+  const NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  document.querySelectorAll('#s3grid').forEach(grid => {
+    grid.querySelectorAll('.daycell').forEach(btn => {
+      btn.onclick = () => {
+        grid.querySelectorAll('.daycell').forEach(b => b.classList.remove('sel'));
+        btn.classList.add('sel');
+        const i = Number(btn.dataset.i), x = DAYS[i];
+        const pg = grid.closest('.pg');
+        pg.querySelector('#s3title').textContent =
+          `${NAMES[i % 7]}, ${x.out ? (i < 7 ? 'July' : 'September') : 'August'} ${x.d}`;
+        const badge = pg.querySelector('#s3badge');
+        badge.className = 'badge ' + (x.unres ? 'badge-warn' : x.h ? 'badge-good' : 'badge-neutral');
+        badge.textContent = x.unres ? 'Needs a decision' : x.h ? `${x.h}h logged` : x.off ? 'Day off' : 'Scheduled 8.0h';
+        pg.querySelector('#s3h').value = x.h || '8.0';
+      };
+    });
+  });
+}
+render();
+</script>
+</body>
+</html>
