@@ -41,7 +41,79 @@ export type OpCodePerformance = {
   // actual ÷ flag. LOWER IS BETTER: 1.0 means the book time was right, 1.4 means
   // the job eats 40% more clock than it pays. null when never timed.
   ratio: number | null;
+  // Rework this code cost, in hours: the actual time on its comeback lines.
+  //
+  // These lines are excluded from `ratio` above and always will be — their flag
+  // is zero by DB CHECK, so there is no book time to divide by. But excluding
+  // them from the ROW as well is what made this table lie. An op code whose
+  // recent lines are ALL comebacks accumulated no flagTotal, no actualTotal and
+  // a null ratio, so it rendered as "never timed" with dashes for hours — the
+  // page reporting NO DATA for the four consecutive days it was quietly eating
+  // 3.3 unpaid hours. The failure got worse as the problem got worse: the more
+  // completely a code degenerates into rework, the more totally it disappeared.
+  //
+  // Summed the same way buildUnpaidSummary sums it (isComeback, actualHours ?? 0,
+  // no per-line floor) so the two cannot report different hours for the same
+  // lines. The MIN_MEASURED_HOURS floor is applied to this TOTAL at the point of
+  // display instead — see opCodeState.
+  unpaidHours: number;
+  unpaidUses: number;
 };
+
+/**
+ * What a row actually has to say, which is not the same question as "is ratio
+ * null". Two very different rows share a null ratio: one measured nothing, the
+ * other measured real rework that pays nothing. Only the first is "never timed".
+ */
+export type OpCodeState =
+  | "measured" // a real ratio against real book time
+  | "unpaid" // no book time, but real hours went into rework
+  | "untimed"; // nothing recorded
+
+export function opCodeState(row: OpCodePerformance): OpCodeState {
+  if (row.ratio !== null) return "measured";
+  return row.unpaidHours >= MIN_MEASURED_HOURS ? "unpaid" : "untimed";
+}
+
+/**
+ * The flag and actual hours a row PUTS ON THE PAGE, or null for an em-dash.
+ *
+ * Exported because the table both renders and sorts by these: reading the raw
+ * totals in the sort comparator while rendering something else is how a column
+ * ends up ordered by numbers the user cannot see. An unpaid row shows 0.0h flag
+ * (a comeback flags zero by construction) against the hours it really took.
+ */
+export function displayedHours(
+  row: OpCodePerformance,
+): { flag: number; actual: number } | null {
+  switch (opCodeState(row)) {
+    case "measured":
+      return { flag: row.flagTotal, actual: row.actualTotal };
+    case "unpaid":
+      return { flag: 0, actual: row.unpaidHours };
+    case "untimed":
+      return null;
+  }
+}
+
+/**
+ * Where a row sits when the table is ordered by "actual vs flag", worst first.
+ *
+ * Unpaid rework ranks WORST — above every finite ratio. That is not a UI
+ * preference, it is the arithmetic: real hours against zero flag is an infinite
+ * ratio, and no measured job can be worse than one that paid nothing at all.
+ * Untimed rows return null and stay pinned last in both directions, as before.
+ */
+export function ratioOrder(row: OpCodePerformance): number | null {
+  switch (opCodeState(row)) {
+    case "measured":
+      return row.ratio;
+    case "unpaid":
+      return Number.POSITIVE_INFINITY;
+    case "untimed":
+      return null;
+  }
+}
 
 /**
  * The shortest actual-hours value that can be a real measurement, in hours.
@@ -95,7 +167,13 @@ function groupKey(
 }
 
 /**
- * Per-op-code performance across every entry passed in, worst ratio first.
+ * Per-op-code performance across every entry passed in, worst first.
+ *
+ * Order is unpaid rework → worst ratio → best ratio → never timed. Rework leads
+ * because it is the most expensive thing this table can find (see ratioOrder),
+ * and because the window chips are exactly where it used to hide: narrow the
+ * range to the current period and a code's older paid lines drop out, leaving
+ * only comebacks and a row that claimed to have no data.
  *
  * Never-timed codes sort last regardless of use count — they have nothing to say
  * yet, and floating them to the top on volume alone would bury the codes that
@@ -123,10 +201,20 @@ export function opCodePerformance(
           flagTotal: 0,
           actualTotal: 0,
           ratio: null,
+          unpaidHours: 0,
+          unpaidUses: 0,
         };
         byKey.set(id.key, row);
       }
       row.uses += 1;
+      if (line.isComeback) {
+        // Counted whether or not it was timed: the rework happened either way,
+        // and unpaidUses is how many times, not how many were on a timer.
+        row.unpaidUses += 1;
+        row.unpaidHours += line.actualHours ?? 0;
+        // No `continue` needed — a comeback flags zero by DB CHECK, so it can
+        // never clear the flagHours > 0 test below.
+      }
       if (
         line.actualHours !== null &&
         line.actualHours >= MIN_MEASURED_HOURS &&
@@ -145,10 +233,16 @@ export function opCodePerformance(
   }
 
   return rows.sort((a, b) => {
-    if (a.ratio === null && b.ratio === null) return b.uses - a.uses;
-    if (a.ratio === null) return 1;
-    if (b.ratio === null) return -1;
-    return b.ratio - a.ratio || b.uses - a.uses;
+    const ao = ratioOrder(a);
+    const bo = ratioOrder(b);
+    if (ao === null && bo === null) return b.uses - a.uses;
+    if (ao === null) return 1;
+    if (bo === null) return -1;
+    // Equality first, and not only for tidiness: both-unpaid means both are
+    // Infinity, and Infinity - Infinity is NaN, which a comparator silently
+    // reads as "equal" and leaves the block in arbitrary order.
+    if (ao === bo) return b.unpaidHours - a.unpaidHours || b.uses - a.uses;
+    return bo - ao || b.uses - a.uses;
   });
 }
 

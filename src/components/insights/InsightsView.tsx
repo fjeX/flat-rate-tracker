@@ -15,9 +15,12 @@ import {
   startOfWeek,
 } from "@/lib/periods";
 import {
+  displayedHours,
   formatRatio,
   opCodePerformance,
+  opCodeState,
   periodTrend,
+  ratioOrder,
   ratioTier,
   weekdayEfficiency,
   type OpCodePerformance,
@@ -88,26 +91,33 @@ function sortOpCodes(
   dir: SortDir,
 ): OpCodePerformance[] {
   const sign = dir === "asc" ? 1 : -1;
-  const value = (r: OpCodePerformance): number | null =>
-    col === "uses"
-      ? r.uses
-      : col === "flag"
-        ? r.flagTotal
-        : col === "actual"
-          ? r.actualTotal
-          : r.ratio;
+  // Read off the DISPLAYED hours, not the raw totals: an unpaid-rework row shows
+  // its comeback hours in the Actual column, and sorting that column by
+  // actualTotal (0 for those rows) would order it by numbers nobody can see.
+  const value = (r: OpCodePerformance): number | null => {
+    if (col === "uses") return r.uses;
+    if (col === "ratio") return ratioOrder(r);
+    const shown = displayedHours(r);
+    if (shown === null) return null;
+    return col === "flag" ? shown.flag : shown.actual;
+  };
 
   return [...rows].sort((a, b) => {
     if (col === "code") return sign * a.code.localeCompare(b.code);
     // A never-timed code has nothing to say about flag, actual or ratio. It
     // stays at the bottom in BOTH directions — otherwise sorting ascending
     // leads with a block of dashes and buries every row with real data.
-    const aBlank = col !== "uses" && a.ratio === null;
-    const bBlank = col !== "uses" && b.ratio === null;
-    if (aBlank && bBlank) return b.uses - a.uses;
-    if (aBlank) return 1;
-    if (bBlank) return -1;
-    return sign * ((value(a) as number) - (value(b) as number)) || b.uses - a.uses;
+    // Blankness is now "showed nothing", NOT "has no ratio": an unpaid row has
+    // a null ratio and real hours, and pinning it down here is the bug.
+    const av = value(a);
+    const bv = value(b);
+    if (av === null && bv === null) return b.uses - a.uses;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    // Infinity - Infinity is NaN, which a comparator reads as "equal" and leaves
+    // the unpaid block in arbitrary order. Rank those by hours bled instead.
+    if (av === bv) return b.unpaidHours - a.unpaidHours || b.uses - a.uses;
+    return sign * (av - bv) || b.uses - a.uses;
   });
 }
 
@@ -159,6 +169,10 @@ function TimeGoesSection({
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? rows : rows.slice(0, COLLAPSED_ROWS);
   const timed = rows.filter((r) => r.ratio !== null).length;
+  // Rework rows are not "nothing yet" — prompting for a timer while the table is
+  // already showing hours the tech worked for free reads as the page ignoring it.
+  const rework = rows.filter((r) => opCodeState(r) === "unpaid");
+  const reworkHours = rework.reduce((sum, r) => sum + r.unpaidHours, 0);
 
   return (
     <section>
@@ -177,6 +191,8 @@ function TimeGoesSection({
           <tbody>
             {shown.map((row) => {
               const tier = ratioTier(row.ratio);
+              const state = opCodeState(row);
+              const shownHours = displayedHours(row);
               return (
                 <tr key={row.key}>
                   <Td>
@@ -191,18 +207,25 @@ function TimeGoesSection({
                     {row.uses}
                   </Td>
                   <Td num dim>
-                    {row.ratio === null ? "—" : `${fmtHours(row.flagTotal)}h`}
+                    {shownHours === null ? "—" : `${fmtHours(shownHours.flag)}h`}
                   </Td>
                   <Td num dim>
-                    {row.ratio === null ? "—" : `${fmtHours(row.actualTotal)}h`}
+                    {shownHours === null ? "—" : `${fmtHours(shownHours.actual)}h`}
                   </Td>
                   <Td num>
-                    {row.ratio === null ? (
-                      <span className="text-xs text-[var(--fg-3)]">never timed</span>
-                    ) : (
+                    {state === "measured" ? (
                       <span className={`pill${tier === "good" ? "" : ` ${tier}`}`}>
-                        {formatRatio(row.ratio)}×
+                        {formatRatio(row.ratio as number)}×
                       </span>
+                    ) : state === "unpaid" ? (
+                      // No ratio, and deliberately no fabricated one — the flag
+                      // is zero, so there is nothing to divide by. What the row
+                      // says instead is the finding itself.
+                      <span className="pill bad" title={`${row.unpaidUses} comeback ${row.unpaidUses === 1 ? "line" : "lines"} — no flag hours paid`}>
+                        unpaid rework
+                      </span>
+                    ) : (
+                      <span className="text-xs text-[var(--fg-3)]">never timed</span>
                     )}
                   </Td>
                 </tr>
@@ -216,7 +239,15 @@ function TimeGoesSection({
           Actual ÷ flag over the jobs you put on a timer —{" "}
           <strong>lower is better</strong>. 1.00× means the book time was right;
           1.40× means the job eats 40% more clock than it pays.
-          {timed === 0 && " Time a few jobs and this fills in."}
+          {rework.length > 0 && (
+            <>
+              {" "}
+              <strong>Unpaid rework</strong> has no ratio because it flags zero —
+              that&rsquo;s {fmtHours(reworkHours)}h of comeback time these codes
+              cost you and paid nothing for.
+            </>
+          )}
+          {timed === 0 && rework.length === 0 && " Time a few jobs and this fills in."}
         </p>
         {rows.length > COLLAPSED_ROWS && (
           <button

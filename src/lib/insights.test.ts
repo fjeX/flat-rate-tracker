@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   dataRange,
+  displayedHours,
   formatRatio,
   opCodePerformance,
+  opCodeState,
   periodTrend,
+  ratioOrder,
   ratioTier,
   weekdayEfficiency,
 } from "./insights";
@@ -253,6 +256,135 @@ describe("opCodePerformance", () => {
     expect(formatRatio(0.01)).toBe("0.01");
     expect(formatRatio(1)).toBe("1.00");
     expect(formatRatio(1.43)).toBe("1.43");
+  });
+
+  // -------------------------------------------------------------------------
+  // Unpaid rework — a null ratio is not the same thing as no data
+  // -------------------------------------------------------------------------
+
+  // Real production shape. ALIGN under the Aug 1–15 window: four consecutive
+  // days, every line a comeback, 3.3 hours worked and nothing paid. The paid
+  // ALIGN lines are all older than the window, so they are simply not here —
+  // which is exactly how the window chips exposed the bug.
+  const alignComebacks = [
+    entry([line({ id: "a1", opCodeId: "oc1", flagHours: 0, actualHours: 0.8, isComeback: true })], { id: "e1", date: "2026-08-01" }),
+    entry([line({ id: "a2", opCodeId: "oc1", flagHours: 0, actualHours: 0.8, isComeback: true })], { id: "e2", date: "2026-08-02" }),
+    entry([line({ id: "a3", opCodeId: "oc1", flagHours: 0, actualHours: 0.9, isComeback: true })], { id: "e3", date: "2026-08-03" }),
+    entry([line({ id: "a4", opCodeId: "oc1", flagHours: 0, actualHours: 0.8, isComeback: true })], { id: "e4", date: "2026-08-04" }),
+  ];
+
+  it("reports a comeback-only code as unpaid rework, not as never timed", () => {
+    // The regression. Every one of these lines is excluded from the ratio (the
+    // flag is zero, there is nothing to divide by) and that is correct — but
+    // excluding them from the ROW made the page render "never timed" with
+    // dashes for hours, reporting NO DATA for the single most expensive thing
+    // it had found. Four days of free work, displayed as nothing to see.
+    const rows = opCodePerformance(alignComebacks, library);
+    const align = rows.find((r) => r.code === "B12")!;
+
+    expect(align.uses).toBe(4);
+    expect(align.unpaidUses).toBe(4);
+    expect(align.unpaidHours).toBeCloseTo(3.3, 5);
+    expect(opCodeState(align)).toBe("unpaid");
+    // Still no ratio, and deliberately no fabricated one.
+    expect(align.ratio).toBeNull();
+    // The hours reach the page instead of an em-dash.
+    expect(displayedHours(align)).toEqual({ flag: 0, actual: align.unpaidHours });
+  });
+
+  it("keeps comeback hours out of the ratio on a code that also has paid work", () => {
+    // The tempting wrong fix: fold comeback actuals into actualTotal so they
+    // show up. That silently corrupts every mixed code — 2.0h of paid work
+    // against a 2.0h flag is 1.00×, and adding 1.3h of unpaid rework on top
+    // reports 1.65×, accusing the book time of being wrong when the real
+    // problem is that the rework was never paid at all.
+    const rows = opCodePerformance(
+      [
+        entry([line({ id: "p", opCodeId: "oc1", flagHours: 2, actualHours: 2 })], { id: "e1" }),
+        entry([line({ id: "c", opCodeId: "oc1", flagHours: 0, actualHours: 1.3, isComeback: true })], { id: "e2" }),
+      ],
+      library,
+    );
+    const row = rows.find((r) => r.code === "B12")!;
+
+    expect(row.ratio).toBeCloseTo(1, 5); // NOT 3.3 / 2
+    expect(row.actualTotal).toBeCloseTo(2, 5);
+    expect(row.timedUses).toBe(1);
+    // The rework is still counted, it just lives in its own field.
+    expect(row.unpaidHours).toBeCloseTo(1.3, 5);
+    expect(opCodeState(row)).toBe("measured");
+  });
+
+  it("sorts unpaid rework above the worst measured ratio", () => {
+    // Real hours against zero flag is an infinite ratio. Nothing measured can
+    // be worse, so nothing measured should outrank it — and the old sort put
+    // it below everything, under "Show all", where it was never seen.
+    const rows = opCodePerformance(
+      [
+        ...alignComebacks,
+        entry([line({ id: "bad", opCodeId: "oc2", flagHours: 1, actualHours: 2.5 })], { id: "e9" }),
+      ],
+      library,
+    );
+    expect(rows[0].code).toBe("B12");
+    expect(opCodeState(rows[0])).toBe("unpaid");
+    expect(rows[1].ratio).toBeCloseTo(2.5, 5);
+    expect(ratioOrder(rows[0])).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("orders two unpaid codes by hours bled, not by how often they came back", () => {
+    // Both rank Infinity, and Infinity - Infinity is NaN. NaN is falsy, so a
+    // comparator written `Infinity - Infinity || b.uses - a.uses` silently falls
+    // through to the use count — which is the wrong answer and looks plausible.
+    //
+    // So the two orderings are made to DISAGREE here: LOF came back five times
+    // for six minutes each, B12 twice for an hour and a half. Five beats two on
+    // volume, but 3.0h is the one costing real money. Ordering by uses would be
+    // ranking the annoying above the expensive.
+    const rows = opCodePerformance(
+      [
+        ...[1, 2].map((n) =>
+          entry([line({ id: `b${n}`, opCodeId: "oc1", flagHours: 0, actualHours: 1.5, isComeback: true })], { id: `eb${n}` }),
+        ),
+        ...[1, 2, 3, 4, 5].map((n) =>
+          entry([line({ id: `l${n}`, opCodeId: "oc2", flagHours: 0, actualHours: 0.1, isComeback: true })], { id: `el${n}` }),
+        ),
+      ],
+      library,
+    );
+    expect(rows.map((r) => r.code)).toEqual(["B12", "LOF"]);
+    expect(rows[0].unpaidHours).toBeCloseTo(3, 5);
+    expect(rows[0].uses).toBeLessThan(rows[1].uses); // fewer uses, still first
+  });
+
+  it("leaves an untimed comeback as never timed — the rework happened, the clock didn't run", () => {
+    // Dashboard Quick Add offers no actual-hours field on a comeback, so this
+    // is a real shape. There is genuinely nothing measured to show; counting
+    // the use without inventing hours is the honest answer.
+    const rows = opCodePerformance(
+      [entry([line({ id: "c", opCodeId: "oc1", flagHours: 0, actualHours: null, isComeback: true })])],
+      library,
+    );
+    const row = rows[0];
+    expect(row.unpaidUses).toBe(1);
+    expect(row.unpaidHours).toBe(0);
+    expect(opCodeState(row)).toBe("untimed");
+    expect(displayedHours(row)).toBeNull();
+  });
+
+  it("does not promote a mis-tapped comeback timer to unpaid rework", () => {
+    // Same 0.01h mis-save that caused the 0.00x bug, on a comeback line. The
+    // floor is applied to the TOTAL rather than per line, so several mis-taps
+    // still cannot add up to a finding.
+    const rows = opCodePerformance(
+      [
+        entry([line({ id: "c1", opCodeId: "oc1", flagHours: 0, actualHours: 0.01, isComeback: true })], { id: "e1" }),
+        entry([line({ id: "c2", opCodeId: "oc1", flagHours: 0, actualHours: 0.02, isComeback: true })], { id: "e2" }),
+      ],
+      library,
+    );
+    expect(rows[0].unpaidHours).toBeCloseTo(0.03, 5);
+    expect(opCodeState(rows[0])).toBe("untimed");
   });
 
   it("keeps lines pointing at a deleted library code separate", () => {
