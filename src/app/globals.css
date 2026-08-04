@@ -21,7 +21,9 @@
   --fg-0: #f4f3f1;
   --fg-1: #d8d5d1;
   --fg-2: #a9a59f;
-  --fg-3: #8d8983;
+  /* Brightened 2026-08-04 from #8d8983 to clear WCAG AA 4.5:1 on every dark
+     surface (was 3.79:1 on --bg-3). Closes the a11y follow-up logged 2026-07-23. */
+  --fg-3: #9b9791;
 
   /* brand & semantic — chroma eased vs the old ramp; color is reserved
      for state, not decoration */
@@ -294,7 +296,7 @@ body {
   position: relative;
 }
 .stat .stat-label {
-  font-size: 12.5px; letter-spacing: 0; text-transform: none; color: var(--fg-3); font-weight: 550;
+  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--fg-3); font-weight: 550;
 }
 .stat .stat-value {
   font-size: 26px; font-weight: 600; letter-spacing: -0.02em;
@@ -651,7 +653,7 @@ body {
   width: 100%;
   min-height: 46px;
   padding: 11px 13px;
-  font-size: 15px;
+  font-size: 16px;
   background: var(--bg-2);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -668,7 +670,7 @@ body {
 /* Field primitive — label + control + one message line (hint or error) */
 .field { display: flex; flex-direction: column; min-width: 0; }
 .field .field-label { margin-bottom: 6px; }
-.field-msg { font-size: 12.5px; color: var(--fg-3); margin-top: 6px; }
+.field-msg { font-size: 13px; color: var(--fg-3); margin-top: 6px; }
 .field-msg-error { color: var(--bad); }
 .field-error .input { border-color: color-mix(in oklab, var(--bad) 55%, transparent); }
 .field-error .input:focus { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in oklab, var(--bad) 22%, transparent); }
@@ -685,7 +687,7 @@ body {
 .badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 9px;
-  font-size: 11.5px; font-weight: 550;
+  font-size: 12px; font-weight: 550;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -704,10 +706,10 @@ body {
 }
 
 /* Table primitive */
-.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th {
   text-align: left; padding: 9px 14px;
-  font-size: 12.5px; font-weight: 550; color: var(--fg-3);
+  font-size: 13px; font-weight: 550; color: var(--fg-3);
   border-bottom: 1px solid var(--line);
   background: var(--bg-2);
 }
@@ -715,7 +717,7 @@ body {
 .table tbody tr:last-child td { border-bottom: none; }
 .table .table-foot td {
   border-top: 1px solid var(--line); border-bottom: none;
-  font-size: 12.5px; color: var(--fg-3); font-weight: 550;
+  font-size: 13px; color: var(--fg-3); font-weight: 550;
 }
 /* Numeric column: header and values share one alignment so the heading sits
    directly over its figures. `tabular-nums` keeps every digit the same width,
@@ -739,7 +741,7 @@ body {
 .table th.table-num .table-sort { justify-content: center; }
 .table .table-sort:hover { color: var(--fg-1); }
 .table .table-sort[data-active="true"] { color: var(--brand); }
-.table .table-sort-arrow { font-size: 10px; opacity: 0.75; }
+.table .table-sort-arrow { font-size: 11px; opacity: 0.75; }
 .table .table-sort[data-active="true"] .table-sort-arrow { opacity: 1; }
 
 /* ── Log RO step cards ───────────────────────────────── */
@@ -901,7 +903,7 @@ button.step-head {
   background: var(--bg-2);
   border: 1px solid transparent;
   border-radius: 999px;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 120ms;
   color: var(--fg-1);
@@ -927,7 +929,7 @@ button.step-head {
    it reads as a caveat to the flag number, not a competing headline. */
 .opc-total-unpaid { border-top: none; padding-top: 4px; margin-top: 2px; }
 .opc-total-unpaid .label { color: var(--warn); }
-.opc-total-unpaid .val   { font-size: 15px; color: var(--warn); }
+.opc-total-unpaid .val   { font-size: 16px; color: var(--warn); }
 
 /* Per-line comeback toggle (unpaid rework). Off state is deliberately quiet —
    it appears on every line, and a loud control on a rare action is noise. */
@@ -1102,7 +1104,7 @@ button.step-head {
   display: inline-flex; align-items: center;
   min-height: var(--tap-min);
   padding: 8px 16px;
-  font-size: 13.5px;
+  font-size: 14px;
   border: 1px solid transparent;
   background: var(--bg-1);
   color: var(--fg-1);
@@ -1447,7 +1449,7 @@ a { color: inherit; }
 .opl-head {
   padding: 8px 14px;
   border-bottom: 1px solid var(--line);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--fg-3);
   font-weight: 550;
 }
@@ -1502,7 +1504,9 @@ a { color: inherit; }
   --fg-0: #201d19;
   --fg-1: #3a362f;
   --fg-2: #605b53;
-  --fg-3: #767066;
+  /* Darkened 2026-08-04 from #767066 to clear WCAG AA 4.5:1 on every light
+     surface (was 3.97:1 on --bg-3). Closes the a11y follow-up logged 2026-07-23. */
+  --fg-3: #6d675d;
 
   /* brand & semantic — dropped lightness vs. dark theme so text-on-light
      passes AA (4.5:1) against --bg-0/1/2; verified with contrast.js.
@@ -1616,7 +1620,7 @@ a { color: inherit; }
 
 /* — Streak heat gauge — */
 .gami-heat-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.gami-heat-label { font-size: 12.5px; color: var(--fg-3); font-weight: 550; }
+.gami-heat-label { font-size: 13px; color: var(--fg-3); font-weight: 550; }
 .gami-heat-num { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; margin-top: 5px; }
 .gami-heat-num .unit { font-size: 14px; font-weight: 500; color: var(--fg-2); letter-spacing: 0; }
 .gami-heat-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
@@ -1639,12 +1643,12 @@ a { color: inherit; }
   position: absolute; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
-  font-size: 10px; color: var(--fg-3);
+  font-size: 11px; color: var(--fg-3);
 }
 .gami-heat-mark::before { content: ""; width: 1.5px; height: 7px; background: var(--fg-3); opacity: 0.5; }
 .gami-heat-mark.hit { color: var(--brand); font-weight: 700; }
 .gami-heat-mark.hit::before { background: var(--brand); opacity: 1; }
-.gami-heat-sub { font-size: 12.5px; color: var(--fg-2); margin-top: 2px; line-height: 1.5; }
+.gami-heat-sub { font-size: 13px; color: var(--fg-2); margin-top: 2px; line-height: 1.5; }
 .gami-heat-sub b { color: var(--fg-0); }
 .gami-heat-frozen { display: inline-flex; align-items: center; gap: 3px; color: var(--info); white-space: nowrap; }
 
@@ -1684,10 +1688,10 @@ a { color: inherit; }
 .gami-road-stop .t {
   position: absolute; top: 14px;
   font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
-  font-size: 10px; color: var(--fg-3); white-space: nowrap;
+  font-size: 11px; color: var(--fg-3); white-space: nowrap;
 }
 .gami-road-stop.done .t { color: var(--fg-1); font-weight: 600; }
-.gami-road-legend { margin-top: 30px; font-size: 12.5px; color: var(--fg-2); }
+.gami-road-legend { margin-top: 30px; font-size: 13px; color: var(--fg-2); }
 .gami-road-legend b { color: var(--fg-0); }
 
 /* — Portfolio snapshot build sheet — */
@@ -1705,13 +1709,13 @@ a { color: inherit; }
   border-top: 4px dashed var(--brand);
 }
 .gami-sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-top: 4px; }
-.gami-sheet-eyebrow { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fg-3); }
+.gami-sheet-eyebrow { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fg-3); }
 .gami-sheet-title { font-size: 16px; font-weight: 700; margin-top: 3px; letter-spacing: 0.01em; }
 .gami-stamp {
   display: inline-flex; align-items: center; gap: 3px;
   transform: rotate(4deg);
   border: 2px solid var(--good); color: var(--good);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
   padding: 4px 8px; border-radius: 4px; opacity: 0.9; white-space: nowrap;
 }
 .gami-sheet-grid {
@@ -1722,14 +1726,14 @@ a { color: inherit; }
 @media (min-width: 600px) { .gami-sheet-grid { grid-template-columns: repeat(4, 1fr); } }
 .gami-sheet-cell { background: var(--bg-2); padding: 10px 12px; }
 /* .k labels are load-bearing (they name the stat) — fg-2, not decorative fg-3 */
-.gami-sheet-cell .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-2); }
+.gami-sheet-cell .k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-2); }
 .gami-sheet-cell .v { font-size: 16px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.gami-sheet-cell .v small { font-size: 10px; color: var(--fg-2); font-weight: 500; }
+.gami-sheet-cell .v small { font-size: 11px; color: var(--fg-2); font-weight: 500; }
 .gami-sheet-specs { margin-top: 12px; font-size: 11px; color: var(--fg-2); line-height: 1.7; }
 .gami-sheet-specs b { color: var(--fg-0); }
 .gami-sheet-foot {
   display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px;
-  border-top: 1px dashed var(--line); font-size: 10px; letter-spacing: 0.1em;
+  border-top: 1px dashed var(--line); font-size: 11px; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--fg-3);
 }
 
@@ -1770,7 +1774,7 @@ a { color: inherit; }
   gap: 10px; min-width: 0;
 }
 .timer-slot-id {
-  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--fg-3); margin-bottom: 2px;
 }
 .timer-slot-ro {
@@ -1905,7 +1909,7 @@ a { color: inherit; }
   font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
   font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
-.pip-row .why { font-size: 10px; color: var(--fg-3); }
+.pip-row .why { font-size: 11px; color: var(--fg-3); }
 .pip-count { font-size: 11px; color: var(--fg-3); }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -2037,7 +2041,7 @@ a { color: inherit; }
 }
 .pp-rail-divider {
   display: flex; align-items: center; gap: 9px;
-  font-size: 11.5px; color: var(--fg-3);
+  font-size: 12px; color: var(--fg-3);
   margin: 4px 0 0;
 }
 .pp-rail-divider::after {
@@ -2049,7 +2053,7 @@ a { color: inherit; }
   border-radius: var(--radius-sm);
   background: var(--bad-bg);
   color: var(--bad);
-  font-size: 12.5px;
+  font-size: 13px;
   padding: 8px 12px;
   margin: 0 0 12px;
 }
@@ -2086,17 +2090,17 @@ a { color: inherit; }
 .period-hero.is-match .period-hero-eyebrow { color: var(--good); }
 .period-hero-figure {
   font-family: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, monospace);
-  font-size: 38px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.05;
+  font-size: 34px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.05;
   margin: 5px 0 0;
 }
 .period-hero-figure .unit {
-  font-size: 18px; font-weight: 500; color: var(--fg-2); margin-left: 2px;
+  font-size: 16px; font-weight: 500; color: var(--fg-2); margin-left: 2px;
   letter-spacing: 0;
 }
 .period-hero.is-short .period-hero-figure { color: var(--bad); }
 .period-hero-support {
   margin: 8px 0 0;
-  font-size: 13.5px; color: var(--fg-2); line-height: 1.45;
+  font-size: 14px; color: var(--fg-2); line-height: 1.45;
   /* No max-width. The hero spans the full header band, and a ch-based cap made
      these one-line sentences wrap at ~52 characters — orphaning "goal" and
      "rate" onto a line of their own. Narrow viewports still wrap naturally. */
@@ -2110,7 +2114,7 @@ a { color: inherit; }
 .period-hero-action .field { flex: 1 1 12rem; min-width: 0; }
 .period-hero-error {
   margin: 8px 0 0;
-  font-size: 12.5px; color: var(--bad);
+  font-size: 13px; color: var(--bad);
 }
 
 /* ── Card header row: toggle + info bubble ─────────────────────────
@@ -2173,7 +2177,7 @@ a { color: inherit; }
   border: 1px solid var(--line);
   background: var(--bg-1);
   color: var(--brand);
-  font-size: 12.5px; font-weight: 550;
+  font-size: 13px; font-weight: 550;
   text-decoration: none;
   white-space: nowrap;
 }

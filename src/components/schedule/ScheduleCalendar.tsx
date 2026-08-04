@@ -121,18 +121,18 @@ function DayCell({
         </span>
       )}
       {off ? (
-        <span style={{ fontSize: 10.5, color: "var(--fg-3)" }}>off</span>
+        <span style={{ fontSize: 11, color: "var(--fg-3)" }}>off</span>
       ) : hoursLabel ? (
-        <span style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+        <span style={{ fontSize: 11, color: "var(--fg-3)" }}>
           {hoursLabel}
           {day.clockedHours !== null && day.clockedHours > 0 ? " clocked" : ""}
         </span>
       ) : null}
       {day.unresolved && (
-        <span style={{ fontSize: 10.5, color: "var(--warn)" }}>empty?</span>
+        <span style={{ fontSize: 11, color: "var(--warn)" }}>empty?</span>
       )}
       {day.confirmedZero && (
-        <span style={{ fontSize: 10.5, color: "var(--fg-3)" }}>zero day</span>
+        <span style={{ fontSize: 11, color: "var(--fg-3)" }}>zero day</span>
       )}
     </button>
   );

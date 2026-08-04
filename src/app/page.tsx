@@ -96,6 +96,7 @@ function PaceBar({
   todayPct,
   state,
   compact = false,
+  inset = false,
 }: {
   now: string;
   goal: string;
@@ -103,9 +104,10 @@ function PaceBar({
   todayPct: number;
   state: "green" | "amber" | "red";
   compact?: boolean;
+  inset?: boolean;
 }) {
   return (
-    <div className="card p-[18px]">
+    <div className={`${inset ? "card-inset" : "card"} p-[18px]`}>
       <div className="flex items-center justify-between mb-3.5">
         <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)]">
           Pay Period Pace{compact ? "" : " · 9 days left"}
@@ -115,7 +117,7 @@ function PaceBar({
       <div className="flex items-baseline justify-between mb-3">
         <span
           className="font-mono font-bold text-[var(--fg-0)] whitespace-nowrap"
-          style={{ fontSize: compact ? 18 : 22 }}
+          style={{ fontSize: compact ? 16 : 20 }}
         >
           {now}
           <span className="text-[var(--fg-3)] ml-0.5" style={{ fontSize: compact ? 12 : 14 }}>
@@ -139,7 +141,7 @@ function PaceBar({
           className="absolute -top-[5px] -bottom-[5px] w-0.5 bg-[var(--fg-1)]"
           style={{ left: `${todayPct}%` }}
         >
-          <span className="absolute -top-4 left-1/2 -translate-x-1/2 font-mono text-[8px] tracking-[0.1em] text-[var(--fg-2)] whitespace-nowrap">
+          <span className="absolute -top-[19px] left-1/2 -translate-x-1/2 font-mono text-[11px] tracking-[0.08em] text-[var(--fg-2)] whitespace-nowrap">
             TODAY
           </span>
         </div>
@@ -154,17 +156,19 @@ function StatTile({
   unit,
   sub,
   mini = false,
+  inset = false,
 }: {
   lab: string;
   big: string;
   unit: string;
   sub?: React.ReactNode;
   mini?: boolean;
+  inset?: boolean;
 }) {
   return (
-    <div className="card rounded-[var(--radius)] p-3.5">
-      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-2">{lab}</div>
-      <div className="font-mono font-bold text-[var(--fg-0)] leading-none" style={{ fontSize: mini ? 22 : 26 }}>
+    <div className={`${inset ? "card-inset" : "card rounded-[var(--radius)]"} p-3.5`}>
+      <div className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-2">{lab}</div>
+      <div className="font-mono font-bold text-[var(--fg-0)] leading-none" style={{ fontSize: mini ? 20 : 26 }}>
         {big}
         <span className="text-[13px] text-[var(--fg-3)] ml-0.5">{unit}</span>
       </div>
@@ -191,7 +195,7 @@ function ROForm() {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
+        <label className="block font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
           RO Number
         </label>
         <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[var(--radius-sm)] px-3 py-2.5 flex items-center">
@@ -199,7 +203,7 @@ function ROForm() {
         </div>
       </div>
       <div>
-        <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
+        <label className="block font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
           Op Code
         </label>
         <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[var(--radius-sm)] px-3 py-2.5 flex items-center gap-2.5">
@@ -219,15 +223,35 @@ function ROForm() {
   );
 }
 
+function Chevron({ open = false }: { open?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="12"
+      height="12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="text-[var(--fg-3)]"
+      style={{ transform: open ? "rotate(90deg)" : undefined }}
+    >
+      <path d="M6 3.5L10.5 8L6 12.5" />
+    </svg>
+  );
+}
+
 function OpCodeList() {
   return (
-    <div className="flex flex-col gap-px bg-[var(--line)] border border-[var(--line)] rounded-[var(--radius)] overflow-hidden">
+    <div className="flex flex-col gap-px bg-[var(--line)] overflow-hidden">
       {/* BRK — expanded */}
       <div
         className="grid items-center gap-2.5 px-3 py-2.5 bg-[var(--bg-2)]"
         style={{ gridTemplateColumns: "16px 64px 1fr auto" }}
       >
-        <span className="text-[10px] text-[var(--fg-3)]">▾</span>
+        <Chevron open />
         <span className="font-mono font-semibold text-[12px] text-[var(--fg-0)]">BRK</span>
         <span className="text-[13px] font-semibold text-[var(--fg-1)]">Brake Job</span>
         <span className="font-mono text-[12px] text-[var(--fg-2)]">—</span>
@@ -252,7 +276,7 @@ function OpCodeList() {
         className="grid items-center gap-2.5 px-3 py-2.5 bg-[var(--bg-2)] opacity-90"
         style={{ gridTemplateColumns: "16px 64px 1fr auto" }}
       >
-        <span className="text-[10px] text-[var(--fg-3)]">▸</span>
+        <Chevron />
         <span className="font-mono font-semibold text-[12px] text-[var(--fg-0)]">SUSP</span>
         <span className="text-[13px] font-semibold text-[var(--fg-1)]">Suspension</span>
         <span className="font-mono text-[12px] text-[var(--fg-2)]">3 sub-codes</span>
@@ -284,8 +308,8 @@ function DiscrepancyCard() {
           <span className="text-[11px] text-[var(--fg-3)] font-normal">hrs</span>
         </span>
       </div>
-      <p className="font-mono text-[11px] text-[var(--fg-3)] leading-relaxed pt-0.5">
-        3 ROs may be missing hours — check before payday.
+      <p className="font-mono text-[12px] text-[var(--fg-3)] leading-relaxed pt-0.5">
+        3 ROs may be missing hours. Check before payday.
       </p>
     </div>
   );
@@ -298,11 +322,11 @@ function HistoryRows() {
     { code: "ALN-4", hrs: "1.8", t: "Today 9:40a" },
   ];
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col">
       {rows.map((r, i) => (
         <div
           key={i}
-          className="grid items-center gap-2.5 px-3 py-2 bg-[var(--bg-1)] border border-[var(--line)] rounded-[var(--radius-sm)]"
+          className="grid items-center gap-2.5 py-2.5 border-b border-[var(--line)] last:border-b-0"
           style={{ gridTemplateColumns: "70px 1fr auto" }}
         >
           <span className="font-mono font-semibold text-[12px] text-[var(--brand)]">{r.code}</span>
@@ -354,35 +378,26 @@ function Hero() {
     <header className="pt-[72px] pb-[88px] max-[900px]:pt-12 max-[900px]:pb-16 max-sm:pt-9 max-sm:pb-[52px]">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex flex-col gap-0">
         <Rv>
-          <div className="inline-flex items-center gap-2.5">
-            <span className="block w-5 h-0.5 bg-[var(--brand-strong)]" />
-            <span className="font-mono text-[13px] font-semibold tracking-[0.18em] uppercase text-[var(--brand-strong)] max-sm:text-[12px] max-sm:tracking-[0.12em]">
-              Built for the tech, not the shop
-            </span>
-          </div>
-        </Rv>
-
-        <Rv delay={60}>
           <h1
-            className="font-extrabold leading-none tracking-tight text-[var(--fg-0)] text-balance mt-5 mb-0 max-sm:mt-4"
+            className="font-extrabold leading-none tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
             style={{ fontSize: "clamp(33px, 5vw, 56px)", maxWidth: 840 }}
           >
             Every RO you log makes you harder to short.
           </h1>
         </Rv>
 
-        <Rv delay={120}>
+        <Rv delay={60}>
           <p
             className="text-[var(--fg-2)] leading-[1.55] mt-5 mb-0 max-sm:mt-4"
             style={{ fontSize: "clamp(16px, 2vw, 18px)", maxWidth: 520 }}
           >
-            FRT turns your daily work into a record that compounds — proof you got paid right,
+            FRT turns your daily work into a record that compounds: proof you got paid right,
             numbers that show your worth, and leverage that grows every single job. Start today;
             thank yourself in a year.
           </p>
         </Rv>
 
-        <Rv delay={180}>
+        <Rv delay={120}>
           <div className="flex gap-3 flex-wrap mt-7 max-sm:mt-6 max-sm:flex-col max-sm:items-stretch">
             <Link href="/signup" className="btn btn-primary btn-lg max-sm:justify-center">
               Create free account
@@ -398,7 +413,7 @@ function Hero() {
         </Rv>
 
         {/* Dashboard mock */}
-        <Rv delay={120} className="flex flex-col gap-3 mt-8 max-sm:mt-6">
+        <Rv delay={180} className="flex flex-col gap-3 mt-8 max-sm:mt-6">
           <div className="grid grid-cols-4 gap-2.5 max-sm:grid-cols-2">
             <StatTile lab="Today" big="6.4" unit="hrs" sub={<span className="text-[var(--good)]">112% eff</span>} />
             <StatTile lab="This Week" big="38.1" unit="hrs" sub={<span className="text-[var(--good)]">104% eff</span>} />
@@ -431,19 +446,14 @@ function PaceSection() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div className="max-w-[620px]">
           <Rv>
-            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--fg-3)]">
-              Pay Period Pace
-            </span>
-          </Rv>
-          <Rv delay={60}>
             <h2
-              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-4 mb-0"
+              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
               style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
             >
               See your pace at a glance.
             </h2>
           </Rv>
-          <Rv delay={120}>
+          <Rv delay={60}>
             <p
               className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-0"
               style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
@@ -470,44 +480,33 @@ function PaceSection() {
 function HowItWorks() {
   const steps = [
     {
-      n: "01",
       t: "Keep your own books.",
-      d: "Most shops know techs don't track their own hours — and some count on it. When flagged time doesn't show up on your check, there's no record to push back with. FRT is that record.",
+      d: "Most shops know techs don't track their own hours, and some count on it. When flagged time doesn't show up on your check, there's no record to push back with. FRT is that record.",
     },
     {
-      n: "02",
       t: "Know before payday.",
-      d: "A live pace bar tracks where you stand against your pay period goal every time you log an RO. If you're slipping, you'll see it with time to fix it — not after the check is already cut.",
+      d: "A live pace bar tracks where you stand against your pay period goal every time you log an RO. If you're slipping, you'll see it with time to fix it, not after the check is already cut.",
     },
     {
-      n: "03",
       t: "Build a record only you control.",
-      d: "Every RO you log builds a real picture of how you perform — efficiency rates, average flag hours, the jobs you run most. Yours to keep, no matter which shop you're standing in.",
+      d: "Every RO you log builds a real picture of how you perform: efficiency rates, average flag hours, the jobs you run most. Yours to keep, no matter which shop you're standing in.",
     },
   ];
   return (
     <section className="pb-24 max-[900px]:pb-[72px] max-sm:pb-14">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <Rv>
-          <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--fg-3)]">
-            Built for flat rate
-          </span>
-        </Rv>
-        <Rv delay={60}>
           <h2
-            className="font-extrabold tracking-tight text-[var(--fg-0)] mt-3.5 mb-0"
-            style={{ fontSize: 36 }}
+            className="font-extrabold tracking-tight text-[var(--fg-0)] mt-0 mb-0"
+            style={{ fontSize: 34 }}
           >
             You flag the hours. Make sure you get paid for every one.
           </h2>
         </Rv>
         <div className="grid grid-cols-3 gap-5 mt-11 max-[900px]:grid-cols-1 max-[900px]:gap-7">
           {steps.map((s, i) => (
-            <Rv key={s.n} delay={i * 90} className="pt-6 border-t-2 border-[var(--line)]">
-              <div className="font-mono font-bold text-[13px] text-[var(--brand-strong)] tracking-[0.1em]">
-                {s.n}
-              </div>
-              <h3 className="text-xl font-bold mt-3 mb-2 text-[var(--fg-0)] tracking-tight">{s.t}</h3>
+            <Rv key={s.t} delay={i * 90} className="pt-6 border-t-2 border-[var(--line)]">
+              <h3 className="text-xl font-bold mt-0 mb-2 text-[var(--fg-0)] tracking-tight">{s.t}</h3>
               <p className="text-[var(--fg-2)] leading-[1.55] m-0 text-base">{s.d}</p>
             </Rv>
           ))}
@@ -523,19 +522,14 @@ function LongGame() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div className="max-w-[680px]">
           <Rv>
-            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--fg-3)]">
-              The long game
-            </span>
-          </Rv>
-          <Rv delay={60}>
             <h2
-              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-4 mb-0"
+              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
               style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
             >
               Day one, it tracks a job. Year one, it tracks your career.
             </h2>
           </Rv>
-          <Rv delay={120}>
+          <Rv delay={60}>
             <p
               className="text-[var(--fg-2)] leading-[1.6] mt-5 mb-0"
               style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
@@ -545,7 +539,7 @@ function LongGame() {
               check. <strong className="text-[var(--fg-1)]">Month six</strong>, it shows your real
               efficiency across every job type. <strong className="text-[var(--fg-1)]">Year one</strong>,
               it&apos;s the case you put on the service manager&apos;s desk when it&apos;s time to
-              talk money — or the proof you take to a better shop. Most techs throw that record
+              talk money, or the proof you take to a better shop. Most techs throw that record
               away every payday. You don&apos;t have to.
             </p>
           </Rv>
@@ -559,13 +553,13 @@ const featCards = [
   {
     tag: "Dashboard",
     title: "Real numbers, four ways",
-    desc: "Today, this week, pay period, this month — flag hours, clocked hours, and efficiency. No estimates.",
+    desc: "Today, this week, pay period, this month: flag hours, clocked hours, and efficiency. No estimates.",
     visual: (
       <div className="grid grid-cols-2 gap-2">
-        <StatTile lab="Today" big="6.4" unit="h" sub={<span className="text-[var(--good)]">112%</span>} mini />
-        <StatTile lab="Week" big="38.1" unit="h" sub={<span className="text-[var(--good)]">104%</span>} mini />
-        <StatTile lab="Pay Period" big="64.2" unit="h" sub={<span className="text-[var(--good)]">98%</span>} mini />
-        <StatTile lab="Month" big="142" unit="h" sub={<span className="text-[var(--good)]">101%</span>} mini />
+        <StatTile lab="Today" big="6.4" unit="h" sub={<span className="text-[var(--good)]">112%</span>} mini inset />
+        <StatTile lab="Week" big="38.1" unit="h" sub={<span className="text-[var(--good)]">104%</span>} mini inset />
+        <StatTile lab="Pay Period" big="64.2" unit="h" sub={<span className="text-[var(--good)]">98%</span>} mini inset />
+        <StatTile lab="Month" big="142" unit="h" sub={<span className="text-[var(--good)]">101%</span>} mini inset />
       </div>
     ),
   },
@@ -573,18 +567,18 @@ const featCards = [
     tag: "Pay Period Pace",
     title: "Know if you'll make it",
     desc: "A live bar against your goal with a today tick, and an at-a-glance pill: on pace, slightly behind, behind.",
-    visual: <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" compact />,
+    visual: <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" compact inset />,
   },
   {
     tag: "RO Logging",
     title: "Logged in two taps",
-    desc: "RO number plus op code. Snap a photo of the repair order and the fields fill themselves — or type it by hand. Hit Save & New and start the next job.",
+    desc: "RO number plus op code. Snap a photo of the repair order and the fields fill themselves, or type it by hand. Hit Save & New and start the next job.",
     visual: <ROForm />,
   },
   {
     tag: "Op Code Library",
     title: "Your codes, your way",
-    desc: 'Build a personal library with parent / child codes — "Brake Job" → Front, Rear, Flush. Stop retyping.',
+    desc: 'Build a personal library with parent / child codes: "Brake Job" → Front, Rear, Flush. Stop retyping.',
     visual: <OpCodeList />,
   },
   {
@@ -612,13 +606,8 @@ function Features() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div className="max-w-[620px]">
           <Rv>
-            <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--fg-3)]">
-              Everything you track
-            </span>
-          </Rv>
-          <Rv delay={60}>
             <h2
-              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-4 mb-0"
+              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
               style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
             >
               Made for the bay, not the boardroom.
@@ -633,10 +622,7 @@ function Features() {
               delay={(i % 3) * 80}
               className="card rounded-[var(--radius)] p-[22px] flex flex-col hover:border-[var(--brand-soft)] hover:-translate-y-0.5 transition-all duration-200"
             >
-              <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--brand-strong)]">
-                {f.tag}
-              </span>
-              <h3 className="text-lg font-bold mt-2 mb-1.5 text-[var(--fg-0)] tracking-tight">
+              <h3 className="text-lg font-bold mt-0 mb-1.5 text-[var(--fg-0)] tracking-tight">
                 {f.title}
               </h3>
               <p className="text-[var(--fg-2)] text-sm leading-[1.5] mb-[18px]">{f.desc}</p>
@@ -659,28 +645,23 @@ function GuestMode() {
         >
           <div>
             <Rv>
-              <span className="font-mono text-[12px] tracking-[0.14em] uppercase text-[var(--brand-strong)]">
-                Guest mode
-              </span>
-            </Rv>
-            <Rv delay={60}>
               <h2
-                className="font-extrabold tracking-tight text-[var(--fg-0)] mt-3.5 mb-0"
+                className="font-extrabold tracking-tight text-[var(--fg-0)] mt-0 mb-0"
                 style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
               >
                 No account? No problem.
               </h2>
             </Rv>
-            <Rv delay={120}>
+            <Rv delay={60}>
               <p
                 className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-7 max-sm:mb-6"
                 style={{ fontSize: "clamp(16px, 1.8vw, 17px)", maxWidth: 440 }}
               >
-                Log ROs, check your stats, watch your pace — the whole app, no signup. Your data
+                Log ROs, check your stats, watch your pace: the whole app, no signup. Your data
                 stays in your browser. Make an account when you&apos;re ready to keep it.
               </p>
             </Rv>
-            <Rv delay={180}>
+            <Rv delay={120}>
               <Link href="/guest" className="btn btn-primary btn-lg max-sm:w-full max-sm:justify-center">
                 Try it first — no account needed
               </Link>
@@ -704,15 +685,27 @@ function GuestMode() {
                 "Job timer with PiP mode",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm text-[var(--fg-1)]">
-                  <span className="w-[18px] h-[18px] rounded-full bg-[var(--good-bg)] text-[var(--good)] grid place-items-center text-[11px] flex-shrink-0 mt-px">
-                    ✓
+                  <span className="w-[18px] h-[18px] rounded-full bg-[var(--good-bg)] text-[var(--good)] grid place-items-center flex-shrink-0 mt-px">
+                    <svg
+                      viewBox="0 0 16 16"
+                      width="10"
+                      height="10"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M3 8.5L6.5 12L13 4.5" />
+                    </svg>
                   </span>
                   {item}
                 </li>
               ))}
             </ul>
-            <p className="font-mono text-[11px] text-[var(--fg-3)] mt-[18px] leading-relaxed">
-              Nothing leaves your phone until you create an account — then it all syncs over.
+            <p className="font-mono text-[12px] text-[var(--fg-3)] mt-[18px] leading-relaxed">
+              Nothing leaves your phone until you create an account, then it all syncs over.
             </p>
           </Rv>
         </div>
@@ -727,22 +720,14 @@ function FinalCTA() {
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div className="max-w-[620px]">
           <Rv>
-            <div className="inline-flex items-center gap-2.5">
-              <span className="block w-5 h-0.5 bg-[var(--brand-strong)]" />
-              <span className="font-mono text-[12px] font-semibold tracking-[0.18em] uppercase text-[var(--brand-strong)]">
-                Flat Rate Tracker
-              </span>
-            </div>
-          </Rv>
-          <Rv delay={60}>
             <h2
-              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-4 mb-0"
+              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
               style={{ fontSize: "clamp(28px, 4vw, 44px)" }}
             >
               Nobody&apos;s looking out for the tech. So we built the tool that does.
             </h2>
           </Rv>
-          <Rv delay={120}>
+          <Rv delay={60}>
             <p
               className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-0"
               style={{ fontSize: "clamp(16px, 1.8vw, 18px)", maxWidth: 480 }}
@@ -750,7 +735,7 @@ function FinalCTA() {
               Set up in under a minute. See exactly where your pay period stands by your next RO.
             </p>
           </Rv>
-          <Rv delay={180}>
+          <Rv delay={120}>
             <div className="flex items-center gap-5 flex-wrap mt-7 max-sm:mt-6">
               <Link href="/signup" className="btn btn-primary btn-lg max-sm:justify-center">
                 Create free account

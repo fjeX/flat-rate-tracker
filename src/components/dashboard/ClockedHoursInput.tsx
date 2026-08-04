@@ -88,7 +88,7 @@ export function ClockedHoursInput({
           className="tabular"
           style={{
             marginTop: 4,
-            fontSize: 28,
+            fontSize: 26,
             fontWeight: 650,
             letterSpacing: "-0.02em",
             color: effGood ? "var(--good)" : effBad ? "var(--bad)" : "var(--fg-1)",
@@ -96,7 +96,7 @@ export function ClockedHoursInput({
         >
           {efficiency !== null ? fmtPct(efficiency) : "—"}
         </div>
-        <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--fg-3)" }}>
+        <div style={{ marginTop: 4, fontSize: 12, color: "var(--fg-3)" }}>
           {todayFlagHours.toFixed(1)}h flag
         </div>
       </div>

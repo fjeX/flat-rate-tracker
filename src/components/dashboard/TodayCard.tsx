@@ -191,7 +191,7 @@ export function TodayCard({
             <div
               className="tabular"
               style={{
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: 650,
                 letterSpacing: "-0.02em",
                 color: effGood ? "var(--good)" : effBad ? "var(--bad)" : "var(--fg-1)",

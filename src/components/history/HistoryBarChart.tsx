@@ -349,7 +349,7 @@ export function HistoryBarChart({
                     <text
                       x={cx} y={BASELINE + 14}
                       textAnchor="middle"
-                      fontSize={10.5}
+                      fontSize={11}
                       fontFamily="ui-monospace, Menlo, monospace"
                       fill={labelColor}
                       fontWeight={bar.isCurrent ? 600 : 400}
@@ -362,7 +362,7 @@ export function HistoryBarChart({
                     <text
                       x={cx} y={BASELINE + 27}
                       textAnchor="middle"
-                      fontSize={9}
+                      fontSize={11}
                       fontFamily="ui-monospace, Menlo, monospace"
                       fill={labelColor}
                       opacity={bar.isCurrent ? 1 : 0.7}

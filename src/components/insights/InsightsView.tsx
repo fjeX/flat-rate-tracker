@@ -427,11 +427,11 @@ function TrendSection({
                     opacity: running ? 0.55 : 1,
                   }}
                 />
-                <span className="truncate text-[10px] text-[var(--fg-3)]">
+                <span className="truncate text-[11px] text-[var(--fg-3)]">
                   {point.label}
                 </span>
                 {running && (
-                  <span className="text-[9px] uppercase tracking-wide text-[var(--fg-3)]">
+                  <span className="text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
                     in progress
                   </span>
                 )}

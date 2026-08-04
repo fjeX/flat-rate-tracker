@@ -410,7 +410,7 @@ function RoomierBarChart({
             if (show) primaryLabel = bar.label;
           }
 
-          const labelFontSize = tab === "week" ? 10 : 11;
+          const labelFontSize = 11;
 
           return (
             <g key={i}>
@@ -451,7 +451,7 @@ function RoomierBarChart({
                 <text
                   x={cx} y={baseline + 28}
                   textAnchor="middle"
-                  fontSize={tab === "week" ? 8 : 9}
+                  fontSize={11}
                   fontFamily="ui-monospace, Menlo, monospace"
                   fill="var(--fg-3)"
                   opacity={0.65}
