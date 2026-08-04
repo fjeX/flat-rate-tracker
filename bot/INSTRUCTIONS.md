@@ -508,6 +508,28 @@ recovered. Sections appear only when they have something to say.
     (Twice-escalated as `insights-zero-ratio-display`; the first fix guarded
     `actualHours > 0`, but `actual_hours` is `numeric(5,2)` so a mis-saved timer
     stores `0.01` and walked straight through it.)
+  - **Changed 2026-08-04 — a row now has THREE states, check all three.**
+    1. **measured** — a real `1.08×`-style ratio with flag and actual hours.
+    2. **unpaid rework** — an amber pill reading `unpaid rework`, with `0.0h`
+       flag against REAL actual hours. This is a code whose lines in the current
+       window are all comebacks. It must sort to the **TOP** of the table, above
+       the worst measured ratio, and the caption below the table must name the
+       total hours.
+    3. **never timed** — em-dashes in both hour columns. This now means ONLY
+       "nothing was recorded."
+    - **The bug this replaced:** a comeback-only code used to read
+      `— — never timed` while holding real hours. If you ever see a row with
+      `never timed` on a code you logged a **timed comeback** against in this
+      window, that is a regression — escalate it, don't file it as a wording
+      question. It was reported as a label nit for two nights and was actually
+      the table hiding 3.3h of unpaid rework.
+    - **How to exercise it:** log 2+ comebacks with actual hours against ONE op
+      code you have not logged paid work for in the current period, then open
+      Insights with the **Period** or **Week** chip. That is the window where
+      the older paid lines drop out and the row goes pure-comeback.
+    - **Known and deliberate, do NOT report:** a code with BOTH paid and
+      comeback work shows only its measured ratio; its rework hours stay hidden.
+      That's an accepted scope call, not a defect.
 - **Best days** — seven weekday tiles with a By day / By efficiency sort toggle.
   Tiles count only days the app knows the length of, so the day count under each
   is real. Check a weekday's figure is not wildly out of line with the dashboard.
