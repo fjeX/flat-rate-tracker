@@ -2234,20 +2234,31 @@ a { color: inherit; }
 
 /* ── Schedule: docked day inspector ───────────────────────────────── */
 /* The panel used to render BELOW six rows of calendar, so on a phone the day
-   you just tapped scrolled itself off screen. It docks instead, following the
-   .save-bar convention for clearing the fixed bottom nav. */
+   you just tapped scrolled itself off screen. It docks instead.
+
+   DOCKING IS A PHONE AFFORDANCE ONLY. Sticky on desktop meant the panel stayed
+   frozen while the calendar slid underneath it — measured at 208px of travel
+   before it released — which reads as the calendar scrolling inside its own box
+   and then handing off to the page. Nothing on a desktop screen needs to be
+   held in thumb reach, so above 900px this is an ordinary card in flow and the
+   page scrolls as one thing. */
 .day-dock {
-  position: sticky; bottom: 16px;
   margin-top: 16px;
   background: var(--bg-1);
   border: 1px solid transparent;
   border-radius: var(--radius);
   padding: 14px;
-  box-shadow: var(--shadow-pop);
-  z-index: 20;
+  /* A resting surface here, not something above the page — pop elevation is
+     for the docked state, where it genuinely floats over the grid. */
+  box-shadow: var(--shadow-card);
 }
 @media (max-width: 899px) {
-  .day-dock { bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .day-dock {
+    position: sticky;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    box-shadow: var(--shadow-pop);
+    z-index: 20;
+  }
 }
 .day-dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 
@@ -2273,6 +2284,71 @@ a { color: inherit; }
 .icon-btn:hover:not(:disabled) { background: var(--bg-3); }
 .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* ── Insights: trend chart ────────────────────────────────────────── */
+/* Labels live OUTSIDE the plot so every bar shares one baseline. They used to
+   sit inside each column, and the in-progress column carries an extra line —
+   which lifted that bar off the baseline and made it read shorter than its own
+   number. A bar chart whose bars start at different heights is not a chart. */
+.trend-plot {
+  position: relative;
+  display: flex; align-items: flex-end; gap: 8px;
+  height: 132px;
+}
+.trend-col {
+  flex: 1; min-width: 0; height: 100%;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  gap: 4px;
+}
+.trend-val {
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--fg-3); line-height: 1;
+}
+.trend-bar {
+  position: relative;
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--bg-4);
+}
+.trend-bar.is-current { background: var(--brand); }
+/* Not finished, so not comparable to the bars beside it. */
+.trend-bar.is-running { opacity: 0.55; }
+/* Taller than the scale can show. The true figure is always printed above the
+   bar, so the hatch says "continues past here" without inventing a height. */
+.trend-bar.is-clipped::before {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 0; height: 8px;
+  border-radius: 4px 4px 0 0;
+  background: repeating-linear-gradient(-45deg, var(--bg-0) 0 2px, transparent 2px 4px);
+}
+/* Par: flag hours equal to clock hours. The one height on this chart that
+   means something on its own. */
+.trend-par {
+  position: absolute; left: 0; right: 0;
+  /* --line is a within-surface hairline and disappears entirely where it
+     crosses a bar, which is most of this chart's width. Derived from the text
+     ramp instead so it stays visible over bar and ground alike, in both themes,
+     without becoming a second piece of foreground. */
+  border-top: 1px dashed color-mix(in oklab, var(--fg-3) 55%, transparent);
+  pointer-events: none;
+}
+/* Punched through the bar rather than floating on top of it — the label sits
+   over a filled bar most of the time, where plain text is unreadable. */
+.trend-par-label {
+  position: absolute; right: 0; top: -7px;
+  padding: 1px 5px;
+  background: var(--bg-1);
+  border-radius: 999px;
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-size: 11px; color: var(--fg-3); line-height: 1.2;
+}
+.trend-labels { display: flex; gap: 8px; margin-top: 6px; }
+.trend-label {
+  flex: 1; min-width: 0; text-align: center;
+  font-size: 11px; color: var(--fg-3); line-height: 1.3;
+}
+.trend-label b { display: block; font-weight: 550; color: var(--fg-3); }
 
 /* ── Insights: what's costing you ─────────────────────────────────── */
 /* One ranked list in a single currency (hours), so an op-code overrun and a

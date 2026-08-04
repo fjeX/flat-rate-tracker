@@ -595,17 +595,28 @@ function TrendSection({
   points: PeriodTrendPoint[];
   today: string;
 }) {
-  // Scale to the tallest bar rather than to 100%: a tech running 130% would
-  // otherwise peg every bar at the ceiling and the trend would read flat.
-  const max = Math.max(...points.map((p) => p.efficiency ?? 0), 1);
   const last = points[points.length - 1];
 
-  // The comparison sentence uses only FINISHED periods. A period two days old
-  // has two days of hours in it, and reading that against a complete period
-  // announced "efficiency is down 108 points" the morning after a period rolled
-  // over — a collapse that exists entirely in the arithmetic. The in-progress
-  // bar still draws, labelled, because the hours in it are real.
+  // FINISHED periods only. A period two days old has two days of hours in it,
+  // and reading that against a complete period announced "efficiency is down
+  // 108 points" the morning after a period rolled over — a collapse that exists
+  // entirely in the arithmetic. The in-progress bar still draws, labelled,
+  // because the hours in it are real.
   const complete = points.filter((p) => p.end < today);
+
+  // THE SAME RULE NOW SETS THE AXIS, which is what was wrong with this chart.
+  // Scaling to the tallest bar of ANY period let an unfinished one define the
+  // ceiling: a period one day in, with one day of denominator, read 1565% and
+  // squashed five real periods into 4px stubs. An incomplete period is not
+  // comparable to the ones beside it, so it does not get to set the scale
+  // either — it just clips, marked, with its true figure printed above it.
+  //
+  // Floored at 100 so the chart always contains par. Without the floor a tech
+  // having a bad run sees every bar near the top, which reads as a good month.
+  const scaleSource = complete.length > 0 ? complete : points;
+  const ceiling = Math.max(100, ...scaleSource.map((p) => p.efficiency ?? 0));
+  const BAR_MAX = 108;
+  const parOffset = (100 / ceiling) * BAR_MAX;
   const deltaFrom = complete.length >= 2 ? complete[complete.length - 2] : null;
   const deltaTo = complete.length >= 2 ? complete[complete.length - 1] : null;
   const delta =
@@ -617,42 +628,48 @@ function TrendSection({
     <section>
       <div className="section-title">Trend</div>
       <Card>
-        <div className="flex items-end gap-2" style={{ height: 132 }}>
+        <div className="trend-plot">
+          <div
+            className="trend-par"
+            style={{ bottom: parOffset }}
+            aria-hidden="true"
+          >
+            <span className="trend-par-label">100%</span>
+          </div>
           {points.map((point) => {
             const value = point.efficiency ?? 0;
+            const clipped = value > ceiling;
             // Every bar keeps a visible stub so an all-zero period still reads
             // as a period rather than as missing data.
-            const height = Math.max(4, (value / max) * 104);
+            const height = Math.max(4, (Math.min(value, ceiling) / ceiling) * BAR_MAX);
             const running = point.end >= today;
             return (
-              <div
-                key={point.key}
-                className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1"
-              >
-                <span className="mono text-[11px] tabular-nums text-[var(--fg-3)]">
-                  {fmtPct(point.efficiency)}
-                </span>
+              <div key={point.key} className="trend-col">
+                <span className="trend-val">{fmtPct(point.efficiency)}</span>
                 <div
-                  className="w-full rounded-t-[4px]"
-                  style={{
-                    height,
-                    background: point === last ? "var(--brand)" : "var(--bg-4)",
-                    // Hatched rather than solid: this period isn't finished, so
-                    // its bar is not comparable to the ones beside it.
-                    opacity: running ? 0.55 : 1,
-                  }}
+                  className={[
+                    "trend-bar",
+                    point === last && "is-current",
+                    running && "is-running",
+                    clipped && "is-clipped",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  style={{ height }}
                 />
-                <span className="truncate text-[11px] text-[var(--fg-3)]">
-                  {point.label}
-                </span>
-                {running && (
-                  <span className="text-[11px] uppercase tracking-wide text-[var(--fg-3)]">
-                    in progress
-                  </span>
-                )}
               </div>
             );
           })}
+        </div>
+        {/* Outside the plot so every bar shares one baseline — the in-progress
+            column's extra line used to lift its bar and understate it. */}
+        <div className="trend-labels">
+          {points.map((point) => (
+            <span key={point.key} className="trend-label">
+              {point.label}
+              {point.end >= today && <b>In progress</b>}
+            </span>
+          ))}
         </div>
         {/* Both figures, stated plainly, instead of the difference between them.
             The caption used to read "up 42 points" — correct (percentage points,
