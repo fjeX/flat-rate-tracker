@@ -1,0 +1,9 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [
+      "docs/design-directions/schedule-insights-2026-08.html"
+    ],
+    "ignoreValues": []
+  }
+}
