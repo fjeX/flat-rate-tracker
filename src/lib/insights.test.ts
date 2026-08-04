@@ -3,6 +3,8 @@ import {
   dataRange,
   displayedHours,
   formatRatio,
+  gainBoard,
+  leakBoard,
   opCodePerformance,
   opCodeState,
   periodTrend,
@@ -552,5 +554,122 @@ describe("periodTrend — in-progress periods", () => {
       { splitDay: 15 },
     );
     expect(points[0].end).toBe("2026-07-15");
+  });
+});
+
+describe("leakBoard", () => {
+  // The disjointness that makes the total a real sum. A comeback flags zero by
+  // DB CHECK, so it can never enter flagTotal/actualTotal — the overrun and the
+  // rework describe different hours of the same code's life.
+  it("reports a code's overrun AND its rework, without counting an hour twice", () => {
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", custom: true, customCode: "DIAG", flagHours: 10, actualHours: 16 }),
+          line({ id: "b", custom: true, customCode: "DIAG", flagHours: 0, actualHours: 3, isComeback: true }),
+        ]),
+      ],
+      [],
+    );
+    const board = leakBoard(rows);
+    expect(board.leaks.map((l) => l.kind).sort()).toEqual(["overrun", "rework"]);
+    expect(board.leaks.find((l) => l.kind === "overrun")!.hours).toBeCloseTo(6, 5);
+    expect(board.leaks.find((l) => l.kind === "rework")!.hours).toBeCloseTo(3, 5);
+    // 6 over book + 3 unpaid = 9. Not 16, not 19 — the actual hours of the
+    // timed line are mostly PAID, and only the excess is a leak.
+    expect(board.totalHours).toBeCloseTo(9, 5);
+  });
+
+  it("keeps rework visible on a code that also has healthy timed lines", () => {
+    // The regression this guards: gating on opCodeState made "measured" win, so
+    // a code with any ratio at all reported its overrun and silently dropped
+    // every unpaid comeback hour attached to it.
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", custom: true, customCode: "BRK", flagHours: 10, actualHours: 10 }),
+          line({ id: "b", custom: true, customCode: "BRK", flagHours: 0, actualHours: 2.5, isComeback: true }),
+        ]),
+      ],
+      [],
+    );
+    const board = leakBoard(rows);
+    expect(board.leaks).toHaveLength(1);
+    expect(board.leaks[0].kind).toBe("rework");
+    expect(board.totalHours).toBeCloseTo(2.5, 5);
+  });
+
+  it("ranks a pure-rework code by the hours it bled", () => {
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", custom: true, customCode: "WARR", flagHours: 0, actualHours: 3.3, isComeback: true }),
+        ]),
+      ],
+      [],
+    );
+    const board = leakBoard(rows);
+    expect(board.leaks).toHaveLength(1);
+    expect(board.leaks[0].kind).toBe("rework");
+    expect(board.leaks[0].hours).toBeCloseTo(3.3, 5);
+    expect(board.totalHours).toBeCloseTo(3.3, 5);
+  });
+
+  it("never lists a job that beat its book time", () => {
+    const rows = opCodePerformance(
+      [entry([line({ custom: true, customCode: "FAST", flagHours: 10, actualHours: 7 })])],
+      [],
+    );
+    expect(leakBoard(rows).leaks).toHaveLength(0);
+    expect(leakBoard(rows).totalHours).toBe(0);
+  });
+
+  it("ignores a code that was never timed rather than guessing a loss", () => {
+    const rows = opCodePerformance(
+      [entry([line({ custom: true, customCode: "NEVER", flagHours: 4, actualHours: null })])],
+      [],
+    );
+    expect(leakBoard(rows).leaks).toHaveLength(0);
+  });
+
+  it("orders worst first", () => {
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", custom: true, customCode: "SMALL", flagHours: 10, actualHours: 11 }),
+          line({ id: "b", custom: true, customCode: "BIG", flagHours: 10, actualHours: 20 }),
+        ]),
+      ],
+      [],
+    );
+    const board = leakBoard(rows);
+    expect(board.leaks.map((l) => l.code)).toEqual(["BIG", "SMALL"]);
+    expect(board.totalHours).toBeCloseTo(11, 5);
+  });
+});
+
+describe("gainBoard", () => {
+  it("reports hours the book paid that the job did not take", () => {
+    const rows = opCodePerformance(
+      [entry([line({ custom: true, customCode: "BRK", flagHours: 10, actualHours: 7.5 })])],
+      [],
+    );
+    const gains = gainBoard(rows);
+    expect(gains).toHaveLength(1);
+    expect(gains[0].code).toBe("BRK");
+    expect(gains[0].hours).toBeCloseTo(2.5, 5);
+  });
+
+  it("excludes overruns and untimed codes", () => {
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", custom: true, customCode: "OVER", flagHours: 5, actualHours: 9 }),
+          line({ id: "b", custom: true, customCode: "NEVER", flagHours: 5, actualHours: null }),
+        ]),
+      ],
+      [],
+    );
+    expect(gainBoard(rows)).toHaveLength(0);
   });
 });

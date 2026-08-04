@@ -17,12 +17,17 @@ import {
 import {
   displayedHours,
   formatRatio,
+  gainBoard,
+  leakBoard,
   opCodePerformance,
   opCodeState,
   periodTrend,
   ratioOrder,
   ratioTier,
   weekdayEfficiency,
+  type Gain,
+  type Leak,
+  type LeakBoard,
   type OpCodePerformance,
   type PeriodTrendPoint,
   type WeekdayEfficiency,
@@ -155,6 +160,145 @@ function SortHead({
 
 // ---------------------------------------------------------------------------
 
+/** One line describing why a leak is a leak, in the tech's own vocabulary. */
+function leakWhy(leak: Leak): string {
+  const lines = `${leak.uses} ${leak.uses === 1 ? "job" : "jobs"}`;
+  return leak.kind === "rework"
+    ? `${leak.uses} comeback ${leak.uses === 1 ? "line" : "lines"}, zero flag`
+    : `${lines} at ${formatRatio(leak.ratio as number)}× book`;
+}
+
+/**
+ * The page's opening claim: everything unpaid, ranked, in hours.
+ *
+ * Leads with the total because that is the number a tech can act on — "which
+ * job" is the follow-up question, not the first one. The bar is scaled to the
+ * worst row rather than to the total, so the top row always fills it and the
+ * rest read as a share of the worst offender instead of as slivers.
+ */
+/**
+ * The page's opening claim, above the window chips on purpose.
+ *
+ * This surface's whole job is to reach a conclusion — opening on a control
+ * instead makes the reader do the concluding, which is what the old chips-first
+ * layout did. An empty board is a real finding too, and a better one.
+ */
+function FindingLede({ board }: { board: LeakBoard }) {
+  if (board.leaks.length === 0) {
+    return (
+      <div>
+        <p className="text-base font-semibold" style={{ color: "var(--fg-0)" }}>
+          Nothing unpaid in this window.
+        </p>
+        <p className="mt-1 max-w-[60ch] text-sm" style={{ color: "var(--fg-2)" }}>
+          Every job you timed came in at or under its book time, and no comeback
+          hours went unflagged.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span
+          className="mono tabular-nums text-[34px] font-bold leading-[1.1] tracking-[-0.02em]"
+          style={{ color: "var(--bad)" }}
+        >
+          {fmtHours(board.totalHours)}h
+        </span>
+        <span className="text-base font-semibold" style={{ color: "var(--fg-0)" }}>
+          you weren&rsquo;t paid for
+        </span>
+      </div>
+      <p className="mt-2 max-w-[60ch] text-sm" style={{ color: "var(--fg-2)" }}>
+        Time you were on the clock for and no flag hour covered, from every
+        source the app can measure — ranked by what it cost you.
+      </p>
+    </div>
+  );
+}
+
+function LeakSection({ board }: { board: LeakBoard }) {
+  const worst = board.leaks[0]?.hours ?? 0;
+
+  return (
+    <section>
+      <div className="section-title">What&rsquo;s costing you</div>
+      <Card flush>
+        {board.leaks.map((leak, i) => {
+          // Rework is always the worse kind: it paid nothing at all, where an
+          // overrun at least paid some of its time.
+          const tier = leak.kind === "rework" ? "bad" : ratioTier(leak.ratio) ?? "warn";
+          const pct = worst > 0 ? Math.max(2, (leak.hours / worst) * 100) : 0;
+          return (
+            <div key={leak.key} className="leak-row">
+              <div className="leak-head">
+                <span className="leak-rank" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <span className="leak-name">
+                  <span className="leak-code">{leak.code}</span>
+                  <span className="leak-why">{leakWhy(leak)}</span>
+                </span>
+                <span className={`leak-hours ${tier === "bad" ? "bad" : "warn"}`}>
+                  {fmtHours(leak.hours)}h
+                </span>
+              </div>
+              <div className="leak-track">
+                <i
+                  className={`leak-fill${tier === "bad" ? " bad" : ""}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </Card>
+      <p className="mt-2 px-1 text-xs" style={{ color: "var(--fg-3)" }}>
+        Overrun is actual minus flag on jobs you timed. Unpaid rework has no
+        ratio because it flags zero — the hours are the whole finding. Weekdays
+        aren&rsquo;t listed here: a slow day is slow because of the jobs on it,
+        so counting it again would inflate the total.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The other half of the ledger.
+ *
+ * Beating the book is the trade, not a consolation prize, and a page that only
+ * ever reports losses stops getting opened. Kept deliberately smaller than the
+ * leak board: it is reassurance, not the finding.
+ */
+function GainSection({ gains }: { gains: Gain[] }) {
+  const shown = gains.slice(0, 3);
+  return (
+    <section>
+      <div className="section-title">Where you&rsquo;re winning</div>
+      <Card>
+        {shown.map((gain) => (
+          <div key={gain.key} className="gain-row">
+            <span className="gain-name">
+              <span className="text-sm font-semibold" style={{ color: "var(--fg-0)" }}>
+                {gain.code}
+              </span>
+              <span className="mt-0.5 block text-xs" style={{ color: "var(--fg-3)" }}>
+                {gain.uses} {gain.uses === 1 ? "job" : "jobs"} at{" "}
+                {formatRatio(gain.ratio)}× book
+              </span>
+            </span>
+            <span className="gain-hours">+{fmtHours(gain.hours)}h</span>
+          </div>
+        ))}
+      </Card>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function TimeGoesSection({
   rows,
   sortCol,
@@ -177,6 +321,76 @@ function TimeGoesSection({
   return (
     <section>
       <div className="section-title">Where your time goes</div>
+
+      {/* Phone form. Same `shown` array, same sort state — a 5-column table
+          clips its last column inside .card.flush at 390px, and that column is
+          the ratio this whole section exists to show. The sort chips reuse the
+          established filter-chip pattern rather than inventing a mobile-only
+          control; pressing one is exactly the header press it replaces. */}
+      <div className="opcode-list">
+        <div className="filter-row" style={{ marginBottom: 8 }}>
+          <span
+            style={{
+              fontSize: 12,
+              color: "var(--fg-3)",
+              fontWeight: 500,
+              alignSelf: "center",
+              flexShrink: 0,
+            }}
+          >
+            Sort
+          </span>
+          {([
+            { col: "ratio", label: "Worst first" },
+            { col: "uses", label: "Most used" },
+            { col: "code", label: "Code" },
+          ] as { col: SortCol; label: string }[]).map((s) => (
+            <button
+              key={s.col}
+              type="button"
+              onClick={() => onSort(s.col)}
+              className={`filter-chip${sortCol === s.col ? " active" : ""}`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <Card flush>
+          {shown.map((row) => {
+            const tier = ratioTier(row.ratio);
+            const state = opCodeState(row);
+            const shownHours = displayedHours(row);
+            return (
+              <div key={row.key} className="opcode-item">
+                <div className="opcode-item-head">
+                  <span className="opcode-item-name">
+                    <span className="opcode-item-code">{row.code}</span>
+                    {row.description && (
+                      <span className="opcode-item-desc">{row.description}</span>
+                    )}
+                  </span>
+                  {state === "measured" ? (
+                    <span className={`pill${tier === "good" ? "" : ` ${tier}`}`}>
+                      {formatRatio(row.ratio as number)}×
+                    </span>
+                  ) : state === "unpaid" ? (
+                    <span className="pill bad">unpaid rework</span>
+                  ) : (
+                    <span className="table-dim text-xs">never timed</span>
+                  )}
+                </div>
+                <p className="opcode-item-meta">
+                  {row.uses} {row.uses === 1 ? "use" : "uses"}
+                  {shownHours !== null &&
+                    ` · ${fmtHours(shownHours.flag)}h flag → ${fmtHours(shownHours.actual)}h actual`}
+                </p>
+              </div>
+            );
+          })}
+        </Card>
+      </div>
+
+      <div className="opcode-table">
       <Card flush>
         <Table>
           <thead>
@@ -234,6 +448,7 @@ function TimeGoesSection({
           </tbody>
         </Table>
       </Card>
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
         <p className="text-xs text-[var(--fg-3)]">
           Actual ÷ flag over the jobs you put on a timer —{" "}
@@ -458,11 +673,11 @@ function TrendSection({
           </p>
         )}
       </Card>
-      {/* "more than one point" was the old wording. Two senses of "point" a
-          line apart, one of which we just removed for being unreadable. */}
+      {/* The "ignores the window above" half of this caption moved up into the
+          All time heading, which now says it once for the whole half of the
+          page rather than once per section. */}
       <p className="mt-2 px-1 text-xs text-[var(--fg-3)]">
-        Always the last six pay periods — one period on its own is not a trend,
-        so this section ignores the window above.
+        Always the last six pay periods — one period on its own is not a trend.
       </p>
     </section>
   );
@@ -621,6 +836,10 @@ export function InsightsView({
     () => sortOpCodes(opCodes, sortCol, sortDir),
     [opCodes, sortCol, sortDir],
   );
+  // Both derived from the SAME rows the table renders, so the leaderboard and
+  // the table can never disagree about one op code's hours.
+  const leaks = useMemo(() => leakBoard(opCodes), [opCodes]);
+  const gains = useMemo(() => gainBoard(opCodes), [opCodes]);
   const weekdays = useMemo(
     () => weekdayEfficiency(scopedEntries, scopedDenom),
     [scopedEntries, scopedDenom],
@@ -647,63 +866,90 @@ export function InsightsView({
     Object.keys(denomByDay).length > 0 ||
     (lifetime !== null && lifetime.closedCount > 0);
 
-  return (
-    <div className="space-y-6">
-      <div className="filter-row">
-        {CHIPS.map((chip) => (
-          <button
-            key={chip.kind}
-            type="button"
-            onClick={() => setFilter(chip.kind)}
-            className={`filter-chip${filter === chip.kind ? " active" : ""}`}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
+  const chipRow = (
+    <div className="filter-row">
+      {CHIPS.map((chip) => (
+        <button
+          key={chip.kind}
+          type="button"
+          onClick={() => setFilter(chip.kind)}
+          className={`filter-chip${filter === chip.kind ? " active" : ""}`}
+        >
+          {chip.label}
+        </button>
+      ))}
+    </div>
+  );
 
-      {!hasAnyHistory ? (
+  if (!hasAnyHistory) {
+    return (
+      <div className="space-y-6">
+        {chipRow}
         <EmptyState
           icon={<Lightbulb size={22} />}
           title="Not enough data yet"
           description="Log your clocked hours and put a few jobs on the timer. Once the app knows how long a day was and how long a job took, this page can tell you which work is costing you."
         />
-      ) : (
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Conclusion, then the control that scopes it, then the evidence. */}
+      {hasWindowContent && <FindingLede board={leaks} />}
+      {chipRow}
+
+      {hasWindowContent ? (
         <>
-          {hasWindowContent ? (
-            <>
-              {opCodes.length > 0 && (
-                <TimeGoesSection
-                  rows={sortedOpCodes}
-                  sortCol={sortCol}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                />
-              )}
-              {hasWorkedDays && (
-                <BestDaysSection
-                  rows={weekdays}
-                  sort={weekdaySort}
-                  onSort={setWeekdaySort}
-                />
-              )}
-            </>
-          ) : (
-            <Card>
-              <p className="text-sm text-[var(--fg-2)]">
-                No work recorded in this {filter === "period" ? "pay period" : filter}.
-                Pick a wider window above — the trend below still covers your
-                whole history.
-              </p>
-            </Card>
+          {leaks.leaks.length > 0 && <LeakSection board={leaks} />}
+          {gains.length > 0 && <GainSection gains={gains} />}
+          {opCodes.length > 0 && (
+            <TimeGoesSection
+              rows={sortedOpCodes}
+              sortCol={sortCol}
+              sortDir={sortDir}
+              onSort={handleSort}
+            />
           )}
-          {trend.length > 0 && <TrendSection points={trend} today={today} />}
-          {/* Gated only on the migration having landed — the section handles
-              "nothing recovered yet" itself. */}
-          {lifetime !== null && (
-            <RecoverySection lifetime={lifetime} insights={insights} />
+          {hasWorkedDays && (
+            <BestDaysSection
+              rows={weekdays}
+              sort={weekdaySort}
+              onSort={setWeekdaySort}
+            />
           )}
         </>
+      ) : (
+        <Card>
+          <p className="text-sm text-[var(--fg-2)]">
+            No work recorded in this {filter === "period" ? "pay period" : filter}.
+            Pick a wider window above — the trend below still covers your whole
+            history.
+          </p>
+        </Card>
+      )}
+
+      {/* The window chips stop here, and the page says so structurally instead
+          of apologising for it in a caption under each section. */}
+      {(trend.length > 0 || lifetime !== null) && (
+        <div className="pt-2">
+          <div style={{ height: 1, background: "var(--line)" }} />
+          <div className="mt-5 flex items-baseline gap-3">
+            <h2 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>
+              All time
+            </h2>
+            <span className="text-xs" style={{ color: "var(--fg-3)" }}>
+              Ignores the window above
+            </span>
+          </div>
+        </div>
+      )}
+      {trend.length > 0 && <TrendSection points={trend} today={today} />}
+      {/* Gated only on the migration having landed — the section handles
+          "nothing recovered yet" itself. */}
+      {lifetime !== null && (
+        <RecoverySection lifetime={lifetime} insights={insights} />
       )}
     </div>
   );

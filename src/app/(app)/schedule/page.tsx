@@ -155,16 +155,13 @@ export default async function SchedulePage({
         </div>
       </div>
 
+      {/* Was seven sentences, which on a 390px phone was the entire first
+          screen before a single day was visible. The calendar teaches most of
+          this by being used; the dot is explained by the legend under the grid,
+          and the weekly pattern explains itself where it sits. */}
       <p className="mt-1 text-sm" style={{ color: "var(--fg-2)" }}>
-        Your efficiency is only as honest as the hours behind it. This
-        calendar tells FRT what a normal day looks like for you — so on days
-        you don&apos;t enter clocked hours, your flag divides by your real
-        schedule instead of showing nothing. Set your weekly pattern below
-        once; tap any day to record the hours you actually worked, mark a day
-        off, or change one day&apos;s shift when you stay late.{" "}
-        <span style={{ color: "var(--warn)" }}>Amber</span>{" "}days are scheduled
-        workdays with nothing logged — settle those so they can&apos;t quietly
-        skew your number.
+        Your efficiency is only as honest as the hours behind it. Tap any day to
+        record what you actually worked.
       </p>
 
       <section className="mt-4">

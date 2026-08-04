@@ -277,6 +277,149 @@ export function ratioTier(ratio: number | null): RatioTier | null {
 }
 
 // ---------------------------------------------------------------------------
+// What's costing you — every leak in one currency: hours
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a leak leaked. The two are measured differently and must stay
+ * distinguishable on the page: an overrun is a job that pays SOME of its time,
+ * rework is a job that pays NONE of it. Collapsing them into "hours lost" in the
+ * UI as well as the arithmetic would hide the difference that matters most.
+ */
+export type LeakKind = "overrun" | "rework";
+
+export type Leak = {
+  key: string;
+  code: string;
+  description: string;
+  kind: LeakKind;
+  /** Hours on the clock that no flag hour paid for. */
+  hours: number;
+  /** Lines behind the number — timed uses for an overrun, comebacks for rework. */
+  uses: number;
+  /** Present for an overrun so the row can show what the job runs at. */
+  ratio: number | null;
+};
+
+export type LeakBoard = {
+  leaks: Leak[];
+  /** Sum of `hours`. A real sum — see the note below on double counting. */
+  totalHours: number;
+};
+
+/**
+ * Every source of unpaid time this page can measure, ranked worst first.
+ *
+ * THE TOTAL IS A REAL SUM, and that is the whole reason this function exists
+ * rather than a looser "what's costing you" list. Two properties hold:
+ *
+ *   - Overrun and rework never count the same hour. A comeback flags zero by DB
+ *     CHECK, so its lines cannot clear the `flagHours > 0` test in
+ *     opCodePerformance and contribute nothing to flagTotal/actualTotal. The two
+ *     buckets are disjoint by construction, not by convention.
+ *   - Weekday efficiency is deliberately NOT a row here. A slow Monday is slow
+ *     largely BECAUSE the jobs on it overran, so its hours are already counted
+ *     above and adding them would inflate the headline with hours that exist
+ *     once in the shop and twice on the page. Best days stays its own section,
+ *     as a pattern rather than a quantity. Truth over comfort cuts both ways:
+ *     the bigger number would have been the flattering one to print.
+ *
+ * Built from the same OpCodePerformance rows the table below renders, so the
+ * leaderboard and the table can never report different hours for one op code.
+ */
+export function leakBoard(rows: OpCodePerformance[]): LeakBoard {
+  const leaks: Leak[] = [];
+
+  for (const row of rows) {
+    // The two buckets are tested INDEPENDENTLY, not as a switch on opCodeState.
+    // A code can both run long and come back, and opCodeState reports only the
+    // first ("measured" wins as soon as a ratio exists) — gating on it dropped
+    // the rework hours of every code that also had paid, timed lines, which
+    // under-reported the loss on exactly the codes in the worst shape.
+    //
+    // A row can therefore contribute two entries. That is the honest shape:
+    // "ran 6h long" and "came back for 3h free" are different findings about
+    // the same code and a tech fixes them differently.
+
+    // Overrun needs book time to overrun. Under it is a win, not a leak — that
+    // belongs to gainBoard.
+    if (row.flagTotal > 0) {
+      const overrun = row.actualTotal - row.flagTotal;
+      if (overrun >= MIN_MEASURED_HOURS) {
+        leaks.push({
+          key: `${row.key}:overrun`,
+          code: row.code,
+          description: row.description,
+          kind: "overrun",
+          hours: overrun,
+          uses: row.timedUses,
+          ratio: row.ratio,
+        });
+      }
+    }
+
+    // Rework is hours against zero flag, so it never overlaps the overrun above
+    // — a comeback cannot clear the flagHours > 0 test in opCodePerformance.
+    // A code that has never been timed and never come back contributes nothing:
+    // silence is not evidence of zero loss, and inventing a number here would
+    // put hours on the page that no clock ever produced.
+    if (row.unpaidHours >= MIN_MEASURED_HOURS) {
+      leaks.push({
+        key: `${row.key}:rework`,
+        code: row.code,
+        description: row.description,
+        kind: "rework",
+        hours: row.unpaidHours,
+        uses: row.unpaidUses,
+        ratio: null,
+      });
+    }
+  }
+
+  leaks.sort((a, b) => b.hours - a.hours || b.uses - a.uses);
+  return {
+    leaks,
+    totalHours: leaks.reduce((sum, leak) => sum + leak.hours, 0),
+  };
+}
+
+export type Gain = {
+  key: string;
+  code: string;
+  description: string;
+  /** Hours the book paid that the job did not take. */
+  hours: number;
+  uses: number;
+  ratio: number;
+};
+
+/**
+ * The other half of the ledger: codes that beat book time, best first.
+ *
+ * A page that only ever reports losses gets read as broken or as nagging, and
+ * a flat rate tech's whole trade is beating the book — the wins are the job
+ * being done well, not a consolation prize. Same rows, same arithmetic,
+ * opposite sign.
+ */
+export function gainBoard(rows: OpCodePerformance[]): Gain[] {
+  const gains: Gain[] = [];
+  for (const row of rows) {
+    if (opCodeState(row) !== "measured") continue;
+    const saved = row.flagTotal - row.actualTotal;
+    if (saved < MIN_MEASURED_HOURS) continue;
+    gains.push({
+      key: row.key,
+      code: row.code,
+      description: row.description,
+      hours: saved,
+      uses: row.timedUses,
+      ratio: row.ratio as number,
+    });
+  }
+  return gains.sort((a, b) => b.hours - a.hours || b.uses - a.uses);
+}
+
+// ---------------------------------------------------------------------------
 // Best days — efficiency by weekday
 // ---------------------------------------------------------------------------
 

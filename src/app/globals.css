@@ -2183,3 +2183,163 @@ a { color: inherit; }
 }
 .missing-day-link:hover { background: var(--bg-3); }
 .missing-day-link:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* ── Schedule: month grid ─────────────────────────────────────────── */
+/* Cells carry NO border. The old grid outlined every one of 42 cells, which
+   read as a table of boxes and fought the flat-ground/floating-surface rule;
+   a scheduled day is now a tonal step up from the page ground and everything
+   else is the ground itself. */
+.day-cell {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 3px;
+  min-height: 56px;
+  padding: 6px 2px 5px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  cursor: pointer;
+  font: inherit;
+  transition: background 120ms;
+}
+.day-cell:hover { background: var(--bg-2); }
+.day-cell:focus-visible { outline: none; box-shadow: var(--ring); }
+.day-cell:active { transform: scale(0.96); }
+/* Days with no shift and days off sit ON the ground rather than above it. */
+.day-cell.is-bare { background: transparent; }
+.day-cell.is-out { background: transparent; opacity: 0.4; }
+.day-cell.is-selected { background: var(--brand-bg); box-shadow: inset 0 0 0 1px var(--brand); }
+.day-num {
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px; font-weight: 550; line-height: 1;
+}
+.day-cell.is-today .day-num { color: var(--brand); font-weight: 700; }
+.day-sub {
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px; line-height: 1; color: var(--fg-3);
+}
+.day-sub.is-planned { opacity: 0.55; }
+.day-flag { width: 6px; height: 6px; border-radius: 999px; background: var(--warn); }
+
+.day-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; padding: 0 2px; }
+.day-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-3); }
+.day-legend i {
+  font-style: normal;
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+/* ── Schedule: docked day inspector ───────────────────────────────── */
+/* The panel used to render BELOW six rows of calendar, so on a phone the day
+   you just tapped scrolled itself off screen. It docks instead, following the
+   .save-bar convention for clearing the fixed bottom nav. */
+.day-dock {
+  position: sticky; bottom: 16px;
+  margin-top: 16px;
+  background: var(--bg-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow-pop);
+  z-index: 20;
+}
+@media (max-width: 899px) {
+  .day-dock { bottom: calc(72px + env(safe-area-inset-bottom)); }
+}
+.day-dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+
+/* Stepper that walks the unsettled days, so they don't have to be hunted. */
+.settle-strip {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 8px 8px 14px;
+  margin-bottom: 16px;
+}
+.settle-strip-label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; color: var(--fg-1); }
+.settle-strip-nav { display: flex; align-items: center; gap: 2px; flex: none; }
+.settle-count {
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px; color: var(--fg-3); min-width: 44px; text-align: center;
+}
+.icon-btn {
+  width: var(--tap-min); height: var(--tap-min);
+  display: grid; place-items: center;
+  border: 1px solid transparent; background: transparent;
+  color: var(--fg-2); border-radius: 999px; cursor: pointer;
+}
+.icon-btn:hover:not(:disabled) { background: var(--bg-3); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* ── Insights: what's costing you ─────────────────────────────────── */
+/* One ranked list in a single currency (hours), so an op-code overrun and a
+   block of unpaid rework can finally be weighed against each other. */
+.leak-row { padding: 14px; }
+.leak-row + .leak-row { border-top: 1px solid var(--line-soft); }
+.leak-head {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 8px;
+}
+.leak-rank {
+  flex: none; width: 16px;
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px; font-weight: 700; color: var(--fg-3);
+}
+.leak-name { flex: 1; min-width: 0; }
+.leak-code { font-size: 14px; font-weight: 600; color: var(--fg-0); }
+.leak-why { display: block; margin-top: 2px; font-size: 12px; color: var(--fg-3); }
+.leak-hours {
+  flex: none;
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 16px; font-weight: 700;
+}
+.leak-hours.warn { color: var(--warn); }
+.leak-hours.bad  { color: var(--bad); }
+/* Indented to the rank gutter so every bar starts on the same rail. */
+.leak-track {
+  margin-left: 26px; height: 8px; border-radius: 999px;
+  background: var(--bg-3); overflow: hidden;
+}
+.leak-fill { display: block; height: 100%; border-radius: 999px; background: var(--warn); }
+.leak-fill.bad { background: var(--bad); }
+
+.gain-row { display: flex; align-items: baseline; gap: 10px; }
+.gain-row + .gain-row { margin-top: 10px; }
+.gain-name { flex: 1; min-width: 0; }
+.gain-hours {
+  flex: none; color: var(--good);
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px; font-weight: 600;
+}
+
+/* ── Insights: op-code table, phone form ──────────────────────────── */
+/* A 5-column table does not fit a 390px phone: .card.flush clips its overflow,
+   so the last column — the ratio, the only reason the section exists — was cut
+   off mid-glyph rather than scrolling. Below 600px the same rows render as a
+   list with the ratio pinned right; the sortable table returns above it, where
+   it actually fits. Both are driven by the same sorted array. */
+.opcode-table { display: none; }
+.opcode-list { display: block; }
+@media (min-width: 600px) {
+  .opcode-table { display: block; }
+  .opcode-list { display: none; }
+}
+.opcode-item { padding: 12px 14px; }
+.opcode-item + .opcode-item { border-top: 1px solid var(--line-soft); }
+.opcode-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.opcode-item-name { min-width: 0; }
+.opcode-item-code { font-size: 14px; font-weight: 500; color: var(--fg-1); }
+.opcode-item-desc { display: block; margin-top: 2px; font-size: 12px; color: var(--fg-3); }
+.opcode-item-meta {
+  margin-top: 6px; font-size: 12px; color: var(--fg-3);
+  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-variant-numeric: tabular-nums;
+}
+.opcode-item-head .pill,
+.opcode-item-head .table-dim { flex: none; }
