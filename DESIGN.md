@@ -20,6 +20,19 @@ colors:
   bad: "oklch(0.72 0.18 25)"
   info: "oklch(0.75 0.13 230)"
 typography:
+  # The closed scale, enumerated. The named roles below cover only six of the
+  # eight legal steps, so tooling that reads this frontmatter flagged 11/13/16px
+  # as off-ramp — sizes globals.css uses 81 times. This block is the ramp; the
+  # roles below describe how six of its steps are typically set.
+  scale:
+    micro-label: "11px"
+    label: "12px"
+    body-dense: "13px"
+    body: "14px"
+    control: "16px"
+    title: "20px"
+    headline: "26px"
+    display: "34px"
   display:
     fontFamily: "IBM Plex Sans, system-ui, sans-serif"
     fontSize: "34px"
@@ -195,6 +208,9 @@ is legal.
 - **Display** (700, 34px, 1.1, -0.02em): page-level hero numbers and landing headlines.
 - **Headline** (650, 26px, 1.15): the primary stat in a tile — the number the screen exists to show.
 - **Title** (600, 20px, 1.25): section and card headings.
+- **Control** (400–600, 16px): form-control text and `.btn-lg`. 16px is the floor
+  that stops iOS Safari zooming the page on focus, so it is a functional
+  requirement on inputs, not a stylistic step.
 - **Body** (400, 14px, 1.5): prose and descriptions. Target 65–75 characters per line.
 - **Secondary body** (400, 13px, 1.45): dense table and list content.
 - **Label** (550, 12px, 1.3): field labels, meta rows, timestamps.
