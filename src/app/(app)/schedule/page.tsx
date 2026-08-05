@@ -162,9 +162,9 @@ export default async function SchedulePage({
         schedule instead of showing nothing. Set your weekly pattern below
         once; tap any day to record the hours you actually worked, mark a day
         off, or change one day&apos;s shift when you stay late.{" "}
-        <span style={{ color: "var(--warn)" }}>Amber</span> days are scheduled
-        workdays with nothing logged — settle those so they can&apos;t quietly
-        skew your number.
+        <span style={{ color: "var(--warn)" }}>Amber</span>{" "}
+        days are scheduled workdays with nothing logged — settle those so they
+        can&apos;t quietly skew your number.
       </p>
 
       <section className="mt-4">
