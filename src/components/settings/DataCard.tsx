@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { Download, Upload, X } from "lucide-react";
 import { exportDataAction, importDataAction } from "@/app/actions/settings";
-import type { ImportBundle } from "@/app/actions/settings";
+import type { ImportBundle } from "@/lib/import-remap";
 
 export function DataCard() {
   const fileRef = useRef<HTMLInputElement>(null);

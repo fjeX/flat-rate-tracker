@@ -260,8 +260,20 @@ export async function exportDataAction(): Promise<string> {
 // Import
 // ---------------------------------------------------------------------------
 
-export type { ImportBundle };
-
+// NOTE: never RE-EXPORT a type from this file — `export type { ImportBundle }`
+// shipped `ReferenceError: ImportBundle is not defined` and took down every
+// render that loads this module, including saving an RO.
+//
+// Next.js enumerates a "use server" module's exports to build the server-action
+// registry and emits a runtime binding for each one. A re-exported type has no
+// runtime value (it came in via a type-only import), so the emitted binding
+// dangles. Declaring a type inline is fine and several sibling actions do it
+// (`export type TimerSaveResult = {...}`) — an alias is erased outright; it is
+// the re-export form that leaves a reference behind.
+//
+// tsc, eslint AND `next build` all pass on this; only loading the built page
+// catches it. src/app/actions/use-server-exports.test.ts guards the pattern.
+// Consumers import ImportBundle from @/lib/import-remap directly.
 export async function importDataAction(bundle: ImportBundle): Promise<void> {
   if (!SUPPORTED_BACKUP_VERSIONS.includes(bundle.version)) {
     throw new Error(`Unsupported backup version ${bundle.version}.`);
