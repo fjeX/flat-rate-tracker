@@ -694,6 +694,28 @@ not a bug).
     the bot must not do that. Testing that it *opens and accepts text* is enough.
 - If the Report a Bug button or modal is missing entirely, note `SKIPPED — not present`.
 
+### 8g. Backup export (rewritten 2026-08-05 — read-only check)
+
+Settings → Data has **Export** (download a backup) and **Import** (restore one).
+
+⛔ **NEVER CLICK IMPORT.** Import REPLACES the entire account — every RO, op code,
+clock, spiff, dispute and pay rate — and there is no undo. Running it would wipe
+the streak, snapshots and career hours that §8b checks against. Export only.
+
+- **Export downloads:** click Export, confirm a `.json` file downloads without an
+  error toast and is more than a few KB. A 0-byte or failed download is a bug.
+- **It must be version 2.** Open the file and confirm `"version": 2`. Version 1
+  means an older build is deployed than expected — report it.
+- **The v2 sections must be present**, because a backup that silently omits them
+  restores an incomplete account (that was the 2026-08-05 Critical bug):
+  `laborRates`, `disputes`, `unpaidTime`, plus the long-standing `entries`,
+  `opCodes`, `dailyClocks`, `paidPeriods`, `bonuses`.
+- **Spot-check that lines carry their real state.** Find any entry op code line
+  in the JSON and confirm the keys `paidHours`, `isComeback` and `laborType`
+  exist. If lines are missing those keys the export has regressed — the import
+  used to drop exactly these, which silently destroyed reconciliation history.
+- If Settings → Data or the Export button is missing, note `SKIPPED — not present`.
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:
