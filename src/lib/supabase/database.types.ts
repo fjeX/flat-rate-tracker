@@ -1004,6 +1004,12 @@ export type Database = {
         Args: Record<string, never>
         Returns: number
       }
+      import_replace_account: {
+        Args: {
+          payload: Json
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
