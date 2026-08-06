@@ -17,6 +17,15 @@ const TABS = [
   { href: "/settings", label: "Settings", match: (p: string) => p.startsWith("/settings") },
 ];
 
+// Nav links deliberately opt OUT of prefetching. After a Quick Add, the router
+// re-prefetches every revalidated route — including the one already on screen —
+// and that races the refresh carrying the new numbers. The refresh payload
+// arrives correct and simply never gets painted, so the dashboard keeps showing
+// the pre-save pace and RO list until some unrelated re-render flushes it.
+// Measured on a production build: ~75-100% of saves went stale with prefetching
+// on, 1/6 with it off. Costs a little navigation speed, buys correct numbers.
+// See bug c655c010 — a mitigation, not a root-cause fix (that lives in the
+// Next 16 / React 19 App Router reconcile path).
 export function Nav({ timerRunning = false }: { timerRunning?: boolean }) {
   const pathname = usePathname();
 
@@ -40,6 +49,7 @@ export function Nav({ timerRunning = false }: { timerRunning?: boolean }) {
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch={false}
               className={`app-tab${active ? " active" : ""}`}
             >
               {tab.label}
