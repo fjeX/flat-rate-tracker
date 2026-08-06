@@ -5,7 +5,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { addDays, formatDateLong, getNeighborPeriodKeys } from "@/lib/periods";
-import type { Bonus, Entry, EntryPhoto, OpCode, DailyClock, PaidPeriod, PeriodOverride } from "@/lib/types";
+import {
+  buildImportPayload,
+  CURRENT_BACKUP_VERSION,
+  SUPPORTED_BACKUP_VERSIONS,
+  type ImportBundle,
+} from "@/lib/import-remap";
+import { reportServerError } from "@/lib/report-error-server";
+import type { Json } from "@/lib/supabase/database.types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -191,7 +198,18 @@ export async function setTimezoneAction(tz: string): Promise<void> {
 
 export async function exportDataAction(): Promise<string> {
   const supabase = await createClient();
-  const [settings, entries, opCodes, dailyClocks, paidPeriods, entryPhotos, bonuses] = await Promise.all([
+  const [
+    settings,
+    entries,
+    opCodes,
+    dailyClocks,
+    paidPeriods,
+    entryPhotos,
+    bonuses,
+    laborRates,
+    disputes,
+    unpaidTime,
+  ] = await Promise.all([
     db.getSettings(supabase),
     db.listEntries(supabase),
     db.listOpCodes(supabase),
@@ -199,11 +217,18 @@ export async function exportDataAction(): Promise<string> {
     db.listPaidPeriods(supabase),
     db.listAllEntryPhotos(supabase),
     db.listBonuses(supabase),
+    db.listLaborRates(supabase),
+    // Safe variants: migrations are applied by hand on the VM, so a build can
+    // legitimately run against a DB without these tables. They return null
+    // there, and the key is then omitted below — which import reads as "this
+    // backup does not describe disputes", leaving them untouched on restore.
+    db.listDisputesSafe(supabase),
+    db.listUnpaidTimeSafe(supabase),
   ]);
 
   return JSON.stringify(
     {
-      version: 1,
+      version: CURRENT_BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
       settings: {
         splitDay: settings.splitDay,
@@ -220,6 +245,11 @@ export async function exportDataAction(): Promise<string> {
       // Spiffs/bonuses — real dollar data, fully restored on import (unlike photo
       // metadata, which has no binary to restore).
       bonuses,
+      // v2. Pay rates price every dollar figure in the app; without them a
+      // migrated account reads as $0 across the board until they're re-entered.
+      laborRates,
+      ...(disputes ? { disputes } : {}),
+      ...(unpaidTime ? { unpaidTime } : {}),
     },
     null,
     2,
@@ -230,159 +260,82 @@ export async function exportDataAction(): Promise<string> {
 // Import
 // ---------------------------------------------------------------------------
 
-export type ImportBundle = {
-  version: number;
-  exportedAt: string;
-  settings: { splitDay: number; periodOverrides: Record<string, PeriodOverride> };
-  entries: Entry[];
-  opCodes: OpCode[];
-  dailyClocks: DailyClock[];
-  paidPeriods: PaidPeriod[];
-  // Photo metadata only — binaries aren't in the backup, so import ignores this.
-  entryPhotos?: EntryPhoto[];
-  // Spiffs/bonuses — optional (older backups predate the feature); restored fully.
-  bonuses?: Bonus[];
-};
-
+// NOTE: never RE-EXPORT a type from this file — `export type { ImportBundle }`
+// shipped `ReferenceError: ImportBundle is not defined` and took down every
+// render that loads this module, including saving an RO.
+//
+// Next.js enumerates a "use server" module's exports to build the server-action
+// registry and emits a runtime binding for each one. A re-exported type has no
+// runtime value (it came in via a type-only import), so the emitted binding
+// dangles. Declaring a type inline is fine and several sibling actions do it
+// (`export type TimerSaveResult = {...}`) — an alias is erased outright; it is
+// the re-export form that leaves a reference behind.
+//
+// tsc, eslint AND `next build` all pass on this; only loading the built page
+// catches it. src/app/actions/use-server-exports.test.ts guards the pattern.
+// Consumers import ImportBundle from @/lib/import-remap directly.
 export async function importDataAction(bundle: ImportBundle): Promise<void> {
-  if (bundle.version !== 1) throw new Error("Unsupported backup version.");
+  if (!SUPPORTED_BACKUP_VERSIONS.includes(bundle.version)) {
+    throw new Error(`Unsupported backup version ${bundle.version}.`);
+  }
   if (!Array.isArray(bundle.entries) || !Array.isArray(bundle.opCodes)) {
     throw new Error("Invalid backup format.");
   }
 
   const supabase = await createClient();
-  const userId = await db.getCurrentUserId(supabase);
 
-  // Validate all records before touching the DB — reduces risk of partial import.
+  // Validate dates up front purely to give a readable message. The import
+  // itself is atomic now, so a bad value further in would roll the whole thing
+  // back rather than half-apply — but "Invalid date in clock record" beats a raw
+  // Postgres cast error in the UI.
   for (const e of bundle.entries) {
     if (!DATE_RE.test(e.date)) throw new Error(`Invalid date in entry RO#${e.roNumber}.`);
   }
   for (const c of bundle.dailyClocks) {
     if (!DATE_RE.test(c.date)) throw new Error("Invalid date in clock record.");
   }
-  const bonuses = bundle.bonuses ?? [];
-  for (const b of bonuses) {
+  for (const b of bundle.bonuses ?? []) {
     if (!DATE_RE.test(b.date)) throw new Error("Invalid date in bonus record.");
   }
+  for (const u of bundle.unpaidTime ?? []) {
+    if (!DATE_RE.test(u.date)) throw new Error("Invalid date in unpaid time record.");
+  }
 
-  // Wipe existing data (entries cascade entry_op_codes + entry_photos via FK).
-  // Photo binaries don't cascade — purge storage objects before dropping rows.
+  // Read the photo paths BEFORE the replace: the rows are about to go with the
+  // entries cascade, so this is the last chance to learn which binaries the
+  // account owned. Nothing is removed here — the purge runs only after the DB
+  // transaction commits, so a failed import leaves the files where they are.
   const oldPhotoPaths = await db.listAllUserPhotoPaths(supabase);
+
+  // Fresh ids for every record, all internal references re-pointed. Without
+  // this the insert collides with the SOURCE account's rows on a shared
+  // database (23505) and importing into a second account can never succeed.
+  const payload = buildImportPayload(bundle);
+
+  // One call, one transaction. The wipe and the restore either both land or
+  // neither does — the old sequence of separate deletes and inserts could wipe
+  // an account and then fail to refill it.
+  const { error } = await supabase.rpc("import_replace_account", {
+    payload: payload as unknown as Json,
+  });
+  if (error) throw error;
+
+  // Past the point of no return: the account has been replaced. These binaries
+  // belong to rows that no longer exist, so failing to remove them leaks storage
+  // but corrupts nothing. Report it rather than throwing — an error here would
+  // tell the user the import failed when it actually succeeded.
   if (oldPhotoPaths.length > 0) {
-    await supabase.storage.from("ro-photos").remove(oldPhotoPaths);
-  }
-  // Delete bonuses before entries: the entry_id FK is ON DELETE SET NULL, so
-  // dropping entries would orphan bonus rows (link nulled, row kept) rather than
-  // remove them. Explicit delete keeps the import a clean replace.
-  await supabase.from("bonuses").delete().eq("user_id", userId);
-  await supabase.from("entries").delete().eq("user_id", userId);
-  await supabase.from("op_codes").delete().eq("user_id", userId);
-  await supabase.from("daily_clock_hours").delete().eq("user_id", userId);
-  await supabase.from("paid_period_hours").delete().eq("user_id", userId);
-
-  // Insert op_codes.
-  if (bundle.opCodes.length > 0) {
-    const { error } = await supabase.from("op_codes").insert(
-      bundle.opCodes.map((oc) => ({
-        id: oc.id,
-        user_id: userId,
-        code: oc.code,
-        description: oc.description,
-        flag_hours: oc.flagHours,
-        sort_order: oc.sortOrder,
-        created_at: oc.createdAt,
-      })),
-    );
-    if (error) throw error;
-  }
-
-  // Insert entries then their op code lines.
-  if (bundle.entries.length > 0) {
-    const { error: entriesErr } = await supabase.from("entries").insert(
-      bundle.entries.map((e) => ({
-        id: e.id,
-        user_id: userId,
-        date: e.date,
-        ro_number: e.roNumber,
-        vehicle_year: e.vehicle.year,
-        vehicle_make: e.vehicle.make,
-        vehicle_model: e.vehicle.model,
-        flag_hours: e.flagHours,
-        notes: e.notes,
-        created_at: e.createdAt,
-        updated_at: e.updatedAt,
-      })),
-    );
-    if (entriesErr) throw entriesErr;
-
-    const allLines = bundle.entries.flatMap((e) =>
-      e.opCodes.map((oc) => ({
-        id: oc.id,
-        entry_id: e.id,
-        op_code_id: oc.opCodeId,
-        custom: oc.custom,
-        custom_code: oc.customCode,
-        custom_description: oc.customDescription,
-        flag_hours: oc.flagHours,
-        actual_hours: oc.actualHours,
-        position: oc.position,
-      })),
-    );
-    if (allLines.length > 0) {
-      const { error: linesErr } = await supabase.from("entry_op_codes").insert(allLines);
-      if (linesErr) throw linesErr;
+    const { error: storageError } = await supabase.storage
+      .from("ro-photos")
+      .remove(oldPhotoPaths);
+    if (storageError) {
+      await reportServerError(storageError, { url: "importDataAction:purge-photos" });
     }
   }
 
-  // Bonuses after entries — entry_id references entries(id), and imported entries
-  // keep their original ids, so any RO link round-trips intact.
-  if (bonuses.length > 0) {
-    const { error } = await supabase.from("bonuses").insert(
-      bonuses.map((b) => ({
-        id: b.id,
-        user_id: userId,
-        date: b.date,
-        amount: b.amount,
-        category: b.category,
-        source: b.source,
-        note: b.note,
-        entry_id: b.entryId,
-        created_at: b.createdAt,
-        updated_at: b.updatedAt,
-      })),
-    );
-    if (error) throw error;
-  }
-
-  if (bundle.dailyClocks.length > 0) {
-    const { error } = await supabase.from("daily_clock_hours").insert(
-      bundle.dailyClocks.map((c) => ({
-        user_id: userId,
-        date: c.date,
-        hours: c.hours,
-      })),
-    );
-    if (error) throw error;
-  }
-
-  if (bundle.paidPeriods.length > 0) {
-    const { error } = await supabase.from("paid_period_hours").insert(
-      bundle.paidPeriods.map((p) => ({
-        user_id: userId,
-        period_key: p.periodKey,
-        paid_flag_hours: p.paidFlagHours,
-      })),
-    );
-    if (error) throw error;
-  }
-
-  await db.updateSettings(supabase, {
-    splitDay: bundle.settings.splitDay,
-    periodOverrides: bundle.settings.periodOverrides,
-  });
-
   revalidateAll();
 }
+
 
 // ---------------------------------------------------------------------------
 // Clear all data
