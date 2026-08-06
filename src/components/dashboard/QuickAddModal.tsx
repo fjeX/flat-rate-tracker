@@ -20,6 +20,7 @@ import {
 } from "@/components/forms/OpCodeModals";
 import { SubOpCodePickerModal } from "@/components/forms/SubOpCodePickerModal";
 import { BonusForm } from "@/components/bonuses/BonusForm";
+import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
 import { tap } from "@/lib/haptics";
 
 type QuickAddMode = "ro" | "spiff";
@@ -297,6 +298,9 @@ export function QuickAddModal({
       tap();
       onClose();
       router.refresh();
+      // The refreshed tree can arrive correct and never get painted (bug
+      // c655c010) — nudge React into committing it. See RefreshFlusher.
+      window.dispatchEvent(new Event(FLUSH_EVENT));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save.");
     }
