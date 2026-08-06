@@ -15,10 +15,6 @@ export type BottomTab = {
 /**
  * Thumb-reachable bottom tab bar for mobile. Hidden on desktop via CSS
  * (.bottom-nav only displays under 900px, where .app-tabs is hidden).
- *
- * These links opt out of prefetching for the same reason as the desktop tabs
- * in Nav.tsx — the post-save re-prefetch storm strands the refresh carrying the
- * new numbers, leaving a stale dashboard. See bug c655c010.
  */
 export function BottomNav({ tabs }: { tabs: BottomTab[] }) {
   const pathname = usePathname();
@@ -30,7 +26,6 @@ export function BottomNav({ tabs }: { tabs: BottomTab[] }) {
           <Link
             key={tab.href}
             href={tab.href}
-            prefetch={false}
             className={`bottom-tab${active ? " active" : ""}`}
             aria-current={active ? "page" : undefined}
           >
