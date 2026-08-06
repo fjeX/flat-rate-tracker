@@ -716,6 +716,39 @@ the streak, snapshots and career hours that §8b checks against. Export only.
   used to drop exactly these, which silently destroyed reconciliation history.
 - If Settings → Data or the Export button is missing, note `SKIPPED — not present`.
 
+### 8h. Dashboard updates after Quick Add WITHOUT a reload (fixed 2026-08-05)
+
+Bug `c655c010`: after the app sat idle, logging a Quick Add RO left the pay
+period pace **and the RO list** showing pre-save values until a manual refresh.
+The save always worked — only the screen was wrong, which makes it easy to miss.
+
+This is a **race that gets more likely the longer the tab sits idle** (near
+certain at ~45s), and it **self-heals after ~15–40s** — so the check only means
+something if you idle first and read fast:
+
+1. On `/dashboard`, note the **Pay Period Pace** flag-hours figure and the top RO
+   in the RO list.
+   - Read the pace from the plain-text twin, not the visible digits:
+     `document.querySelector('.pace-now .sr-only').textContent`. The visible
+     number is a RollingNumber odometer that renders every digit 0–9, so
+     `innerText` returns garbage like `0 1 2 3 4 5…`.
+2. **Leave the tab alone for at least 45 seconds.** Don't click anything — any
+   interaction resets the condition and the check becomes meaningless.
+3. Quick Add an RO with real flag hours (e.g. one `ALIGN` line).
+4. **Within ~10 seconds, without reloading and without clicking anything else,**
+   re-read the pace and the RO list.
+   - The pace must have gone **up by the flag hours you just logged**, and the
+     new RO must be at the top of the list.
+   - If either still shows the old value, the mitigation has regressed —
+     report it as **HIGH**, and say explicitly whether a manual reload then
+     shows the correct number (it will).
+5. Do the same check once for a **spiff** via Quick Add → Spiff, which goes
+   through `BonusForm` and had the identical defect.
+
+⚠️ Do not "verify" this by clicking around and then looking — clicking is
+precisely what hides the bug. `RefreshFlusher` (app layout) is what keeps this
+working; if it has been removed from the tree, expect this check to fail.
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:
