@@ -491,9 +491,27 @@ run long, which days are strongest, how efficiency is trending, and what FRT has
 recovered. Sections appear only when they have something to say.
 
 - **Window chips** — Week · Period · Month · All (All is the default). They
-  re-scope "Where your time goes" and "Best days" ONLY. Trend deliberately
-  ignores them and says so. Pick a window with no work in it and the page must
-  say "No work recorded in this…" — a blank page or a lone chart is a bug.
+  re-scope the windowed sections ONLY. Pick a window with no work in it and the
+  page must say "No work recorded in this…" — a blank page or a lone chart is a bug.
+  - **Restructured 2026-08-04.** The page is now split in two halves by a rule
+    and an **"All time"** heading captioned "Ignores the window above". Everything
+    ABOVE it obeys the chips ("What's costing you", "Where you're winning",
+    "Where your time goes", "Best days"); everything BELOW it ignores them
+    (Trend, Claims and recovery). The old per-section "ignores the window"
+    caption is GONE — it is said once, structurally. Its absence is the fix, not
+    a regression. If a section sits on the wrong side of that divider, or the
+    heading is missing while Trend/Claims render, that IS a bug.
+- **What's costing you (NEW 2026-08-04)** — the leak leaderboard, and the first
+  thing on the page. Ranked rows (1, 2, 3…) of time you were on the clock for
+  with no flag hour covering it, longest first, each with a proportional bar.
+  Two kinds: **rework** (paid nothing) and **overrun** (paid some of its time) —
+  rework must always rank as the worse kind at equal hours. Check the ranking is
+  actually descending by hours and that rank 1 has the longest bar. Cross-check
+  the total against the unpaid-rework figures on Pay Period; two surfaces
+  disagreeing about the same hours is the bug class this page keeps hitting.
+- **Where you're winning (NEW 2026-08-04)** — up to **3** codes beating book,
+  with job count and `×` book. Deliberately smaller than the leak board. Four or
+  more rows is a bug. It may be absent when nothing beats book — that is fine.
 - **Where your time goes** — op-code table, `actual ÷ flag`, LOWER is better.
   Every column header is a sort control: click to sort, click again to reverse,
   and the arrow (`↕ ↑ ↓`) must follow. Codes never timed read **"never timed"**
@@ -607,6 +625,13 @@ efficiency denominator falls back to the scheduled hours.
 - **Empty-day resolution:** amber "empty?" days are scheduled workdays with
   nothing logged. If one exists, resolve it as "Worked, zero flag", verify the
   marker changes to "zero day", then **Undo zero day** to put it back.
+- **Shorter lede (2026-08-04) — do NOT report as missing copy.** The intro was
+  cut from seven sentences to two; on a 390px phone the old one filled the
+  entire first screen before a single day was visible. Amber is now explained by
+  the **legend under the grid**, and the weekly pattern explains itself where it
+  sits. Check the legend is present and names the amber state — that is the
+  replacement. "The page no longer explains amber days" is only a bug if the
+  legend is also missing.
 - **Dashboard tie-ins:** the Today card may show **"On Pace"** (live pace vs
   the shift as it passes) instead of Efficiency until clocked hours are
   entered — that's by design. An "N scheduled days look empty" card on the
