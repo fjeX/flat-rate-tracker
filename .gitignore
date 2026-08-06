@@ -53,3 +53,4 @@ tests/.auth/
 .env.bot.local
 tests/e2e/.results/
 tests/e2e/.report/
+tests/smoke/.results/

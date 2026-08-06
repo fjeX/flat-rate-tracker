@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:ui": "playwright test",
+    "smoke": "playwright test --config=playwright.smoke.config.ts",
     "test:ui:update": "playwright test --update-snapshots",
     "test:ui:report": "playwright show-report tests/e2e/.report"
   },

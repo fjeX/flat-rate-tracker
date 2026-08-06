@@ -125,7 +125,16 @@ function RoRow({
             />
           )}
         </div>
-        <div className="history-ro-meta">{dateLine}</div>
+        {/*
+          Until the frt_timezone cookie exists — a user's first ever page load,
+          before the layout's sync writes it — the server formats this time in
+          the container's UTC and the browser formats it in the real local zone,
+          which is React error #418 on every row. The client value is the
+          correct one and React keeps it; suppressing the warning here is the
+          documented handling for locale/time formatting, not a mask. Once the
+          cookie is set, `tz` pins both sides and there is nothing to suppress.
+        */}
+        <div className="history-ro-meta" suppressHydrationWarning={!tz}>{dateLine}</div>
         {vehicle && <div className="history-ro-vehicle">{vehicle}</div>}
       </div>
       <div className="history-ro-hours">
@@ -188,10 +197,17 @@ export function HistoryView({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  // Optimistically removed on delete. The 2026-07-23 fix pruned `extraEntries`
+  // and called router.refresh(), which covers a row from "Load more" but NOT a
+  // row on the first page — that one lives in the `entries` prop, and a refresh
+  // is exactly the call that does not reliably repaint (bug c655c010, the same
+  // reason RefreshFlusher exists). A freshly logged RO is the newest row, so it
+  // is always on the first page: the common case was the uncovered one.
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const allEntries = useMemo(
-    () => [...entries, ...extraEntries],
-    [entries, extraEntries],
+    () => [...entries, ...extraEntries].filter((e) => !deletedIds.has(e.id)),
+    [entries, extraEntries, deletedIds],
   );
 
   async function handleLoadMore() {
@@ -382,6 +398,7 @@ export function HistoryView({
               // page's `entries` prop) — so it lingered on the list until a full
               // reload. Drop it from client state AND refresh the server page.
               onDeleted={(id) => {
+                setDeletedIds((prev) => new Set(prev).add(id));
                 setExtraEntries((prev) => prev.filter((e) => e.id !== id));
                 setOpenId(null);
                 router.refresh();

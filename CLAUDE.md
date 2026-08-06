@@ -16,34 +16,39 @@ You are assisting with the Flat Rate Tracker (FRT) — a Next.js app for logging
 
 ## After a Pull — What to Do Next
 
-After every `git pull origin master`, run these two checks in order:
+Use the **rebuild skill**. It is two steps and neither is conditional:
 
-### 1. Check for new migrations
+### 1. Apply migrations — invoke the migrate skill, unconditionally
+Do not gate this on a git check, and do not apply migrations by hand or in the
+Supabase SQL editor. The skill detects what is pending against
+`public.applied_migrations` and records what it applied; anything applied outside it
+leaves no ledger row and looks pending forever.
+
+A `git log ORIG_HEAD..HEAD` check asks *"what arrived in the last pull"*, not *"what
+is pending against the database"*. On 2026-08-06 that difference nearly shipped a
+container calling a function the DB did not have — the migration had landed in an
+earlier pull, so the diff was empty, and every later pull moved `ORIG_HEAD` further
+past it.
+
+**Migrations always finish before the deploy.** If migrate fails, stop.
+
+### 2. Deploy — one command
 ```bash
-git log --oneline ORIG_HEAD..HEAD -- supabase/migrations/
+cd ~/docker/flat-rate-tracker
+./scripts/deploy.sh
 ```
-- **Output is empty** → no schema changes, skip to step 2
-- **Output shows commits** → new migrations came in, apply them before anything else (see The One Thing That's VM-Only below)
 
-### 2. Check for app code changes
-```bash
-git log --oneline ORIG_HEAD..HEAD -- src/ Dockerfile package.json next.config.ts docker-compose.yml
-```
-- **Output is empty** → no rebuild needed, you're done
-- **Output shows commits** → app code changed, rebuild the container:
-  ```bash
-  cd ~/docker/flat-rate-tracker
-  docker compose down && docker compose build && docker compose up -d
-  ```
+Tags the running image for rollback → builds → deploys → waits for 200 → runs the
+**write-smoke** against the live site → **rolls back automatically if it fails**.
+`Deploy accepted` is the only pass. Anything else means the previous image is live
+and the new code is not deployed.
 
-**Always do migrations before rebuilding.** The new image expects the new schema — if the DB is still behind when the container comes up, it will fail immediately.
+**Do not run `docker compose down && docker compose build && docker compose up -d`
+directly.** That was the old procedure. It has no gate and no rollback, and it is
+how a build that returned 200 on `/` while every authenticated page threw was
+reported as a successful deploy (2026-08-05).
 
-### Rebuild takes a few minutes
-The `docker compose build` step compiles the Next.js app. It's done when you see the prompt return. Then:
-```bash
-docker compose ps   # should show app running (Up)
-```
-If it shows `Exit` or `Restarting`, check logs: `docker compose logs --tail=50`
+If the container itself is sick: `docker compose logs --tail=50`.
 
 ## VM Directory Structure
 
@@ -56,26 +61,19 @@ The self-hosted Supabase database is the only component that differs between env
 
 ### Applying migrations
 
-When the post-pull check (step 1 above) shows new migration files, apply them oldest-first:
+**Use the migrate skill.** It is the only supported path.
 
-```bash
-# See which files are new
-git diff ORIG_HEAD HEAD -- supabase/migrations/
+It diffs the files in `supabase/migrations/` against the `public.applied_migrations`
+ledger, applies whatever is pending oldest-first with `ON_ERROR_STOP=1`, writes a
+ledger row per file immediately after that file succeeds, and verifies against the
+catalog rather than against its own ledger.
 
-# Apply each one (replace filename with actual file)
-docker exec supabase-db psql -U postgres -d postgres \
-  -c "$(cat supabase/migrations/<timestamp>_<name>.sql)"
-```
+Do not hand-run `psql` and do not use the Supabase SQL editor. Both work and both
+leave no ledger row, so the migration stays "pending" forever and the next deploy
+tries to apply it again. `ON_ERROR_STOP=1` matters for the same reason: without it
+psql half-applies a file and still exits 0.
 
-Migration files live at: `~/docker/flat-rate-tracker/supabase/migrations/`
-
-**Verify after applying:**
-```bash
-docker exec supabase-db psql -U postgres -d postgres \
-  -c "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, column_name;"
-```
-
-If the new columns appear in that list, the migration worked. Then proceed to the rebuild check (step 2).
+Migration files live at `~/docker/flat-rate-tracker/supabase/migrations/`.
 
 ## Infrastructure Reference
 

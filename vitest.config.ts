@@ -15,7 +15,11 @@ export default defineConfig({
     // Spread configDefaults.exclude rather than replacing it — assigning a bare
     // array drops vitest's built-in node_modules/dist exclusions, and it starts
     // collecting tests out of dependencies.
-    exclude: [...configDefaults.exclude, "tests/e2e/**"],
+    // tests/smoke/** is excluded for the same reason. Its files are named
+    // *.smoke.ts so they don't match vitest's include today, but that's a
+    // filename convention holding the line — one file named *.spec.ts in there
+    // would reintroduce the exact breakage above.
+    exclude: [...configDefaults.exclude, "tests/e2e/**", "tests/smoke/**"],
   },
   resolve: {
     alias: {
