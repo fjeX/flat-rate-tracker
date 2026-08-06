@@ -17,12 +17,25 @@ Run the following steps using the Bash tool from this directory (`~/docker/flat-
    ```
    - "Already up to date" is fine — still rebuild, the Docker image may be stale
 
-2. **Check for new migrations**
-   ```bash
-   git log --oneline ORIG_HEAD..HEAD -- supabase/migrations/ 2>/dev/null || git log --oneline -5 -- supabase/migrations/
-   ```
-   - Empty output → no migrations, continue
-   - Shows commits → new migrations came in; apply them via the Supabase SQL editor before rebuilding
+2. **Apply pending migrations — always invoke the migrate skill**
+
+   Invoke the **migrate skill** unconditionally, on every rebuild. Do not gate it
+   behind a git check, and do not apply migrations by hand or via the Supabase SQL
+   editor — the skill records what it applied in `public.applied_migrations`, and a
+   migration applied outside it leaves no row, so it looks pending forever.
+
+   This step used to gate on `git log ORIG_HEAD..HEAD -- supabase/migrations/`. That
+   asks "what arrived in the last pull", not "what is pending against the database".
+   On 2026-08-06 a migration that had landed in an *earlier* pull was still unapplied,
+   the check came back empty, and the container was about to come up calling a
+   function the database did not have. A migration missed once stayed invisible
+   forever, because each new pull moved `ORIG_HEAD` past it.
+
+   The migrate skill detects pending work itself and is a no-op when there is none,
+   so calling it every time costs one query.
+
+   **Migrations always complete before the rebuild in step 3** — the new image
+   expects the new schema. If migrate reports a failure, stop; do not rebuild.
 
 3. **Rebuild and redeploy** — always run this, even if git said "Already up to date"
    ```bash
