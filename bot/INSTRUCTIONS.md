@@ -209,6 +209,24 @@ these as you go — both of these were real, and both came from your own reports
   is released on purpose — content sliding back under a panel you moved yourself
   is expected, not a bug.
 
+#### 3d. Hydration on /timer ITSELF (fixed 2026-08-09 — verify it stayed fixed)
+§3c watches the pip, which only appears on OTHER pages — the pip is hidden on
+/timer. The timer page's own cards had the same bug separately
+(`timer-page-hydration-418`), and this is the check that confirms the fix.
+
+Do this when you come back for §3b, with timers that have been running for
+several minutes:
+- **Reload /timer directly** (a fresh load, not a client-side nav) and watch the
+  console. `#418` / "server rendered text didn't match" is a bug.
+- Do it **two or three times.** The mismatch only fires when a second boundary
+  falls between the server render and hydration, so one clean load proves
+  nothing — the pip version used to fire on roughly half of loads.
+- The elapsed readout may show banked time only for a single frame before
+  jumping to the live value. **That is the fix working, not a bug** — the page
+  deliberately renders without the in-flight segment until the browser clock is
+  known. Only report it if the number stays wrong, or if the cards visibly shift
+  position as it resolves.
+
 ### 3z. Pay Period page shape (REDESIGNED 2026-07-30 — read before §4–§7)
 
 **Before this section: §3a should already be done and a timer running.** If it
