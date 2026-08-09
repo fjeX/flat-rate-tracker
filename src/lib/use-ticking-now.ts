@@ -15,8 +15,25 @@ import { useEffect, useState } from "react";
 //  - visibility/focus/pageshow listeners re-sync immediately on return, so a
 //    restored tab never shows even one stale second
 // Falls back to a plain setInterval when Workers are unavailable.
-export function useTickingNow(running: boolean): number {
-  const [now, setNow] = useState<number>(() => Date.now());
+//
+// Returns null until the component has mounted on the client, which is the
+// honest answer: there is no single wall clock the server and the browser can
+// agree on. Seeding with Date.now() during render stamped one second into the
+// SSR HTML and hydrated with another, so any elapsed time rendered as text
+// mismatched and React threw #418 — on the pip (fixed 2026-08-02) and then
+// again on /timer's own cards (timer-page-hydration-418). Fixing it per-caller
+// meant every future consumer had to remember; fixing it here means they
+// can't forget. Callers treat null as "exclude the in-flight segment" — see
+// elapsedFor.
+export function useTickingNow(running: boolean): number | null {
+  const [now, setNow] = useState<number | null>(null);
+
+  // Adopt the real clock once mounted, even when nothing is accruing — the
+  // ticking effect below returns early in that case and would leave `now` null
+  // indefinitely.
+  useEffect(() => {
+    setNow(Date.now());
+  }, []);
 
   useEffect(() => {
     if (!running) return;

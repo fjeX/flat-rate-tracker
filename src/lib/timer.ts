@@ -91,10 +91,21 @@ export type Elapsed = {
  * that's the forgotten-timer guard (a timer left running overnight stops
  * counting at the end of the scheduled shift instead of billing 16 hours).
  * Passing null means no cap.
+ *
+ * `now` may be null, meaning "the wall clock isn't known yet" — the state a
+ * client component is in during SSR and its first hydrating render (see
+ * useTickingNow). That is not the same as zero elapsed time: banked time still
+ * counts, only the in-flight segment is excluded, so the server and the first
+ * client render agree on the text and hydration matches. It resolves to the
+ * live value a frame later.
+ *
+ * Display-only. The persistence path (flushAccumulators, saveTimerAction)
+ * requires a real clock and takes a plain number — a saved total must never be
+ * computed from an unknown "now".
  */
 export function elapsedFor(
   slot: TimerSlot,
-  now: number,
+  now: number | null,
   capAt: number | null = null,
 ): Elapsed {
   const banked = {
@@ -104,7 +115,7 @@ export function elapsedFor(
   };
 
   const bucket = bucketFor(slot.status);
-  if (slot.startTime !== null && bucket !== null) {
+  if (slot.startTime !== null && bucket !== null && now !== null) {
     // Clock skew (server/client disagreement, or a device whose clock moved
     // backwards) must never produce negative time.
     const until = capAt !== null ? Math.min(now, capAt) : now;
@@ -315,8 +326,10 @@ export function minutesFromHHMM(hhmm: string | null | undefined): number | null 
  * stopped banking time. Drives the "RO 88421 ran until 5:00pm — right?" prompt. */
 export function wasAutoStopped(
   slot: TimerSlot,
-  now: number,
+  now: number | null,
   capAt: number | null,
 ): boolean {
-  return isAccruing(slot) && capAt !== null && now > capAt;
+  // A null `now` (pre-hydration, see elapsedFor) can't have passed a deadline —
+  // nothing is known to have elapsed yet.
+  return isAccruing(slot) && capAt !== null && now !== null && now > capAt;
 }

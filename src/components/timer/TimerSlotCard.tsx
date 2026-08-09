@@ -92,7 +92,8 @@ export function TimerSlotCard({
   entry: Entry | null;
   /** Auto-stop deadline, or null when uncapped (guest mode has no schedule). */
   capAt: number | null;
-  now: number;
+  /** Null until the client has mounted — see useTickingNow. */
+  now: number | null;
   libraryById: Map<string, OpCode>;
   pending: boolean;
   onStatus: (status: TimerStatus) => void;

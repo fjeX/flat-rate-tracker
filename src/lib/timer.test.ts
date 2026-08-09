@@ -122,6 +122,32 @@ describe("elapsedFor", () => {
     expect(e.total).toBe(0);
   });
 
+  // Hydration guard. A null `now` means the client hasn't mounted yet, so the
+  // server and the first client render must agree — that requires excluding the
+  // in-flight segment (whose length depends on a wall clock neither shares)
+  // while still counting banked time. Rendering the in-flight segment from a
+  // render-time Date.now() is what caused React #418 twice: on the pip
+  // (2026-08-02) and on /timer's own cards (timer-page-hydration-418).
+  it("excludes the in-flight segment when the wall clock is unknown", () => {
+    const e = elapsedFor(slot({ workAccumulated: HOUR }), null);
+    expect(e.work).toBe(HOUR);
+    expect(e.total).toBe(HOUR);
+  });
+
+  it("still banks hold accumulators when the wall clock is unknown", () => {
+    const e = elapsedFor(
+      slot({
+        status: "hold_parts",
+        workAccumulated: 2 * HOUR,
+        holdPartsAccumulated: HOUR,
+      }),
+      null,
+    );
+    expect(e.work).toBe(2 * HOUR);
+    expect(e.holdParts).toBe(HOUR);
+    expect(e.total).toBe(3 * HOUR);
+  });
+
   it("clamps the in-flight segment at capAt", () => {
     const e = elapsedFor(slot(), T0 + 10 * HOUR, T0 + 2 * HOUR);
     expect(e.work).toBe(2 * HOUR);
@@ -316,6 +342,8 @@ describe("wasAutoStopped", () => {
   it("is false for a slot that is not accruing", () => {
     expect(wasAutoStopped(slot({ status: "paused" }), T0 + 9 * HOUR, T0)).toBe(false);
     expect(wasAutoStopped(slot({ startTime: null }), T0 + 9 * HOUR, T0)).toBe(false);
+    // Unknown wall clock can't have passed a deadline.
+    expect(wasAutoStopped(slot(), null, T0)).toBe(false);
   });
 });
 
