@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import { test, expect, AUTH_STATE, FIXTURE_TARGET } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { ROUTES } from "./routes";
 
 /**
@@ -13,13 +12,8 @@ import { ROUTES } from "./routes";
  */
 for (const route of ROUTES) {
   test.describe(route.name, () => {
-    // See visual.spec.ts — fixture mode stubs auth server-side, so the
-    // AUTH_STATE guard would turn a real gate into a no-op.
-    if (route.auth && !FIXTURE_TARGET) {
-      test.skip(!fs.existsSync(AUTH_STATE), "no bot session — run auth setup");
-      test.use({ storageState: AUTH_STATE });
-    }
-
+    // No auth branch: fixture mode stubs auth server-side, so authed routes
+    // render for anyone who asks.
     test.beforeEach(async ({ page }) => {
       await page.goto(route.path);
       await page.waitForLoadState("networkidle");

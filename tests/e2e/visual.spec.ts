@@ -1,25 +1,18 @@
-import fs from "node:fs";
-import { test, expect, AUTH_STATE, FIXTURE_TARGET } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { ROUTES } from "./routes";
 
 /**
- * Visual regression: every route × (dark|light) × (390px|1440px), driven by
- * the four projects in playwright.config.ts. Dynamic data (the bot account's
- * ROs, dates, charts) is masked per routes.ts; layout in masked regions is
- * still covered by quality.spec.ts.
+ * Visual regression: every route × (dark|light) × (390px|1440px), driven by the
+ * four projects in playwright.visual.config.ts.
  *
- * Accepting an intentional look change:  npm run test:ui:update
+ * Runs against a container in FRT_FIXTURE_MODE — frozen dataset, frozen clock,
+ * stubbed auth — so nothing masks and nothing drifts. A diff here means the
+ * design moved.
+ *
+ * Accepting an intentional change:  ./scripts/update-baselines.sh   (VM only)
  */
 for (const route of ROUTES) {
   test.describe(route.name, () => {
-    // Against a fixture-mode container the server stubs auth, so there is no
-    // session to load. Skipping on a missing AUTH_STATE there would silently
-    // drop every authed route from a gate whose whole job is to check them.
-    if (route.auth && !FIXTURE_TARGET) {
-      test.skip(!fs.existsSync(AUTH_STATE), "no bot session — run auth setup");
-      test.use({ storageState: AUTH_STATE });
-    }
-
     test(`renders like the approved ${route.name}`, async ({ page }) => {
       await page.goto(route.path);
       await page.waitForLoadState("networkidle");
@@ -35,24 +28,16 @@ for (const route of ROUTES) {
       // let it into a baseline
       await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
       /**
-       * Against a fixture-mode container: mask nothing.
+       * No mask. The selector list this used to carry existed purely to hide the
+       * bot account's churning data; with the data and the clock both pinned
+       * there is nothing left that legitimately moves, and masking would only
+       * throw away coverage. /insights went from "mask the card interiors
+       * wholesale" to being compared numerals and all.
        *
-       * Every selector in route.mask is there to hide data that churns — the
-       * bot's nightly ROs, rolling dates, chart values. With the dataset and the
-       * clock both pinned, none of it churns, so masking would only be throwing
-       * away coverage. This is the actual payoff of the fixture work: /insights
-       * and /account went from "mask the card interiors wholesale" to being
-       * genuinely compared, numerals and all.
-       *
-       * Verified byte-identical across repeated renders before this was turned
-       * on. If a specific region ever does prove unstable here, mask that one
-       * selector with a comment saying what moves — don't restore the whole set.
+       * If some region ever does prove unstable, mask that ONE selector with a
+       * comment naming what moves — don't reintroduce a blanket list.
        */
-      await expect(page).toHaveScreenshot(`${route.name}.png`, {
-        fullPage: true,
-        mask: FIXTURE_TARGET ? [] : route.mask.map((sel) => page.locator(sel)),
-        maskColor: "#3a3f4b",
-      });
+      await expect(page).toHaveScreenshot(`${route.name}.png`, { fullPage: true });
     });
   });
 }

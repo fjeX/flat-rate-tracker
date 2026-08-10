@@ -1,18 +1,14 @@
 import { test as base } from "@playwright/test";
-import path from "node:path";
-
-export const AUTH_STATE = path.join(__dirname, "../.auth/bot-state.json");
 
 /**
- * Set when the suite is pointed at a container running FRT_FIXTURE_MODE=1.
+ * Shared setup for the canary suite.
  *
- * In that mode the server stubs auth outright, so there is no session to sign
- * in for and no bot-state.json to load — the authed routes render for anyone
- * who asks. Without this flag the authed specs would hit their
- * `skip(!existsSync(AUTH_STATE))` guard and quietly pass having tested nothing,
- * which is the worst possible outcome for a deploy gate.
+ * There is exactly one way to run these specs now: `playwright.visual.config.ts`
+ * against a container started with FRT_FIXTURE_MODE=1. The old local config that
+ * signed into prod as the bot account is gone, along with its bot-state.json
+ * plumbing — the server stubs auth in fixture mode, so there is no session to
+ * load and nothing to sign in to.
  */
-export const FIXTURE_TARGET = process.env.FRT_FIXTURE_TARGET === "1";
 
 /**
  * Pinned so "today" is computed identically on every machine. The app derives
@@ -43,7 +39,7 @@ export const test = base.extend<UiFixtures>({
   ],
   context: async ({ context, baseURL }, use, testInfo) => {
     const theme = testInfo.project.name.startsWith("light") ? "light" : "dark";
-    if (FIXTURE_TARGET && baseURL) {
+    if (baseURL) {
       // `url` and `path` are mutually exclusive here — passing both is rejected
       // with "Cookie should have either url or path". url implies path "/".
       await context.addCookies(

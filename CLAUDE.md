@@ -193,8 +193,14 @@ green without looking is how the old suite died.
 
 Escape hatches: `--skip-visual`, `--skip-smoke`.
 
-### `npm run test:ui` (local, optional)
+### `npm run test:ui` no longer exists
 
-Still runs against your dev server and live bot data, and still drifts — it's a
-dev convenience, not the gate, and its `-win32` baselines are separate from the
-canary's. Nothing blocks on it.
+Deleted 2026-08-10 with its 76 `-win32` baselines, `playwright.config.ts`, and
+`tests/e2e/auth.setup.ts`. It rendered live bot data on a dev server, so it
+failed on data drift instead of regressions, and its baselines were valid on
+exactly one machine. Leaving a permanently-red command around just teaches
+everyone to ignore red.
+
+Old memories and plans still tell you to "run `npm run test:ui` on the Windows
+PC" before committing. **That instruction is dead** — the gate is in
+`deploy.sh`.

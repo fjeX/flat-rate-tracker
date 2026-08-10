@@ -68,13 +68,20 @@ shows a new kind of data, add rows for it in `src/lib/fixtures/data.ts` —
 otherwise it renders its empty state (unknown tables resolve to `[]`, never an
 error), which snapshots fine but tests less.
 
-### `npm run test:ui` — local, optional
+### There is no local `npm run test:ui`
 
-Runs against your dev server and the live bot account, so it still drifts and
-still needs `.env.bot.local` (`FRT_BOT_EMAIL` / `FRT_BOT_PASSWORD`, same values
-as `~/.frt-bot.env`). Keeps its own `-win32` baselines under
-`tests/e2e/visual.spec.ts-snapshots/`. It's a dev convenience — nothing blocks
-on it.
+It was removed along with its 76 `-win32` baselines. It rendered live bot data
+on a dev server, so it failed on data drift rather than on regressions, and its
+baselines only existed on one machine — which is what made "run the UI tests"
+a manual chore on the Windows PC in the first place.
+
+To look at the canary suite yourself, run the container and point at it:
+
+```bash
+export IMAGE_NAME=$(docker compose config --images | head -1) CANARY_PORT=3901
+docker compose --profile canary up -d app-canary
+npm run test:visual            # then: docker compose --profile canary rm -sf app-canary
+```
 
 ## Design system
 

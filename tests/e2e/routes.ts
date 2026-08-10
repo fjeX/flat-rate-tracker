@@ -1,56 +1,45 @@
 /**
- * Every route in the app, with the selectors whose CONTENT is live data
- * (the bot account logs new ROs nightly, dates roll over, etc.). Masked
- * regions are excluded from pixel comparison — their layout is still
- * covered by the quality checks in quality.spec.ts.
+ * Every route in the app, for both the canary suite (tests/e2e) and the
+ * post-deploy health smoke (tests/smoke/health.smoke.ts).
+ *
+ * This file used to carry a `mask` list per route — the selectors whose content
+ * was live data, excluded from pixel comparison so the bot account's nightly ROs
+ * wouldn't fail the snapshots. It didn't work: masking hides pixels but not
+ * height, so pages kept growing and the baselines failed anyway. Fixture mode
+ * pins the data and the clock instead, which removed the reason to mask at all
+ * and got the numerals and charts back under the gate.
  */
 export type RouteSpec = {
   /** snapshot + test name */
   name: string;
   path: string;
+  /** true = behind the app's auth gate (stubbed in fixture mode) */
   auth: boolean;
-  /** selectors masked out of visual snapshots (dynamic data) */
-  mask: string[];
 };
-
-// Dynamic-data selectors shared by several pages. Data numerals in FRT
-// consistently use the mono/tabular classes, which makes "mask the numbers,
-// keep the layout" cheap.
-const NUMBERS = [".mono", ".tabular", ".font-mono", ".rn"];
-const RO_LISTS = [".ro-list", ".history-ro-row", ".ro-row"];
-const CHARTS = [".r-chart-wrap", ".r-readout", ".r-footer", ".period-bars-card"];
-const DATES = ['input[type="date"]', "time"];
 
 export const ROUTES: RouteSpec[] = [
   // ── public ─────────────────────────────────────────────
-  { name: "landing", path: "/", auth: false, mask: [] },
-  { name: "signin", path: "/signin", auth: false, mask: [] },
-  { name: "signup", path: "/signup", auth: false, mask: [] },
+  { name: "landing", path: "/", auth: false },
+  { name: "signin", path: "/signin", auth: false },
+  { name: "signup", path: "/signup", auth: false },
 
-  // ── guest mirrors (deterministic empty state) ──────────
-  { name: "guest-log", path: "/guest/log", auth: false, mask: DATES },
-  { name: "guest-history", path: "/guest/history", auth: false, mask: CHARTS },
-  { name: "guest-timer", path: "/guest/timer", auth: false, mask: [".rn"] },
-  { name: "guest-op-codes", path: "/guest/op-codes", auth: false, mask: [] },
+  // ── guest mirrors ──────────────────────────────────────
+  { name: "guest-log", path: "/guest/log", auth: false },
+  { name: "guest-history", path: "/guest/history", auth: false },
+  { name: "guest-timer", path: "/guest/timer", auth: false },
+  { name: "guest-op-codes", path: "/guest/op-codes", auth: false },
 
-  // ── authed (bot account data churns nightly — mask it) ─
-  // .gami-* fills/pins move with the bot's nightly logging — mask whole cards.
-  { name: "dashboard", path: "/dashboard", auth: true, mask: [".greeting", ".pace", ".gami-heat", ".gami-odo", ".gami-snap", ...NUMBERS, ...RO_LISTS, ...CHARTS, ...DATES] },
-  { name: "log", path: "/log", auth: true, mask: [".opc-quick", ...DATES] },
-  { name: "history", path: "/history", auth: true, mask: [".history-summary", ...NUMBERS, ...RO_LISTS, ...CHARTS] },
-  { name: "timer", path: "/timer", auth: true, mask: [...NUMBERS, ...RO_LISTS, ...DATES] },
-  { name: "op-codes", path: "/op-codes", auth: true, mask: ["main ul", "main ol", ...NUMBERS] },
-  { name: "pay-period", path: "/pay-period", auth: true, mask: [".stat-grid", ".pill", "input", ...NUMBERS, ...RO_LISTS, ...DATES] },
-  { name: "account", path: "/account", auth: true, mask: ["main"] },
-  // Calendar cells + pattern editor both churn with the bot's data and the
-  // month rolls over — mask both sections, keep header/nav/intro copy.
-  { name: "schedule", path: "/schedule", auth: true, mask: ["main section", ...NUMBERS] },
-  { name: "snapshots", path: "/snapshots", auth: true, mask: [".gami-sheet", ...NUMBERS] },
-  // Every figure on /insights is derived from the bot's nightly data — the ops
-  // table, the day bars, the trend readout and the claim tiles all move. Mask
-  // the card interiors wholesale (same call as /schedule and /account) and keep
-  // the frame: nav, page heading, section titles, range chips, card geometry.
-  { name: "insights", path: "/insights", auth: true, mask: ["main .card", ...NUMBERS, ...DATES] },
-  { name: "settings", path: "/settings", auth: true, mask: ["input", "select", ...NUMBERS] },
-  { name: "dispute-pack", path: "/pay-period/dispute-pack", auth: true, mask: [".dp-meta", ".dp-table-wrap", ".dp-header", ".dp-footer"] },
+  // ── authed ─────────────────────────────────────────────
+  { name: "dashboard", path: "/dashboard", auth: true },
+  { name: "log", path: "/log", auth: true },
+  { name: "history", path: "/history", auth: true },
+  { name: "timer", path: "/timer", auth: true },
+  { name: "op-codes", path: "/op-codes", auth: true },
+  { name: "pay-period", path: "/pay-period", auth: true },
+  { name: "account", path: "/account", auth: true },
+  { name: "schedule", path: "/schedule", auth: true },
+  { name: "snapshots", path: "/snapshots", auth: true },
+  { name: "insights", path: "/insights", auth: true },
+  { name: "settings", path: "/settings", auth: true },
+  { name: "dispute-pack", path: "/pay-period/dispute-pack", auth: true },
 ];

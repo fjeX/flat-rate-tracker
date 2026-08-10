@@ -17,15 +17,12 @@ import { defineConfig } from "@playwright/test";
  * deploy.sh owns the canary's lifecycle.
  *
  * NO setup PROJECT — fixture mode stubs auth server-side, so there is no sign-in
- * step and no storage state. FRT_FIXTURE_TARGET tells the specs to skip their
- * auth-state guard (see tests/e2e/fixtures.ts).
+ * step and no storage state to load.
  */
 const MOBILE = { width: 390, height: 844 };
 const DESKTOP = { width: 1440, height: 900 };
 
 const CANARY_URL = process.env.FRT_CANARY_URL ?? "http://127.0.0.1:3901";
-
-process.env.FRT_FIXTURE_TARGET = "1";
 
 export default defineConfig({
   testDir: "./tests/e2e",

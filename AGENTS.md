@@ -16,9 +16,9 @@ npm test          # vitest logic suite — must be green
 against the freshly built image in fixture mode, before traffic swaps. A
 layout regression rejects the deploy. See README → UI regression tests.
 
-`npm run test:ui` still exists as a local dev convenience (dev server + live bot
-data, needs `.env.bot.local`). It drifts with the bot's nightly data and nothing
-blocks on it — do not "fix" it by re-recording its baselines.
+**`npm run test:ui` does not exist.** It was deleted along with its `-win32`
+baselines. If a doc, plan, or memory tells you to run it before committing, that
+instruction is stale — the gate lives in `deploy.sh`.
 
 If the **deploy** gate fails on a look you changed intentionally: review
 (`npm run test:ui:report`), then `./scripts/update-baselines.sh` on the VM, and
