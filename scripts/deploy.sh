@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # FRT deploy gate — VM only. Run from ~/docker/flat-rate-tracker.
 #
-#   ./scripts/deploy.sh              build, deploy, smoke, roll back on failure
-#   ./scripts/deploy.sh --skip-smoke deploy without the gate (records WHY it was skipped)
-#   ./scripts/deploy.sh --smoke-only run the smoke against what is already live
+#   ./scripts/deploy.sh               build, visual gate, deploy, smoke, roll back on failure
+#   ./scripts/deploy.sh --skip-smoke  deploy without the smoke gate (records WHY it was skipped)
+#   ./scripts/deploy.sh --skip-visual deploy without the visual gate
+#   ./scripts/deploy.sh --smoke-only  run the smoke against what is already live
+#
+# TWO GATES, TWO DIFFERENT FAILURE MODES
+#   visual (pre-swap)  — photographs the new image in fixture mode on a loopback
+#                        port. Fails => nothing was deployed, no rollback needed.
+#   smoke  (post-swap) — exercises real writes against the live site.
+#                        Fails => the previous image is restored.
 #
 # WHY THIS IS A SCRIPT AND NOT STEPS IN A SKILL FILE
 # The incident log is explicit about this. bot-runner-hang was "fixed" with prose
@@ -26,12 +33,18 @@ cd "$REPO_DIR"
 SMOKE_BASE_URL="${SMOKE_BASE_URL:-https://tracker.slimelab.cc}"
 BOT_ENV="${BOT_ENV:-$HOME/.frt-bot.env}"
 ROLLBACK_TAG="frt-rollback:prev"
+CANARY_PORT="${CANARY_PORT:-3001}"
+# Must track the @playwright/test version in package.json. A mismatched browser
+# renders text differently and every baseline fails at once.
+PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.61.1-noble}"
 SKIP_SMOKE=0
+SKIP_VISUAL=0
 SMOKE_ONLY=0
 
 for arg in "$@"; do
   case "$arg" in
     --skip-smoke) SKIP_SMOKE=1 ;;
+    --skip-visual) SKIP_VISUAL=1 ;;
     --smoke-only) SMOKE_ONLY=1 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
@@ -101,6 +114,73 @@ fi
 log "Building"
 docker compose build || die "build FAILED — nothing was deployed, the old container is untouched"
 ok "image built"
+
+# ── 2.5. Visual regression, PRE-SWAP ────────────────────────────────────────
+# Runs the image we just built in fixture mode on a loopback port and photographs
+# it. The live container has not been touched at this point, so a failure here
+# uses die(), NOT rollback(): there is nothing to roll back from, and calling
+# rollback() would pointlessly re-tag and recreate a container that was never
+# replaced. "Rejected before swap" and "rolled back after swap" are different
+# outcomes and the output says which one happened.
+#
+# Why this can't just run against the live site like the smoke does: the smoke
+# asserts behaviour, which survives changing data. Pixels don't. Photographing
+# prod means photographing whatever the bot logged last night, which is what
+# made the old local suite fail on a schedule.
+if [[ "$SKIP_VISUAL" -eq 1 ]]; then
+  warn "VISUAL GATE SKIPPED (--skip-visual) — layout regressions will not be caught"
+else
+  log "Visual regression gate (pre-swap, canary on port $CANARY_PORT)"
+
+  export IMAGE_NAME CANARY_PORT
+  canary_down() { docker compose --profile canary rm -sf app-canary >/dev/null 2>&1 || true; }
+  # A canary left running holds the port and fails every later deploy.
+  canary_down
+  trap canary_down EXIT
+
+  docker compose --profile canary up -d app-canary \
+    || die "canary failed to start — new image never went live, the old one is still serving"
+
+  CANARY_URL="http://127.0.0.1:$CANARY_PORT"
+  CANARY_UP=0
+  for i in $(seq 1 30); do
+    CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$CANARY_URL" || true)"
+    if [[ "$CODE" == "200" ]]; then CANARY_UP=1; ok "canary answering after ${i}s"; break; fi
+    sleep 1
+  done
+  [[ "$CANARY_UP" -eq 1 ]] || {
+    docker compose --profile canary logs --tail=30 app-canary || true
+    die "canary never returned 200 — new image never went live, the old one is still serving"
+  }
+
+  # Confirm fixture mode actually engaged. Without this the gate would happily
+  # photograph a canary that fell back to live data and call the result a pass —
+  # exactly the failure this whole change exists to eliminate.
+  docker compose --profile canary logs app-canary 2>&1 | grep -q "FIXTURE MODE" \
+    || die "canary is NOT in fixture mode — refusing to snapshot live data. Check FRT_FIXTURE_MODE in docker-compose.yml."
+  ok "fixture mode confirmed"
+
+  # Playwright runs INSIDE its pinned image, not on the VM. Font rendering is
+  # part of the snapshot, so the renderer has to be pinned too — otherwise the
+  # baselines are only valid on whichever machine happened to make them, which
+  # is the trap the old -win32 set fell into.
+  if docker run --rm --network host \
+      --user "$(id -u):$(id -g)" \
+      -v "$REPO_DIR:/work" -w /work \
+      -e HOME=/tmp -e FRT_CANARY_URL="$CANARY_URL" \
+      "$PLAYWRIGHT_IMAGE" \
+      npx playwright test --config=playwright.visual.config.ts; then
+    ok "visual regression passed"
+  else
+    canary_down
+    die "VISUAL REGRESSION FAILED against the new build — new image never went live, the old one is still serving.
+       Review:  npm run test:ui:report
+       If the change is intentional, accept it with:  ./scripts/update-baselines.sh"
+  fi
+
+  canary_down
+  trap - EXIT
+fi
 
 # ── 3. Deploy ───────────────────────────────────────────────────────────────
 log "Deploying"

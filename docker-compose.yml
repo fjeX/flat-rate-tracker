@@ -28,6 +28,31 @@ services:
       - "traefik.http.routers.flat-rate-tracker.tls.certresolver=cloudflare"
       - "traefik.http.services.flat-rate-tracker.loadbalancer.server.port=3000"
 
+  # ── Visual-regression canary ────────────────────────────────────────────────
+  # The image deploy.sh just built, run in fixture mode on a loopback port so the
+  # visual gate can photograph it BEFORE any traffic swaps over. Same image as
+  # `app` — FRT_FIXTURE_MODE is runtime-only, not a NEXT_PUBLIC_* var, so one
+  # build serves both and the gate tests the exact bytes that ship.
+  #
+  # `profiles` keeps it out of a bare `docker compose up -d` (the deploy step at
+  # scripts/deploy.sh). Without it, every deploy would also start a canary and
+  # leave it running.
+  app-canary:
+    profiles: ["canary"]
+    image: ${IMAGE_NAME:-}
+    restart: "no"
+    environment:
+      # The only thing that distinguishes this container from production.
+      - FRT_FIXTURE_MODE=1
+      # SUPABASE_INTERNAL_URL and the webhook vars are deliberately NOT passed.
+      # Fixture mode never reaches Postgres, and a canary that could fire the
+      # bug-triage webhook would page us over a screenshot.
+    ports:
+      # Loopback only. This container serves frozen data and stubs auth — it must
+      # never be reachable from the network, and it is deliberately off the proxy
+      # network with no traefik labels so Traefik cannot route to it.
+      - "127.0.0.1:${CANARY_PORT:-3001}:3000"
+
 networks:
   proxy:
     external: true

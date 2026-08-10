@@ -5,6 +5,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./database.types";
 import { authCookieName, serverSupabaseUrl } from "./config";
+import { FIXTURE_MODE } from "@/lib/fixtures/enabled";
 
 // Auth pages redirect logged-in users to the app. Guest routes allow anyone.
 const AUTH_PAGES = ["/signin", "/signup"];
@@ -17,6 +18,24 @@ const CALLBACK_ROUTES = ["/auth/"];
 const PUBLIC_ROUTES = ["/"];
 
 export async function updateSession(request: NextRequest) {
+  /**
+   * Fixture mode: let every request through, redirecting nothing.
+   *
+   * This is the third place the app decides who you are, and the only one that
+   * runs before page code — it builds its own createServerClient right below
+   * rather than going through lib/supabase/server.ts, so stubbing that factory
+   * doesn't reach here. Without this branch every authed route 307s to /signin
+   * and the visual suite photographs the sign-in page thirteen times.
+   *
+   * Pass-through rather than "pretend a user is signed in", because of the
+   * redirect at the bottom of this function: a logged-in user hitting a public
+   * route gets bounced to /dashboard, which would make the landing, signin and
+   * signup snapshots impossible to capture. The suite needs public AND authed
+   * routes renderable in the same run, and no redirects at all is the only
+   * state where that's true.
+   */
+  if (FIXTURE_MODE) return NextResponse.next({ request });
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(

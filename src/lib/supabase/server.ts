@@ -4,8 +4,22 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "./database.types";
 import { authCookieName, serverSupabaseUrl } from "./config";
+import { FIXTURE_MODE } from "@/lib/fixtures/enabled";
+import { createFixtureClient } from "@/lib/fixtures/client";
 
 export async function createClient() {
+  // Fixture mode: hand back a client backed by frozen data instead of Postgres.
+  // This is the single seam the whole visual-regression gate hangs on — every
+  // Server Component gets its DB handle here, and the four routes that call
+  // supabase.auth.getUser() directly get their fake user from it too.
+  //
+  // The cast is load-bearing: without it the return type widens to a union and
+  // every db/*.ts function (typed SupabaseClient<Database>) stops compiling.
+  // The fixture client implements the slice of that surface db/ actually calls.
+  if (FIXTURE_MODE) {
+    return createFixtureClient() as unknown as ReturnType<typeof createServerClient<Database>>;
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient<Database>(

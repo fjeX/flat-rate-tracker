@@ -140,10 +140,61 @@ networks:
 - Do not create Docker networks named `web`, `traefik`, or `default` — use `proxy`
 - Do not clone the Supabase repo anywhere other than `~/supabase/`
 
-## UI Changes — Required Gate
+## UI Changes — The Visual Gate
 
-Before any commit that touches `.tsx` or `.css`, run **`npm run test:ui`**
-(visual snapshots + quality checks, every route × dark/light × mobile/desktop).
-Intentional look changes: review with `npm run test:ui:report`, accept with
-`npm run test:ui:update`, commit baselines with the change. Details in
-`README.md` and `AGENTS.md`.
+**The gate runs itself inside `deploy.sh`. You do not run it by hand.**
+
+After the image builds and *before* traffic swaps, deploy.sh starts that same
+image on `127.0.0.1:3001` with `FRT_FIXTURE_MODE=1` and photographs every route
+× dark/light × mobile/desktop from inside a pinned Playwright container. A
+regression rejects the deploy before it goes live.
+
+### Fixture mode — why the snapshots stopped rotting
+
+The suite used to render the bot account's live prod data, so pages grew taller
+every night and the baselines failed on a schedule — `/history` drifted
+2580px → 4495px with zero CSS changes (2026-08-09). Masking hid the pixels but
+not the height. A gate that fails for reasons unrelated to the diff gets
+rubber-stamped, and then it isn't a gate.
+
+`FRT_FIXTURE_MODE=1` pins two things, and **both are required** — frozen data
+alone still drifts as "days left in this period" counts down:
+
+- **Data** — `createClient()` returns a fixture-backed client
+  (`src/lib/fixtures/`). One seam covers all ~18 db functions *and* the four
+  routes that call `supabase.auth.getUser()` directly.
+- **Clock** — `src/instrumentation.ts` pins the global `Date` to
+  `2026-03-12T17:30Z`, catching all six independent "now" reads.
+
+Three places decide who you are, and `src/lib/supabase/proxy.ts` (Next 16's
+renamed middleware) runs *before* page code and bypasses `createClient()`
+entirely — it has its own fixture branch. **Add a fourth auth surface and the
+gate silently photographs the sign-in page.**
+
+Because data is frozen, fixture-mode snapshots **mask nothing** — numerals and
+charts are compared for real, and `maxDiffPixelRatio` is 0.002 instead of 0.01.
+
+### Accepting an intentional look change
+
+```bash
+./scripts/update-baselines.sh     # VM only — rebuilds, then regenerates
+```
+Review first (`npm run test:ui:report`). Commit the images in
+`tests/e2e/__canary__/` **with** the change that caused them, the same way a
+migration ships with the code that needs it. Running this to turn a red gate
+green without looking is how the old suite died.
+
+### Two gates, two failure modes
+
+| Gate | When | On failure |
+|---|---|---|
+| **visual** | pre-swap, fixture canary | `die` — nothing deployed, nothing to roll back |
+| **write-smoke** | post-swap, live site | `rollback` — previous image restored |
+
+Escape hatches: `--skip-visual`, `--skip-smoke`.
+
+### `npm run test:ui` (local, optional)
+
+Still runs against your dev server and live bot data, and still drifts — it's a
+dev convenience, not the gate, and its `-win32` baselines are separate from the
+canary's. Nothing blocks on it.
