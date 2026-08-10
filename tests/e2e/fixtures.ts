@@ -44,8 +44,10 @@ export const test = base.extend<UiFixtures>({
   context: async ({ context, baseURL }, use, testInfo) => {
     const theme = testInfo.project.name.startsWith("light") ? "light" : "dark";
     if (FIXTURE_TARGET && baseURL) {
+      // `url` and `path` are mutually exclusive here — passing both is rejected
+      // with "Cookie should have either url or path". url implies path "/".
       await context.addCookies(
-        FIXTURE_COOKIES.map((c) => ({ ...c, url: baseURL, path: "/" })),
+        FIXTURE_COOKIES.map((c) => ({ ...c, url: baseURL })),
       );
       /**
        * Seal the browser off from the real Supabase.
