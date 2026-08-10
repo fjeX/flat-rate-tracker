@@ -33,7 +33,7 @@ cd "$REPO_DIR"
 SMOKE_BASE_URL="${SMOKE_BASE_URL:-https://tracker.slimelab.cc}"
 BOT_ENV="${BOT_ENV:-$HOME/.frt-bot.env}"
 ROLLBACK_TAG="frt-rollback:prev"
-CANARY_PORT="${CANARY_PORT:-3001}"
+CANARY_PORT="${CANARY_PORT:-3901}"
 # Must track the @playwright/test version in package.json. A mismatched browser
 # renders text differently and every baseline fails at once.
 PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.61.1-noble}"

@@ -16,7 +16,7 @@ migrations locally; see `CLAUDE.md` for the VM deploy flow.
 
 **The gate is automatic — it runs inside `scripts/deploy.sh`, not on your
 machine.** After the image builds and before traffic swaps, deploy.sh runs that
-same image on `127.0.0.1:3001` with `FRT_FIXTURE_MODE=1` and photographs every
+same image on `127.0.0.1:3901` with `FRT_FIXTURE_MODE=1` and photographs every
 route × dark/light × 390px/1440px from inside a pinned Playwright container. A
 regression rejects the deploy before it reaches the site.
 

@@ -145,7 +145,7 @@ networks:
 **The gate runs itself inside `deploy.sh`. You do not run it by hand.**
 
 After the image builds and *before* traffic swaps, deploy.sh starts that same
-image on `127.0.0.1:3001` with `FRT_FIXTURE_MODE=1` and photographs every route
+image on `127.0.0.1:3901` with `FRT_FIXTURE_MODE=1` and photographs every route
 × dark/light × mobile/desktop from inside a pinned Playwright container. A
 regression rejects the deploy before it goes live.
 

@@ -17,7 +17,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
-CANARY_PORT="${CANARY_PORT:-3001}"
+CANARY_PORT="${CANARY_PORT:-3901}"
 PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.61.1-noble}"
 BUILD=1
 [[ "${1:-}" == "--no-build" ]] && BUILD=0

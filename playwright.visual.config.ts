@@ -23,7 +23,7 @@ import { defineConfig } from "@playwright/test";
 const MOBILE = { width: 390, height: 844 };
 const DESKTOP = { width: 1440, height: 900 };
 
-const CANARY_URL = process.env.FRT_CANARY_URL ?? "http://127.0.0.1:3001";
+const CANARY_URL = process.env.FRT_CANARY_URL ?? "http://127.0.0.1:3901";
 
 process.env.FRT_FIXTURE_TARGET = "1";
 

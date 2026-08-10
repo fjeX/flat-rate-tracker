@@ -51,7 +51,11 @@ services:
       # Loopback only. This container serves frozen data and stubs auth — it must
       # never be reachable from the network, and it is deliberately off the proxy
       # network with no traefik labels so Traefik cannot route to it.
-      - "127.0.0.1:${CANARY_PORT:-3001}:3000"
+      #
+      # 3901, not the obvious 3001: the photo-booth container already holds 3001
+      # on this VM. Anything here must be a port nothing else on the homelab
+      # wants, or every deploy fails on a port bind.
+      - "127.0.0.1:${CANARY_PORT:-3901}:3000"
 
 networks:
   proxy:
