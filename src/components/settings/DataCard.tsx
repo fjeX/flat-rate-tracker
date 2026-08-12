@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { Download, Upload, X } from "lucide-react";
 import { exportDataAction, importDataAction } from "@/app/actions/settings";
-import type { ImportBundle } from "@/lib/import-remap";
+import { SUPPORTED_BACKUP_VERSIONS, type ImportBundle } from "@/lib/import-remap";
 
 export function DataCard() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -43,7 +43,12 @@ export function DataCard() {
     reader.onload = (ev) => {
       try {
         const raw = JSON.parse(ev.target?.result as string) as ImportBundle;
-        if (raw.version !== 1) throw new Error("Unsupported backup version.");
+        // Read the supported list rather than hardcoding it. This check used to
+        // be `!== 1` and was left behind when export moved to v2 (584e450), so
+        // the picker rejected every backup the app itself had produced since.
+        if (!SUPPORTED_BACKUP_VERSIONS.includes(raw.version)) {
+          throw new Error(`Unsupported backup version ${raw.version}.`);
+        }
         if (!Array.isArray(raw.entries) || !Array.isArray(raw.opCodes)) {
           throw new Error("Invalid backup format — missing entries or opCodes.");
         }
