@@ -97,6 +97,23 @@ describe("summarizeBackup", () => {
       expect(s.warnings.some((w) => w.label === "True Time contributions")).toBe(true);
     });
 
+    it("never restates the label as the explanation", () => {
+      // Found on prod 2026-08-12: the detail was derived from the manifest's
+      // developer-facing `reason`, and labor_time_observations' reason opens by
+      // naming itself — so the dialog read "True Time contributions — True Time
+      // contributions." and dropped the actual explanation. Guarding the class,
+      // not the one string, because the next warnUser table would repeat it.
+      for (const w of summarizeBackup(bundle()).warnings) {
+        const norm = (s: string) => s.toLowerCase().replace(/[.\s]+$/, "").trim();
+        expect(norm(w.detail), `"${w.label}" explains itself with its own name`).not.toBe(
+          norm(w.label),
+        );
+        expect(w.detail.length, `"${w.label}" has no real explanation`).toBeGreaterThan(
+          w.label.length,
+        );
+      }
+    });
+
     it("says identity cannot cross accounts at all", () => {
       // The question someone migrating actually asks, and the one no table
       // in the manifest answers.

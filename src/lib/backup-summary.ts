@@ -53,10 +53,30 @@ const SECTIONS: { key: keyof ImportBundle; label: string }[] = [
   { key: "careerMilestones", label: "Career milestones" },
 ];
 
-/** User-facing names for the tables the manifest flags with `warnUser`. */
-const WARNING_LABELS: Partial<Record<TableName, string>> = {
-  entry_photos: "RO photos",
-  labor_time_observations: "True Time contributions",
+/**
+ * User-facing copy for the tables the manifest flags with `warnUser`.
+ *
+ * The detail is written HERE rather than reused from the manifest's `reason`.
+ * Those reasons are developer notes explaining a decision to whoever reads the
+ * manifest next, and they open by naming the thing — labor_time_observations'
+ * starts "True Time contributions.", which rendered as
+ * "True Time contributions — True Time contributions." and threw away the
+ * actual explanation. One string cannot be both a code comment and product copy.
+ *
+ * A table with no entry here still appears, falling back to the manifest's
+ * reason — clumsy wording beats a warning that silently vanishes.
+ */
+const WARNING_COPY: Partial<Record<TableName, { label: string; detail: string }>> = {
+  entry_photos: {
+    label: "RO photos",
+    detail: "Image files are never included in a backup — only their metadata.",
+  },
+  labor_time_observations: {
+    label: "True Time contributions",
+    detail:
+      "They stay with the account that recorded them. Copying them would count the " +
+      "same real-world jobs twice and skew the shared times everyone sees.",
+  },
 };
 
 function countOf(value: unknown): number | null {
@@ -83,21 +103,19 @@ export function summarizeBackup(bundle: ImportBundle): BackupSummary {
 
   const warnings: BackupWarning[] = [];
   for (const { table, reason } of tablesUserShouldBeWarnedAbout()) {
-    const label = WARNING_LABELS[table];
-    // A new warnUser table with no label here would silently vanish from the
-    // dialog, so fall back to the raw table name — ugly beats invisible.
+    const copy = WARNING_COPY[table];
+    let detail = copy?.detail ?? firstSentence(reason);
+
+    // Photos are the one warning worth quantifying — "3 photos stay behind" is
+    // a decision the user can act on, where the others are just facts.
     if (table === "entry_photos") {
       const n = countOf(b.entryPhotos) ?? 0;
-      warnings.push({
-        label: label ?? table,
-        detail:
-          n > 0
-            ? `${n} photo${n === 1 ? "" : "s"} stay in secure storage — the image files aren't in this backup.`
-            : "Image files are never included in a backup; only their metadata.",
-      });
-      continue;
+      if (n > 0) {
+        detail = `${n} photo${n === 1 ? "" : "s"} stay in secure storage — the image files aren't in this backup.`;
+      }
     }
-    warnings.push({ label: label ?? table, detail: firstSentence(reason) });
+
+    warnings.push({ label: copy?.label ?? table, detail });
   }
 
   // Not a table, so the manifest has nothing to say about it — but it is the
