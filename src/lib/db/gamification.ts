@@ -13,7 +13,13 @@
 // yet): getGamificationData returns null and the dashboard hides the cards.
 
 import type { Database, Json } from "@/lib/supabase/database.types";
-import type { DayOff, Entry, PortfolioSnapshot, SnapshotStats } from "@/lib/types";
+import type {
+  CareerMilestone,
+  DayOff,
+  Entry,
+  PortfolioSnapshot,
+  SnapshotStats,
+} from "@/lib/types";
 import { computeStreak, type StreakResult } from "@/lib/streak";
 import {
   careerMilestonesHit,
@@ -119,6 +125,35 @@ export async function listCareerMilestones(supabase: DbClient): Promise<number[]
   return (data ?? []).map((r) => r.threshold).sort((a, b) => a - b);
 }
 
+/**
+ * The same rows WITH achieved_at, for a backup. Null pre-migration.
+ *
+ * Kept separate from listCareerMilestones rather than widening it: the dashboard
+ * asks "which thresholds have I crossed" and answers that with a number[], and
+ * every caller of it would have to unwrap an object for a field it never uses.
+ * A backup asks a different question — "when did I cross them" — because
+ * re-stamping the date on import would compress a multi-year career into one
+ * afternoon.
+ */
+export async function listCareerMilestonesForBackupSafe(
+  supabase: DbClient,
+): Promise<CareerMilestone[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from("career_milestones")
+      .select("threshold, achieved_at")
+      .order("threshold", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      threshold: r.threshold,
+      achievedAt: r.achieved_at,
+    }));
+  } catch (err) {
+    if (isMissingTable(err)) return null;
+    throw err;
+  }
+}
+
 /** Record crossed milestones. Idempotent — existing rows are left alone. */
 export async function recordCareerMilestones(
   supabase: DbClient,
@@ -156,6 +191,18 @@ export async function listSnapshots(supabase: DbClient): Promise<PortfolioSnapsh
     .order("seq", { ascending: false });
   if (error) throw error;
   return (data ?? []).map(toSnapshot);
+}
+
+/** listSnapshots that reports a pre-migration DB as null instead of throwing. */
+export async function listSnapshotsSafe(
+  supabase: DbClient,
+): Promise<PortfolioSnapshot[] | null> {
+  try {
+    return await listSnapshots(supabase);
+  } catch (err) {
+    if (isMissingTable(err)) return null;
+    throw err;
+  }
 }
 
 // ------------------------------------------------------------------------

@@ -357,6 +357,19 @@ export type DayOff = {
   createdAt: string;
 };
 
+/**
+ * A career threshold and when it was crossed.
+ *
+ * The dashboard only ever needs the thresholds, which is why listCareerMilestones
+ * returns a bare number[]. A backup needs the date too: re-stamping achieved_at on
+ * import would compress a multi-year career into the afternoon someone migrated
+ * their account.
+ */
+export type CareerMilestone = {
+  threshold: number; // lifetime flag hours: 100 / 500 / 1000 / 5000 / 10000
+  achievedAt: string; // ISO timestamp
+};
+
 export type SnapshotTopOp = { code: string; description: string; count: number };
 
 // Stats frozen into a portfolio snapshot at generation time. Immutable —

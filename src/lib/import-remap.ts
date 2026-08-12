@@ -25,6 +25,7 @@
 
 import type {
   Bonus,
+  CareerMilestone,
   DailyClock,
   DayOff,
   Dispute,
@@ -90,12 +91,17 @@ export type ImportBundle = {
   careerMilestones?: CareerMilestone[];
 };
 
-/** A milestone and when it was reached. The existing read returns thresholds
- * only; the date matters on a migration, so the backup carries both. */
-export type CareerMilestone = { threshold: number; achievedAt: string };
+// CareerMilestone lives in @/lib/types with the other domain shapes. The
+// dashboard's listCareerMilestones returns a bare number[]; the backup needs the
+// date as well, so it reads through listCareerMilestonesForBackupSafe.
 
-export const CURRENT_BACKUP_VERSION = 2;
-export const SUPPORTED_BACKUP_VERSIONS = [1, 2];
+/**
+ * v3 (2026-08-12) carries the Schedule and Career tables and every user_settings
+ * column. v1 and v2 files still restore — the RPC replaces a table only when the
+ * payload names its key, so an older file leaves what it never described alone.
+ */
+export const CURRENT_BACKUP_VERSION = 3;
+export const SUPPORTED_BACKUP_VERSIONS = [1, 2, 3];
 
 /** Row payload handed to import_replace_account(). Keys are table names. */
 export type ImportPayload = {

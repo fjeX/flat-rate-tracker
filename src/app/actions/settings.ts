@@ -7,10 +7,10 @@ import * as db from "@/lib/db";
 import { addDays, formatDateLong, getNeighborPeriodKeys } from "@/lib/periods";
 import {
   buildImportPayload,
-  CURRENT_BACKUP_VERSION,
   SUPPORTED_BACKUP_VERSIONS,
   type ImportBundle,
 } from "@/lib/import-remap";
+import { buildBackupBundle } from "@/lib/backup-bundle";
 import { reportServerError } from "@/lib/report-error-server";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -209,6 +209,12 @@ export async function exportDataAction(): Promise<string> {
     laborRates,
     disputes,
     unpaidTime,
+    workSchedules,
+    daysOff,
+    shiftOverrides,
+    confirmedZeroDays,
+    portfolioSnapshots,
+    careerMilestones,
   ] = await Promise.all([
     db.getSettings(supabase),
     db.listEntries(supabase),
@@ -224,33 +230,43 @@ export async function exportDataAction(): Promise<string> {
     // backup does not describe disputes", leaving them untouched on restore.
     db.listDisputesSafe(supabase),
     db.listUnpaidTimeSafe(supabase),
+    // v3. Same safe-variant rule as above — each returns null on a pre-migration
+    // DB and its key is then omitted, which import reads as "this backup does
+    // not describe the schedule" rather than "the schedule is empty".
+    db.listWorkSchedulesSafe(supabase),
+    db.listDaysOffSafe(supabase),
+    db.listShiftOverridesSafe(supabase),
+    db.listConfirmedZeroDaysSafe(supabase),
+    db.listSnapshotsSafe(supabase),
+    db.listCareerMilestonesForBackupSafe(supabase),
   ]);
 
+  // Assembly lives in @/lib/backup-bundle so it can be tested without a
+  // database. BackupParts requires a property per carried table, so forgetting
+  // to fetch one above fails tsc right here rather than shipping a backup that
+  // looks complete and isn't.
   return JSON.stringify(
-    {
-      version: CURRENT_BACKUP_VERSION,
-      exportedAt: new Date().toISOString(),
-      settings: {
-        splitDay: settings.splitDay,
-        periodOverrides: settings.periodOverrides,
+    buildBackupBundle(
+      {
+        settings,
+        entries,
+        opCodes,
+        dailyClocks,
+        paidPeriods,
+        entryPhotos,
+        bonuses,
+        laborRates,
+        disputes,
+        unpaidTime,
+        workSchedules,
+        daysOff,
+        shiftOverrides,
+        confirmedZeroDays,
+        portfolioSnapshots,
+        careerMilestones,
       },
-      entries,
-      opCodes,
-      dailyClocks,
-      paidPeriods,
-      // Photo METADATA only (paths + capture timestamps). The image binaries live
-      // in the private ro-photos bucket and are NOT included in this JSON backup —
-      // restoring photos would need a separate media export (follow-up: zip export).
-      entryPhotos,
-      // Spiffs/bonuses — real dollar data, fully restored on import (unlike photo
-      // metadata, which has no binary to restore).
-      bonuses,
-      // v2. Pay rates price every dollar figure in the app; without them a
-      // migrated account reads as $0 across the board until they're re-entered.
-      laborRates,
-      ...(disputes ? { disputes } : {}),
-      ...(unpaidTime ? { unpaidTime } : {}),
-    },
+      new Date().toISOString(),
+    ),
     null,
     2,
   );

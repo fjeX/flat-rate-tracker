@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { Download, Upload, X } from "lucide-react";
 import { exportDataAction, importDataAction } from "@/app/actions/settings";
 import { SUPPORTED_BACKUP_VERSIONS, type ImportBundle } from "@/lib/import-remap";
+import { summarizeBackup } from "@/lib/backup-summary";
 
 export function DataCard() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,6 +61,15 @@ export function DataCard() {
     };
     reader.readAsText(file);
   }
+
+  // Derived from the parsed file, so the dialog can never describe a different
+  // bundle than the one the confirm button imports.
+  const summary = useMemo(
+    () => (pendingBundle ? summarizeBackup(pendingBundle) : null),
+    [pendingBundle],
+  );
+  const replacing = summary?.sections.filter((s) => s.state === "replacing") ?? [];
+  const untouched = summary?.sections.filter((s) => s.state === "untouched") ?? [];
 
   function handleImportConfirm() {
     if (!pendingBundle) return;
@@ -132,7 +142,7 @@ export function DataCard() {
         )}
       </section>
 
-      {pendingBundle && (
+      {pendingBundle && summary && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/70 sm:items-center">
           <div className="card w-full p-6 sm:mx-auto sm:max-w-md" style={{ borderRadius: "var(--radius) var(--radius) 0 0" }}>
             <div className="mb-4 flex items-start justify-between">
@@ -147,28 +157,63 @@ export function DataCard() {
               </button>
             </div>
 
-            <p className="mb-4 text-sm" style={{ color: "var(--fg-2)" }}>
-              This will permanently replace your current data with:
-            </p>
+            {summary.exportedAt && (
+              <p className="mb-4 text-xs" style={{ color: "var(--fg-3)" }}>
+                Backup taken {new Date(summary.exportedAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+                {" · "}version {summary.version}
+              </p>
+            )}
 
-            <ul className="mb-5 space-y-1 text-sm" style={{ color: "var(--fg-1)" }}>
-              <li>
-                {pendingBundle.entries.length} repair order
-                {pendingBundle.entries.length !== 1 ? "s" : ""}
-              </li>
-              <li>
-                {pendingBundle.opCodes.length} op code
-                {pendingBundle.opCodes.length !== 1 ? "s" : ""}
-              </li>
-              <li>
-                {pendingBundle.dailyClocks?.length ?? 0} daily clock record
-                {(pendingBundle.dailyClocks?.length ?? 0) !== 1 ? "s" : ""}
-              </li>
-              <li>
-                {pendingBundle.paidPeriods?.length ?? 0} paid period record
-                {(pendingBundle.paidPeriods?.length ?? 0) !== 1 ? "s" : ""}
-              </li>
-            </ul>
+            <div className="mb-5 max-h-[45vh] overflow-y-auto">
+              <p className="mb-2 text-sm" style={{ color: "var(--fg-2)" }}>
+                This will permanently replace:
+              </p>
+              <ul className="mb-4 space-y-1 text-sm" style={{ color: "var(--fg-1)" }}>
+                {replacing.length === 0 && (
+                  <li style={{ color: "var(--fg-3)" }}>Nothing — this file describes no records.</li>
+                )}
+                {replacing.map((s) => (
+                  <li key={s.key} className="flex justify-between gap-4">
+                    <span>{s.label}</span>
+                    <span style={{ color: s.count === 0 ? "var(--bad)" : "var(--fg-2)" }}>
+                      {s.count === 0 ? "cleared" : s.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* An older backup has no key for these tables, and the import
+                  skips a table it can't see — so this data is KEPT, not wiped.
+                  Showing it as "0" alongside the list above is the one thing
+                  this screen must never do. */}
+              {untouched.length > 0 && (
+                <>
+                  <p className="mb-2 text-sm" style={{ color: "var(--fg-2)" }}>
+                    Not described by this backup — your current data is kept:
+                  </p>
+                  <ul className="mb-4 space-y-1 text-sm" style={{ color: "var(--fg-3)" }}>
+                    {untouched.map((s) => (
+                      <li key={s.key}>{s.label}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              <p className="mb-2 text-sm" style={{ color: "var(--fg-2)" }}>
+                Doesn&apos;t come across:
+              </p>
+              <ul className="space-y-1 text-sm" style={{ color: "var(--fg-3)" }}>
+                {summary.warnings.map((w) => (
+                  <li key={w.label}>
+                    <span style={{ color: "var(--fg-2)" }}>{w.label}</span> — {w.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             <div className="flex gap-3">
               <button
