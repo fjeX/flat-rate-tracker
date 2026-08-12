@@ -97,6 +97,20 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
       // A backup is user-supplied JSON that a user can open in a text editor.
       // Carrying this would let anyone set "is_admin": true and import their way
       // to admin. The RPC must never read it from the payload.
+      //
+      // ADDING A COLUMN HERE? It needs a SECOND decision, in another file. Since
+      // 20260812010000_lock_is_admin.sql, user_settings has no table-level
+      // INSERT/UPDATE grant for `authenticated` — only a per-column GRANT UPDATE
+      // list. A new column inherits nothing from it, so the app cannot write it
+      // until your migration grants it too, and the symptom is "permission
+      // denied for table user_settings" thrown from updateSettings() in
+      // production.
+      //
+      // Nothing catches that automatically: the check at the end of that
+      // migration runs once, when the migration is applied, so it cannot see a
+      // column a later migration adds. THIS mapped type is the tripwire — a new
+      // column fails tsc here, and this comment is what you're meant to find
+      // when it does. Rule on the column here; grant it in your own migration.
       is_admin: { exclude: "privilege flag — a crafted backup must not grant it" },
       user_id: "server-controlled",
       updated_at: "server-controlled",
