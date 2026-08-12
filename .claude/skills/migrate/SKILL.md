@@ -76,9 +76,36 @@ That answers *"what arrived in the last pull"*, which is a different question. O
    docker exec supabase-db psql -U postgres -d postgres -c "\df public.<fn>"   # new functions
    ```
 
+5. **Check the generated types still describe the database — always, even when nothing was pending**
+
+   ```bash
+   docker exec supabase-db psql -U postgres -d postgres -tAc \
+     "select table_name||chr(46)||column_name from information_schema.columns \
+      where table_schema=chr(112)||chr(117)||chr(98)||chr(108)||chr(105)||chr(99) order by 1;" \
+     | node scripts/check-types-fresh.mjs
+   ```
+
+   (`chr(...)` spells `public` and `.` without quotes, which do not survive the
+   nested quoting when this runs over ssh.)
+
+   **Exit 0** → types match the catalog, continue.
+   **Exit 1** → report it and treat the deploy as suspect. Do **not** fix it here:
+   `database.types.ts` is source, and source changes belong on a dev machine.
+
+   Why this is part of migrating rather than a nice-to-have: backup/import
+   coverage is enforced by a mapped type over `database.types.ts`
+   (`src/lib/backup-manifest.ts`), so a new column cannot compile until someone
+   declares whether a backup carries it. That guard is only as current as the
+   generated file. Skip the regen and the types still describe yesterday's
+   schema — the check stays exhaustive over a schema that no longer exists, and
+   a new column silently drops out of every backup while everything stays green.
+   Six tables and eight `user_settings` columns went missing exactly that way.
+
 ## Report back
 
-State which migrations were applied (or that none were pending), and the verification result. If nothing was pending, say so explicitly — silence reads like the check was skipped.
+State which migrations were applied (or that none were pending), the verification
+result, and the type-freshness result. If nothing was pending, say so explicitly —
+silence reads like the check was skipped.
 
 ## If a migration fails
 

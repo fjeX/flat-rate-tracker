@@ -26,19 +26,39 @@
 import type {
   Bonus,
   DailyClock,
+  DayOff,
   Dispute,
   Entry,
   LaborRate,
   OpCode,
   PaidPeriod,
   PeriodOverride,
+  PortfolioSnapshot,
   UnpaidTime,
 } from "@/lib/types";
+import type { ShiftOverrideMap, WorkSchedule } from "@/lib/schedule";
 
 export type ImportBundle = {
   version: number;
   exportedAt: string;
-  settings: { splitDay: number; periodOverrides: Record<string, PeriodOverride> };
+  // v3 widened this from two fields to eight. The table has always had more
+  // columns than the backup carried, so a migrated account came up with the
+  // destination's goal, tag colours, templates and rate — or, on a fresh
+  // account, the column defaults. shareLaborTimes was the worst of them: it
+  // reverted to false and quietly un-enrolled a True Time contributor.
+  //
+  // is_admin is deliberately NOT here. A backup is a file the user can edit, so
+  // a settings shape that accepts a privilege flag is a privilege escalation.
+  settings: {
+    splitDay: number;
+    periodOverrides: Record<string, PeriodOverride>;
+    goalHours?: number;
+    tagColors?: Record<string, number>;
+    referenceHourlyRate?: number | null;
+    roTemplates?: unknown[] | null;
+    defaultLaborType?: string | null;
+    shareLaborTimes?: boolean;
+  };
   entries: Entry[];
   opCodes: OpCode[];
   dailyClocks: DailyClock[];
@@ -54,14 +74,45 @@ export type ImportBundle = {
   laborRates?: LaborRate[];
   disputes?: Dispute[];
   unpaidTime?: UnpaidTime[];
+  // --- version 3 additions: the Schedule and Career features, absent from every
+  // backup written before 2026-08-12. Same "absent is meaningful" rule as v2.
+  //
+  // work_schedules is the load-bearing one — it is the denominator the
+  // efficiency engine divides by, so an account restored without it doesn't
+  // show blanks, it shows DIFFERENT numbers.
+  workSchedules?: WorkSchedule[];
+  daysOff?: DayOff[];
+  /** date -> shift, matching listShiftOverridesSafe's read shape. */
+  shiftOverrides?: ShiftOverrideMap;
+  /** Bare "YYYY-MM-DD" strings, matching listConfirmedZeroDaysSafe. */
+  confirmedZeroDays?: string[];
+  portfolioSnapshots?: PortfolioSnapshot[];
+  careerMilestones?: CareerMilestone[];
 };
+
+/** A milestone and when it was reached. The existing read returns thresholds
+ * only; the date matters on a migration, so the backup carries both. */
+export type CareerMilestone = { threshold: number; achievedAt: string };
 
 export const CURRENT_BACKUP_VERSION = 2;
 export const SUPPORTED_BACKUP_VERSIONS = [1, 2];
 
 /** Row payload handed to import_replace_account(). Keys are table names. */
 export type ImportPayload = {
-  settings: { split_day: number; period_overrides: Record<string, PeriodOverride> };
+  settings: {
+    split_day: number;
+    period_overrides: Record<string, PeriodOverride>;
+    // Optional on purpose, and the RPC must treat a missing key as "leave the
+    // destination's value alone" rather than "write the default". Restoring a
+    // v1/v2 file that predates these columns must not reset the goal and tag
+    // colours of the account being restored into.
+    goal_hours?: number;
+    tag_colors?: Record<string, number>;
+    reference_hourly_rate?: number | null;
+    ro_template?: unknown[] | null;
+    default_labor_type?: string | null;
+    share_labor_times?: boolean;
+  };
   op_codes: Record<string, unknown>[];
   op_code_variants: Record<string, unknown>[];
   entries: Record<string, unknown>[];
@@ -73,6 +124,12 @@ export type ImportPayload = {
   disputes?: Record<string, unknown>[];
   dispute_lines?: Record<string, unknown>[];
   unpaid_time?: Record<string, unknown>[];
+  work_schedules?: Record<string, unknown>[];
+  days_off?: Record<string, unknown>[];
+  work_shift_overrides?: Record<string, unknown>[];
+  confirmed_zero_days?: Record<string, unknown>[];
+  portfolio_snapshots?: Record<string, unknown>[];
+  career_milestones?: Record<string, unknown>[];
 };
 
 /**
@@ -119,6 +176,10 @@ export function buildImportPayload(
 
   const opCodes = bundle.opCodes ?? [];
   const entries = bundle.entries ?? [];
+  // Read through a narrowed alias so a hand-edited backup carrying extra keys
+  // (is_admin being the one that matters) can't reach the payload — only the
+  // fields named on ImportBundle["settings"] are ever consulted.
+  const s = bundle.settings;
 
   // Mint every id up front. References are resolved in a second pass because a
   // comeback can point at an RO logged later in the file, and a bonus can point
@@ -136,6 +197,28 @@ export function buildImportPayload(
     settings: {
       split_day: bundle.settings.splitDay,
       period_overrides: bundle.settings.periodOverrides ?? {},
+      // Spread-if-present, never defaulted: an older backup that predates these
+      // columns leaves them out, and the RPC reads a missing key as "keep what
+      // the destination account already has". Writing a default here would let
+      // restoring a v2 file silently reset the goal hours of the account being
+      // restored into — trading one silent loss for another.
+      ...(s.goalHours !== undefined ? { goal_hours: s.goalHours } : {}),
+      ...(s.tagColors !== undefined ? { tag_colors: s.tagColors } : {}),
+      ...(s.referenceHourlyRate !== undefined
+        ? { reference_hourly_rate: s.referenceHourlyRate }
+        : {}),
+      ...(s.roTemplates !== undefined
+        ? { ro_template: s.roTemplates && s.roTemplates.length > 0 ? s.roTemplates : null }
+        : {}),
+      ...(s.defaultLaborType !== undefined
+        ? { default_labor_type: s.defaultLaborType }
+        : {}),
+      // A consent flag, so it is carried verbatim when present and never
+      // inferred. Its old behaviour — silently reverting to false — un-enrolled
+      // a True Time contributor without telling them.
+      ...(s.shareLaborTimes !== undefined
+        ? { share_labor_times: s.shareLaborTimes }
+        : {}),
     },
 
     op_codes: opCodes.map((oc) => ({
@@ -307,6 +390,71 @@ export function buildImportPayload(
       note: u.note ?? "",
       created_at: u.createdAt,
       updated_at: u.updatedAt,
+    }));
+  }
+
+  // --- v3 sections: Schedule + Career. None of these tables is referenced by
+  // anything else in the bundle, so ids are simply minted fresh rather than
+  // tracked in an IdMap — there is no reference for a stale id to break.
+
+  if (bundle.workSchedules) {
+    payload.work_schedules = bundle.workSchedules.map((s) => ({
+      id: newId(),
+      effective_from: s.effectiveFrom,
+      rotation_weeks: s.rotationWeeks,
+      // anchor_monday is normally derived server-side from effective_from, but
+      // it is carried verbatim here on purpose: it fixes which week of the
+      // rotation is "week A". Re-deriving it on import would land a 2-week
+      // rotation half a cycle out of phase and quietly change every scheduled
+      // hour — and scheduled hours are the efficiency denominator.
+      anchor_monday: s.anchorMonday,
+      weeks: s.weeks,
+      created_at: s.createdAt,
+    }));
+  }
+
+  if (bundle.daysOff) {
+    payload.days_off = bundle.daysOff.map((d) => ({
+      id: newId(),
+      // A range, not a day — one row covers a whole vacation.
+      start_date: d.startDate,
+      end_date: d.endDate,
+      created_at: d.createdAt,
+    }));
+  }
+
+  if (bundle.shiftOverrides) {
+    // Read shape is a date -> shift map; the table is one row per date.
+    payload.work_shift_overrides = Object.entries(bundle.shiftOverrides).map(
+      ([date, shift]) => ({ date, shift, created_at: now }),
+    );
+  }
+
+  if (bundle.confirmedZeroDays) {
+    payload.confirmed_zero_days = bundle.confirmedZeroDays.map((date) => ({
+      date,
+      created_at: now,
+    }));
+  }
+
+  if (bundle.portfolioSnapshots) {
+    payload.portfolio_snapshots = bundle.portfolioSnapshots.map((s) => ({
+      id: newId(),
+      seq: s.seq,
+      ro_threshold: s.roThreshold,
+      // Frozen at generation and never recomputed, like a dispute — so the
+      // stats travel verbatim rather than being rebuilt from the imported ROs.
+      stats: s.stats,
+      created_at: s.createdAt,
+    }));
+  }
+
+  if (bundle.careerMilestones) {
+    payload.career_milestones = bundle.careerMilestones.map((m) => ({
+      threshold: m.threshold,
+      // When you hit it, not when you imported it. Re-stamping would compress a
+      // multi-year career into a single afternoon.
+      achieved_at: m.achievedAt,
     }));
   }
 

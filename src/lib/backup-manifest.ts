@@ -343,7 +343,10 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
     columns: {
       date: "carry",
       shift: "carry",
-      created_at: "carry",
+      // Bookkeeping only — the override IS the date/shift pair. The read layer
+      // returns a date→shift map and never surfaces this, so stamping it fresh
+      // loses nothing a user could observe.
+      created_at: "server-controlled",
       user_id: "server-controlled",
     },
   },
@@ -351,7 +354,12 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
   confirmed_zero_days: {
     carried: true,
     bundleKey: "confirmedZeroDays",
-    columns: { date: "carry", created_at: "carry", user_id: "server-controlled" },
+    columns: {
+      date: "carry",
+      // As above: the read layer returns bare dates.
+      created_at: "server-controlled",
+      user_id: "server-controlled",
+    },
   },
 
   portfolio_snapshots: {
