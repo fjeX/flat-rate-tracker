@@ -368,22 +368,32 @@ export function useLogRoForm({
       if (comebackKind === null) setComebackKind("comeback_own");
       return;
     }
-    // Unmarking the LAST comeback line makes the entry-level metadata
-    // meaningless — an RO with no free lines is not a comeback.
-    const remaining = lines.filter((l) => l.key !== key && l.isComeback);
-    if (remaining.length === 0) clearComebackMeta();
+    // Unmarking the LAST comeback line used to wipe the entry-level metadata.
+    // Nothing needed it to: LogRoForm hides ComebackSection on hasComebackLines,
+    // and BOTH save paths already null the columns when no line is marked (the
+    // payload below, and actions/entries.ts). The wipe was purely destructive —
+    // re-marking a line could not bring the redo-of link back, and on an
+    // EXISTING RO the next save wrote that null straight to
+    // comeback_of_entry_id. Flag hours have always survived this round trip via
+    // flagBeforeComeback; the link survives it now too.
+    //
+    // Only clearOriginalRo() removes a link, because only the user should.
+    // resetForm() still calls clearComebackMeta — a NEW RO must never inherit
+    // the saved one's link.
   }
 
   function changeComebackKind(kind: ComebackKind) {
     setComebackKind(kind);
-    // Only your OWN comeback can point at an original RO in your data. Another
-    // tech's work isn't in here, and same-visit rework never got a second
-    // ticket — keeping a stale link would assert something untrue.
-    if (kind !== "comeback_own") {
-      setComebackOfEntryId(null);
-      setSelectedOriginal(null);
-      setOriginalRoMatches(null);
-    }
+    // Only your OWN comeback can point at an original RO in your data, so the
+    // link must never be PERSISTED under another kind — and it can't be: the
+    // payload below and actions/entries.ts both null it unless kind is
+    // "comeback_own". It is not DISPLAYED either; ComebackSection renders the
+    // redo-of panel only for comeback_own.
+    //
+    // So nulling the state here bought nothing, and it cost the user their link
+    // on a My own work -> Another tech's -> My own work round trip, which then
+    // saved as null. Drop the stale search results only.
+    if (kind !== "comeback_own") setOriginalRoMatches(null);
   }
 
   function findOriginalRo() {

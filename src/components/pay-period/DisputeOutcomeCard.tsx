@@ -216,10 +216,16 @@ export function DisputeOutcomeCard({
 
   const lifetime = lifetimeRecovery(allDisputes);
   // The closed claim for this period, if the live one is already gone. Lets a
-  // finished period still show its outcome instead of offering a fresh claim.
+  // finished period still show its outcome.
   const closedForPeriod = allDisputes.find(
     (d) => d.periodKey === periodKey && isClosed(d.status),
   );
+  // Drives the OUTCOME section only. It used to gate the offer too, which meant
+  // one closed claim hid the offer for the rest of the period's life — money
+  // found after the claim went out stayed unclaimed with no way to ask for it.
+  // The DB never agreed with that: disputes_one_open_per_period_idx excludes
+  // terminal states precisely so a second-round claim is possible once the
+  // first closes (20260729000000_dispute_ledger.sql:107-112).
   const dispute = openDispute ?? closedForPeriod ?? null;
 
   // Nothing to claim, nothing ever claimed — the card has nothing to say.
@@ -274,15 +280,27 @@ export function DisputeOutcomeCard({
             than mirrored. */}
       </div>
 
-      {!dispute && (shortedHours > 0 || canOfferPending) && (
+      {/* Gated on the LIVE claim, not on any claim. A closed one still renders
+          its outcome above; it no longer silences the offer. openDisputeAction
+          hands back an existing open dispute rather than tripping the unique
+          index, so this can never create a second live claim. */}
+      {!openDispute && (shortedHours > 0 || canOfferPending) && (
         <div className="space-y-2">
           <p className="text-sm text-[var(--fg-2)]">
             {shortedHours > 0 ? (
-              <>
-                You&apos;re short {fmtHours(shortedHours)}h in {periodLabel}.
-                Track the claim and FRT will remember what you asked for and
-                what actually came back.
-              </>
+              closedForPeriod ? (
+                <>
+                  Your earlier claim for {periodLabel} is closed and you&apos;re
+                  still short {fmtHours(shortedHours)}h. You can raise a
+                  second-round claim for what&apos;s left.
+                </>
+              ) : (
+                <>
+                  You&apos;re short {fmtHours(shortedHours)}h in {periodLabel}.
+                  Track the claim and FRT will remember what you asked for and
+                  what actually came back.
+                </>
+              )
             ) : (
               <>
                 Nothing in {periodLabel} was paid short, but {pendingCount} line

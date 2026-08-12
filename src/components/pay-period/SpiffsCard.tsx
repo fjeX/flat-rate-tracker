@@ -17,6 +17,9 @@ import { fmtMoney } from "@/lib/earnings";
 import { sumBonuses, periodTotalPay, BONUS_CATEGORY_LABELS } from "@/lib/bonuses";
 import { formatDateLong } from "@/lib/periods";
 import { BonusForm } from "@/components/bonuses/BonusForm";
+import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
+import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
+import { reportError } from "@/lib/report-error";
 import { deleteBonusAction } from "@/app/actions/bonuses";
 
 export function SpiffsCard({
@@ -139,7 +142,17 @@ export function SpiffsCard({
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
-                  <DeleteButton bonusId={b.id} onDeleted={() => router.refresh()} />
+                  <DeleteButton
+                    bonusId={b.id}
+                    onDeleted={() => {
+                      router.refresh();
+                      // Same stale-tree hazard as adding one — see RefreshFlusher
+                      // (c655c010). Without this the row stays on screen after a
+                      // successful delete, which reads as "delete didn't work".
+                      window.dispatchEvent(new Event(FLUSH_EVENT));
+                      notifyDataChanged(); // and the other open tabs
+                    }}
+                  />
                 </div>
               </li>
             ))}
@@ -211,8 +224,14 @@ function DeleteButton({
       try {
         await deleteBonusAction(bonusId);
         onDeleted();
-      } catch {
-        // Best-effort; the row stays if it fails.
+      } catch (err) {
+        // Deleting money is destructive and irreversible: a failure that only
+        // leaves the row sitting there is indistinguishable from a success that
+        // didn't repaint, so say so out loud and record it.
+        void reportError(err, { url: "SpiffsCard/deleteBonus" });
+        window.alert(
+          err instanceof Error ? err.message : "Failed to delete spiff.",
+        );
       }
     });
   }

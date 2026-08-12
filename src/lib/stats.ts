@@ -3,7 +3,6 @@ import type { DailyClock, DenomSource, Entry, UnpaidTime } from "./types";
 import { addDays } from "./periods";
 import {
   scheduledHoursFor,
-  scheduledHoursForRetro,
   type ShiftOverrideMap,
   type WorkSchedule,
 } from "./schedule";
@@ -268,9 +267,13 @@ export function aggregateStatsWithSchedule(
 // explicit days off). Days with no denominator are simply absent — the chart
 // shows hours only, no efficiency.
 //
-// One display-only difference from the period stats: days before the first
-// schedule existed borrow the earliest schedule's pattern (retro fallback),
-// so setting up a schedule today lights up last week's hovers too.
+// Identical to the period stats on purpose — same function, same answer. Days
+// before the first schedule existed used to borrow the earliest schedule's
+// pattern here (a "display-only" retro fallback, for hover readouts). That
+// leaked: periodTrend builds the /insights headline efficiency and its delta
+// caption from this map, so the same period read "no data" on /pay-period
+// (forward-only) and 508% on /insights. A schedule you did not have last month
+// must not invent a denominator for last month — on any surface.
 // ---------------------------------------------------------------------------
 
 export type DayDenom = {
@@ -299,7 +302,7 @@ export function dailyDenominators(
       continue;
     }
     if (!schedule || d >= today || off.has(d)) continue;
-    const scheduled = scheduledHoursForRetro(
+    const scheduled = scheduledHoursFor(
       schedule.schedules,
       d,
       schedule.shiftOverrides ?? {},

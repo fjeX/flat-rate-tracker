@@ -142,28 +142,13 @@ export function scheduledHoursFor(
   return shift === null ? null : shiftPaidHours(shift);
 }
 
-/** Like scheduledHoursFor, but dates BEFORE the first schedule existed borrow
- * the EARLIEST schedule's pattern (weekIndexFor's modulo handles negative
- * week offsets). Display-only fallback for chart hover readouts — period
- * stats stay forward-only, so adding a schedule never rewrites history. */
-export function scheduledHoursForRetro(
-  schedules: WorkSchedule[],
-  date: string,
-  overrides: ShiftOverrideMap = {},
-): number | null {
-  const inForce = scheduledHoursFor(schedules, date, overrides);
-  if (inForce !== null) return inForce;
-  const current = scheduleForDate(schedules, date);
-  if (current !== null) return null; // a schedule was in force — day is genuinely off
-  let earliest: WorkSchedule | null = null;
-  for (const s of schedules) {
-    if (!earliest || s.effectiveFrom < earliest.effectiveFrom) earliest = s;
-  }
-  if (!earliest) return null;
-  const week = earliest.weeks[weekIndexFor(earliest, date)];
-  const shift = week ? week[WEEKDAY_KEYS[weekdayOf(date)]] : null;
-  return shift === null ? null : shiftPaidHours(shift);
-}
+// scheduledHoursForRetro lived here: it let dates BEFORE the first schedule
+// borrow the earliest schedule's pattern, as a "display-only" fallback for
+// chart hover readouts. It was not display-only in practice — dailyDenominators
+// used it, and periodTrend builds the /insights headline efficiency from that
+// map, so one period read "no data" on /pay-period and 508% on /insights.
+// Deleted 2026-08-12 rather than fixed: adding a schedule must never rewrite
+// history, so there is no surface that wants the retro answer.
 
 /** Build a ShiftDef from the hours-first editor inputs: paid hours + start
  * time + unpaid lunch. End time is derived. Null when the inputs don't form

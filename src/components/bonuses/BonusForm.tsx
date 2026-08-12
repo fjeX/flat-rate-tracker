@@ -15,6 +15,7 @@ import { BONUS_CATEGORIES, BONUS_CATEGORY_LABELS } from "@/lib/bonuses";
 import { isoDate } from "@/lib/periods";
 import { tap } from "@/lib/haptics";
 import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
+import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import {
   createBonusAction,
   updateBonusAction,
@@ -85,6 +86,8 @@ export function BonusForm({
         router.refresh();
         // Same stale-tree hazard as Quick Add — see RefreshFlusher (c655c010).
         window.dispatchEvent(new Event(FLUSH_EVENT));
+        notifyDataChanged(); // and the other open tabs
+
         onSaved(saved);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to save.");

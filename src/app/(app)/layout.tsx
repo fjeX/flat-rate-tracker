@@ -8,6 +8,7 @@ import { Footer } from "@/components/layout/Footer";
 import { TimezoneSync } from "@/components/layout/TimezoneSync";
 import { RefreshFlusher } from "@/components/layout/RefreshFlusher";
 import { RefreshOnFocus } from "@/components/layout/RefreshOnFocus";
+import { CrossTabRefresh } from "@/components/layout/CrossTabRefresh";
 import { TimerPip } from "@/components/timer/TimerPip";
 import { anyAccruing } from "@/lib/timer";
 import { capsForSlots } from "@/lib/timer-schedule";
@@ -68,6 +69,9 @@ export default async function AppLayout({
       <TimezoneSync hasTz={hasTz} />
       <RefreshFlusher />
       <RefreshOnFocus />
+      {/* RefreshOnFocus covers a tab you left and came back to; this covers a
+          tab that never lost focus at all. */}
+      <CrossTabRefresh />
       <Header userEmail={user.email} />
       <Nav timerRunning={timerRunning} />
       <div style={{ flex: 1 }}>{children}</div>

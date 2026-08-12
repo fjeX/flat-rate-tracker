@@ -21,6 +21,7 @@ import {
 import { SubOpCodePickerModal } from "@/components/forms/SubOpCodePickerModal";
 import { BonusForm } from "@/components/bonuses/BonusForm";
 import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
+import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import { tap } from "@/lib/haptics";
 
 type QuickAddMode = "ro" | "spiff";
@@ -301,6 +302,9 @@ export function QuickAddModal({
       // The refreshed tree can arrive correct and never get painted (bug
       // c655c010) — nudge React into committing it. See RefreshFlusher.
       window.dispatchEvent(new Event(FLUSH_EVENT));
+      // Same again in the other open tabs, which got neither the refresh nor
+      // the flush — this is the write the cross-tab-stale report was filed on.
+      notifyDataChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save.");
     }

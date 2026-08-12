@@ -6,7 +6,6 @@ import {
   mondayOf,
   scheduleForDate,
   scheduledHoursFor,
-  scheduledHoursForRetro,
   shiftForDate,
   shiftFromHours,
   shiftPaidHours,
@@ -301,34 +300,34 @@ describe("inferScheduleWeek", () => {
   });
 });
 
-// ── scheduledHoursForRetro (display-only backwards extension) ──────────────────
+// ── no retro extension: adding a schedule never rewrites history ──────────────
+// scheduledHoursForRetro used to project the earliest schedule's pattern back
+// before its effectiveFrom. It was deleted 2026-08-12 — /insights built its
+// headline efficiency from it while /pay-period stayed forward-only, so one
+// period showed "no data" on one page and 508% on the other. These lock the
+// single surviving answer in place.
 
-describe("scheduledHoursForRetro", () => {
+describe("scheduledHoursFor is forward-only", () => {
   const sched = makeSchedule({ effectiveFrom: "2026-07-06" });
 
-  it("matches scheduledHoursFor while a schedule is in force", () => {
-    expect(scheduledHoursForRetro([sched], "2026-07-08")).toBe(8); // Wed
-    expect(scheduledHoursForRetro([sched], "2026-07-11")).toBeNull(); // Sat off
+  it("gives no denominator to dates before the schedule existed", () => {
+    expect(scheduledHoursFor([sched], "2026-06-30")).toBeNull(); // Tue, pre-schedule
+    expect(scheduledHoursFor([sched], "2026-06-28")).toBeNull(); // Sun, pre-schedule
   });
 
-  it("extends the earliest schedule's pattern before effectiveFrom", () => {
-    expect(scheduledHoursFor([sched], "2026-06-30")).toBeNull(); // forward-only
-    expect(scheduledHoursForRetro([sched], "2026-06-30")).toBe(8); // Tue, pattern
-    expect(scheduledHoursForRetro([sched], "2026-06-28")).toBeNull(); // Sun off
+  it("still answers normally once the schedule is in force", () => {
+    expect(scheduledHoursFor([sched], "2026-07-08")).toBe(8); // Wed
+    expect(scheduledHoursFor([sched], "2026-07-11")).toBeNull(); // Sat off
   });
 
-  it("does not resurrect off days under a schedule that IS in force", () => {
+  it("does not fall back to an older schedule's pattern on a newer one's day off", () => {
     const v2 = makeSchedule({
       id: "v2",
       effectiveFrom: "2026-07-13",
       anchorMonday: "2026-07-13",
       weeks: [week({ mon: SHIFT_10 })], // Mon only
     });
-    // Wed 2026-07-15 is off under v2 — retro must not fall back to v1's pattern.
-    expect(scheduledHoursForRetro([sched, v2], "2026-07-15")).toBeNull();
-  });
-
-  it("returns null with no schedules at all", () => {
-    expect(scheduledHoursForRetro([], "2026-07-08")).toBeNull();
+    // Wed 2026-07-15 is off under v2 — v1's pattern must not resurrect it.
+    expect(scheduledHoursFor([sched, v2], "2026-07-15")).toBeNull();
   });
 });
