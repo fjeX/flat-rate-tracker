@@ -115,6 +115,17 @@ one most nights.
   (those have no original RO in this account) — it still showing is a bug.
 - Tapping "Mark as comeback" a second time must **restore the original flag
   hours**, not leave 0 behind.
+- **The "Redo of" link must survive both round trips** (fixed 2026-08-12,
+  `comeback-redoof-reset-on-toggle` — regression-check it):
+  - pick a redo-of RO, toggle the comeback flag **off then on** → the link is
+    still there
+  - pick a redo-of RO, switch "Whose work" **My own work → Another tech's → My
+    own work** → the link is still there
+  - Only the **"Remove link to original RO"** button may clear it.
+  - This mattered more than it looks: it was filed "minor/cosmetic" but on an
+    **existing** RO opened via `/log?edit=<id>`, losing the link and then saving
+    wrote NULL over `comeback_of_entry_id`. So do this on a SAVED comeback RO,
+    save again, reopen it, and confirm the link is still stored.
 - Fill the line's **actual** hours (a comeback still costs you time — that's the
   whole point) and save. In history the RO must show **0.0h flag**.
 - Also exercise the toggle from **dashboard Quick Add** — it has the toggle and
@@ -311,6 +322,14 @@ Reference rail in every mode.
   and shortfall dollars appear if pay rates are set.
 - If a dispute-pack export exists for short lines, open it and confirm the
   print view renders with the short lines listed.
+- **Second-round claims** (fixed 2026-08-12, `dispute-track-offer-missing`). A
+  period whose earlier claim is **closed** (resolved/withdrawn) but which is
+  **still short** must offer "Track this dispute" again, worded as a
+  second-round claim — a closed claim no longer silences the offer. Note this
+  check is hard to exercise on this account; if every period already has an open
+  or closed claim covering its whole shortfall, say so and move on rather than
+  reporting a false negative. **Do not** expect the offer while a claim for that
+  period is still OPEN — one live claim per period is enforced by the database.
 
 **➡️ Now go back to /timer and do §3b.** The timer you armed in §3a has been
 running through §3z–§5 and that is its whole elapsed time. Close it out and
@@ -320,6 +339,12 @@ verify the saved hours before continuing to §6.
 - Add one spiff via the quick-add flow (plausible: "alignment spiff $25",
   "tire spiff $10", etc.). Link it to one of tonight's ROs if the UI allows.
 - Verify it shows on the pay period's Spiffs card and on the RO's detail view.
+- **Delete a spiff and watch the row go** (fixed 2026-08-12). Adding one has
+  always repainted; deleting one did not, so a successful delete could sit on
+  screen for up to 40s and read as "delete failed". The row must disappear
+  **without a reload**, within a couple of seconds.
+- If a delete ever fails you must now SEE it — an alert with the reason. A
+  delete that silently leaves the row is a bug worth reporting either way.
 
 ### 7. "What did the work cost me?" (CA wage math + unpaid time)
 > **Renamed and merged 2026-07-30.** Was "Pay Check-Up". The old separate
@@ -573,6 +598,16 @@ recovered. Sections appear only when they have something to say.
   labelled **"in progress"**, and the sentence underneath must compare the last
   two FINISHED periods, never the running one. A caption claiming a huge drop
   the day after a period rolls over is exactly the bug this fixed.
+  - ⚠️ **A MISSING caption is NOT a bug** (corrected 2026-08-12). It is
+    suppressed on purpose when the two finished periods differ by **less than 1
+    percentage point** — a deliberate noise floor. This account's last two
+    complete periods were 508.125% and 508.646%, a 0.52 delta, so no caption is
+    the CORRECT output. This was escalated as `insights-trend-no-comparison` for
+    **11 consecutive nights** against working-as-designed behaviour, because this
+    instruction used to say the sentence must always appear.
+  - Only report it if the caption is missing while the two finished periods
+    differ by **1 point or more**, or if the numbers it prints disagree with the
+    tiles above it.
 - **Claims and recovery** — the lifetime figures that used to live on Pay
   Period. With no closed claims it must still render, showing "Nothing recovered
   yet" and how it fills in. It must NOT be missing entirely.
