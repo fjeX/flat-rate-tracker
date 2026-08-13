@@ -54,3 +54,16 @@ tests/.auth/
 tests/e2e/.results/
 tests/e2e/.report/
 tests/smoke/.results/
+
+# Playwright MCP scratch output — page snapshots, console logs, screenshots.
+# This was ignored only by the PARENT Claude-EA .gitignore, which the VM's
+# standalone clone of this repo never sees. It had been accumulating there
+# untracked since 2026-07-09: 3,911 files, 62MB, and screenshots of signed-in
+# pages showing real account data.
+.playwright-mcp/
+
+# Exported account backups. One of these files is an ENTIRE account — every RO,
+# VIN, mileage, pay rate and dollar figure — and downloading one into the repo
+# directory is the normal way to test import. Six were found loose on the VM.
+# Untracked is not the same as ignored: `git add -A` would have published them.
+flat-rate-backup-*.json
