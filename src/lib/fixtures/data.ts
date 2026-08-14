@@ -170,6 +170,65 @@ WORK_DAYS.forEach((date, dayIx) => {
   }
 });
 
+// ── the unpaired day ────────────────────────────────────────────────────────
+// A Saturday: flagged work, no clock entry, and no scheduled shift (the pattern
+// below is Mon–Fri). The app therefore cannot tell how long that day was, so
+// these hours land in the flagged total but in NEITHER side of the efficiency
+// percentage, and PeriodStats renders its "Not counted above" caption to say so.
+//
+// This day exists to put that caption in front of the camera. Without it every
+// fixture day is clocked, unpairedFlagHours is 0, the caption never renders, and
+// the branch of stats.ts that computes it is dark to the visual suite — which is
+// exactly how it shipped unphotographed on 2026-08-14. It sits inside the
+// 2026-03-01..15 period so /pay-period picks it up, and before the frozen today.
+const UNPAIRED_DAY = "2026-03-07"; // Saturday
+{
+  const entryId = id("e17a", roSeq);
+  const [vehicle_year, vehicle_make, vehicle_model, vehicle_vin, vehicle_mileage] =
+    VEHICLES[roSeq % VEHICLES.length];
+  const picks = [opCodes[2], opCodes[4]]; // BRK-F 1.8 + ALIGN 1.0 = 2.8 flagged
+  let flagTotal = 0;
+
+  picks.forEach((op, l) => {
+    flagTotal += op.flag_hours;
+    opLineRows.push({
+      id: id("11ce", lineSeq++),
+      entry_id: entryId,
+      op_code_id: op.id,
+      sub_op_code_id: null,
+      custom: false,
+      custom_code: null,
+      custom_description: null,
+      flag_hours: op.flag_hours,
+      actual_hours: null,
+      paid_hours: null,
+      labor_type: "customer_pay",
+      is_comeback: false,
+      notes: "",
+      position: l,
+    });
+  });
+
+  entryRows.push({
+    id: entryId,
+    user_id: FIXTURE_USER_ID,
+    ro_number: `9099${String(10_000 + roSeq).slice(-5)}`,
+    date: UNPAIRED_DAY,
+    flag_hours: Number(flagTotal.toFixed(2)),
+    vehicle_year,
+    vehicle_make,
+    vehicle_model,
+    vehicle_vin,
+    vehicle_mileage,
+    notes: "Came in Saturday to finish the brake job — never clocked in.",
+    comeback_of_entry_id: null,
+    comeback_kind: null,
+    created_at: `${UNPAIRED_DAY}T16:00:00.000Z`,
+    updated_at: `${UNPAIRED_DAY}T16:00:00.000Z`,
+  });
+  roSeq++;
+}
+
 // entries are read with `.select("*, entry_op_codes(*)")` — the real mapper
 // expects the relation embedded, so it's attached here rather than joined.
 export const entries = entryRows.map((e) => ({
@@ -188,6 +247,41 @@ export const dailyClockHours = WORK_DAYS.map((date, i) => ({
   date,
   hours: [8, 8, 7.5, 8, 9, 8, 6.5, 8][i % 8],
 }));
+
+// ── work schedule ───────────────────────────────────────────────────────────
+// Mon–Fri, 08:00–17:00 with an unpaid hour = 8 paid hours, effective from the
+// first fixture working day.
+//
+// This deliberately changes no existing number. Every weekday in the dataset
+// already has a clock entry and clocked hours always win, so no day falls to the
+// schedule fallback: the denominator, the efficiency and the "Clocked hrs"
+// provenance label all stay exactly as they were. What it changes is WHICH
+// aggregator runs — aggregateStatsAuto only reaches aggregateStatsWithSchedule
+// when a schedule exists, and that is the only function that computes
+// unpairedFlagHours. With no schedule here, the pay-period page ran plain
+// aggregateStats and the entire schedule-aware branch went unphotographed.
+const SHIFT_8 = { start: "08:00", end: "17:00", breakMin: 60 };
+const WEEK_MON_FRI = {
+  mon: SHIFT_8,
+  tue: SHIFT_8,
+  wed: SHIFT_8,
+  thu: SHIFT_8,
+  fri: SHIFT_8,
+  sat: null,
+  sun: null,
+};
+
+export const workSchedules = [
+  {
+    id: id("5c4e", 1),
+    user_id: FIXTURE_USER_ID,
+    effective_from: "2026-01-05", // Monday, the first fixture working day
+    anchor_monday: "2026-01-05",
+    rotation_weeks: 1,
+    weeks: [WEEK_MON_FRI],
+    created_at: STAMP,
+  },
+];
 
 // ── settings & rates ────────────────────────────────────────────────────────
 export const userSettings = {
@@ -225,4 +319,5 @@ export const TABLES: Record<string, unknown[]> = {
   labor_rates: laborRates,
   daily_clock_hours: dailyClockHours,
   user_settings: [userSettings],
+  work_schedules: workSchedules,
 };
