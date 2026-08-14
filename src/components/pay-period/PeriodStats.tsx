@@ -103,10 +103,16 @@ export function PeriodStats({
             {fmtHours(stats.unpairedFlagHours!)}h
           </span>{" "}
           flagged across {stats.unpairedDays}{" "}
-          {stats.unpairedDays === 1 ? "day" : "days"} with no clocked hours and
-          no schedule — the app can&apos;t tell how long those days were, so
-          they&apos;re in your flagged total but in neither side of the
-          percentage. Clock them or add them to your schedule to include them.
+          {stats.unpairedDays === 1 ? "day" : "days"}{" "}
+          {/* The {" "} above is load-bearing. Text that follows an expression
+              container loses its leading space in the JSX transform, which
+              shipped this caption reading "1 daywith no clocked hours".
+              InsightsView's copy of this sentence uses explicit separators for
+              the same reason — match it, don't rely on the source newline. */}
+          with no clocked hours and no schedule — the app can&apos;t tell how
+          long those days were, so they&apos;re in your flagged total but in
+          neither side of the percentage. Clock them or add them to your
+          schedule to include them.
         </p>
       )}
       {unflaggedTime !== null && (
