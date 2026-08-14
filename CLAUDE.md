@@ -184,6 +184,21 @@ Review first (`npm run test:ui:report`). Commit the images in
 migration ships with the code that needs it. Running this to turn a red gate
 green without looking is how the old suite died.
 
+**Regenerate on the VM; commit from your own machine.** `scp` the PNGs down,
+commit and push there, then `git checkout -- tests/e2e/__canary__/ && git pull`
+on the VM. A VM commit makes two writers on one branch — the VM's clone pushes
+to `frt`, all code flows local → `frt` — and the subtree splits diverge. On
+2026-08-13 two `git subtree push` attempts were rejected and had to be reunited
+with `-s ours` merges, over PNGs that were byte-identical on both sides. This is
+the one command that tempts you to break the never-commit-on-the-VM rule.
+
+**Before you accept anything, prove the diff is yours.** A stale baseline and a
+real regression look identical in the report. The rebuild skill's "When the
+visual gate rejects the deploy" section has the fixture-mode HTML diff that
+settles it in about a minute — on 2026-08-13 it cleared a commit that four
+failing `/insights` snapshots appeared to indict, and the real cause was
+baselines nobody had regenerated since Insights v2 changed the page.
+
 ### Two gates, two failure modes
 
 | Gate | When | On failure |

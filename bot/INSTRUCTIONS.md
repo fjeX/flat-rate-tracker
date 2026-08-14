@@ -521,6 +521,29 @@ Use §5 to reconcile a line to fewer hours than it flagged.
   MORE than claimed is legal (goodwill hours) and must save, not error.
 - **Double-tap protection:** with a live claim open, there must be no second
   "Track this dispute" offer for the same period.
+- **Recovered hours must land back on the lines** (new 2026-08-13,
+  `dispute-reoffer-after-recovery`). Closing a claim used to move the recovery
+  figure and leave Reconciliation exactly as short as before, so the app
+  re-offered a second-round claim for money the shop had already paid, forever
+  and with no upper bound.
+  - After closing a claim with hours recovered, the card must show
+    **"N.Nh came back and isn't on your lines yet"** with a preview of the RO
+    lines and their paid → paid-after figures, and a button reading
+    **"Apply N.Nh to N lines"**.
+  - Tap it. The lines' paid hours must move, the period's shortfall must drop by
+    that amount, and the panel must **disappear**. Tap-and-reload must not offer
+    it a second time — applying twice would pay a line twice, and that is a FAIL.
+  - The second-round offer, when it still appears, must now read
+    **"still short N.Nh · N.Nh already recovered on a closed claim"**. A bare
+    shortfall with no mention of what came back is the old wording.
+  - Recovery ABOVE the claim (goodwill) must be reported as not mapping to any
+    line, never silently written onto one.
+  - A claim closed with a partial recovery and **no per-line breakdown** must
+    REFUSE to apply and ask for the breakdown. It must never split the money
+    across lines by guessing — that would invent the shop's decision.
+  - This does not change the separate-ledger rule above: applying recovery moves
+    PAID hours (reconciliation), and period earnings/flag pay must still be
+    untouched by the recovered dollars.
 - **Recovered money must never move any other number.** Note the period's
   earnings, flag pay and Pay Check-Up effective hourly BEFORE closing a claim,
   then re-check after. They must be **identical** — recovery is a separate
@@ -623,6 +646,17 @@ recovered. Sections appear only when they have something to say.
   labelled **"in progress"**, and the sentence underneath must compare the last
   two FINISHED periods, never the running one. A caption claiming a huge drop
   the day after a period rolls over is exactly the bug this fixed.
+  - **Trend % must equal the Pay Period hero %** for the same period (fixed
+    2026-08-13, `payperiod-insights-efficiency-mismatch`). They disagreed —
+    387% vs 627% — because Trend summed flag hours from EVERY entry over a
+    denominator that only counted days the app knew the length of. Compare the
+    two surfaces on the same period every run; any gap is a real bug, not a
+    rounding difference.
+  - If some days are excluded, the chart must SAY so underneath: **"Not counted
+    above: N.Nh flagged across N days … with no clocked hours and no schedule"**.
+    Those are days with flagged work the app can't put a length to (a Saturday
+    that was never clocked). Silently dropping them is the bug this replaced —
+    the hours have to be visible somewhere.
   - ⚠️ **A MISSING caption is NOT a bug** (corrected 2026-08-12). It is
     suppressed on purpose when the two finished periods differ by **less than 1
     percentage point** — a deliberate noise floor. This account's last two

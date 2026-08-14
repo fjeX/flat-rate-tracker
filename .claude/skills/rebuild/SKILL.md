@@ -66,6 +66,68 @@ Run from `~/docker/flat-rate-tracker`.
 
    If the container itself is sick: `docker compose logs --tail=50`.
 
+## When the visual gate rejects the deploy
+
+`deploy.sh` dies *before* the traffic swap — nothing deployed, nothing to roll back,
+old image still serving. Two questions, in this order. Do not skip to
+`update-baselines.sh`: regenerating is how a real regression gets blessed into the
+baseline.
+
+### 1. Is the diff actually yours?
+
+A stale baseline and a regression look identical in the report. Settle it by
+rendering the route at your commit and at its parent, on the same frozen fixture
+data:
+
+```bash
+FRT_FIXTURE_MODE=1 npx next dev -p 3902          # your machine, not the VM
+curl -s http://127.0.0.1:3902/insights > after.html
+git checkout HEAD~1 -- src/lib/insights.ts src/components/insights/InsightsView.tsx
+curl -s http://127.0.0.1:3902/insights > before.html   # dev server hot-reloads
+git checkout HEAD -- src/lib/insights.ts src/components/insights/InsightsView.tsx
+diff before.html after.html
+```
+
+Identical HTML (Next's random `self.__next_r` router id aside) means your commit did
+not move those pixels and the baseline was already stale. The page height Playwright
+reports receiving is the other half of the proof — open the route in a browser at the
+failing viewport and check it matches.
+
+On 2026-08-13 `/insights` failed on all four projects for a commit that rendered
+byte-identically: the baselines were recorded Aug 10 by `ffebd5a`, and Insights v2
+changed the page on Aug 13 without regenerating them. Roughly 760px of new sections
+that nothing had ever photographed.
+
+**Second confirmation, free:** after regenerating, look at *which* files changed. If
+only routes you never touched moved, the diff was not yours. If a route you did touch
+appears and you cannot explain it, stop and treat it as a regression.
+
+### 2. Regenerate on the VM — commit from your own machine
+
+```bash
+# VM
+./scripts/update-baselines.sh
+git diff --stat tests/e2e/__canary__          # review before accepting anything
+
+# your machine
+scp frt-vm:'~/docker/flat-rate-tracker/tests/e2e/__canary__/<route>-*.png' \
+    tests/e2e/__canary__/
+git add tests/e2e/__canary__ && git commit    # say WHICH change caused them
+git push
+
+# VM
+git checkout -- tests/e2e/__canary__/ && git pull --ff-only origin master
+```
+
+Then re-run `./scripts/deploy.sh`.
+
+**Never `git commit` on the VM, images included.** The VM's clone pushes to `frt`
+while all code flows local → `frt`, so a VM commit makes two writers on one branch and
+the subtree splits diverge. On 2026-08-13 both `git subtree push` attempts were
+rejected and had to be reunited with `-s ours` merges — over PNGs whose content was
+byte-identical on both sides. `update-baselines.sh` is the one command that tempts you
+to break the rule, because it is VM-only and it produces files worth keeping.
+
 ## What the smoke actually checks
 
 `playwright.smoke.config.ts` → `tests/smoke/`, run against `tracker.slimelab.cc` as
