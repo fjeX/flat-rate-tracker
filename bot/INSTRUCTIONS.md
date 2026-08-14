@@ -297,6 +297,20 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
   the denominator came from the work schedule rather than typed clock entries,
   and plain **"Clocked hrs"** otherwise. It must never read 0.0h next to a
   non-zero schedule-derived efficiency — that pairing was a bug.
+- **The stats grid must explain its own arithmetic (new 2026-08-14,
+  `payperiod-efficiency-no-provenance`).** Flag hrs ÷ Hours will often NOT equal
+  the Efficiency beside it, because days the app can't measure are excluded from
+  the percentage but still counted in the flagged total. When that happens a
+  caption sits directly under the grid reading **"Not counted above: N.Nh
+  flagged across N days with no clocked hours and no schedule…"**. Do the
+  division yourself: if the three tiles disagree and there is NO caption
+  explaining the gap, that is a FAIL. (Divide before you trust it — the page
+  used to print 430.1h, 72.0h and 397% side by side with nothing said.)
+- **/pay-period and /insights must report the SAME efficiency for the same
+  span.** They are now derived from one shared per-day rule; they were two
+  copies that disagreed whenever a period held a scheduled day you had neither
+  flagged work on nor confirmed as a real zero. Check a period containing such a
+  day specifically — a silent workday you have not resolved.
 - **Nothing is ever hidden by mode.** Cards the mode de-prioritises move below a
   **"Reference"** divider (the right-hand column on desktop). If a card is
   genuinely absent rather than demoted, that IS a bug — check the rail before
@@ -516,7 +530,22 @@ Use §5 to reconcile a line to fewer hours than it flagged.
   - **Critical:** it must NOT still read "Waiting on a response / Recovered 0.0h"
     after saving. That exact bug was fixed on 2026-07-30 (the form used to close
     before the refresh landed). If it reappears, report as FAIL.
-  - Leave dollars **blank** on one run — it must record as unknown, never as $0.
+  - **Both fields now open EMPTY (changed 2026-08-14,
+    `dispute-recovered-dollars-prefill`).** They used to be pre-filled with the
+    CLAIMED amounts, so closing a claim without editing recorded the ask as the
+    payment — prod ended up with 4 of 5 priced claims storing recovered ==
+    claimed to the cent. **A pre-filled Recovered $ or Recovered hrs on a fresh
+    outcome form is now a FAIL, not a convenience.**
+  - There is a **"Same as claimed"** button beside the helper text. Tapping it
+    must fill BOTH fields with the claimed figures. That is the only way a
+    recovered figure should ever arrive without being typed.
+  - **Leaving hours blank must be REFUSED**, with "Enter recovered hours, or tap
+    Same as claimed." Blank must never save as 0.0h — blank means "I have not
+    answered", 0 means "they denied it", and they are different facts.
+  - Leave dollars **blank** on one run — dollars are still optional and must
+    record as unknown, never as $0.
+  - Re-open a claim you already closed with **0 recovered hours**: it must come
+    back showing 0, not the claimed amount.
 - Recovered hours are deliberately **not capped** at the claimed amount. Entering
   MORE than claimed is legal (goodwill hours) and must save, not error.
 - **Double-tap protection:** with a live claim open, there must be no second
