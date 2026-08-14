@@ -8,8 +8,17 @@ import { authCookieName, serverSupabaseUrl } from "./config";
 import { FIXTURE_MODE } from "@/lib/fixtures/enabled";
 
 // Auth pages redirect logged-in users to the app. Guest routes allow anyone.
-const AUTH_PAGES = ["/signin", "/signup"];
+const AUTH_PAGES = ["/signin", "/signup", "/forgot-password"];
 const GUEST_ROUTES = ["/guest"];
+// Password recovery landing page. Needs its OWN category because it is the one
+// route that must pass through in BOTH directions:
+//   - signed-out, because that is how the user arrives from the email link;
+//   - signed-in, because exchanging the recovery code creates a real session,
+//     and an AUTH_PAGES-style bounce to /dashboard would fire the instant the
+//     exchange succeeded — throwing the user out of the flow one step before
+//     they set the password they came to set.
+// /forgot-password above has no such problem: nothing signs you in there.
+const RECOVERY_ROUTES = ["/reset-password"];
 // OAuth callback — hit before the user has a session, so it must pass through
 // unauthenticated. The handler at /auth/callback exchanges the code and sets
 // the auth cookies itself.
@@ -71,8 +80,16 @@ export async function updateSession(request: NextRequest) {
   const isGuestRoute = GUEST_ROUTES.some((p) => pathname.startsWith(p));
   const isCallbackRoute = CALLBACK_ROUTES.some((p) => pathname.startsWith(p));
   const isPublicRoute = PUBLIC_ROUTES.some((p) => pathname === p);
+  const isRecoveryRoute = RECOVERY_ROUTES.some((p) => pathname.startsWith(p));
 
-  if (!user && !isAuthPage && !isGuestRoute && !isCallbackRoute && !isPublicRoute) {
+  if (
+    !user &&
+    !isAuthPage &&
+    !isGuestRoute &&
+    !isCallbackRoute &&
+    !isPublicRoute &&
+    !isRecoveryRoute
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
     return NextResponse.redirect(url);

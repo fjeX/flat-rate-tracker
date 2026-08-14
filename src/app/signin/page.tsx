@@ -57,6 +57,12 @@ export default async function SignInPage({
           </button>
         </form>
 
+        <p className="mt-3 text-sm">
+          <Link href="/forgot-password" className="text-[var(--fg-2)] hover:text-[var(--brand)]">
+            Forgot your password?
+          </Link>
+        </p>
+
         <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-[var(--line)]" />
           <span className="text-xs text-[var(--fg-3)]">or</span>

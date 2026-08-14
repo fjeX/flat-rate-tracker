@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -13,6 +14,10 @@ function toSigninWithError(message: string): never {
 
 function toSignupWithError(message: string): never {
   redirect(`/signup?error=${encodeURIComponent(message)}`);
+}
+
+function toForgotWithError(message: string): never {
+  redirect(`/forgot-password?error=${encodeURIComponent(message)}`);
 }
 
 export async function signUp(formData: FormData) {
@@ -107,6 +112,55 @@ export async function signIn(formData: FormData) {
 
   revalidatePath("/", "layout");
   redirect("/dashboard");
+}
+
+// Send a password-recovery email.
+//
+// ALWAYS REPORTS SUCCESS, even for an address with no account. This form is
+// reachable without a session by definition, so a response that distinguished
+// "sent" from "no such user" would turn it into an account-enumeration oracle
+// for anyone with a word list. The only signal a caller gets back is "if that
+// address has an account, mail is on its way".
+//
+// A send FAILURE is swallowed for the same reason and reported instead, so a
+// broken mailer shows up in client_errors rather than in the response. That
+// matters right now: SMTP is still the stock placeholder, so this currently
+// errors on every call and the report is the only place it will be visible.
+export async function requestPasswordReset(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) toForgotWithError("Enter the email address on your account.");
+
+  // Two keys, same reasoning as signIn: per-IP stops one host spraying many
+  // addresses, per-email stops a single account being mail-bombed through the
+  // form. Tighter than sign-in because a legitimate user needs one email, not
+  // eight. Fail-open — inert until Upstash is configured.
+  const ip = await clientIp();
+  const [ipLimit, emailLimit] = await Promise.all([
+    rateLimit("reset-ip", ip, { limit: 10, windowSec: 3600 }),
+    rateLimit("reset-email", email.toLowerCase(), { limit: 4, windowSec: 3600 }),
+  ]);
+  if (!ipLimit.ok || !emailLimit.ok) {
+    toForgotWithError("Too many reset requests. Please wait a while and try again.");
+  }
+
+  // Behind Traefik the request origin is the internal container address, so the
+  // user-facing host has to come from the forwarded header — same reason
+  // /auth/callback does it. This URL must also be listed in the GoTrue
+  // ADDITIONAL_REDIRECT_URLS allow-list or the mail is never sent.
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const origin = `${proto}://${host}`;
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/reset-password`,
+  });
+  if (error) {
+    await reportServerError(error, { url: "action:requestPasswordReset" });
+  }
+
+  redirect("/forgot-password?sent=1");
 }
 
 export async function signOut() {
