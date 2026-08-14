@@ -15,6 +15,12 @@ export default async function AccountPage() {
   const lastName = (user?.user_metadata?.last_name as string | undefined) ?? "";
   const email = user?.email ?? "";
 
+  // Drives whether the form asks for the current password. A Google-only
+  // account has none to confirm — it is setting its first one. Defaults to
+  // "yes, ask" if identities are missing, so the prompt fails closed; the
+  // server re-derives this independently and does not trust the form.
+  const hasPassword = user?.identities?.some((i) => i.provider === "email") ?? true;
+
   return (
     <main className="app-main" style={{ paddingBottom: 64 }}>
       <div style={{ marginBottom: 20 }}>
@@ -28,6 +34,7 @@ export default async function AccountPage() {
         initialLastName={lastName}
         initialEmail={email}
         initialWeekStartDay={weekStartDay}
+        hasPassword={hasPassword}
       />
     </main>
   );

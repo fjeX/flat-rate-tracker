@@ -10,6 +10,13 @@ interface Props {
   initialLastName: string;
   initialEmail: string;
   initialWeekStartDay: 0 | 1;
+  /**
+   * False only for a Google-only account, which has no password to confirm —
+   * it is setting its first one. The server re-derives this from the user's
+   * identities and never trusts the form, so hiding the field cannot be used
+   * to skip the check.
+   */
+  hasPassword: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +40,7 @@ function Feedback({ error, message }: { error?: string; message?: string }) {
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
-export function AccountView({ initialFirstName, initialLastName, initialEmail, initialWeekStartDay }: Props) {
+export function AccountView({ initialFirstName, initialLastName, initialEmail, initialWeekStartDay, hasPassword }: Props) {
   const router = useRouter();
 
   // Profile
@@ -48,6 +55,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
   const [emailPending, startEmailTransition] = useTransition();
 
   // Password
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordResult, setPasswordResult] = useState<{ error?: string; message?: string }>({});
@@ -125,6 +133,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
       const result = await updatePassword(formData);
       setPasswordResult(result);
       if (!result.error) {
+        setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       }
@@ -236,6 +245,24 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
         <div className="card padded-lg">
           <form onSubmit={handlePasswordSubmit}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {hasPassword && (
+                <div>
+                  <label className="field-label" htmlFor="current_password">
+                    Current Password
+                  </label>
+                  <input
+                    id="current_password"
+                    name="current_password"
+                    type="password"
+                    className="input"
+                    placeholder="Your current password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+              )}
               <div>
                 <label className="field-label" htmlFor="new_password">
                   New Password
