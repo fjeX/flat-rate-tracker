@@ -3,6 +3,7 @@ import {
   aggregateStats,
   aggregateStatsWithSchedule,
   computeEfficiency,
+  dailyDenominators,
   efficiencyTier,
   fmtHours,
   fmtPct,
@@ -470,5 +471,84 @@ describe("aggregateStatsWithSchedule", () => {
     const plain = aggregateStats(entries, clocks, range);
     expect(withSchedule.efficiency).toBe(plain.efficiency);
     expect(withSchedule.denomSource).toBe("clocked");
+  });
+
+  it("reports the flag hours the pairing loop could not count", () => {
+    // Off-Saturday work: in the headline total, in neither side of the ratio.
+    // PeriodStats prints all three figures together, so it needs this to
+    // explain why 13h over 8h reads as 100%.
+    const entries = [makeEntry("2026-07-06", 8), makeEntry("2026-07-11", 5)];
+    const stats = aggregateStatsWithSchedule(entries, [], range, ctx());
+    expect(stats.unpairedFlagHours).toBe(5);
+    expect(stats.unpairedDays).toBe(1);
+    // The invariant the caption rests on: the numerator plus the unpaired
+    // hours is the whole flagged total — nothing vanishes between them.
+    const numerator = (stats.efficiency! / 100) * stats.denomHours;
+    expect(numerator + stats.unpairedFlagHours).toBeCloseTo(stats.flagHours, 10);
+  });
+
+  it("counts no unpaired hours when every flagged day has a length", () => {
+    const entries = [makeEntry("2026-07-06", 9), makeEntry("2026-07-07", 7)];
+    const stats = aggregateStatsWithSchedule(entries, [], range, ctx());
+    expect(stats.unpairedFlagHours).toBe(0);
+    expect(stats.unpairedDays).toBe(0);
+  });
+
+  // ── the two derivations must not drift ───────────────────────────────────
+  // /pay-period divides by aggregateStatsWithSchedule's denominator; /insights
+  // builds its headline efficiency out of dailyDenominators. They were two
+  // hand-written copies of one rule and they diverged on unresolved days, so
+  // the same fortnight could read two different percentages on two pages.
+  // Nothing asserted they agreed, which is why nobody noticed.
+  describe("dailyDenominators agrees with the period stats", () => {
+    function denomTotal(
+      entries: Entry[],
+      clocks: DailyClock[],
+      over: Partial<ScheduleContext> = {},
+    ): number {
+      const byDay = dailyDenominators(entries, clocks, range, today, ctx(over));
+      return Object.values(byDay).reduce((sum, d) => sum + d.hours, 0);
+    }
+
+    const scenarios: [string, Entry[], DailyClock[], Partial<ScheduleContext>][] = [
+      ["a plain scheduled day", [makeEntry("2026-07-06", 8)], [], {}],
+      [
+        "a confirmed zero day",
+        [makeEntry("2026-07-06", 8)],
+        [],
+        { confirmedZeroDays: ["2026-07-09"] },
+      ],
+      [
+        "an explicit day off",
+        [makeEntry("2026-07-06", 8)],
+        [],
+        { daysOff: [{ startDate: "2026-07-07", endDate: "2026-07-08" }] },
+      ],
+      [
+        "clocked hours beating the schedule",
+        [makeEntry("2026-07-06", 9)],
+        [makeClock("2026-07-06", 10)],
+        {},
+      ],
+      ["off-schedule work with no clock", [makeEntry("2026-07-11", 5)], [], {}],
+    ];
+
+    for (const [name, entries, clocks, over] of scenarios) {
+      it(`matches on ${name}`, () => {
+        const stats = aggregateStatsWithSchedule(entries, clocks, range, ctx(over));
+        expect(denomTotal(entries, clocks, over)).toBe(stats.denomHours);
+      });
+    }
+
+    it("holds out unresolved scheduled days — the drift that reopened the mismatch", () => {
+      // Mon logged; Tue/Wed/Thu scheduled, silent and unconfirmed; Fri is today.
+      // dailyDenominators used to count all three at 8h regardless, so the same
+      // week read 8/32 = 25% on /insights and 8/8 = 100% on /pay-period.
+      const entries = [makeEntry("2026-07-06", 8)];
+      const stats = aggregateStatsWithSchedule(entries, [], range, ctx());
+      expect(stats.unresolvedDays).toHaveLength(3);
+      expect(stats.denomHours).toBe(8);
+      expect(denomTotal(entries, [])).toBe(8);
+    });
   });
 });

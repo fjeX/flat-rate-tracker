@@ -28,7 +28,17 @@ export function PeriodStats({
   unflaggedTime = null,
   hideFlagHours = false,
 }: {
-  stats: Stats & { denomSource?: DenomSource | null; denomHours?: number };
+  stats: Stats & {
+    denomSource?: DenomSource | null;
+    denomHours?: number;
+    // Flag hours on days with no denominator. Without these the hero prints
+    // Flag hrs, Hours and Efficiency side by side and the division visibly
+    // doesn't work — 430.1 / 72.0 is 597%, not the 397% next to it. /insights
+    // has explained this since 7cbbdda; this tile went on showing the bare
+    // numbers, which reads as a bug rather than as excluded days.
+    unpairedFlagHours?: number;
+    unpairedDays?: number;
+  };
   // The in-progress and awaiting-pay heroes already carry flagged hours as
   // their headline figure, so repeating it as a tile directly underneath is
   // noise. The settled hero shows the shortfall instead, and there the tile
@@ -86,6 +96,19 @@ export function PeriodStats({
           <Cell label="Earnings" value={fmtMoney(earnings)} highlighted />
         )}
       </EntranceGrid>
+      {(stats.unpairedFlagHours ?? 0) > 0 && (
+        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+          Not counted above:{" "}
+          <span className="font-medium text-[var(--fg-1)]">
+            {fmtHours(stats.unpairedFlagHours!)}h
+          </span>{" "}
+          flagged across {stats.unpairedDays}{" "}
+          {stats.unpairedDays === 1 ? "day" : "days"} with no clocked hours and
+          no schedule — the app can&apos;t tell how long those days were, so
+          they&apos;re in your flagged total but in neither side of the
+          percentage. Clock them or add them to your schedule to include them.
+        </p>
+      )}
       {unflaggedTime !== null && (
         <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
           {fmtHours(unflaggedTime.gapHours)} clocked hours had no flagged work —

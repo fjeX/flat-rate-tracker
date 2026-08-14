@@ -51,6 +51,7 @@ export default async function InsightsPage() {
   // can never contradict the efficiency on the dashboard.
   const denomByDay = range
     ? dailyDenominators(
+        entries,
         clocks,
         range,
         today,

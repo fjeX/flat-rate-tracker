@@ -183,11 +183,78 @@ export type ScheduleStats = Stats & {
   denomSource: DenomSource | null;
   /** Completed scheduled workdays awaiting a day-off / real-zero decision. */
   unresolvedDays: string[];
+  /**
+   * Flag hours inside the range that landed on days with NO denominator, so
+   * they are in `flagHours` (the headline total) but not in the efficiency
+   * numerator. This is the whole reason `flagHours / denomHours` does not equal
+   * `efficiency`, and a surface that prints all three owes the reader this
+   * number — otherwise the arithmetic on screen simply looks wrong.
+   */
+  unpairedFlagHours: number;
+  /** How many distinct days those unpaired hours came from. */
+  unpairedDays: number;
 };
 
 // Dashboard walks are a month-ish; snapshot generation spans a whole career.
 // The cap only guards against a malformed range hanging the request.
 const MAX_RANGE_DAYS = 4000;
+
+export type DayDenom = {
+  hours: number;
+  source: "clocked" | "scheduled";
+};
+
+type DayPairing =
+  | { kind: "counted"; denom: DayDenom }
+  /** Completed scheduled workday awaiting a day-off / real-zero decision. */
+  | { kind: "unresolved" }
+  /** No denominator at all: today, the future, a day off, or no schedule. */
+  | { kind: "none" };
+
+// ---------------------------------------------------------------------------
+// The one per-day pairing rule. Every surface that divides flag hours by a
+// day length goes through here.
+//
+// Clocked hours win. Scheduled hours fill COMPLETED days only — never today
+// (mid-shift), never the future, never an explicit day off. A scheduled day
+// with no flagged work counts only once the tech has confirmed it was a real
+// zero; until then it is UNRESOLVED and contributes to neither side.
+//
+// aggregateStatsWithSchedule and dailyDenominators were two hand-synced copies
+// of this, under a comment claiming they were "identical on purpose". They were
+// not: dailyDenominators counted every completed scheduled day unconditionally
+// and never consulted confirmedZeroDays, so any period holding an unresolved
+// scheduled day read one efficiency on /pay-period and a lower one on
+// /insights — the same surface disagreement 7cbbdda was meant to close, still
+// live for every period nobody happened to check. Two functions answering one
+// real-world question drift; there is now one function.
+// ---------------------------------------------------------------------------
+function pairDay(
+  date: string,
+  flag: number,
+  clocked: number,
+  today: string,
+  schedule: ScheduleContext | null,
+  off: Set<string>,
+  confirmedZero: Set<string>,
+): DayPairing {
+  if (clocked > 0) {
+    return { kind: "counted", denom: { hours: clocked, source: "clocked" } };
+  }
+  if (!schedule || date >= today || off.has(date)) return { kind: "none" };
+  const scheduled = scheduledHoursFor(
+    schedule.schedules,
+    date,
+    schedule.shiftOverrides ?? {},
+  );
+  // A valid shift always has positive paid hours (shiftFromHours rejects 0), so
+  // `<= 0` and `null` are the same answer: this day has no scheduled length.
+  if (scheduled === null || scheduled <= 0) return { kind: "none" };
+  if (flag > 0 || confirmedZero.has(date)) {
+    return { kind: "counted", denom: { hours: scheduled, source: "scheduled" } };
+  }
+  return { kind: "unresolved" };
+}
 
 export function aggregateStatsWithSchedule(
   entries: Entry[],
@@ -214,31 +281,30 @@ export function aggregateStatsWithSchedule(
   let denomHours = 0;
   let clockedDays = 0;
   let scheduledDays = 0;
+  let unpairedFlagHours = 0;
+  let unpairedDays = 0;
   const unresolvedDays: string[] = [];
 
   let d = range.start;
   for (let i = 0; d <= range.end && i < MAX_RANGE_DAYS; i++, d = addDays(d, 1)) {
     const flag = flagByDay.get(d) ?? 0;
     const clocked = clockByDay.get(d) ?? 0;
+    const paired = pairDay(d, flag, clocked, ctx.today, ctx, off, confirmedZero);
 
-    if (clocked > 0) {
+    if (paired.kind === "counted") {
       numerator += flag;
-      denomHours += clocked;
-      clockedDays += 1;
+      denomHours += paired.denom.hours;
+      if (paired.denom.source === "clocked") clockedDays += 1;
+      else scheduledDays += 1;
       continue;
     }
-    // No clock entry. Schedule fallback applies to completed days only —
-    // never today (mid-shift) or the future — and never to explicit days off.
-    if (d >= ctx.today || off.has(d)) continue;
-    const scheduled = scheduledHoursFor(ctx.schedules, d, ctx.shiftOverrides ?? {});
-    if (scheduled === null) continue;
-
-    if (flag > 0 || confirmedZero.has(d)) {
-      numerator += flag;
-      denomHours += scheduled;
-      scheduledDays += 1;
-    } else {
-      unresolvedDays.push(d);
+    if (paired.kind === "unresolved") unresolvedDays.push(d);
+    // Flagged work on a day the app can't measure. An unresolved day always has
+    // flag === 0 (flag > 0 would have counted it), so this only ever fires for
+    // "none" days: today, the future, days off, days with no schedule at all.
+    if (flag > 0) {
+      unpairedFlagHours += flag;
+      unpairedDays += 1;
     }
   }
 
@@ -257,59 +323,63 @@ export function aggregateStatsWithSchedule(
     denomHours,
     denomSource,
     unresolvedDays,
+    unpairedFlagHours,
+    unpairedDays,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Per-day denominators — chart hover readouts.
-// Same hierarchy as aggregateStatsWithSchedule, per single day: clocked hours
-// win; scheduled paid hours fill COMPLETED days (never today mid-shift, never
-// explicit days off). Days with no denominator are simply absent — the chart
-// shows hours only, no efficiency.
+// Per-day denominators — chart hover readouts and the /insights trend.
+// One call to pairDay per day, the same call aggregateStatsWithSchedule makes,
+// so a day counts here if and only if it counts there. Days with no
+// denominator are simply absent — the chart shows hours only, no efficiency.
 //
-// Identical to the period stats on purpose — same function, same answer. Days
-// before the first schedule existed used to borrow the earliest schedule's
-// pattern here (a "display-only" retro fallback, for hover readouts). That
-// leaked: periodTrend builds the /insights headline efficiency and its delta
-// caption from this map, so the same period read "no data" on /pay-period
-// (forward-only) and 508% on /insights. A schedule you did not have last month
-// must not invent a denominator for last month — on any surface.
+// `entries` is not optional and not cosmetic: the pairing rule needs to know
+// whether a scheduled day had flagged work on it before it can tell a real
+// zero from an unanswered question. Leaving entries out is exactly how this
+// function drifted from the period stats in the first place.
+//
+// Days before the first schedule existed used to borrow the earliest
+// schedule's pattern here (a "display-only" retro fallback, for hover
+// readouts). That leaked: periodTrend builds the /insights headline efficiency
+// and its delta caption from this map, so the same period read "no data" on
+// /pay-period (forward-only) and 508% on /insights. A schedule you did not
+// have last month must not invent a denominator for last month — on any
+// surface.
 // ---------------------------------------------------------------------------
 
-export type DayDenom = {
-  hours: number;
-  source: "clocked" | "scheduled";
-};
-
 export function dailyDenominators(
+  entries: Entry[],
   clocks: DailyClock[],
   range: { start: string; end: string },
   today: string,
   schedule: ScheduleContext | null,
 ): Record<string, DayDenom> {
   const out: Record<string, DayDenom> = {};
+  const flagByDay = new Map<string, number>();
+  for (const e of entries) {
+    if (!inRange(e.date, range.start, range.end)) continue;
+    flagByDay.set(e.date, (flagByDay.get(e.date) ?? 0) + e.flagHours);
+  }
   const clockByDay = new Map<string, number>();
   for (const c of clocks) {
     if (inRange(c.date, range.start, range.end)) clockByDay.set(c.date, c.hours);
   }
   const off = schedule ? expandDaysOff(schedule.daysOff) : new Set<string>();
+  const confirmedZero = new Set(schedule?.confirmedZeroDays ?? []);
 
   let d = range.start;
   for (let i = 0; d <= range.end && i < MAX_RANGE_DAYS; i++, d = addDays(d, 1)) {
-    const clocked = clockByDay.get(d) ?? 0;
-    if (clocked > 0) {
-      out[d] = { hours: clocked, source: "clocked" };
-      continue;
-    }
-    if (!schedule || d >= today || off.has(d)) continue;
-    const scheduled = scheduledHoursFor(
-      schedule.schedules,
+    const paired = pairDay(
       d,
-      schedule.shiftOverrides ?? {},
+      flagByDay.get(d) ?? 0,
+      clockByDay.get(d) ?? 0,
+      today,
+      schedule,
+      off,
+      confirmedZero,
     );
-    if (scheduled !== null && scheduled > 0) {
-      out[d] = { hours: scheduled, source: "scheduled" };
-    }
+    if (paired.kind === "counted") out[d] = paired.denom;
   }
   return out;
 }

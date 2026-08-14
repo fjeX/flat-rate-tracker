@@ -172,6 +172,7 @@ export default async function DashboardPage() {
 
   // Day-level efficiency for the Flagged Hours chart's week-tab hover readout.
   const denomByDay = dailyDenominators(
+    entries,
     clocks,
     { start: weekStart, end: today },
     today,

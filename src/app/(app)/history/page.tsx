@@ -24,7 +24,7 @@ export default async function HistoryPage() {
   const weekStart = startOfWeek(today, weekStartDay);
 
   const PAGE_SIZE = 100;
-  const [entries, library, settings, laborRates, photoEntryIds, clocks, schedules, daysOff, shiftOverrides] = await Promise.all([
+  const [entries, library, settings, laborRates, photoEntryIds, clocks, schedules, daysOff, shiftOverrides, confirmedZeroDays] = await Promise.all([
     db.listEntries(supabase, { limit: PAGE_SIZE }),
     db.listOpCodes(supabase),
     db.getSettings(supabase),
@@ -35,6 +35,7 @@ export default async function HistoryPage() {
     db.listWorkSchedulesSafe(supabase),
     db.listDaysOffSafe(supabase),
     db.listShiftOverridesSafe(supabase),
+    db.listConfirmedZeroDaysSafe(supabase),
   ]);
   const hasMore = entries.length === PAGE_SIZE;
 
@@ -46,12 +47,17 @@ export default async function HistoryPage() {
       ? {
           schedules,
           daysOff: daysOff ?? [],
-          confirmedZeroDays: [],
+          // Was hardcoded []. Harmless while dailyDenominators ignored the
+          // field; under the shared pairing rule an empty list turns every
+          // confirmed real-zero day into an unresolved one and drops it from
+          // the chart's denominator.
+          confirmedZeroDays: confirmedZeroDays ?? [],
           today,
           shiftOverrides: shiftOverrides ?? {},
         }
       : null;
   const denomByDay = dailyDenominators(
+    entries,
     clocks,
     { start: weekStart, end: today },
     today,
