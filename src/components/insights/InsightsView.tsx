@@ -589,7 +589,7 @@ function BestDaysSection({
               {WEEKDAY_LABELS[best!.weekday]}
             </span>{" "}
             is your strongest day at {fmtPct(best!.efficiency)};{" "}
-            {WEEKDAY_LABELS[worst!.weekday].toLowerCase()} runs{" "}
+            {WEEKDAY_LABELS[worst!.weekday]} runs{" "}
             {fmtPct(worst!.efficiency)}.
           </p>
         )}
@@ -807,7 +807,7 @@ function RecoverySection({
             claims get paid {pct(i.betterRate)} of the time ({i.betterCount}{" "}
             closed) vs {pct(i.worseRate)} for{" "}
             <span className="font-medium text-[var(--fg-1)]">
-              {i.worseLabel.toLowerCase()}
+              {i.worseLabel}
             </span>{" "}
             ({i.worseCount} closed).
           </p>

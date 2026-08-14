@@ -34,17 +34,20 @@ export function RetroTimePrompt({
   if (candidates.length === 0) return null;
 
   const answered = Object.keys(picked).length;
+  const single = candidates.length === 1;
 
   return (
     <Modal
       open={open}
       onClose={onSkip}
-      title={candidates.length === 1 ? "How long did that take?" : "How long did these take?"}
+      title={single ? "How long did that take?" : "How long did these take?"}
     >
       <div className="space-y-4">
         <p className="text-sm" style={{ color: "var(--fg-2)" }}>
-          Roughly is fine — close enough to know whether you beat the book. This
-          is the only job on the ticket big enough to be worth asking about.
+          Roughly is fine — close enough to know whether you beat the book.{" "}
+          {single
+            ? "This is the only job on the ticket big enough to be worth asking about."
+            : "These are the only jobs on the ticket big enough to be worth asking about."}
         </p>
 
         {candidates.map((c) => {
