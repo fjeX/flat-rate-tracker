@@ -20,6 +20,7 @@ import {
 import { lineCode, lineDescription } from "./line-label";
 import { payStatus } from "./reconcile";
 import { buildUnpaidSummary, type UnpaidSummary } from "./unpaid-summary";
+import { fmtHours2 } from "./format";
 
 // One disputed line, flattened with enough context to render a report row
 // without re-deriving anything.
@@ -171,9 +172,12 @@ export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
 // to their service manager or payroll.
 // ---------------------------------------------------------------------------
 
-function fmtH(n: number): string {
-  return (Math.round(n * 10) / 10).toFixed(1);
-}
+// Two decimals, not one. Every total in this pack is an exact sum of its rows,
+// so at 1dp an 11-row list could legitimately print rows adding to 2.8 above a
+// total of 2.7 — an invitation to have the whole claim waved off over an
+// arithmetic error that was never in the data. At the stored resolution the
+// page adds up.
+const fmtH = fmtHours2;
 
 function fmtD(n: number): string {
   return n.toLocaleString("en-US", {
@@ -273,7 +277,7 @@ function appendUnpaidSection(out: string[], pack: DisputePack): void {
       const head = l.roNumber ? `RO #${l.roNumber} (${l.date})` : l.date;
       const what = [l.code, l.description].filter(Boolean).join(" — ");
       out.push(what ? `${head}  |  ${what}` : head);
-      let detail = `  ${fmtH(l.hours)}h performed, 0.0h flagged`;
+      let detail = `  ${fmtH(l.hours)}h performed, ${fmtH(0)}h flagged`;
       if (l.dollars !== null) detail += ` (${fmtD(l.dollars)} at the applicable rate)`;
       out.push(detail);
       out.push("");

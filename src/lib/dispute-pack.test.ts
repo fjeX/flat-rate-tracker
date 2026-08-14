@@ -269,7 +269,7 @@ describe("formatDisputePackText", () => {
     expect(text).toContain("Flagged vs. Paid Variance Report");
     expect(text).toContain("Technician: Jane Tech");
     expect(text).toContain("RO #1001");
-    expect(text).toContain("Total variance: 2.0h");
+    expect(text).toContain("Total variance: 2.00h");
     expect(text).toContain("$60");
     expect(text).toContain("Photo record available for 1 of 1");
     // No accusatory language / emoji.
@@ -343,7 +343,7 @@ describe("buildDisputePack — unpaid rework section", () => {
     ];
     const text = formatDisputePackText(build({ entries }));
     expect(text).toContain("Unpaid rework performed");
-    expect(text).toContain("Total unpaid time: 2.0h");
+    expect(text).toContain("Total unpaid time: 2.00h");
     expect(text.indexOf("Total variance")).toBeLessThan(
       text.indexOf("Unpaid rework performed"),
     );
@@ -385,7 +385,7 @@ describe("buildDisputePack — unpaid rework section", () => {
     expect(pack.unpaidRework!.totalDollars).toBe(60); // the RO line only
     expect(pack.unpaidRework!.unpricedHours).toBe(4);
     const text = formatDisputePackText(pack);
-    expect(text).toContain("4.0h of the above carries no rate on file");
+    expect(text).toContain("4.00h of the above carries no rate on file");
   });
 });
 

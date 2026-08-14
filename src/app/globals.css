@@ -2222,6 +2222,10 @@ a { color: inherit; }
 }
 .day-sub.is-planned { opacity: 0.55; }
 .day-flag { width: 6px; height: 6px; border-radius: 999px; background: var(--warn); }
+/* A one-day shift override. Without this the cell is byte-identical to a
+   pattern day whenever the override lands on the same hours. */
+.day-override { color: var(--brand); font-weight: 700; margin-left: 1px; }
+.day-cell.is-override .day-sub { opacity: 1; }
 
 .day-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; padding: 0 2px; }
 .day-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-3); }

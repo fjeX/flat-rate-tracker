@@ -120,10 +120,10 @@ export function aggregateStats(
   };
 }
 
-// Round to 1 decimal for display. 10.05 → 10.1, 10.04 → 10.
-export function fmtHours(n: number): string {
-  return (Math.round(n * 10) / 10).toFixed(1);
-}
+// Hours-to-text lives in lib/format now — one copy, so a rounding rule can
+// never again be fixed on one surface and left broken on two others. Re-exported
+// here because ~30 files already import fmtHours from this module.
+export { fmtHours } from "./format";
 
 export function fmtPct(n: number | null): string {
   if (n === null) return "—";

@@ -91,16 +91,24 @@ function DayCell({
       ? fmtHours(shiftPaidHours(day.shift as ShiftDef))
       : null;
 
+  const overridden = day.hasOverride && !off;
+
   const cls = [
     "day-cell",
     !day.inMonth && "is-out",
     day.inMonth && (off || !scheduled) && "is-bare",
     isToday && "is-today",
     selected && "is-selected",
+    overridden && "is-override",
   ]
     .filter(Boolean)
     .join(" ");
 
+  // The hours go in the label, not just the cell. A scheduled day used to
+  // announce itself as ", scheduled" with no figure at all, so an 8h day and a
+  // 10h day were indistinguishable to a screen reader — and a one-day override
+  // set to the SAME hours as the pattern was invisible to everyone, since the
+  // only thing that ever moved was the number.
   const state = day.unresolved
     ? ", needs a decision"
     : off
@@ -108,14 +116,14 @@ function DayCell({
       : logged
         ? `, ${fmtHours(day.clockedHours as number)} hours logged`
         : scheduled
-          ? ", scheduled"
+          ? `, ${fmtHours(shiftPaidHours(day.shift as ShiftDef))} hours scheduled`
           : "";
 
   return (
     <button
       type="button"
       onClick={() => onSelect(day.date)}
-      aria-label={`${formatDateLong(day.date)}${state}`}
+      aria-label={`${formatDateLong(day.date)}${state}${overridden ? ", shift overridden" : ""}`}
       aria-pressed={selected}
       className={cls}
     >
@@ -123,7 +131,22 @@ function DayCell({
       {off ? (
         <span className="day-sub">off</span>
       ) : hours !== null ? (
-        <span className={`day-sub${logged ? "" : " is-planned"}`}>{hours}</span>
+        <span className={`day-sub${logged ? "" : " is-planned"}`}>
+          {hours}
+          {overridden && (
+            <span className="day-override" aria-hidden="true">
+              *
+            </span>
+          )}
+        </span>
+      ) : overridden ? (
+        // An override that clears the shift leaves no number to hang the
+        // marker on; it still must not look like an ordinary bare day.
+        <span className="day-sub is-planned">
+          <span className="day-override" aria-hidden="true">
+            *
+          </span>
+        </span>
       ) : null}
       {day.unresolved && <span className="day-flag" aria-hidden="true" />}
     </button>
@@ -488,6 +511,12 @@ export function ScheduleCalendar({
         </span>
         <span>
           <i style={{ color: "var(--fg-3)" }}>9.2</i>Hours you logged
+        </span>
+        <span>
+          <i className="day-override" style={{ fontStyle: "normal" }}>
+            *
+          </i>
+          One-day override
         </span>
       </div>
 

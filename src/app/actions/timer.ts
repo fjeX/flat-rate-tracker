@@ -15,6 +15,8 @@ import {
   msToHours,
   nextFreeSlot,
   type TimerSlot,
+  attachConflict,
+  lineTakenByOtherSlot,
 } from "@/lib/timer";
 import { capForSlot, type TimerCapContext } from "@/lib/timer-schedule";
 
@@ -108,9 +110,18 @@ async function pauseOtherWorkingSlots(
 /**
  * Put an RO on a timer and start working it. Claims the lowest free slot.
  *
- * The same RO is deliberately refused on two slots at once: it's almost always
- * a mis-tap, and because saves are additive it would double-count the job's
- * actual hours in a way that's very hard to spot after the fact.
+ * What is refused is the same LINE on two slots at once, not the same RO. Hours
+ * bank per line (`addLineActualHours` writes one entry_op_codes row keyed on
+ * lineId), so two slots on two different lines of one RO cannot double-count
+ * anything — while an RO with a line on parts hold and another being diagnosed
+ * is an ordinary afternoon. This used to refuse by entryId, which blocked that
+ * outright and, worse, did it silently: the picker simply omitted the RO, so
+ * the tech went looking for a job that had vanished (timer-same-ro-implicit-
+ * refusal, 2026-08-13).
+ *
+ * A second timer on an already-running RO must name its line up front. Left
+ * null it could later be pointed at the line already in flight, which is the
+ * double-count the original guard was actually there to prevent.
  */
 export async function attachRoToTimerAction(
   entryId: string,
@@ -126,8 +137,19 @@ export async function attachRoToTimerAction(
   }
 
   const all = await db.listTimerSlots(supabase);
-  if (all.some((s) => s.entryId === entryId)) {
-    throw new Error(`RO #${entry.roNumber} is already on a timer.`);
+  switch (attachConflict(all, entryId, lineId)) {
+    case "needs-line":
+      throw new Error(
+        `RO #${entry.roNumber} is already on a timer. Pick which line this ` +
+          `timer is for.`,
+      );
+    case "line-taken":
+      throw new Error(`That line of RO #${entry.roNumber} is already on a timer.`);
+    case "sibling-unassigned":
+      throw new Error(
+        `RO #${entry.roNumber} is on a timer that hasn't been assigned a line ` +
+          `yet. Set that timer's line first.`,
+      );
   }
 
   const slot = nextFreeSlot(all);
@@ -193,6 +215,16 @@ export async function setTimerLineAction(
     const entry = await db.getEntry(supabase, slot.entryId);
     if (!entry?.opCodes.some((l) => l.id === lineId)) {
       throw new Error("That op code line isn't on this RO.");
+    }
+    // Same rule as attach, enforced on the other door into it: now that one RO
+    // may occupy several slots, re-pointing this timer at a line another slot
+    // is already running would recreate exactly the additive double-count the
+    // per-line guard exists to prevent.
+    const all = await db.listTimerSlots(supabase);
+    if (lineTakenByOtherSlot(all, slot.id, slot.entryId, lineId)) {
+      throw new Error(
+        `That line of RO #${entry.roNumber} is already on another timer.`,
+      );
     }
   }
 

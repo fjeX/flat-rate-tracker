@@ -19,6 +19,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { InfoBubble } from "@/components/ui/InfoBubble";
 import { fmtHours } from "@/lib/stats";
+import { fmtHours2 } from "@/lib/format";
 import { fmtMoney } from "@/lib/earnings";
 import { formatDateShort } from "@/lib/periods";
 import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
@@ -413,7 +414,15 @@ export function WorkCostCard({
 
           {/* The evidence behind the gap: every unpaid record, one row each.
               A drill-down rather than a peer card — this is detail you open
-              when you want to check the claim above. */}
+              when you want to check the claim above.
+
+              It is also the audit view rather than the glance: it itemises
+              every row and then totals them, so a reader can and will add it
+              up. At 1dp they don't reconcile — eleven 2dp rows rounded
+              individually summed to 2.8h under a 2.7h total (2026-08-13) — so
+              everything inside here is shown at the resolution hours are
+              stored at. The card headline above stays at 1dp, where nothing is
+              being itemised. */}
           {hasUnpaid && (
             <div>
               <button
@@ -425,7 +434,7 @@ export function WorkCostCard({
                 <span>Every unpaid record</span>
                 <span className="flex-1" />
                 <span className="mono text-sm font-semibold tabular-nums text-[var(--warn)]">
-                  {fmtHours(unpaid.totalHours)}h
+                  {fmtHours2(unpaid.totalHours)}h
                 </span>
                 {recordsOpen ? (
                   <ChevronUp className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
@@ -461,7 +470,7 @@ export function WorkCostCard({
                           </span>
                         </span>
                         <span className="mono shrink-0 tabular-nums text-[var(--fg-1)]">
-                          {fmtHours(l.hours)}h
+                          {fmtHours2(l.hours)}h
                           {l.dollars !== null && (
                             <span className="text-[var(--fg-3)]">
                               {" "}
@@ -478,7 +487,7 @@ export function WorkCostCard({
                       Total unpaid
                     </span>
                     <span className="mono text-sm font-semibold tabular-nums text-[var(--warn)]">
-                      {fmtHours(unpaid.totalHours)}h
+                      {fmtHours2(unpaid.totalHours)}h
                       {unpaid.totalDollars !== null && (
                         <span className="text-[var(--fg-2)]">
                           {" "}
@@ -492,7 +501,7 @@ export function WorkCostCard({
                     // Never let the dollar figure read as if it covered every
                     // hour above.
                     <p className="text-xs text-[var(--fg-3)]">
-                      {fmtHours(unpaid.unpricedHours)}h of this has no rate on
+                      {fmtHours2(unpaid.unpricedHours)}h of this has no rate on
                       file and is counted in hours only.
                     </p>
                   )}

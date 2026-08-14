@@ -4,10 +4,10 @@ import "./dispute-pack.css";
 import Link from "next/link";
 import type { DisputePack } from "@/lib/dispute-pack";
 import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
+import { fmtHours2 } from "@/lib/format";
 
-function fmtH(n: number): string {
-  return (Math.round(n * 10) / 10).toFixed(1);
-}
+// 2dp so printed rows reconcile with printed totals — see lib/format.
+const fmtH = fmtHours2;
 
 function fmtD(n: number): string {
   return n.toLocaleString("en-US", {
@@ -75,7 +75,7 @@ function UnpaidReworkSection({ pack }: { pack: DisputePack }) {
                   <td>{l.code ?? UNPAID_TIME_KIND_LABELS[l.kind]}</td>
                   <td>{l.description || "—"}</td>
                   <td className="dp-num dp-variance">{fmtH(l.hours)}h</td>
-                  <td className="dp-num">0.0h</td>
+                  <td className="dp-num">{fmtH(0)}h</td>
                   {priced && (
                     <td className="dp-num dp-variance">
                       {l.dollars === null ? "—" : fmtD(l.dollars)}

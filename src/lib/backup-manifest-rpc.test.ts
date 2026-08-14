@@ -49,10 +49,20 @@ function currentRpcSource(): { file: string; sql: string } {
   );
 }
 
-/** Strip `-- …` comments so a table named only in prose doesn't count as covered. */
+/**
+ * Strip `-- …` comments so a table named only in prose doesn't count as covered.
+ *
+ * Split on `\r?\n`, not `\n`. On a CRLF checkout every line ended in a stray
+ * `\r`, and JS `.` does not match `\r` — so `--.*$` matched nothing, this
+ * function returned the SQL untouched, and every guard below silently read
+ * comments as code. That fails safe in one direction (is_admin appears in two
+ * comments, so the exclusion test screamed) and fails OPEN in the other: a
+ * table mentioned only in prose would have satisfied "the RPC writes it".
+ * Green on Linux, wrong on Windows, for the same commit.
+ */
 function withoutComments(sql: string): string {
   return sql
-    .split("\n")
+    .split(/\r?\n/)
     .map((line) => line.replace(/--.*$/, ""))
     .join("\n");
 }

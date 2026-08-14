@@ -55,6 +55,7 @@ export function GuestTimerSlots() {
   const [pickRoOpen, setPickRoOpen] = useState(false);
   const [saveSlotId, setSaveSlotId] = useState<string | null>(null);
   const [linePickSlotId, setLinePickSlotId] = useState<string | null>(null);
+  const [attachLineEntry, setAttachLineEntry] = useState<Entry | null>(null);
 
   const now = useTickingNow(timers.some(isAccruing));
 
@@ -66,13 +67,43 @@ export function GuestTimerSlots() {
     () => new Map(entries.map((e) => [e.id, e])),
     [entries],
   );
-  const onTimerIds = useMemo(
-    () => new Set(timers.map((t) => t.entryId).filter(Boolean) as string[]),
-    [timers],
-  );
+  // Per-RO, per-line — mirrors TimerSlots. A blocked RO stays in the list with
+  // its reason shown rather than silently vanishing from it.
+  const slotsByEntry = useMemo(() => {
+    const m = new Map<string, { lineIds: Set<string>; hasUnassigned: boolean }>();
+    for (const t of timers) {
+      if (!t.entryId) continue;
+      const cur = m.get(t.entryId) ?? { lineIds: new Set<string>(), hasUnassigned: false };
+      if (t.lineId) cur.lineIds.add(t.lineId);
+      else cur.hasUnassigned = true;
+      m.set(t.entryId, cur);
+    }
+    return m;
+  }, [timers]);
 
   const canAddTimer = timers.length < MAX_TIMER_SLOTS;
-  const attachable = entries.filter((e) => !onTimerIds.has(e.id));
+  function attachBlockReason(entry: Entry): string | null {
+    const taken = slotsByEntry.get(entry.id);
+    if (!taken) return null;
+    if (taken.hasUnassigned) {
+      return "On a timer that has no line set yet — set that one's line first.";
+    }
+    const free = entry.opCodes.filter((l) => !taken.lineIds.has(l.id));
+    if (free.length === 0) {
+      return entry.opCodes.length === 1
+        ? "Its only line is already on a timer."
+        : "Every line is already on a timer.";
+    }
+    return null;
+  }
+
+  function freeLinesFor(entry: Entry) {
+    const taken = slotsByEntry.get(entry.id);
+    return entry.opCodes.filter((l) => !taken?.lineIds.has(l.id));
+  }
+
+  const attachable = entries.map((e) => ({ entry: e, blocked: attachBlockReason(e) }));
+  const anyAttachable = attachable.some((a) => a.blocked === null);
 
   const saveSlot = timers.find((t) => t.id === saveSlotId) ?? null;
   const saveEntry = saveSlot?.entryId ? entryById.get(saveSlot.entryId) : null;
@@ -82,7 +113,17 @@ export function GuestTimerSlots() {
     : null;
 
   function handleAttach(entry: Entry) {
-    const lineId = entry.opCodes.length === 1 ? entry.opCodes[0].id : null;
+    const free = freeLinesFor(entry);
+    // A second timer on the same RO must name its line up front — an unset one
+    // could later be pointed at the line already running, and hours are additive.
+    if (slotsByEntry.has(entry.id) && free.length > 1) {
+      setAttachLineEntry(entry);
+      return;
+    }
+    const lineId =
+      free.length === 1 ? free[0].id
+      : entry.opCodes.length === 1 ? entry.opCodes[0].id
+      : null;
     setPickRoOpen(false);
     setError(attachGuestTimer(entry.id, lineId));
   }
@@ -171,22 +212,27 @@ export function GuestTimerSlots() {
       {pickRoOpen && (
         <Modal open onClose={() => setPickRoOpen(false)} title="Put an RO on a timer">
           <div className="space-y-3">
-            {attachable.length === 0 ? (
+            {entries.length === 0 ? (
               <p className="text-sm text-[var(--fg-2)]">
-                {entries.length === 0
-                  ? "The timer clocks against an RO — log one first."
-                  : "Every RO is already on a timer."}
+                The timer clocks against an RO — log one first.
               </p>
             ) : (
+              <>
+              {!anyAttachable && (
+                <p className="text-sm text-[var(--fg-2)]">
+                  Every line of every RO is already on a timer.
+                </p>
+              )}
               <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
-                {attachable.map((e) => {
+                {attachable.map(({ entry: e, blocked }) => {
                   const vehicle = vehicleLabel(e);
                   return (
                     <li key={e.id}>
                       <button
                         type="button"
                         onClick={() => handleAttach(e)}
-                        className="flex w-full min-h-[44px] items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
+                        disabled={blocked !== null}
+                        className="flex w-full min-h-[44px] items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
                       >
                         <span className="min-w-0">
                           <span className="flex items-center gap-2">
@@ -202,6 +248,11 @@ export function GuestTimerSlots() {
                               {vehicle}
                             </span>
                           )}
+                          {blocked && (
+                            <span className="mt-0.5 block text-xs text-[var(--fg-3)]">
+                              {blocked}
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 text-sm text-[var(--fg-0)]">
                           {fmtHours(e.flagHours)}h
@@ -211,6 +262,7 @@ export function GuestTimerSlots() {
                   );
                 })}
               </ul>
+              </>
             )}
             <Link href="/guest/log" className="btn btn-block">
               <Plus className="h-4 w-4" />
@@ -221,6 +273,57 @@ export function GuestTimerSlots() {
       )}
 
       {/* Line picker */}
+      {/* Second timer on an RO that already has one: choose the line up front,
+          from the free lines only. Mirrors TimerSlots. */}
+      {attachLineEntry && (
+        <Modal
+          open
+          onClose={() => setAttachLineEntry(null)}
+          title={`RO #${attachLineEntry.roNumber} — Which line?`}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--fg-2)]">
+              This RO already has a timer running. Pick the line this second
+              timer is for — its hours land on that line only.
+            </p>
+            <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
+              {freeLinesFor(attachLineEntry).map((line) => {
+                const { code, description } = lineLabelFor(line, libraryById);
+                return (
+                  <li key={line.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const entryId = attachLineEntry.id;
+                        setAttachLineEntry(null);
+                        setPickRoOpen(false);
+                        setError(attachGuestTimer(entryId, line.id));
+                      }}
+                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="font-mono text-sm text-[var(--brand)]">
+                          {code}
+                        </span>
+                        {line.custom && <Badge className="ml-2">Other</Badge>}
+                        {description && (
+                          <span className="block truncate text-xs text-[var(--fg-3)]">
+                            {description}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-xs text-[var(--fg-2)]">
+                        {fmtHours(line.flagHours)}h
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </Modal>
+      )}
+
       {linePickSlot && linePickEntry && (
         <Modal
           open
@@ -234,6 +337,12 @@ export function GuestTimerSlots() {
             <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
               {linePickEntry.opCodes.map((line) => {
                 const { code, description } = lineLabelFor(line, libraryById);
+                const takenElsewhere = timers.some(
+                  (t) =>
+                    t.id !== linePickSlot.id &&
+                    t.entryId === linePickEntry.id &&
+                    t.lineId === line.id,
+                );
                 return (
                   <li key={line.id}>
                     <button
@@ -242,7 +351,8 @@ export function GuestTimerSlots() {
                         setGuestTimerLine(linePickSlot.id, line.id);
                         setLinePickSlotId(null);
                       }}
-                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
+                      disabled={takenElsewhere}
+                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
                     >
                       <span className="min-w-0 flex-1">
                         <span className="font-mono text-sm text-[var(--brand)]">

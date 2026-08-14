@@ -6,6 +6,7 @@ import type { OpCodeDraft } from "@/components/forms/OpCodeModals";
 import { STARTER_OP_CODES } from "@/lib/starter-opcodes";
 import { GUEST_STORAGE_KEY } from "@/lib/guest/storage";
 import {
+  attachConflict,
   bucketFor,
   flushAccumulators,
   msToHours,
@@ -417,8 +418,16 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
   }
 
   function attachGuestTimer(entryId: string, lineId: string | null): string | null {
-    if (state.timers.some((t) => t.entryId === entryId)) {
-      return "That RO is already on a timer.";
+    // Per-line, mirroring attachRoToTimerAction: two lines of one RO may run at
+    // once (hours bank per line), the same line twice may not. See the comment
+    // on the server action for why the entry-level version was wrong.
+    switch (attachConflict(state.timers, entryId, lineId)) {
+      case "needs-line":
+        return "That RO is already on a timer. Pick which line this timer is for.";
+      case "line-taken":
+        return "That line of the RO is already on a timer.";
+      case "sibling-unassigned":
+        return "That RO is on a timer with no line set yet. Set that timer's line first.";
     }
     const slot = nextFreeSlot(state.timers);
     if (slot === null) return "All 3 timers are in use. Save or clear one first.";

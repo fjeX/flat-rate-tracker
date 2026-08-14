@@ -183,6 +183,54 @@ export function nextFreeSlot(slots: TimerSlot[]): number | null {
 }
 
 /** The slot currently working, if any. Only one may hold this at a time. */
+/**
+ * Whether a new timer on (entryId, lineId) may start, given what is running.
+ *
+ * The rule is PER LINE, not per RO. Hours bank per line — addLineActualHours
+ * writes one entry_op_codes row keyed on lineId — so two lines of one RO can
+ * run at once without double-counting anything, and a car with one line on
+ * parts hold while another is being diagnosed is an ordinary afternoon. The
+ * original guard refused by entryId, which blocked that outright and did it
+ * silently: the picker just omitted the RO (timer-same-ro-implicit-refusal,
+ * 2026-08-13).
+ *
+ * What is still refused is anything that could land two clocks on ONE line:
+ * the same line twice, and any second timer that hasn't named its line yet
+ * (including alongside a sibling that hasn't named its own), because an unset
+ * line can still be pointed at the one already in flight.
+ *
+ * Pure and shared so the server action and the guest store can't drift apart.
+ */
+export type AttachConflict = "line-taken" | "needs-line" | "sibling-unassigned" | null;
+
+export function attachConflict(
+  slots: readonly Pick<TimerSlot, "entryId" | "lineId">[],
+  entryId: string,
+  lineId: string | null,
+): AttachConflict {
+  const sameRo = slots.filter((s) => s.entryId === entryId);
+  if (sameRo.length === 0) return null;
+  if (!lineId) return "needs-line";
+  if (sameRo.some((s) => s.lineId === lineId)) return "line-taken";
+  if (sameRo.some((s) => s.lineId === null)) return "sibling-unassigned";
+  return null;
+}
+
+/**
+ * Whether pointing an EXISTING timer at `lineId` would collide with another
+ * slot on the same RO. The other door into the same rule as attachConflict.
+ */
+export function lineTakenByOtherSlot(
+  slots: readonly Pick<TimerSlot, "id" | "entryId" | "lineId">[],
+  slotId: string,
+  entryId: string | null,
+  lineId: string,
+): boolean {
+  return slots.some(
+    (s) => s.id !== slotId && s.entryId === entryId && s.lineId === lineId,
+  );
+}
+
 export function workingSlot(slots: TimerSlot[]): TimerSlot | null {
   return slots.find((s) => s.status === "working") ?? null;
 }

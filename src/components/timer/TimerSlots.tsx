@@ -56,6 +56,9 @@ export function TimerSlots({
   const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
   const [saveSlotId, setSaveSlotId] = useState<string | null>(null);
   const [linePickSlotId, setLinePickSlotId] = useState<string | null>(null);
+  // Set when attaching a SECOND timer to an RO that already has one running:
+  // that case has to choose its line before the timer starts.
+  const [attachLineEntry, setAttachLineEntry] = useState<Entry | null>(null);
 
   // Only tick when something is actually banking time — a page full of paused
   // timers has no reason to re-render every second.
@@ -69,10 +72,46 @@ export function TimerSlots({
     () => new Map(attachedEntries.map((e) => [e.id, e])),
     [attachedEntries],
   );
-  const onTimerIds = useMemo(
-    () => new Set(slots.map((s) => s.entryId).filter(Boolean) as string[]),
-    [slots],
-  );
+  // What each RO already has running, line by line. The picker used to reduce
+  // this to a flat set of entry ids and drop those ROs from the list entirely,
+  // which refused a legal second timer (a different line of the same RO) and
+  // refused it silently — the job simply wasn't there to find.
+  const slotsByEntry = useMemo(() => {
+    const m = new Map<string, { lineIds: Set<string>; hasUnassigned: boolean }>();
+    for (const s of slots) {
+      if (!s.entryId) continue;
+      const cur = m.get(s.entryId) ?? { lineIds: new Set<string>(), hasUnassigned: false };
+      if (s.lineId) cur.lineIds.add(s.lineId);
+      else cur.hasUnassigned = true;
+      m.set(s.entryId, cur);
+    }
+    return m;
+  }, [slots]);
+
+  /**
+   * Why this RO can't take another timer right now, or null if it can.
+   * Whatever this returns gets shown to the tech — a refusal the picker won't
+   * explain is the bug being fixed here.
+   */
+  function attachBlockReason(entry: Entry): string | null {
+    const taken = slotsByEntry.get(entry.id);
+    if (!taken) return null;
+    if (taken.hasUnassigned) {
+      return "On a timer that has no line set yet — set that one's line first.";
+    }
+    const free = entry.opCodes.filter((l) => !taken.lineIds.has(l.id));
+    if (free.length === 0) {
+      return entry.opCodes.length === 1
+        ? "Its only line is already on a timer."
+        : "Every line is already on a timer.";
+    }
+    return null;
+  }
+
+  function freeLinesFor(entry: Entry) {
+    const taken = slotsByEntry.get(entry.id);
+    return entry.opCodes.filter((l) => !taken?.lineIds.has(l.id));
+  }
 
   const slotsUsed = slots.length;
   const canAddTimer = slotsUsed < MAX_TIMER_SLOTS;
@@ -90,10 +129,25 @@ export function TimerSlots({
   }
 
   function handleAttach(entry: Entry) {
-    // One line? Bind it now so the tech never has to pick. Several? Leave it
-    // unset and let the card prompt — guessing would silently log a brake job's
-    // hours against an oil change.
-    const lineId = entry.opCodes.length === 1 ? entry.opCodes[0].id : null;
+    const free = freeLinesFor(entry);
+    const alreadyRunning = slotsByEntry.has(entry.id);
+
+    // A second timer on the same RO must name its line before it starts: left
+    // unset it could later be pointed at the line already in flight, and hours
+    // bank additively. The server refuses it too — this just asks first.
+    if (alreadyRunning && free.length > 1) {
+      setAttachLineEntry(entry);
+      return;
+    }
+
+    // One line to choose from? Bind it now so the tech never has to pick.
+    // Several, on an RO with nothing running? Leave it unset and let the card
+    // prompt — guessing would silently log a brake job's hours against an oil
+    // change.
+    const lineId =
+      free.length === 1 ? free[0].id
+      : entry.opCodes.length === 1 ? entry.opCodes[0].id
+      : null;
     setPickRoOpen(false);
     run(() => attachRoToTimerAction(entry.id, lineId));
   }
@@ -114,7 +168,15 @@ export function TimerSlots({
     ? entryById.get(linePickSlot.entryId)
     : null;
 
-  const attachableEntries = recentEntries.filter((e) => !onTimerIds.has(e.id));
+  // Every recent RO stays in the list. One that can't take a timer is shown
+  // disabled with the reason underneath, rather than being removed — a tech
+  // looking for a job they know they logged must never find a blank space
+  // where it should be.
+  const pickerEntries = recentEntries.map((e) => ({
+    entry: e,
+    blocked: attachBlockReason(e),
+  }));
+  const anyAttachable = pickerEntries.some((p) => p.blocked === null);
 
   return (
     <main className="app-main" style={{ paddingBottom: 64 }}>
@@ -197,23 +259,27 @@ export function TimerSlots({
       {pickRoOpen && (
         <Modal open onClose={() => setPickRoOpen(false)} title="Put an RO on a timer">
           <div className="space-y-3">
-            {attachableEntries.length === 0 ? (
+            {recentEntries.length === 0 ? (
               <p className="text-sm text-[var(--fg-2)]">
-                {recentEntries.length === 0
-                  ? "The timer clocks against an RO — log one first."
-                  : "Every recent RO is already on a timer."}
+                The timer clocks against an RO — log one first.
               </p>
             ) : (
+              <>
+              {!anyAttachable && (
+                <p className="text-sm text-[var(--fg-2)]">
+                  Every line of every recent RO is already on a timer.
+                </p>
+              )}
               <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
-                {attachableEntries.map((e) => {
+                {pickerEntries.map(({ entry: e, blocked }) => {
                   const vehicle = vehicleLabel(e);
                   return (
                     <li key={e.id}>
                       <button
                         type="button"
                         onClick={() => handleAttach(e)}
-                        disabled={pending}
-                        className="flex w-full min-h-[44px] items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
+                        disabled={pending || blocked !== null}
+                        className="flex w-full min-h-[44px] items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
                       >
                         <span className="min-w-0">
                           <span className="flex items-center gap-2">
@@ -229,6 +295,11 @@ export function TimerSlots({
                               {vehicle}
                             </span>
                           )}
+                          {blocked && (
+                            <span className="mt-0.5 block text-xs text-[var(--fg-3)]">
+                              {blocked}
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 text-sm text-[var(--fg-0)]">
                           {fmtHours(e.flagHours)}h
@@ -238,6 +309,7 @@ export function TimerSlots({
                   );
                 })}
               </ul>
+              </>
             )}
             <Button
               block
@@ -274,6 +346,59 @@ export function TimerSlots({
       )}
 
       {/* Line picker */}
+      {/* Second timer on an RO that already has one running: choose the line
+          up front. Only the free lines are offered, so this can't collide with
+          the timer already in flight. */}
+      {attachLineEntry && (
+        <Modal
+          open
+          onClose={() => setAttachLineEntry(null)}
+          title={`RO #${attachLineEntry.roNumber} — Which line?`}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--fg-2)]">
+              This RO already has a timer running. Pick the line this second
+              timer is for — its hours land on that line only.
+            </p>
+            <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
+              {freeLinesFor(attachLineEntry).map((line) => {
+                const { code, description } = lineLabelFor(line, libraryById);
+                return (
+                  <li key={line.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const entryId = attachLineEntry.id;
+                        setAttachLineEntry(null);
+                        setPickRoOpen(false);
+                        run(() => attachRoToTimerAction(entryId, line.id));
+                      }}
+                      disabled={pending}
+                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="font-mono text-sm text-[var(--brand)]">
+                          {code}
+                        </span>
+                        {line.custom && <Badge className="ml-2">Other</Badge>}
+                        {description && (
+                          <span className="block truncate text-xs text-[var(--fg-3)]">
+                            {description}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-xs text-[var(--fg-2)]">
+                        {fmtHours(line.flagHours)}h
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </Modal>
+      )}
+
       {linePickSlot && linePickEntry && (
         <Modal
           open
@@ -287,6 +412,15 @@ export function TimerSlots({
             <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
               {linePickEntry.opCodes.map((line) => {
                 const { code, description } = lineLabelFor(line, libraryById);
+                // Taken by a DIFFERENT slot on this same RO. Now that one RO
+                // can hold several timers, this is reachable — and it is the
+                // one combination that would double-count.
+                const takenElsewhere = slots.some(
+                  (s) =>
+                    s.id !== linePickSlot.id &&
+                    s.entryId === linePickEntry.id &&
+                    s.lineId === line.id,
+                );
                 return (
                   <li key={line.id}>
                     <button
@@ -295,7 +429,8 @@ export function TimerSlots({
                         setLinePickSlotId(null);
                         run(() => setTimerLineAction(linePickSlot.id, line.id));
                       }}
-                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
+                      disabled={takenElsewhere}
+                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
                     >
                       <span className="min-w-0 flex-1">
                         <span className="font-mono text-sm text-[var(--brand)]">
@@ -305,6 +440,11 @@ export function TimerSlots({
                         {description && (
                           <span className="block truncate text-xs text-[var(--fg-3)]">
                             {description}
+                          </span>
+                        )}
+                        {takenElsewhere && (
+                          <span className="block text-xs text-[var(--fg-3)]">
+                            Already on another timer.
                           </span>
                         )}
                       </span>

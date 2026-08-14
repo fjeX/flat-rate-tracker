@@ -48,7 +48,26 @@ export FRT_BOT_EMAIL FRT_BOT_PASSWORD RUN_DATE WEEKLY_DIGEST
 cd "$REPO_DIR"
 BASE_PROMPT="You are the FRT nightly bot. Read bot/INSTRUCTIONS.md and follow it exactly. RUN_DATE=$RUN_DATE WEEKLY_DIGEST=$WEEKLY_DIGEST. Login email is in \$FRT_BOT_EMAIL, password in \$FRT_BOT_PASSWORD."
 
-RETRY_NOTE="RETRY — READ THIS FIRST. A previous attempt tonight exited without writing
+# How long one attempt gets, and the wall the whole run has to be finished by.
+# 45m was the budget until 2026-08-13, when attempt 1 was killed at exactly
+# 45:00 (exit 124) — INSTRUCTIONS.md had grown 35 lines the afternoon before and
+# the checklist simply outgrew the budget. Runs were 31-33 min all week before
+# that commit, and the passing retry took 41m33s.
+TIMEOUT_MIN="${FRT_BOT_TIMEOUT_MIN:-75}"
+# The 6 AM digest reads whatever report exists at 06:00. A retry finishing after
+# that is worse than no retry: the digest reports the report missing, which is
+# the alarm for "the bot never ran" firing on a run that was merely slow.
+FINISH_BY="${FRT_BOT_FINISH_BY:-05:40}"
+
+# Minutes from now until FINISH_BY today (0 if already past).
+minutes_left() {
+  local now target
+  now=$(date +%s)
+  target=$(date -d "today $FINISH_BY" +%s 2>/dev/null) || { echo 0; return; }
+  if (( target <= now )); then echo 0; else echo $(( (target - now) / 60 )); fi
+}
+
+RETRY_NOTE_YIELD="RETRY — READ THIS FIRST. A previous attempt tonight exited without writing
 bot/reports/$RUN_DATE.md. It ended its turn early, almost certainly by backgrounding a
 wait instead of blocking on it. You are running headless: ending your turn for ANY
 reason terminates the whole run and loses everything you tested. Every pause must be a
@@ -57,26 +76,93 @@ scheduled wake-up, or any wait that hands the turn back. If a step genuinely can
 done without waiting asynchronously, SKIP that step, record it as untested in the
 report, and keep going. Writing the report file is the one thing you may never skip."
 
+# A timed-out attempt was NOT idle — it was working and ran out of clock. Telling
+# it "you ended your turn early", which is what every retry used to be told,
+# is false and sends it hunting a bug that isn't there.
+RETRY_NOTE_TIMEOUT_TMPL="RETRY — READ THIS FIRST. A previous attempt tonight was KILLED at its
+time limit while still working; it did not hang and it did not end its turn early. It had
+already logged real test data before it died. You have __MINS__ minutes, and that is a hard
+kill, not a guideline.
+
+Budget accordingly: work the checklist in order, and from the halfway mark onward prefer
+finishing the report over starting another check. Any step you do not reach must be listed
+in the report as untested — an unreached check recorded as untested is a good outcome; a
+run killed with no report at all is the one true failure. Write bot/reports/$RUN_DATE.md
+before you run out of time, then keep testing and update it if time remains."
+
+RETRY_NOTE_CRASH="RETRY — READ THIS FIRST. A previous attempt tonight exited with an error
+before writing bot/reports/$RUN_DATE.md. If you hit the same failure, do not fight it —
+record it in the report as the blocker, note what you could not test because of it, and
+write the report anyway. Writing the report file is the one thing you may never skip."
+
+# Why an attempt produced no report. These need different retry advice and
+# different fingerprints; the runner used to call all of them bot-runner-hang,
+# which is a real but DIFFERENT bug (a yielded turn exiting 0) — so a timeout
+# arrived looking like an already-diagnosed problem.
+#   124 → killed at the wall, still working  → bot-runner-timeout
+#     0 → exited "successfully", no report   → bot-runner-hang
+#  else → crashed                            → bot-runner-crash
+classify() {
+  case "$1" in
+    124) echo "timeout" ;;
+    0)   echo "yield" ;;
+    *)   echo "crash" ;;
+  esac
+}
+
+fingerprint_for() {
+  case "$1" in
+    timeout) echo "bot-runner-timeout" ;;
+    yield)   echo "bot-runner-hang" ;;
+    *)       echo "bot-runner-crash" ;;
+  esac
+}
+
 run_attempt() {
-  local n="$1" prompt="$2" rc=0
-  echo "=== attempt $n started $(date +%T) ===" >>"$LOG_FILE"
-  timeout 45m claude -p "$prompt" \
+  local n="$1" prompt="$2" budget="$3" rc=0
+  echo "=== attempt $n started $(date +%T) (budget ${budget}m) ===" >>"$LOG_FILE"
+  timeout "${budget}m" claude -p "$prompt" \
       --dangerously-skip-permissions \
       >>"$LOG_FILE" 2>&1 || rc=$?
   echo "=== attempt $n finished $(date +%T): claude exited $rc ===" >>"$LOG_FILE"
+  ATTEMPT_RC="$rc"
 }
 
 STATUS="FAIL"
 RETRIED=0
+CAUSE=""
+FINGERPRINT=""
+SKIPPED_RETRY=""
 
-run_attempt 1 "$BASE_PROMPT"
+run_attempt 1 "$BASE_PROMPT" "$TIMEOUT_MIN"
 
 if [[ ! -f "$REPORT_FILE" ]]; then
-  RETRIED=1
-  echo "NO REPORT FILE after attempt 1 (bot-runner-hang) — retrying once" >>"$LOG_FILE"
-  run_attempt 2 "$BASE_PROMPT
+  CAUSE="$(classify "$ATTEMPT_RC")"
+  FINGERPRINT="$(fingerprint_for "$CAUSE")"
+  echo "NO REPORT FILE after attempt 1 (rc=$ATTEMPT_RC, $FINGERPRINT)" >>"$LOG_FILE"
 
-$RETRY_NOTE"
+  LEFT="$(minutes_left)"
+  RETRY_BUDGET=$(( LEFT < TIMEOUT_MIN ? LEFT : TIMEOUT_MIN ))
+  # Leave enough room to be worth starting: a 10-minute attempt burns tokens and
+  # still lands nothing in front of the digest. Gate on the time actually left,
+  # not on RETRY_BUDGET — that is capped by TIMEOUT_MIN, so gating on it would
+  # silently disable retries entirely for anyone who lowered the per-attempt
+  # limit below 15m.
+  if (( LEFT < 15 )); then
+    SKIPPED_RETRY="only ${LEFT}m left before ${FINISH_BY}"
+    echo "SKIPPING retry — $SKIPPED_RETRY" >>"$LOG_FILE"
+  else
+    RETRIED=1
+    case "$CAUSE" in
+      timeout) RETRY_NOTE="${RETRY_NOTE_TIMEOUT_TMPL//__MINS__/$RETRY_BUDGET}" ;;
+      yield)   RETRY_NOTE="$RETRY_NOTE_YIELD" ;;
+      *)       RETRY_NOTE="$RETRY_NOTE_CRASH" ;;
+    esac
+    echo "retrying with ${RETRY_BUDGET}m budget ($CAUSE)" >>"$LOG_FILE"
+    run_attempt 2 "$BASE_PROMPT
+
+$RETRY_NOTE" "$RETRY_BUDGET"
+  fi
 fi
 
 # --- collect the report ------------------------------------------------------
@@ -85,24 +171,65 @@ if [[ -f "$REPORT_FILE" ]]; then
   STATUS="$(grep -m1 '^## Status:' "$REPORT_FILE" | sed 's/^## Status:[[:space:]]*//' || true)"
   [[ -z "$STATUS" ]] && STATUS="UNKNOWN"
   # Surface the retry even on success — a run that only passed on attempt 2 is
-  # still the bot-runner-hang bug, and it must not disappear behind a PASS.
+  # still a runner failure, and it must not disappear behind a PASS.
   if [[ "$RETRIED" == "1" ]]; then
+    case "$CAUSE" in
+      timeout) WHAT="was killed at its ${TIMEOUT_MIN}m time limit while still working" ;;
+      yield)   WHAT="exited without writing a report" ;;
+      *)       WHAT="exited with an error (rc=$ATTEMPT_RC)" ;;
+    esac
     REPORT="$REPORT
 
 ---
-**⚠️ Runner note:** attempt 1 exited without writing a report (fingerprint
-\`bot-runner-hang\`); this report came from the automatic retry. The retry
-succeeding does not mean the hang is fixed."
+**⚠️ Runner note:** attempt 1 $WHAT (fingerprint
+\`$FINGERPRINT\`); this report came from the automatic retry. The retry
+succeeding does not mean the underlying problem is fixed."
   fi
 else
+  # Is the app itself up? Without this the runner asserted, on every no-report
+  # night whatever the cause, that this was "not an FRT application failure" and
+  # that nobody should touch the app — which would read as reassuring on exactly
+  # the night the site was down.
+  APP_URL="${FRT_APP_URL:-https://tracker.slimelab.cc}"
+  APP_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$APP_URL" 2>/dev/null || echo 000)"
+  echo "app probe: $APP_URL -> $APP_CODE" >>"$LOG_FILE"
+
+  if [[ "$APP_CODE" == "200" ]]; then
+    APP_LINE="The app answered $APP_CODE at $APP_URL just now, so this is a bot-harness
+failure and **not** an FRT application failure: do not restart containers or touch the app."
+  else
+    APP_LINE="**The app did NOT answer normally** — $APP_URL returned \`$APP_CODE\` when the
+runner probed it just now. Treat this as a possible production outage first and a bot
+problem second: check the container and the site before assuming the harness is at fault."
+  fi
+
+  case "$CAUSE" in
+    timeout) WHY="Attempt 1 was killed at its ${TIMEOUT_MIN}m limit (exit 124) while still
+working — it did not hang. The checklist may have outgrown the budget again; compare the
+attempt durations in tonight's log against previous nights before raising it further." ;;
+    yield)   WHY="The bot ended its turn before writing a report, which makes headless
+\`claude -p\` exit 0 as if the work were done." ;;
+    *)       WHY="The bot exited with code $ATTEMPT_RC before writing a report." ;;
+  esac
+
+  if [[ -n "$SKIPPED_RETRY" ]]; then
+    WHY="$WHY
+
+No retry was attempted: $SKIPPED_RETRY, and a retry finishing after the 6 AM digest would
+have reported itself as missing anyway."
+  fi
+
+  if [[ "$RETRIED" == "1" ]]; then ATTEMPTS=" after 2 attempts"; else ATTEMPTS=""; fi
+
   REPORT="# FRT Bot Run — $RUN_DATE
 
-## Status: FAIL (no report after 2 attempts)
+## Status: FAIL (no report${ATTEMPTS})
 
-Fingerprint: \`bot-runner-hang\`. The bot produced no report file on either
-attempt — it ended its turn before writing one, which makes headless
-\`claude -p\` exit as if the work were done. This is a bot-harness failure,
-**not** an FRT application failure: do not restart containers or touch the app.
+Fingerprint: \`$FINGERPRINT\`.
+
+$WHY
+
+$APP_LINE
 
 Runner log tail:
 

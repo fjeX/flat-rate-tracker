@@ -25,6 +25,24 @@ order: go do the next section and come back.
 
 Work in one continuous turn straight through to writing `bot/reports/$RUN_DATE.md`.
 
+**⏱ You are on a clock, and it is a hard kill.** The runner wraps you in
+`timeout` (75 minutes by default) and there is no grace period — when it fires,
+everything you have tested and not yet written down is lost. On 2026-08-13 that
+is exactly what happened: this checklist grew by 35 lines the afternoon before,
+the run hit the 45-minute wall it had been comfortably inside all week, and a
+full attempt's worth of testing evaporated (fingerprint `bot-runner-timeout`).
+
+So budget deliberately:
+
+- Work the checklist **in order** — it is ordered by value, not by convenience.
+- From the halfway mark on, prefer **finishing the report** over starting another
+  section.
+- A section you never reach must be listed in the report as **untested**. That is
+  a perfectly good outcome and the reader can act on it. A run killed with no
+  report at all is the only true failure.
+- If you are running long, write the report with what you have, then keep testing
+  and update it while time remains.
+
 ## Credentials & environment
 
 - Login email: `$FRT_BOT_EMAIL` (env var)
@@ -404,8 +422,14 @@ when both sources are present.
   (was a standalone "Unpaid Time" card until 2026-07-30):
   - The card header shows total unpaid hours. Expand it, then expand
     **"Every unpaid record"**.
-  - Three tiles — Rework / Waiting / Shop time — must **sum to the "Total
-    unpaid" row** at the bottom.
+  - Inside is a single itemised list — one row per record — ending in a
+    **"Total unpaid"** row. The rows must **sum to that total**, exactly, as
+    printed. (This section reads at two decimals on purpose, since it is the
+    audit view: at one decimal eleven rows legitimately displayed 2.8h under a
+    2.7h total on 2026-08-13. The card headline above stays at one decimal.)
+    There are no "Rework / Waiting / Shop time" tiles here — this checklist
+    described three of them for seven straight nights against a UI that has
+    never had them.
   - Every row should trace back to something you actually created tonight: a
     comeback RO line (shows RO # and op code) or a ledger row (shows the reason
     label and your note).
@@ -428,7 +452,8 @@ when both sources are present.
     Variance = "paid me less than I flagged"; unpaid rework = "flagged nothing at
     all". If they're mixed, the document is wrong in a way a service manager
     would catch — report as FAIL.
-  - Every rework row must read **0.0h flagged**.
+  - Every rework row must read **0.00h flagged** (the pack prints hours at two
+    decimals so its rows reconcile with its totals).
   - A period with **no** variance but **with** a comeback must still print the
     unpaid section, and the "Print / Save as PDF" button must be **enabled**.
   - A period with neither must show neither section and a **disabled** print
@@ -782,12 +807,17 @@ the streak, snapshots and career hours that §8b checks against. Export only.
 
 - **Export downloads:** click Export, confirm a `.json` file downloads without an
   error toast and is more than a few KB. A 0-byte or failed download is a bug.
-- **It must be version 2.** Open the file and confirm `"version": 2`. Version 1
-  means an older build is deployed than expected — report it.
+- **It must be version 3.** Open the file and confirm `"version": 3`. A lower
+  number means an older build is deployed than expected — report it. (This
+  checklist demanded version 2 until 2026-08-13, so a correct build failed this
+  check every night from the moment v3 shipped in 416589b / 794da9e.)
 - **The v2 sections must be present**, because a backup that silently omits them
   restores an incomplete account (that was the 2026-08-05 Critical bug):
   `laborRates`, `disputes`, `unpaidTime`, plus the long-standing `entries`,
   `opCodes`, `dailyClocks`, `paidPeriods`, `bonuses`.
+- **The v3 sections must also be present** — these are what a migration would
+  otherwise drop: `workSchedules`, `daysOff`, `shiftOverrides`,
+  `confirmedZeroDays`, `portfolioSnapshots`, `careerMilestones`.
 - **Spot-check that lines carry their real state.** Find any entry op code line
   in the JSON and confirm the keys `paidHours`, `isComeback` and `laborType`
   exist. If lines are missing those keys the export has regressed — the import

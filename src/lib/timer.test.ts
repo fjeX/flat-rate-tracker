@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   anyAccruing,
+  attachConflict,
   autoStopCap,
   AUTO_STOP_GRACE_MIN,
   bucketFor,
@@ -11,6 +12,7 @@ import {
   HOLD_KIND,
   isAccruing,
   isHold,
+  lineTakenByOtherSlot,
   localMinutesOfDay,
   MAX_SEGMENT_MS,
   MAX_TIMER_SLOTS,
@@ -360,5 +362,77 @@ describe("status coverage", () => {
 
   it("gives the two hold reasons different tones so they read apart", () => {
     expect(STATUS_TONE.hold_parts).not.toBe(STATUS_TONE.hold_approval);
+  });
+});
+
+// ── attachConflict / lineTakenByOtherSlot ──────────────────────────────────────
+// Escalation timer-same-ro-implicit-refusal (2026-08-13). The guard used to be
+// per-RO, which refused a legal second timer and refused it invisibly. It is
+// now per-LINE, because hours bank per line.
+
+describe("attachConflict", () => {
+  const slot = (
+    entryId: string | null,
+    lineId: string | null,
+  ): Pick<TimerSlot, "entryId" | "lineId"> => ({ entryId, lineId });
+
+  it("allows the first timer on an RO", () => {
+    expect(attachConflict([], "ro1", "lineA")).toBe(null);
+    expect(attachConflict([], "ro1", null)).toBe(null);
+  });
+
+  it("allows a second timer on a DIFFERENT line of the same RO", () => {
+    // The case the old entry-level guard blocked outright: one line on parts
+    // hold while another is being diagnosed.
+    expect(attachConflict([slot("ro1", "lineA")], "ro1", "lineB")).toBe(null);
+  });
+
+  it("refuses the same line twice — the only real double-count", () => {
+    expect(attachConflict([slot("ro1", "lineA")], "ro1", "lineA")).toBe("line-taken");
+  });
+
+  it("refuses a second timer that hasn't named its line", () => {
+    // An unset line can still be pointed at the one already running.
+    expect(attachConflict([slot("ro1", "lineA")], "ro1", null)).toBe("needs-line");
+  });
+
+  it("refuses running alongside a sibling that hasn't named its own line", () => {
+    expect(attachConflict([slot("ro1", null)], "ro1", "lineA")).toBe(
+      "sibling-unassigned",
+    );
+  });
+
+  it("ignores timers on other ROs entirely", () => {
+    const running = [slot("ro2", "lineA"), slot("ro3", null), slot(null, null)];
+    expect(attachConflict(running, "ro1", "lineA")).toBe(null);
+  });
+
+  it("allows a third line while two of the same RO already run", () => {
+    const running = [slot("ro1", "lineA"), slot("ro1", "lineB")];
+    expect(attachConflict(running, "ro1", "lineC")).toBe(null);
+    expect(attachConflict(running, "ro1", "lineB")).toBe("line-taken");
+  });
+});
+
+describe("lineTakenByOtherSlot", () => {
+  const slot = (id: string, entryId: string | null, lineId: string | null) => ({
+    id,
+    entryId,
+    lineId,
+  });
+
+  it("catches re-pointing a timer onto a line another slot holds", () => {
+    const running = [slot("s1", "ro1", "lineA"), slot("s2", "ro1", "lineB")];
+    expect(lineTakenByOtherSlot(running, "s2", "ro1", "lineA")).toBe(true);
+  });
+
+  it("lets a slot keep (or re-pick) its own line", () => {
+    const running = [slot("s1", "ro1", "lineA")];
+    expect(lineTakenByOtherSlot(running, "s1", "ro1", "lineA")).toBe(false);
+  });
+
+  it("does not confuse the same line id across different ROs", () => {
+    const running = [slot("s1", "ro2", "lineA")];
+    expect(lineTakenByOtherSlot(running, "s2", "ro1", "lineA")).toBe(false);
   });
 });
