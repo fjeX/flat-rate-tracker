@@ -57,38 +57,82 @@ function ResetPasswordInner() {
   const linkError =
     searchParams.get("error_description") ?? searchParams.get("error");
 
-  const [phase, setPhase] = useState<Phase>(() =>
-    linkError || !code ? "invalid" : "verifying",
-  );
-  const [reason, setReason] = useState(() =>
-    linkError
-      ? "That link has expired or has already been used."
-      : !code
-      ? "This page needs a reset link to work."
-      : "",
-  );
+  // Starts as "verifying" in every case: the fragment is only readable on the
+  // client, so the real answer cannot be known during render.
+  const [phase, setPhase] = useState<Phase>("verifying");
+  const [reason, setReason] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (!code || linkError) return; // phase is already "invalid"
+    // GoTrue answers in one of TWO shapes and this page has to accept both.
+    //
+    //   PKCE     -> ?code=...            (when the request carried a challenge,
+    //                                     which it does when the app's own
+    //                                     /forgot-password sent it)
+    //   implicit -> #access_token=...&type=recovery
+    //
+    // Errors follow the same split: an expired link reports through the query
+    // string under PKCE and through the FRAGMENT under implicit. Reading only
+    // the query string made a dead link render as "this page needs a reset
+    // link", which blames the user for a token that simply timed out.
+    //
+    // Read the fragment BEFORE constructing the client: supabase-js has
+    // detectSessionInUrl on by default and will consume and clear it.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const hashError = hash.get("error_description") ?? hash.get("error");
+    const accessToken = hash.get("access_token");
+    const refreshToken = hash.get("refresh_token");
+    // The fragment must say it is a RECOVERY. Without this check any fragment
+    // carrying a session would open the form, which is the "ordinary session
+    // is good enough" hole this whole page is built to avoid.
+    const isRecovery = hash.get("type") === "recovery";
 
     let cancelled = false;
-    const supabase = createClient();
-    supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
+    const settle = (next: Phase, why = "") => {
       if (cancelled) return;
-      if (exchangeError) {
-        setPhase("invalid");
-        setReason("That link has expired or has already been used.");
-        return;
+      setReason(why);
+      setPhase(next);
+    };
+    const expired = "That link has expired or has already been used.";
+
+    // Deferred by a microtask so no setState runs synchronously in the effect
+    // body. Two of the three branches await the network anyway.
+    Promise.resolve().then(async () => {
+      const combinedError = linkError ?? hashError;
+      if (combinedError) return settle("invalid", expired);
+
+      const supabase = createClient();
+
+      if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          // Also the "opened in a different browser" case: the PKCE verifier
+          // is a cookie, so a link requested on a phone and opened on a
+          // desktop lands here with a perfectly valid, unusable code.
+          return settle(
+            "invalid",
+            "This link could not be verified. If you opened it in a different browser than you requested it from, request a new one here.",
+          );
+        }
+      } else if (accessToken && refreshToken && isRecovery) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) return settle("invalid", expired);
+      } else {
+        return settle("invalid", "This page needs a reset link to work.");
       }
-      // Drop the one-time code out of the address bar so it isn't left in
-      // history, or leaked by a Referer header on the next navigation.
+
+      // Drop the one-time credential out of the address bar so it isn't left
+      // in history, or leaked by a Referer header on the next navigation.
       window.history.replaceState({}, "", "/reset-password");
-      setPhase("ready");
+      settle("ready");
     });
+
     return () => {
       cancelled = true;
     };
