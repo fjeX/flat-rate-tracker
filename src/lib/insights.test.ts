@@ -492,6 +492,56 @@ describe("periodTrend", () => {
     expect(points[1].efficiency).toBeCloseTo(250, 5);
   });
 
+  // The /pay-period vs /insights split: 387% against 627% for one fortnight,
+  // because four weekend days with flagged work, no clock and no schedule were
+  // in this numerator and in nobody's denominator.
+  it("pairs the numerator — a day with no denominator is in neither side", () => {
+    const points = periodTrend(
+      [
+        entry([line({ flagHours: 8 })], { id: "wk", date: "2026-07-03" }),
+        entry([line({ flagHours: 6 })], { id: "sat", date: "2026-07-04" }),
+      ],
+      denom({ "2026-07-03": 8 }),
+      { splitDay: 15 },
+    );
+    expect(points).toHaveLength(1);
+    expect(points[0].flagHours).toBe(8);
+    expect(points[0].denomHours).toBe(8);
+    expect(points[0].efficiency).toBeCloseTo(100, 5);
+    // Reported, not discarded.
+    expect(points[0].unpairedFlagHours).toBe(6);
+    expect(points[0].unpairedDays).toBe(1);
+  });
+
+  it("counts an unpaired day once no matter how many ROs it holds", () => {
+    const points = periodTrend(
+      [
+        entry([line({ flagHours: 3 })], { id: "a", date: "2026-07-04" }),
+        entry([line({ flagHours: 4 })], { id: "b", date: "2026-07-04" }),
+        entry([line({ flagHours: 5 })], { id: "c", date: "2026-07-05" }),
+      ],
+      denom({}),
+      { splitDay: 15 },
+    );
+    expect(points[0].flagHours).toBe(0);
+    expect(points[0].efficiency).toBeNull();
+    expect(points[0].unpairedFlagHours).toBe(12);
+    expect(points[0].unpairedDays).toBe(2);
+  });
+
+  // The regression that started this: same entries, same clocks, two surfaces.
+  it("agrees with aggregateStatsWithSchedule on a period with weekend work", () => {
+    const entries = [
+      entry([line({ flagHours: 30 })], { id: "mon", date: "2026-07-06" }),
+      entry([line({ flagHours: 12 })], { id: "sat", date: "2026-07-11" }),
+    ];
+    const points = periodTrend(entries, denom({ "2026-07-06": 8 }), {
+      splitDay: 15,
+    });
+    // Paired: 30 / 8. Unpaired Saturday would have made it 42 / 8.
+    expect(points[0].efficiency).toBeCloseTo(375, 5);
+  });
+
   it("includes a period that was clocked but flagged nothing", () => {
     const points = periodTrend(
       [entry([line({ flagHours: 10 })], { date: "2026-07-03" })],

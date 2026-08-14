@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import { disputeFromPack } from "@/lib/disputes";
+import { disputeFromPack, pendingRecoveryApplication } from "@/lib/disputes";
 import { buildDisputePack } from "@/lib/dispute-pack";
 import { formatPeriodLabel, getRangeForPeriodKey } from "@/lib/periods";
 import { ratesToMap } from "@/lib/earnings";
@@ -177,4 +177,55 @@ export async function deleteDisputeAction(id: string): Promise<void> {
   const supabase = await createClient();
   await db.deleteDispute(supabase, id);
   revalidateDisputeScreens();
+}
+
+/**
+ * Write a closed claim's recovered hours onto the RO lines they came back for.
+ *
+ * The bridge between the two ledgers. Without it, closing a claim moved the
+ * recovery figure and left the period reading exactly as short as before, so
+ * the second-round offer re-offered the same shortfall forever — money the shop
+ * had already paid, asked for again, with no upper bound.
+ *
+ * Recomputed here from the user's own rows, never from a payload: same rule as
+ * openDisputeAction. The client names a dispute; the server decides what that
+ * means for the lines. Idempotent — pendingRecoveryApplication skips any line
+ * whose paid hours have already moved past what the claim froze, so a
+ * double-tap writes nothing the second time.
+ */
+export async function applyDisputeRecoveryAction(
+  disputeId: string,
+): Promise<{ appliedLines: number; appliedHours: number }> {
+  if (!disputeId) throw new Error("Dispute ID is required.");
+  const supabase = await createClient();
+
+  const disputes = await db.listDisputes(supabase);
+  const dispute = disputes.find((d) => d.id === disputeId);
+  if (!dispute) throw new Error("That claim no longer exists.");
+
+  const settings = await db.getSettings(supabase);
+  const range = getRangeForPeriodKey(
+    dispute.periodKey,
+    settings.splitDay,
+    settings.periodOverrides,
+  );
+  if (!range) throw new Error(`Unrecognized period: ${dispute.periodKey}`);
+
+  const [entries, library] = await Promise.all([
+    db.listEntries(supabase, { from: range.start, to: range.end }),
+    db.listOpCodes(supabase),
+  ]);
+
+  const plan = pendingRecoveryApplication(dispute, entries, library);
+  if (plan.rows.length === 0) return { appliedLines: 0, appliedHours: 0 };
+
+  // Sequential, not Promise.all: these are separate row updates with no
+  // transaction around them, and a half-applied batch is far easier to read
+  // back when the rows went in one at a time in a known order.
+  for (const row of plan.rows) {
+    await db.setLinePaidHours(supabase, row.lineId, row.paidAfter);
+  }
+
+  revalidateDisputeScreens();
+  return { appliedLines: plan.rows.length, appliedHours: plan.applyHours };
 }

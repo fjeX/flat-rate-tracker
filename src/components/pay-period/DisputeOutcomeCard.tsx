@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fmtHours } from "@/lib/stats";
@@ -11,13 +11,17 @@ import {
   isClosed,
   lifetimeRecovery,
   nextStatus,
+  pendingRecoveryApplication,
 } from "@/lib/disputes";
 import {
   DISPUTE_SCOPE_LABELS,
   DISPUTE_STATUS_LABELS,
   type Dispute,
+  type Entry,
+  type OpCode,
 } from "@/lib/types";
 import {
+  applyDisputeRecoveryAction,
   openDisputeAction,
   recordDisputeOutcomeAction,
   setDisputeStatusAction,
@@ -170,6 +174,8 @@ export function DisputeOutcomeCard({
   periodLabel,
   openDispute,
   allDisputes,
+  entries,
+  library,
   shortedHours,
   pendingCount,
   pendingHours,
@@ -183,6 +189,11 @@ export function DisputeOutcomeCard({
   openDispute: Dispute | null;
   // Every dispute the user has ever raised — drives the lifetime figure.
   allDisputes: Dispute[];
+  // The period's live ROs and the code library, used ONLY to work out which
+  // lines a closed claim's recovery lands on. Same two inputs the dispute pack
+  // was built from, so the rows offered here are the rows that were claimed.
+  entries: Entry[];
+  library: OpCode[];
   // Outstanding hours for the viewed period, so the card knows whether there is
   // anything worth claiming yet. This is Reconciliation's shortfall — lines paid
   // LESS than flagged — and it is exactly what the claim freezes by default.
@@ -208,6 +219,7 @@ export function DisputeOutcomeCard({
   const [recording, setRecording] = useState(false);
   // Opt-in, never the default: see the doc comment on openDisputeAction.
   const [claimPending, setClaimPending] = useState(false);
+  const [applied, setApplied] = useState<number | null>(null);
 
   const canOfferPending = periodEnded && pendingCount > 0;
   // What the claim will actually freeze. Shown on the button so the figure the
@@ -227,6 +239,19 @@ export function DisputeOutcomeCard({
   // terminal states precisely so a second-round claim is possible once the
   // first closes (20260729000000_dispute_ledger.sql:107-112).
   const dispute = openDispute ?? closedForPeriod ?? null;
+
+  // What that closed claim's recovery would do to the live lines. Empty unless
+  // there is real, unapplied money to move — see pendingRecoveryApplication.
+  const recovery = useMemo(
+    () => pendingRecoveryApplication(closedForPeriod ?? null, entries, library),
+    [closedForPeriod, entries, library],
+  );
+  // Hours already back from closed claims on THIS period. The re-offer used to
+  // state the shortfall and nothing else, so a period that had recovered 34.0h
+  // against a 31.4h short read as though nothing had ever been paid.
+  const recoveredHere = allDisputes
+    .filter((d) => d.periodKey === periodKey && isClosed(d.status))
+    .reduce((sum, d) => sum + d.recoveredHours, 0);
 
   // Nothing to claim, nothing ever claimed — the card has nothing to say.
   if (
@@ -263,6 +288,20 @@ export function DisputeOutcomeCard({
     });
   }
 
+  function applyRecovery() {
+    if (!closedForPeriod) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await applyDisputeRecoveryAction(closedForPeriod!.id);
+        setApplied(result.appliedLines);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to apply recovery.");
+      }
+    });
+  }
+
   const outcome = dispute ? disputeOutcome(dispute) : null;
   const waiting = dispute ? daysWaiting(dispute) : null;
   const next = dispute && !isClosed(dispute.status) ? nextStatus(dispute.status) : null;
@@ -280,6 +319,86 @@ export function DisputeOutcomeCard({
             than mirrored. */}
       </div>
 
+      {/* Recovery lands here first. Above the second-round offer on purpose:
+          the money that already came back is the thing to record before asking
+          for more, and the offer's shortfall figure is the one this fixes. */}
+      {recovery.rows.length > 0 && (
+        <div className="card-inset space-y-2 px-3 py-3">
+          <p className="text-sm">
+            <span className="font-medium text-[var(--fg-1)]">
+              {fmtHours(recovery.applyHours)}h came back and isn&apos;t on your
+              lines yet.
+            </span>{" "}
+            <span className="text-[var(--fg-2)]">
+              Until it is, {periodLabel} still reads{" "}
+              {fmtHours(shortedHours)}h short and FRT will keep offering to
+              claim it again.
+            </span>
+          </p>
+
+          <ul className="space-y-1 text-xs text-[var(--fg-2)]">
+            {recovery.rows.slice(0, 5).map((row) => (
+              <li key={row.lineId} className="flex flex-wrap gap-x-1">
+                <span className="font-medium text-[var(--fg-1)]">
+                  RO {row.roNumber}
+                </span>
+                <span>&middot; {row.code}</span>
+                <span>
+                  &middot; paid {row.paidNow === null ? "—" : `${fmtHours(row.paidNow)}h`}{" "}
+                  &rarr;{" "}
+                  <span className="font-medium text-[var(--fg-1)]">
+                    {fmtHours(row.paidAfter)}h
+                  </span>
+                </span>
+              </li>
+            ))}
+            {recovery.rows.length > 5 && (
+              <li>+ {recovery.rows.length - 5} more lines</li>
+            )}
+          </ul>
+
+          {recovery.unmappedHours > 0 && (
+            <p className="text-xs text-[var(--fg-3)]">
+              {fmtHours(recovery.unmappedHours)}h of the recovery maps to no line
+              on this period — goodwill above the ask, or an RO that&apos;s since
+              been deleted. It stays on the claim and is not written anywhere.
+            </p>
+          )}
+
+          {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
+
+          <button
+            type="button"
+            onClick={applyRecovery}
+            disabled={isPending}
+            className="btn btn-sm btn-primary min-h-11"
+          >
+            {isPending
+              ? "Applying…"
+              : `Apply ${fmtHours(recovery.applyHours)}h to ${recovery.rows.length} line${recovery.rows.length === 1 ? "" : "s"}`}
+          </button>
+        </div>
+      )}
+
+      {/* No per-line breakdown and a partial settlement: which lines the shop
+          paid is a fact the app does not have, and splitting the money evenly
+          would be the app inventing the answer. Ask for it instead. */}
+      {recovery.needsLineBreakdown && (
+        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+          {fmtHours(recovery.unmappedHours)}h came back on the closed claim, but
+          it isn&apos;t recorded against individual lines — so FRT can&apos;t
+          tell which ROs to mark paid. Record what each line got back below, or
+          enter the paid hours yourself in &ldquo;Which lines came up
+          short?&rdquo;.
+        </p>
+      )}
+
+      {applied !== null && recovery.rows.length === 0 && (
+        <p className="text-xs text-[var(--good)]">
+          Recovery applied to {applied} line{applied === 1 ? "" : "s"}.
+        </p>
+      )}
+
       {/* Gated on the LIVE claim, not on any claim. A closed one still renders
           its outcome above; it no longer silences the offer. openDisputeAction
           hands back an existing open dispute rather than tripping the unique
@@ -291,8 +410,18 @@ export function DisputeOutcomeCard({
               closedForPeriod ? (
                 <>
                   Your earlier claim for {periodLabel} is closed and you&apos;re
-                  still short {fmtHours(shortedHours)}h. You can raise a
-                  second-round claim for what&apos;s left.
+                  still short {fmtHours(shortedHours)}h
+                  {recoveredHere > 0 && (
+                    <>
+                      {" "}
+                      &middot;{" "}
+                      <span className="font-medium text-[var(--fg-1)]">
+                        {fmtHours(recoveredHere)}h already recovered
+                      </span>{" "}
+                      on a closed claim
+                    </>
+                  )}
+                  . You can raise a second-round claim for what&apos;s left.
                 </>
               ) : (
                 <>

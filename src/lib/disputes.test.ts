@@ -9,10 +9,11 @@ import {
   lifetimeRecovery,
   nextStatus,
   outcomeInsights,
+  pendingRecoveryApplication,
   sumLineRecovery,
 } from "./disputes";
 import type { DisputePack } from "./dispute-pack";
-import type { Dispute, DisputeLine } from "./types";
+import type { Dispute, DisputeLine, Entry, EntryOpCode } from "./types";
 
 function line(over: Partial<DisputeLine> = {}): DisputeLine {
   return {
@@ -532,5 +533,183 @@ describe("sumLineRecovery", () => {
 
   it("is zero for no lines", () => {
     expect(sumLineRecovery([])).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pendingRecoveryApplication — the bridge between the two ledgers
+// ---------------------------------------------------------------------------
+
+function roLine(over: Partial<EntryOpCode> = {}): EntryOpCode {
+  return {
+    id: over.id ?? "l1",
+    opCodeId: null,
+    custom: true,
+    customCode: "BRK-F",
+    customDescription: "Front brakes",
+    flagHours: 1.5,
+    actualHours: null,
+    notes: "",
+    position: 0,
+    subOpCodeId: null,
+    laborType: null,
+    paidHours: 1,
+    ...over,
+  };
+}
+
+function ro(lines: EntryOpCode[], over: Partial<Entry> = {}): Entry {
+  return {
+    id: over.id ?? "e1",
+    userId: "u",
+    createdAt: "",
+    updatedAt: "",
+    date: "2026-07-20",
+    roNumber: "1001",
+    vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
+    opCodes: lines,
+    flagHours: lines.reduce((s, l) => s + l.flagHours, 0),
+    notes: "",
+    ...over,
+  };
+}
+
+describe("pendingRecoveryApplication", () => {
+  it("maps a per-line recovery onto the live line by RO and code", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.5,
+      lines: [line({ entryId: "e1", recoveredHours: 0.5 })],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toHaveLength(1);
+    expect(plan.rows[0].lineId).toBe("l1");
+    expect(plan.rows[0].paidNow).toBe(1);
+    expect(plan.rows[0].paidAfter).toBeCloseTo(1.5, 5);
+    expect(plan.applyHours).toBeCloseTo(0.5, 5);
+    expect(plan.unmappedHours).toBe(0);
+  });
+
+  it("offers nothing while the claim is still open", () => {
+    const d = dispute({
+      status: "submitted",
+      recoveredHours: 0.5,
+      lines: [line({ entryId: "e1", recoveredHours: 0.5 })],
+    });
+    expect(pendingRecoveryApplication(d, [ro([roLine()])], []).rows).toEqual([]);
+  });
+
+  // The re-offer loop: closing a claim never touched paidHours, so the period
+  // stayed as short as it was and the offer came back forever.
+  it("is idempotent — a line already moved past its claim-time paid hours is skipped", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.5,
+      lines: [line({ entryId: "e1", paidHours: 1, recoveredHours: 0.5 })],
+    });
+    const after = [ro([roLine({ paidHours: 1.5 })])];
+    expect(pendingRecoveryApplication(d, after, []).rows).toEqual([]);
+  });
+
+  // The case a "still short?" check would get wrong: a partial recovery leaves
+  // the line short on purpose, so shortness cannot mean "not yet applied".
+  it("does not re-apply a partial recovery that left the line short", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 1,
+      lines: [
+        line({ entryId: "e1", flaggedHours: 5, paidHours: 2, claimedHours: 3, recoveredHours: 1 }),
+      ],
+    });
+    const before = [ro([roLine({ flagHours: 5, paidHours: 2 })])];
+    expect(pendingRecoveryApplication(d, before, []).rows[0].paidAfter).toBeCloseTo(3, 5);
+    const after = [ro([roLine({ flagHours: 5, paidHours: 3 })])];
+    expect(pendingRecoveryApplication(d, after, []).rows).toEqual([]);
+  });
+
+  it("treats a settlement covering the whole ask as every line getting its claim", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 1, // no per-line breakdown recorded
+      lines: [
+        line({ id: "a", entryId: "e1", code: "BRK-F", claimedHours: 0.5 }),
+        line({ id: "b", entryId: "e1", code: "ALN", claimedHours: 0.5 }),
+      ],
+    });
+    const entries = [
+      ro([
+        roLine({ id: "l1", customCode: "BRK-F" }),
+        roLine({ id: "l2", customCode: "ALN" }),
+      ]),
+    ];
+    const plan = pendingRecoveryApplication(d, entries, []);
+    expect(plan.rows.map((r) => r.lineId)).toEqual(["l1", "l2"]);
+    expect(plan.applyHours).toBeCloseTo(1, 5);
+  });
+
+  it("refuses to split a partial settlement with no per-line breakdown", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.4,
+      lines: [
+        line({ id: "a", entryId: "e1", code: "BRK-F", claimedHours: 0.5 }),
+        line({ id: "b", entryId: "e1", code: "ALN", claimedHours: 0.5 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.needsLineBreakdown).toBe(true);
+    expect(plan.unmappedHours).toBeCloseTo(0.4, 5);
+  });
+
+  it("reports goodwill above the ask as unmapped rather than writing it somewhere", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 2, // 0.5 claimed back, 1.5 goodwill
+      lines: [line({ entryId: "e1", recoveredHours: 0.5 })],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.applyHours).toBeCloseTo(0.5, 5);
+    expect(plan.unmappedHours).toBeCloseTo(1.5, 5);
+  });
+
+  it("counts a deleted RO's recovery as unmapped", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.5,
+      lines: [line({ entryId: "gone", roNumber: "9999", recoveredHours: 0.5 })],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.unmappedHours).toBeCloseTo(0.5, 5);
+  });
+
+  it("never lands two claim rows on the same live line", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 1,
+      lines: [
+        line({ id: "a", entryId: "e1", recoveredHours: 0.5 }),
+        line({ id: "b", entryId: "e1", recoveredHours: 0.5 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toHaveLength(1);
+    expect(plan.unmappedHours).toBeCloseTo(0.5, 5);
+  });
+
+  it("picks the matching line when one RO carries the same code twice", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.5,
+      lines: [line({ entryId: "e1", flaggedHours: 3, recoveredHours: 0.5 })],
+    });
+    const entries = [
+      ro([
+        roLine({ id: "l1", flagHours: 1.5 }),
+        roLine({ id: "l2", flagHours: 3 }),
+      ]),
+    ];
+    expect(pendingRecoveryApplication(d, entries, []).rows[0].lineId).toBe("l2");
   });
 });

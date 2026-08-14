@@ -631,6 +631,15 @@ function TrendSection({
   const ceiling = Math.max(100, ...scaleSource.map((p) => p.efficiency ?? 0));
   const BAR_MAX = 108;
   const parOffset = (100 / ceiling) * BAR_MAX;
+  // Hours that are in no percentage on this page, because the app never learned
+  // how long those days were. Stated rather than dropped: the pairing rule is
+  // right, but "we quietly removed 40 hours of your work from the math" is not
+  // something a page gets to do silently, and the fix is one the tech can act
+  // on (clock the day, or put it on the schedule).
+  const unpaired = points.filter((p) => p.unpairedFlagHours > 0);
+  const unpairedHours = unpaired.reduce((sum, p) => sum + p.unpairedFlagHours, 0);
+  const unpairedDays = unpaired.reduce((sum, p) => sum + p.unpairedDays, 0);
+
   const deltaFrom = complete.length >= 2 ? complete[complete.length - 2] : null;
   const deltaTo = complete.length >= 2 ? complete[complete.length - 1] : null;
   const delta =
@@ -701,6 +710,19 @@ function TrendSection({
               {fmtPct(deltaFrom!.efficiency)}
             </span>{" "}
             in {deltaFrom!.label}.
+          </p>
+        )}
+        {unpairedHours > 0 && (
+          <p className="mt-3 text-xs text-[var(--fg-2)]">
+            Not counted above:{" "}
+            <span className="font-medium text-[var(--fg-1)]">
+              {fmtHours(unpairedHours)}h
+            </span>{" "}
+            flagged across {unpairedDays} {unpairedDays === 1 ? "day" : "days"}{" "}
+            {unpaired.length === 1 ? `in ${unpaired[0].label}` : "in these periods"}{" "}
+            with no clocked hours and no schedule — the app can&apos;t tell how
+            long those days were, so they&apos;re in neither side of the
+            percentage. Clock them or add them to your schedule to include them.
           </p>
         )}
       </Card>

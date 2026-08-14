@@ -200,6 +200,10 @@ export function PaidCheckCard({
               periodLabel={periodLabel}
               openDispute={openDispute}
               allDisputes={disputes}
+              // Same rows Reconciliation above is showing — the recovery from a
+              // closed claim has to land on these exact lines.
+              entries={entries}
+              library={library}
               shortedHours={shortedHours}
               pendingCount={pendingCount}
               pendingHours={pendingHours}

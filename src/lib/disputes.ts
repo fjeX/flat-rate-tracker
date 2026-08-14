@@ -21,10 +21,14 @@ import type {
   Dispute,
   DisputeLine,
   DisputeStatus,
+  Entry,
+  EntryOpCode,
   NewDispute,
   NewDisputeLine,
+  OpCode,
 } from "./types";
 import type { DisputePack } from "./dispute-pack";
+import { lineCode } from "./line-label";
 
 // Tolerance for calling a claim fully recovered. Matches reconcile.ts PAY_EPS:
 // shops round flag hours, so a 0.05h (3 min) gap isn't a real shortfall.
@@ -302,4 +306,194 @@ export function disputeFromPack(
 /** Sum of per-line recoveries — the cross-check against the header figure. */
 export function sumLineRecovery(lines: DisputeLine[]): number {
   return lines.reduce((s, l) => s + l.recoveredHours, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Applying a recovery back to the lines — closing the loop between the two
+// ledgers
+// ---------------------------------------------------------------------------
+//
+// Recovery and reconciliation are separate ledgers on purpose (see the header),
+// and NOTHING joined them: recordDisputeOutcomeAction writes recoveredHours on
+// the claim and never touches a line's paidHours. So a claim could close with
+// 34.0h recovered against a 31.4h shortfall and the period still read "31.4h
+// short" forever — and the offer gate, which keys on that shortfall, would keep
+// offering a second-round claim for hours the shop had already paid, with no
+// upper bound.
+//
+// The fix is a bridge, not a merge. This module works out WHICH live lines the
+// recovery lands on and what their paid hours would become; a tech taps once to
+// apply it. Deliberately not automatic: recovered hours can be goodwill that
+// maps to no line at all, and an app that writes numbers into your pay ledger
+// without showing you the rows first is an app you stop trusting the moment one
+// of them is wrong.
+
+export type RecoveryApplicationRow = {
+  /** The live entry_op_codes row this recovery lands on. */
+  lineId: string;
+  entryId: string;
+  roNumber: string;
+  code: string;
+  flaggedHours: number;
+  /** What the line reads now. null = never reconciled. */
+  paidNow: number | null;
+  /** Hours coming back to this line. */
+  recoveredHours: number;
+  /** What paidHours becomes: (paidNow ?? 0) + recoveredHours. */
+  paidAfter: number;
+};
+
+export type RecoveryApplication = {
+  rows: RecoveryApplicationRow[];
+  /** Hours across `rows` — what the one tap would write. */
+  applyHours: number;
+  /**
+   * Recovered hours that land on no live line: goodwill above the claim, a
+   * deleted RO, or a claim whose per-line breakdown was never recorded. Stays
+   * on the claim only. Reported so the two figures visibly reconcile instead of
+   * the tech wondering where 2.6h went.
+   */
+  unmappedHours: number;
+  /**
+   * True when the claim recovered hours but nothing could be mapped because no
+   * per-line recovery was recorded and the settlement wasn't full. The UI asks
+   * for the breakdown rather than guessing at a split.
+   */
+  needsLineBreakdown: boolean;
+};
+
+const EMPTY_APPLICATION: RecoveryApplication = {
+  rows: [],
+  applyHours: 0,
+  unmappedHours: 0,
+  needsLineBreakdown: false,
+};
+
+/**
+ * What a closed claim's recovery would do to the live lines, or nothing.
+ *
+ * Only closed claims: an open one hasn't been answered, and writing paid hours
+ * from a claim still in flight would report money that hasn't arrived.
+ *
+ * Per-line hours come from the per-line recoveries when they were recorded. If
+ * they weren't, the ONLY other honest reading is a settlement that covered the
+ * whole ask — then every line got its claim, no split is being invented, and
+ * anything above the ask is goodwill. A partial settlement with no breakdown is
+ * left alone: which lines the shop paid is a fact the app does not have.
+ */
+export function pendingRecoveryApplication(
+  dispute: Dispute | null,
+  entries: Entry[],
+  library: OpCode[],
+): RecoveryApplication {
+  if (!dispute || !isClosed(dispute.status)) return EMPTY_APPLICATION;
+  if (dispute.recoveredHours <= 0) return EMPTY_APPLICATION;
+
+  const perLine = sumLineRecovery(dispute.lines);
+  const claimed = dispute.lines.reduce((s, l) => s + l.claimedHours, 0);
+  const usePerLine = perLine > 0;
+  const fullSettlement =
+    !usePerLine && claimed > 0 && dispute.recoveredHours + RECOVERY_EPS >= claimed;
+
+  if (!usePerLine && !fullSettlement) {
+    return {
+      ...EMPTY_APPLICATION,
+      unmappedHours: dispute.recoveredHours,
+      needsLineBreakdown: dispute.lines.length > 0,
+    };
+  }
+
+  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+  const rows: RecoveryApplicationRow[] = [];
+  let applyHours = 0;
+  let matchedRecovery = 0;
+  // One live line is claimable once. Without this, two dispute rows for the
+  // same RO and code (the shop's own duplicate, or a re-claim) would both land
+  // on it and pay it twice.
+  const taken = new Set<string>();
+
+  for (const dl of dispute.lines) {
+    const hours = usePerLine ? dl.recoveredHours : dl.claimedHours;
+    if (hours <= 0) continue;
+
+    const live = findLiveLine(dl, entries, libraryById, taken);
+    if (!live) continue;
+
+    matchedRecovery += hours;
+    const paidNow = live.line.paidHours ?? null;
+    const paidAfter = (paidNow ?? 0) + hours;
+
+    // ALREADY APPLIED — the guard against paying a line twice, and it cannot be
+    // "is the line still short": a partial recovery leaves the line short on
+    // purpose (flagged 5, paid 2, shop returns 1), so a short line would be
+    // offered again every render and the second tap would write 4.
+    //
+    // dl.paidHours is frozen at claim time. If the live line has moved up since
+    // then, this money is already on the books — by this tap, or by the tech
+    // typing it into Reconciliation afterwards. Skipping a hand-entered
+    // adjustment is the safe direction to be wrong in: the worst case is a
+    // number the tech already recorded themselves.
+    const paidAtClaim = dl.paidHours ?? 0;
+    if (paidNow !== null && paidNow > paidAtClaim + RECOVERY_EPS) continue;
+
+    taken.add(live.line.id);
+    rows.push({
+      lineId: live.line.id,
+      entryId: live.entry.id,
+      roNumber: live.entry.roNumber,
+      code: lineCode(live.line, libraryById),
+      flaggedHours: live.line.flagHours,
+      paidNow,
+      recoveredHours: hours,
+      paidAfter,
+    });
+    applyHours += hours;
+  }
+
+  const unmapped = dispute.recoveredHours - matchedRecovery;
+  return {
+    rows,
+    applyHours,
+    unmappedHours: unmapped > RECOVERY_EPS ? unmapped : 0,
+    needsLineBreakdown: false,
+  };
+}
+
+/**
+ * The live line a frozen claim row points at.
+ *
+ * disputeFromPack stores `lineId: null` — a pack row identifies the RO and the
+ * code, not the row id — so the join is (entryId, code) against the live entry,
+ * with the stored lineId honoured when a caller did record one. Flag hours
+ * break a tie between two lines of the same code on one RO; without that, an RO
+ * carrying the same code twice would always resolve to the first.
+ */
+function findLiveLine(
+  dl: DisputeLine,
+  entries: Entry[],
+  libraryById: Map<string, OpCode>,
+  taken: Set<string>,
+): { entry: Entry; line: EntryOpCode } | null {
+  if (dl.lineId) {
+    for (const entry of entries) {
+      const line = entry.opCodes.find((l) => l.id === dl.lineId);
+      if (line && !taken.has(line.id)) return { entry, line };
+    }
+    return null;
+  }
+
+  const entry =
+    entries.find((e) => e.id === dl.entryId) ??
+    entries.find((e) => e.roNumber === dl.roNumber) ??
+    null;
+  if (!entry) return null;
+
+  const candidates = entry.opCodes.filter(
+    (l) => !taken.has(l.id) && lineCode(l, libraryById) === dl.code,
+  );
+  if (candidates.length === 0) return null;
+  const exact = candidates.find(
+    (l) => Math.abs(l.flagHours - dl.flaggedHours) <= RECOVERY_EPS,
+  );
+  return { entry, line: exact ?? candidates[0] };
 }

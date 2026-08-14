@@ -572,6 +572,14 @@ export type PeriodTrendPoint = {
   flagHours: number;
   denomHours: number;
   efficiency: number | null;
+  // Flagged hours on days the app could not put a length to — no clock entry,
+  // and no schedule that covers the day. They are NOT in flagHours (see the
+  // pairing rule in periodTrend) and so are not in the percentage either.
+  // Carried instead of dropped because they are real hours the tech turned:
+  // a Saturday that pays but never gets clocked is the ordinary case, and a
+  // page that silently subtracts it is a page that hides work.
+  unpairedFlagHours: number;
+  unpairedDays: number;
 };
 
 /**
@@ -605,6 +613,8 @@ export function periodTrend(
         flagHours: 0,
         denomHours: 0,
         efficiency: null,
+        unpairedFlagHours: 0,
+        unpairedDays: 0,
       };
       byKey.set(range.key, point);
     }
@@ -614,7 +624,33 @@ export function periodTrend(
   // Both loops, not just entries: a period where the tech clocked in and flagged
   // nothing is the most important point on this chart, and it has no entries to
   // find it by.
-  for (const entry of entries) touch(entry.date).flagHours += entry.flagHours;
+  //
+  // The numerator is PAIRED with the denominator, exactly as
+  // aggregateStatsWithSchedule does it (stats.ts:224-243) and as
+  // weekdayEfficiency above already did: a day's flag hours count only if that
+  // day also contributed a length. Summing every entry over a paired
+  // denominator is an unpaired top on a paired bottom, and it is why /pay-period
+  // read 387% while this page read 627% for the same fortnight — four weekend
+  // days with flagged work, no clock and no schedule sat in one number and not
+  // the other. stats.ts:273-276 records the DENOMINATOR half of this same leak
+  // being closed once already; this is the other half.
+  //
+  // touch() stays unconditional. A period is a period because work happened in
+  // it, whether or not the app knows how long the days were — dropping the key
+  // would erase the bar entirely instead of reporting an unknown.
+  const unpairedDates = new Set<string>();
+  for (const entry of entries) {
+    const point = touch(entry.date);
+    if (denomByDay[entry.date]) {
+      point.flagHours += entry.flagHours;
+      continue;
+    }
+    point.unpairedFlagHours += entry.flagHours;
+    if (!unpairedDates.has(entry.date)) {
+      unpairedDates.add(entry.date);
+      point.unpairedDays += 1;
+    }
+  }
   for (const [date, denom] of Object.entries(denomByDay)) {
     touch(date).denomHours += denom.hours;
   }
