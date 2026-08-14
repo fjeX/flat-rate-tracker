@@ -15,6 +15,7 @@
 // match on free-text descriptions — is a fuzzy-matching problem that would put
 // wrong jobs in the same bucket, which is worse than a fragmented one.
 import type { Entry, EntryOpCode, OpCode } from "./types";
+import { isMeasuredLine } from "./insights";
 import { lineCode } from "./line-label";
 
 /** A single measurement, ready to store. Shaped to labor_time_observations. */
@@ -86,19 +87,31 @@ export function observedMonthFor(date: string): string | null {
 /**
  * Is this line worth pooling?
  *
- * Requires a real measured actual (> 0) and a real book time (> 0). Both guards
- * matter:
+ * The bar here is HIGHER than the bar for showing a number on the tech's own
+ * page, and deliberately so. This pool is shared: a bad row does not mislead the
+ * person who created it, it misleads every other tech who ever looks up that
+ * code, and it cannot be un-mixed once it is in a median.
+ *
+ * Four guards:
  *  - actualHours null/0 means nobody timed it. There is no measurement.
  *  - flagHours 0 makes the flag-vs-actual ratio meaningless (and unbounded),
  *    which is the whole point of the dataset. Comebacks flag exactly zero, so
  *    without this guard every unpaid rework line would poison the ratio.
+ *  - the reading has to be PHYSICALLY POSSIBLE. `> 0` let 0.12h against a 25h
+ *    engine through, and a median is not robust against a value three orders of
+ *    magnitude out. isMeasuredLine is imported rather than re-derived so this
+ *    file and the insights page can never disagree about what a measurement is.
+ *  - an ESTIMATE is not a measurement. A tech tapping "about 3 hours" from
+ *    memory is a perfectly good input to their own coaching and a corrupting
+ *    input to somebody else's peer median. null source is grandfathered as
+ *    measured: those rows predate the column and were timer- or hand-entered.
  */
 export function isPoolableLine(line: EntryOpCode): boolean {
-  const actual = line.actualHours;
-  if (actual === null || actual === undefined) return false;
-  if (!Number.isFinite(actual) || actual <= 0) return false;
-  if (!Number.isFinite(line.flagHours) || line.flagHours <= 0) return false;
-  return true;
+  if (line.actualSource === "estimate") return false;
+  return isMeasuredLine({
+    flagHours: line.flagHours,
+    actualHours: line.actualHours ?? null,
+  });
 }
 
 // A code that carries no information — lineCode()'s fallbacks for a line whose

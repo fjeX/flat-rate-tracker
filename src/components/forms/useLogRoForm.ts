@@ -20,7 +20,13 @@ import type {
   SubOpCode,
 } from "@/lib/types";
 import { isoDate } from "@/lib/periods";
-import { saveEntry, deleteEntryAction, findDuplicateRos } from "@/app/actions/entries";
+import {
+  saveEntry,
+  deleteEntryAction,
+  findDuplicateRos,
+  setLineActualHoursAction,
+} from "@/app/actions/entries";
+import { retroCandidates, type RetroCandidate } from "@/lib/retro-capture";
 import { createLibraryOpCode } from "@/app/actions/op-codes";
 import { uploadEntryPhoto } from "@/app/actions/entry-photos";
 import { downscaleImage } from "@/lib/image";
@@ -168,6 +174,11 @@ export function useLogRoForm({
   // Duplicate-RO prompt: when saving a NEW RO whose number already exists, we
   // pause and ask the user (edit existing vs. log a separate repair).
   const [dupMatches, setDupMatches] = useState<RoMatch[] | null>(null);
+  // Retro capture. The RO is ALREADY SAVED before any of this renders — the
+  // prompt defers navigation, it never gates the persist. If anything here
+  // throws, the tech still keeps their ticket.
+  const [retroCandidatesList, setRetroCandidatesList] = useState<RetroCandidate[]>([]);
+  const retroAfterSave = useRef<(() => void) | undefined>(undefined);
   const [isChecking, setIsChecking] = useState(false);
   const pendingAfterSave = useRef<(() => void) | undefined>(undefined);
   // Synchronous guard against overlapping persists (see performSave).
@@ -551,6 +562,16 @@ export function useLogRoForm({
             await uploadCapturedPhoto(saved.id, capturedPhoto);
             setCapturedPhoto(null);
           }
+          // Ask about the big jobs on this ticket, once, before leaving. Only
+          // the persisted entry can be asked — the candidates carry real line
+          // ids, which the pre-save form lines do not have.
+          const candidates = retroCandidates(saved, library);
+          if (candidates.length > 0) {
+            tap();
+            retroAfterSave.current = afterSave;
+            setRetroCandidatesList(candidates);
+            return;
+          }
         }
         tap();
         if (afterSave) {
@@ -620,6 +641,36 @@ export function useLogRoForm({
     });
   }
 
+  // Both paths finish the navigation the save deferred, and both clear the
+  // prompt FIRST — a write that fails must not strand the tech in a modal with
+  // their RO already saved behind it.
+  function finishRetro() {
+    const after = retroAfterSave.current;
+    retroAfterSave.current = undefined;
+    setRetroCandidatesList([]);
+    if (after) after();
+    else router.push(redirectTo);
+  }
+
+  function skipRetro() {
+    finishRetro();
+  }
+
+  async function submitRetro(answers: Record<string, number>) {
+    try {
+      await Promise.all(
+        Object.entries(answers).map(([lineId, hours]) =>
+          setLineActualHoursAction(lineId, hours, "estimate"),
+        ),
+      );
+    } catch {
+      // Deliberately swallowed. The RO is saved; a failed estimate write is the
+      // least important thing in this flow, and trapping the tech on a modal to
+      // tell them about it would cost more than the number is worth.
+    }
+    finishRetro();
+  }
+
   const vehicleSummary = [year, make, model].filter(Boolean).join(" ");
 
   return {
@@ -638,6 +689,9 @@ export function useLogRoForm({
     isDeleting,
     isChecking,
     dupMatches,
+    retroCandidates: retroCandidatesList,
+    submitRetro,
+    skipRetro,
     roInputRef,
     vehicleSummary,
     // vehicle

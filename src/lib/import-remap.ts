@@ -284,6 +284,10 @@ export function buildImportPayload(
         custom_description: line.customDescription,
         flag_hours: line.flagHours,
         actual_hours: line.actualHours,
+        // Rides with the hours. Restoring an estimate as a bare actual would
+        // silently promote it to a measurement — and, worse, make it eligible
+        // for the shared True Time pool it was deliberately kept out of.
+        actual_source: line.actualHours === null ? null : (line.actualSource ?? null),
         // The reconciliation state. Dropping this was the worst of the silent
         // losses — it is the answer to "did the shop actually pay me for this?"
         paid_hours: line.paidHours ?? null,

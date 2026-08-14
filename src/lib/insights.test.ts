@@ -2,8 +2,13 @@ import { describe, it, expect } from "vitest";
 import {
   dataRange,
   displayedHours,
+  bigJobCoverage,
+  bigJobPerformance,
   formatRatio,
   gainBoard,
+  isMeasuredLine,
+  MIN_MEASURED_HOURS,
+  minPlausibleActual,
   leakBoard,
   opCodePerformance,
   opCodeState,
@@ -671,5 +676,227 @@ describe("gainBoard", () => {
       [],
     );
     expect(gainBoard(rows)).toHaveLength(0);
+  });
+});
+
+describe("minPlausibleActual — the relative floor", () => {
+  it("keeps the absolute floor in charge of small jobs", () => {
+    // 0.3h flag × 0.15 = 0.045, which is below six minutes. The flat floor wins,
+    // so nothing about how quick jobs are measured changes.
+    expect(minPlausibleActual(0.3)).toBeCloseTo(MIN_MEASURED_HOURS, 5);
+    expect(minPlausibleActual(0.5)).toBeCloseTo(MIN_MEASURED_HOURS, 5);
+  });
+
+  it("scales with book time once the job is big enough to hide a mis-tap", () => {
+    expect(minPlausibleActual(25)).toBeCloseTo(3.75, 5);
+    expect(minPlausibleActual(8)).toBeCloseTo(1.2, 5);
+  });
+
+  it("rejects every implausible reading found in production", () => {
+    // The four real rows that walked through the old absolute-only gate.
+    for (const [flag, actual] of [
+      [25, 0.12],
+      [22, 0.5],
+      [8, 0.24],
+      [5.4, 0.46],
+    ]) {
+      expect(isMeasuredLine({ flagHours: flag, actualHours: actual })).toBe(false);
+    }
+  });
+
+  it("keeps every genuine reading found in production", () => {
+    for (const [flag, actual] of [
+      [1.8, 0.7],
+      [0.3, 0.2],
+      [1.5, 1.24],
+      [6, 5.5],
+    ]) {
+      expect(isMeasuredLine({ flagHours: flag, actualHours: actual })).toBe(true);
+    }
+  });
+
+  it("keeps a genuinely excellent job — beating the book is the job", () => {
+    // Liem's water pump: flags 5.0h, done in 1.5h. A 0.30 ratio, and the single
+    // most important reading the app can capture. It must never be filtered.
+    expect(isMeasuredLine({ flagHours: 5, actualHours: 1.5 })).toBe(true);
+    // Even a 4x beat survives.
+    expect(isMeasuredLine({ flagHours: 8, actualHours: 2 })).toBe(true);
+  });
+
+  it("treats a null actual and a zero flag as unmeasurable, as before", () => {
+    expect(isMeasuredLine({ flagHours: 5, actualHours: null })).toBe(false);
+    expect(isMeasuredLine({ flagHours: 0, actualHours: 2 })).toBe(false);
+  });
+});
+
+describe("opCodePerformance — implausible readings", () => {
+  it("does not let a mis-saved timer become the biggest win on the page", () => {
+    const rows = opCodePerformance(
+      [entry([line({ id: "a", opCodeId: "oc1", flagHours: 25, actualHours: 0.12 })])],
+      library,
+    );
+    expect(rows).toHaveLength(1);
+    // Not measured, so it cannot reach gainBoard and claim 24.88 saved hours.
+    expect(rows[0].ratio).toBeNull();
+    expect(rows[0].timedUses).toBe(0);
+    expect(gainBoard(rows)).toHaveLength(0);
+    expect(leakBoard(rows).leaks).toHaveLength(0);
+  });
+
+  it("counts the bad reading so the tech can find and fix it", () => {
+    const rows = opCodePerformance(
+      [entry([line({ id: "a", opCodeId: "oc1", flagHours: 25, actualHours: 0.12 })])],
+      library,
+    );
+    expect(rows[0].implausibleUses).toBe(1);
+    // Still "untimed" as a state — there is genuinely no measurement here.
+    expect(opCodeState(rows[0])).toBe("untimed");
+  });
+
+  it("does not flag a comeback as implausible", () => {
+    // A comeback flags zero by DB CHECK. It is unmeasurable by design, not by
+    // mistake, and calling it suspect would cry wolf on a correct record.
+    const rows = opCodePerformance(
+      [entry([line({ id: "a", opCodeId: "oc1", flagHours: 0, actualHours: 1.2, isComeback: true })])],
+      library,
+    );
+    expect(rows[0].implausibleUses).toBe(0);
+    expect(rows[0].unpaidHours).toBeCloseTo(1.2, 5);
+  });
+
+  it("keeps a good line and rejects a bad one on the same code", () => {
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", opCodeId: "oc1", flagHours: 5, actualHours: 4.5 }),
+          line({ id: "b", opCodeId: "oc1", flagHours: 5, actualHours: 0.2 }),
+        ]),
+      ],
+      library,
+    );
+    expect(rows[0].timedUses).toBe(1);
+    expect(rows[0].implausibleUses).toBe(1);
+    expect(rows[0].ratio).toBeCloseTo(0.9, 5);
+  });
+});
+
+describe("bigJobPerformance", () => {
+  it("keeps only the jobs worth measuring individually", () => {
+    const rows = bigJobPerformance(
+      [
+        entry([
+          line({ id: "a", opCodeId: "oc1", flagHours: 5, actualHours: 4 }),
+          line({ id: "b", opCodeId: "oc2", flagHours: 0.4, actualHours: 0.3 }),
+        ]),
+      ],
+      library,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].ratio).toBeCloseTo(0.8, 5);
+  });
+
+  it("does not mix a code's big and small uses into one ratio", () => {
+    // Same code used two ways. Filtering after grouping would average a 5h job
+    // with a 0.4h one and call the result "that job".
+    const rows = bigJobPerformance(
+      [
+        entry([
+          line({ id: "a", opCodeId: "oc1", flagHours: 5, actualHours: 5 }),
+          line({ id: "b", opCodeId: "oc1", flagHours: 0.4, actualHours: 0.8 }),
+        ]),
+      ],
+      library,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].timedUses).toBe(1);
+    expect(rows[0].ratio).toBeCloseTo(1, 5);
+  });
+
+  it("marks a row provisional until it has enough readings", () => {
+    const one = bigJobPerformance(
+      [entry([line({ id: "a", opCodeId: "oc1", flagHours: 5, actualHours: 4 })])],
+      library,
+    );
+    expect(one[0].confident).toBe(false);
+    expect(one[0].needsMore).toBe(2);
+
+    const three = bigJobPerformance(
+      [
+        entry([
+          line({ id: "a", opCodeId: "oc1", flagHours: 5, actualHours: 4 }),
+          line({ id: "b", opCodeId: "oc1", flagHours: 5, actualHours: 4 }),
+          line({ id: "c", opCodeId: "oc1", flagHours: 5, actualHours: 4 }),
+        ]),
+      ],
+      library,
+    );
+    expect(three[0].confident).toBe(true);
+    expect(three[0].needsMore).toBe(0);
+  });
+
+  it("flags a row whose readings include a tapped estimate", () => {
+    const rows = bigJobPerformance(
+      [
+        entry([
+          line({
+            id: "a",
+            opCodeId: "oc1",
+            flagHours: 5,
+            actualHours: 4,
+            actualSource: "estimate",
+          }),
+        ]),
+      ],
+      library,
+    );
+    expect(rows[0].hasEstimate).toBe(true);
+  });
+
+  it("does not flag a row measured by the clock", () => {
+    const rows = bigJobPerformance(
+      [
+        entry([
+          line({
+            id: "a",
+            opCodeId: "oc1",
+            flagHours: 5,
+            actualHours: 4,
+            actualSource: "timer",
+          }),
+        ]),
+      ],
+      library,
+    );
+    expect(rows[0].hasEstimate).toBe(false);
+  });
+});
+
+describe("bigJobCoverage", () => {
+  it("reports how much of the big work has a reading behind it", () => {
+    const cov = bigJobCoverage([
+      entry([
+        line({ id: "a", opCodeId: "oc1", flagHours: 5, actualHours: 4 }),
+        line({ id: "b", opCodeId: "oc1", flagHours: 5 }),
+        line({ id: "c", opCodeId: "oc1", flagHours: 5 }),
+        line({ id: "d", opCodeId: "oc2", flagHours: 0.4, actualHours: 0.3 }),
+      ]),
+    ]);
+    // The quick line is not part of the question.
+    expect(cov.lines).toBe(3);
+    expect(cov.measured).toBe(1);
+    expect(cov.pct).toBeCloseTo(33.33, 1);
+  });
+
+  it("does not count an impossible reading as coverage", () => {
+    const cov = bigJobCoverage([
+      entry([line({ id: "a", opCodeId: "oc1", flagHours: 25, actualHours: 0.12 })]),
+    ]);
+    expect(cov.lines).toBe(1);
+    expect(cov.measured).toBe(0);
+  });
+
+  it("is zero, not NaN, with no big jobs at all", () => {
+    const cov = bigJobCoverage([entry([line({ opCodeId: "oc1", flagHours: 0.4 })])]);
+    expect(cov.pct).toBe(0);
   });
 });

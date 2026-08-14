@@ -183,6 +183,11 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
       custom_description: "carry",
       flag_hours: "carry",
       actual_hours: "carry",
+      // Carried with the hours it describes. Dropping it would quietly promote
+      // every restored estimate to a measurement, which is worse than losing
+      // the hours outright: the tech gets back a number that now claims more
+      // authority than it had when they entered it.
+      actual_source: "carry",
       // "Did the shop actually pay me for this?" — the worst of the original
       // silent losses.
       paid_hours: "carry",

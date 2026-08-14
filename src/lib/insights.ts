@@ -14,6 +14,7 @@
 // totals would have been simpler and would have quietly produced a THIRD answer
 // to "how efficient was I", which is exactly how the last round of drift
 // started: a weekday with one unclocked heavy day would read 300%.
+import { HEAVY_FLAG_HOURS } from "./mix";
 import { computeEfficiency, type DayDenom } from "./stats";
 import { formatPeriodLabel, getPeriodForDate } from "./periods";
 import type { DailyClock, Entry, OpCode, PeriodOverride } from "./types";
@@ -28,11 +29,15 @@ export type OpCodePerformance = {
   description: string;
   uses: number; // every line of this op code, timed or not
   // Lines behind `ratio`: a real measurement against real book time. Three
-  // kinds of line are counted in `uses` and excluded here:
+  // kinds of line are counted in `uses` and excluded here — see isMeasuredLine,
+  // which is the one gate all of this module's consumers share:
   //   - never timed (actualHours null) — nothing to measure
-  //   - actualHours below MIN_MEASURED_HOURS — a timer tapped and saved, not a
-  //     job. Letting it through renders "0.00×", which reads as a job that
-  //     costs nothing and outranks every genuine measurement on the page
+  //   - actualHours below minPlausibleActual(flagHours) — a timer tapped and
+  //     saved, not a job. Below six minutes outright, or below 15% of the book
+  //     time on anything bigger. Letting the first through renders "0.00×",
+  //     which reads as a job that costs nothing; letting the SECOND through is
+  //     worse, because 0.12h against a 25h engine renders as the biggest win on
+  //     the page rather than as anything broken
   //   - flagHours 0 — a comeback (the DB forces those to zero flag) or a
   //     goodwill job, which would divide by zero
   timedUses: number;
@@ -58,6 +63,12 @@ export type OpCodePerformance = {
   // display instead — see opCodeState.
   unpaidHours: number;
   unpaidUses: number;
+  /**
+   * Lines that carry a timer reading which cannot be true — see
+   * MIN_PLAUSIBLE_RATIO. Not measurements, not rework, not "never timed": a
+   * fourth thing, and the only one the tech can repair by editing the RO.
+   */
+  implausibleUses: number;
 };
 
 /**
@@ -131,6 +142,64 @@ export function ratioOrder(row: OpCodePerformance): number | null {
  */
 export const MIN_MEASURED_HOURS = 0.1;
 
+/**
+ * The smallest fraction of book time a real measurement can be.
+ *
+ * MIN_MEASURED_HOURS is an ABSOLUTE floor, and that is only half the guard. Six
+ * minutes is a plausible read on a 0.3h oil change; it is not a plausible read
+ * on a 25h engine. The same mis-saved timer that lands on 0.01 against a small
+ * job lands on 0.12 against a big one, clears the absolute floor untouched, and
+ * divides to 0.005 — which does not print as "0.00×" and so was never caught by
+ * the earlier fix. It prints as a HUGE WIN: 24.9 hours "saved", the number one
+ * row in "Where you're winning".
+ *
+ * That is the worse failure. A ratio of 0.00 looks broken and gets ignored; a
+ * ratio of 0.005 on a 25h job looks like the best day of the tech's career.
+ *
+ * Production data splits cleanly here too. The four implausible lines sit at
+ * 0.005, 0.023, 0.030 and 0.085 — every one of them a small actual against a
+ * 5h+ flag. The next value up is 0.389 (0.70h against a 1.80h job), and there is
+ * nothing in between. 0.15 sits in the empty gap.
+ *
+ * Deliberately generous, because BEATING THE BOOK IS THE JOB. A water pump that
+ * flags 5.0h and takes 1.5h is a 0.30 ratio, and that reading is the entire
+ * reason this app exists — it must survive. This threshold rejects only
+ * measurements no wrench could produce, not merely impressive ones.
+ */
+export const MIN_PLAUSIBLE_RATIO = 0.15;
+
+/**
+ * The shortest actual-hours value that can be a real measurement OF THIS JOB.
+ *
+ * Scales with the book time instead of being flat, so the guard is proportional
+ * to what it is guarding. The absolute floor still governs small jobs (a 0.3h
+ * flag yields 0.045 here, so MIN_MEASURED_HOURS wins) and the relative floor
+ * takes over above ~0.67h of flag, which is exactly where the flat floor stopped
+ * being able to tell a measurement from a mis-tap.
+ */
+export function minPlausibleActual(flagHours: number): number {
+  return Math.max(MIN_MEASURED_HOURS, flagHours * MIN_PLAUSIBLE_RATIO);
+}
+
+/**
+ * Is this line a measurement at all?
+ *
+ * The single gate every consumer must use, exported so the ratio table, the leak
+ * board and the true-time collector cannot drift into three different answers to
+ * "does this line count" — which is the same class of bug the module header
+ * warns about for efficiency.
+ */
+export function isMeasuredLine(line: {
+  flagHours: number;
+  actualHours: number | null;
+}): boolean {
+  return (
+    line.actualHours !== null &&
+    line.flagHours > 0 &&
+    line.actualHours >= minPlausibleActual(line.flagHours)
+  );
+}
+
 // A line's grouping identity. Sub-op-code variants roll up to their PARENT
 // library code — a tech thinks "brakes", not "brakes, front, ceramic" — but each
 // line still contributes its own flag hours, so the variant's book time is
@@ -203,6 +272,7 @@ export function opCodePerformance(
           ratio: null,
           unpaidHours: 0,
           unpaidUses: 0,
+          implausibleUses: 0,
         };
         byKey.set(id.key, row);
       }
@@ -215,14 +285,24 @@ export function opCodePerformance(
         // No `continue` needed — a comeback flags zero by DB CHECK, so it can
         // never clear the flagHours > 0 test below.
       }
-      if (
-        line.actualHours !== null &&
-        line.actualHours >= MIN_MEASURED_HOURS &&
-        line.flagHours > 0
-      ) {
+      if (isMeasuredLine(line)) {
         row.timedUses += 1;
         row.flagTotal += line.flagHours;
-        row.actualTotal += line.actualHours;
+        row.actualTotal += line.actualHours as number;
+      } else if (
+        line.actualHours !== null &&
+        line.actualHours > 0 &&
+        line.flagHours > 0 &&
+        !line.isComeback
+      ) {
+        // Timed, non-zero, against real book time — and still not a measurement.
+        // Counted rather than dropped silently: these are almost always a timer
+        // saved by accident, the tech is the only one who can fix them, and a
+        // number they never see is a number they never fix. Comebacks are
+        // excluded because their zero flag makes them unmeasurable BY DESIGN,
+        // not by mistake — flagging those as suspect would cry wolf on the one
+        // thing the tech recorded correctly.
+        row.implausibleUses += 1;
       }
     }
   }
@@ -569,4 +649,101 @@ export function dataRange(
   for (const entry of entries) see(entry.date);
   for (const clock of clocks) see(clock.date);
   return start !== null && end !== null ? { start, end } : null;
+}
+
+// ---------------------------------------------------------------------------
+// Big jobs — the per-job scorecard, scoped to where measurement is real
+// ---------------------------------------------------------------------------
+
+/**
+ * Timed uses before a code's ratio is presented as a finding rather than a
+ * first look.
+ *
+ * THREE. Below it, one unusual job IS the average — a single bad water pump
+ * (helper called away, bolt snapped) becomes "you run water pumps at 1.6x" and
+ * the tech either disbelieves the page or, worse, believes it. The row is still
+ * shown at n=1 and n=2, because hiding it would make a tech who just timed a job
+ * think the timing did nothing; it is shown as provisional and says how many
+ * more it needs.
+ */
+export const MIN_USES_TO_JUDGE = 3;
+
+export type BigJobRow = OpCodePerformance & {
+  /** Enough timed readings to state the ratio as a finding. */
+  confident: boolean;
+  /** Readings still needed to get there. 0 once confident. */
+  needsMore: number;
+  /** At least one reading behind the ratio is a tapped estimate, not a clock. */
+  hasEstimate: boolean;
+};
+
+/**
+ * Per-code performance over BIG JOBS ONLY.
+ *
+ * Scoped deliberately, and the scope is the point. Across production data 68% of
+ * lines flag under an hour, essentially none of them are ever timed, and the
+ * count of them in a day correlates with that day's flag hours at 0.067. A
+ * per-job ratio table spanning everything is therefore mostly empty rows for
+ * work whose speed does not move the paycheck — it buries the handful of
+ * measurements that are worth something under the ones that are not.
+ *
+ * Lines are filtered BEFORE grouping, not after: a code used both ways (a 2.5h
+ * job on one ticket, a 0.4h version on another) must contribute only its heavy
+ * lines here, or the ratio silently mixes two different jobs.
+ */
+export function bigJobPerformance(
+  entries: Entry[],
+  library: OpCode[],
+): BigJobRow[] {
+  const heavyOnly = entries
+    .map((entry) => ({
+      ...entry,
+      opCodes: entry.opCodes.filter((line) => line.flagHours >= HEAVY_FLAG_HOURS),
+    }))
+    .filter((entry) => entry.opCodes.length > 0);
+
+  const estimatedKeys = new Set<string>();
+  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+  for (const entry of heavyOnly) {
+    for (const line of entry.opCodes) {
+      if (line.actualSource !== "estimate") continue;
+      if (!isMeasuredLine(line)) continue;
+      const id = groupKey(line, libraryById);
+      if (id) estimatedKeys.add(id.key);
+    }
+  }
+
+  return opCodePerformance(heavyOnly, library).map((row) => ({
+    ...row,
+    confident: row.timedUses >= MIN_USES_TO_JUDGE,
+    needsMore: Math.max(0, MIN_USES_TO_JUDGE - row.timedUses),
+    hasEstimate: estimatedKeys.has(row.key),
+  }));
+}
+
+/**
+ * How much of the big-job work has any reading at all behind it.
+ *
+ * Put on the page next to the table, because a confident-looking scorecard built
+ * on 4% coverage is the most dangerous thing this file could produce. A tech is
+ * entitled to know whether they are looking at their record or at a sample of it.
+ */
+export type BigJobCoverage = {
+  lines: number;
+  measured: number;
+  /** 0-100. */
+  pct: number;
+};
+
+export function bigJobCoverage(entries: Entry[]): BigJobCoverage {
+  let lines = 0;
+  let measured = 0;
+  for (const entry of entries) {
+    for (const line of entry.opCodes) {
+      if (line.flagHours < HEAVY_FLAG_HOURS) continue;
+      lines += 1;
+      if (isMeasuredLine(line)) measured += 1;
+    }
+  }
+  return { lines, measured, pct: lines > 0 ? (measured / lines) * 100 : 0 };
 }

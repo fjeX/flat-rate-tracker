@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 import { Lightbulb } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { MixSection } from "@/components/insights/MixSection";
+import {
+  BigJobsSection,
+  MaintenanceTimesSection,
+} from "@/components/insights/JobTimeSections";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Table, Td, Th } from "@/components/ui/Table";
 import { fmtHours, fmtPct, type DayDenom } from "@/lib/stats";
@@ -14,7 +19,16 @@ import {
   startOfMonth,
   startOfWeek,
 } from "@/lib/periods";
+import { inferCodeDurations } from "@/lib/time-inference";
 import {
+  dayShapes,
+  mixBands,
+  mixDrivers,
+  mixSummary,
+} from "@/lib/mix";
+import {
+  bigJobCoverage,
+  bigJobPerformance,
   displayedHours,
   formatRatio,
   gainBoard,
@@ -863,6 +877,31 @@ export function InsightsView({
   );
   // Deliberately built from the FULL history, not the window — see the caption
   // on TrendSection.
+  // Mix runs over EVERY day, not the windowed slice — see MixSection's header.
+  // Quartiles cut from a one-week window are three days apiece.
+  const mix = useMemo(() => {
+    const days = dayShapes(entries, denomByDay);
+    const bands = mixBands(days);
+    const drivers = mixDrivers(days);
+    return { days, bands, drivers, summary: mixSummary(bands, drivers) };
+  }, [entries, denomByDay]);
+
+  // Big jobs and the quick stuff both run over ALL history, like Mix and Trend:
+  // a per-code ratio needs every reading it can get, and the solve below needs
+  // as many days as exist.
+  const bigJobs = useMemo(
+    () => ({
+      rows: bigJobPerformance(entries, library),
+      coverage: bigJobCoverage(entries),
+    }),
+    [entries, library],
+  );
+
+  const inference = useMemo(
+    () => inferCodeDurations(entries, denomByDay, library),
+    [entries, denomByDay, library],
+  );
+
   const trend = useMemo(
     () => periodTrend(entries, denomByDay, { splitDay, periodOverrides }),
     [entries, denomByDay, splitDay, periodOverrides],
@@ -949,7 +988,7 @@ export function InsightsView({
 
       {/* The window chips stop here, and the page says so structurally instead
           of apologising for it in a caption under each section. */}
-      {(trend.length > 0 || lifetime !== null) && (
+      {(trend.length > 0 || lifetime !== null || mix.days.length > 0) && (
         <div className="pt-2">
           <div style={{ height: 1, background: "var(--line)" }} />
           <div className="mt-5 flex items-baseline gap-3">
@@ -962,6 +1001,16 @@ export function InsightsView({
           </div>
         </div>
       )}
+      {mix.days.length > 0 && (
+        <MixSection
+          days={mix.days}
+          bands={mix.bands}
+          drivers={mix.drivers}
+          summary={mix.summary}
+        />
+      )}
+      <BigJobsSection rows={bigJobs.rows} coverage={bigJobs.coverage} />
+      <MaintenanceTimesSection inference={inference} />
       {trend.length > 0 && <TrendSection points={trend} today={today} />}
       {/* Gated only on the migration having landed — the section handles
           "nothing recovered yet" itself. */}

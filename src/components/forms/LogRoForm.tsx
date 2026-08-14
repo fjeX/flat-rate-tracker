@@ -5,6 +5,7 @@
 // components (RoScanSection, OpCodeLines, VehicleFields). The shell here owns
 // only the surrounding layout — title, RO#/notes steps, save bar, dialogs.
 import Link from "next/link";
+import { RetroTimePrompt } from "@/components/forms/RetroTimePrompt";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import type { Entry, LaborType, NewEntry, OpCode, RoTemplate } from "@/lib/types";
 import type { OpCodeDraft } from "./OpCodeModals";
@@ -52,7 +53,8 @@ export function LogRoForm({
     vehicleOpen, setVehicleOpen, vehicleSummary, year, setYear, make, handleMakeChange,
     model, setModel, vin, setVin, mileage, setMileage, autoFill, handleAutoFillToggle,
     notesOpen, setNotesOpen, notes, setNotes, isDeleting, isSubmitting, isChecking,
-    dupMatches, handleDeleteRo, handleSaveAndNew, handleSave, handleDupEdit,
+    dupMatches, retroCandidates, submitRetro, skipRetro,
+    handleDeleteRo, handleSaveAndNew, handleSave, handleDupEdit,
     handleDupLogNew, handleDupClose, laborTypeEnabled: laborTypeShown,
     photosEnabled, photoAttached, handlePhotoCaptured, clearCapturedPhoto,
   } = useLogRoForm({
@@ -314,6 +316,15 @@ export function LogRoForm({
           </button>
         </div>
       </div>
+
+      {/* ---- "How long did that take?" — fires only for 2h+ lines, after the
+           RO is already persisted. See lib/retro-capture.ts. ---- */}
+      <RetroTimePrompt
+        open={retroCandidates.length > 0}
+        candidates={retroCandidates}
+        onSubmit={submitRetro}
+        onSkip={skipRetro}
+      />
 
       {/* ---- Duplicate-RO dialog ---- */}
       {dupMatches && (

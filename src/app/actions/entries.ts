@@ -6,7 +6,13 @@ import * as db from "@/lib/db";
 import { isComebackKind } from "@/lib/types";
 import { observationsFromEntry } from "@/lib/true-time";
 import { reportServerError } from "@/lib/report-error-server";
-import type { Entry, NewEntry, NewEntryOpCode, RoMatch } from "@/lib/types";
+import type {
+  ActualSource,
+  Entry,
+  NewEntry,
+  NewEntryOpCode,
+  RoMatch,
+} from "@/lib/types";
 import type { DbClient } from "@/lib/db";
 
 /**
@@ -193,9 +199,14 @@ export async function addOpCodeLineToEntryAction(
 export async function setLineActualHoursAction(
   lineId: string,
   actualHours: number | null,
+  // Defaults to "timer" rather than null so every EXISTING caller (the RO detail
+  // modal's blur-to-save, the timer's own write) keeps contributing to the
+  // shared True Time pool exactly as it did before. Only retro capture passes
+  // "estimate", and only it is held back from the pool.
+  actualSource: ActualSource | null = "timer",
 ): Promise<void> {
   const supabase = await createClient();
-  await db.setLineActualHours(supabase, lineId, actualHours);
+  await db.setLineActualHours(supabase, lineId, actualHours, actualSource);
   // The single most important True Time hook: this is where a timed job's actual
   // hours actually arrive (the timer saves through here), so it is where most
   // observations are born — and where clearing the hours must retract one.

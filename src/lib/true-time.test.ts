@@ -317,3 +317,44 @@ describe("flagToActualRatio", () => {
     expect(flagToActualRatio({ flagHours: 2, actualHours: Number.NaN })).toBeNull();
   });
 });
+
+describe("isPoolableLine — the shared pool holds a higher bar", () => {
+  it("refuses an estimate, however plausible the number is", () => {
+    // The tech's own page will happily coach off this. The pool must not, and
+    // the difference is that a bad row here misleads people who never saw it
+    // entered — and can never be un-mixed from a median afterwards.
+    expect(
+      isPoolableLine(
+        line({ flagHours: 5, actualHours: 4, actualSource: "estimate" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts the same reading when a clock produced it", () => {
+    expect(
+      isPoolableLine(line({ flagHours: 5, actualHours: 4, actualSource: "timer" })),
+    ).toBe(true);
+  });
+
+  it("grandfathers rows that predate the source column", () => {
+    // null is not a third grade of evidence — it means "recorded before we
+    // tracked this". Retracting those would silently shrink a consenting tech's
+    // existing contribution.
+    expect(
+      isPoolableLine(line({ flagHours: 5, actualHours: 4, actualSource: null })),
+    ).toBe(true);
+  });
+
+  it("refuses a physically impossible reading", () => {
+    // 0.12h against a 25h engine cleared the old `> 0` guard. A median is not
+    // robust against a value three orders of magnitude out.
+    expect(isPoolableLine(line({ flagHours: 25, actualHours: 0.12 }))).toBe(false);
+    expect(isPoolableLine(line({ flagHours: 8, actualHours: 0.24 }))).toBe(false);
+  });
+
+  it("still accepts a genuinely fast job", () => {
+    // Beating the book is the job. A 5h water pump in 1.5h must reach the pool —
+    // it is the single most useful observation the dataset can hold.
+    expect(isPoolableLine(line({ flagHours: 5, actualHours: 1.5 }))).toBe(true);
+  });
+});

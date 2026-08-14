@@ -46,6 +46,16 @@ export type LaborRate = {
   hourlyRate: number;
 };
 
+/**
+ * How a line's actualHours got there.
+ *
+ * "timer" — a clock ran. "estimate" — the tech tapped a coarse bucket after the
+ * fact. null — recorded before the app tracked this, which is NOT a third grade
+ * of evidence and is treated as measured, preserving the status quo for rows
+ * that already exist.
+ */
+export type ActualSource = "timer" | "estimate";
+
 export type EntryOpCode = {
   id: string; // entry_op_codes.id (so we can update/delete a line)
   opCodeId: string | null; // reference to library op code, null for custom
@@ -75,6 +85,11 @@ export type EntryOpCode = {
   // Optional so line literals predating Phase 2 still typecheck; the DB mapper
   // always populates it.
   isComeback?: boolean;
+  // How actualHours was obtained. Optional so line literals predating the
+  // retro-capture feature still typecheck; the DB mapper always populates it.
+  // An estimate is good enough to coach the tech who made it and NOT good
+  // enough to enter the shared True Time pool — see lib/true-time.ts.
+  actualSource?: ActualSource | null;
 };
 
 export type Entry = {

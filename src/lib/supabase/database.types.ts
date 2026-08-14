@@ -345,6 +345,7 @@ export type Database = {
       entry_op_codes: {
         Row: {
           actual_hours: number | null
+          actual_source: string | null
           custom: boolean
           custom_code: string | null
           custom_description: string | null
@@ -361,6 +362,7 @@ export type Database = {
         }
         Insert: {
           actual_hours?: number | null
+          actual_source?: string | null
           custom?: boolean
           custom_code?: string | null
           custom_description?: string | null
@@ -377,6 +379,7 @@ export type Database = {
         }
         Update: {
           actual_hours?: number | null
+          actual_source?: string | null
           custom?: boolean
           custom_code?: string | null
           custom_description?: string | null

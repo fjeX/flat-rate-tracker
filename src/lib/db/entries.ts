@@ -2,6 +2,7 @@
 import type { Database } from "@/lib/supabase/database.types";
 import {
   isComebackKind,
+  type ActualSource,
   type Entry,
   type EntryOpCode,
   type EntryPatch,
@@ -23,6 +24,7 @@ function toEntryOpCode(row: EntryOpCodeRow): EntryOpCode {
     customDescription: row.custom_description,
     flagHours: Number(row.flag_hours),
     actualHours: row.actual_hours === null ? null : Number(row.actual_hours),
+    actualSource: (row.actual_source as ActualSource | null) ?? null,
     notes: row.notes,
     position: row.position,
     subOpCodeId: row.sub_op_code_id ?? null,
@@ -154,6 +156,7 @@ function toLineInsert(
     custom_description: line.customDescription ?? null,
     flag_hours: comebackSafeFlagHours(line),
     actual_hours: line.actualHours,
+    actual_source: line.actualHours === null ? null : (line.actualSource ?? null),
     position,
     // ── NOT NULL columns must ALWAYS be present. Read this before adding one. ──
     //
@@ -202,6 +205,9 @@ function toLineUpdate(
     custom_description: line.customDescription ?? null,
     flag_hours: comebackSafeFlagHours(line),
     actual_hours: line.actualHours,
+    // Cleared alongside the hours: a source with no actual is a shape the DB
+    // CHECK refuses, and it is exactly what clearing only one of the two makes.
+    actual_source: line.actualHours === null ? null : (line.actualSource ?? null),
     notes: line.notes ?? "",
     position,
     sub_op_code_id: line.subOpCodeId ?? null,
@@ -409,10 +415,17 @@ export async function setLineActualHours(
   supabase: DbClient,
   lineId: string,
   actualHours: number | null,
+  actualSource: ActualSource | null = null,
 ): Promise<void> {
   const { error } = await supabase
     .from("entry_op_codes")
-    .update({ actual_hours: actualHours })
+    // Written together, always. Clearing the hours must clear the source, or
+    // the row violates entry_op_codes_actual_source_needs_hours and the tech's
+    // save fails on a constraint they cannot see.
+    .update({
+      actual_hours: actualHours,
+      actual_source: actualHours === null ? null : actualSource,
+    })
     .eq("id", lineId);
   if (error) throw error;
 }
