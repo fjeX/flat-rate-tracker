@@ -45,24 +45,46 @@ function OutcomeForm({
   onDone: () => void;
 }) {
   const router = useRouter();
-  // Pre-fill with the full ask: the common outcome is "they paid it", so the
-  // fast path should be one tap. Partial payments are the edit case.
+  // Both fields start EMPTY. Seeding them with the claim recorded the ASK as
+  // the PAYMENT on a single tap — prod had 4 of 5 priced claims storing
+  // recovered == claimed to the cent, and in three of those the tech had
+  // edited the hours while the dollar figure sat untouched at the prefill.
+  // Filling from the claim is now an explicit tap (fillFromClaim below).
+  //
+  // Re-opening an already-closed claim seeds from what was stored. That checks
+  // resolvedAt, not truthiness: recoveredHours 0 is a real answer ("they denied
+  // it"), and `recoveredHours || claimedHours` silently replaced it with the ask.
+  const closed = dispute.resolvedAt !== null;
   const [hoursText, setHoursText] = useState(
-    String(dispute.recoveredHours || dispute.claimedHours),
+    closed ? String(dispute.recoveredHours) : "",
   );
   const [dollarsText, setDollarsText] = useState(
-    dispute.recoveredDollars !== null
+    closed && dispute.recoveredDollars !== null
       ? String(dispute.recoveredDollars)
-      : dispute.claimedDollars !== null
-        ? String(dispute.claimedDollars)
-        : "",
+      : "",
   );
   const [note, setNote] = useState(dispute.note);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  function fillFromClaim() {
+    setError(null);
+    setHoursText(String(dispute.claimedHours));
+    setDollarsText(
+      dispute.claimedDollars !== null ? String(dispute.claimedDollars) : "",
+    );
+  }
+
   function save() {
-    const hours = Number(hoursText);
+    const hoursTrimmed = hoursText.trim();
+    // Blank is not zero. Number("") is 0, so without this an untouched form
+    // would close the claim at "recovered nothing" — the mirror of the bug
+    // that made it record the full ask.
+    if (hoursTrimmed === "") {
+      setError("Enter recovered hours, or tap Same as claimed.");
+      return;
+    }
+    const hours = Number(hoursTrimmed);
     if (!Number.isFinite(hours) || hours < 0) {
       setError("Recovered hours must be 0 or more.");
       return;
@@ -105,10 +127,19 @@ function OutcomeForm({
 
   return (
     <div className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] p-3">
-      <p className="text-xs text-[var(--fg-2)]">
-        What did they actually pay back? Leave dollars blank if you only know the
-        hours.
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-[var(--fg-2)]">
+          What did they actually pay back? Leave dollars blank if you only know
+          the hours.
+        </p>
+        <button
+          type="button"
+          onClick={fillFromClaim}
+          className="btn btn-sm btn-ghost min-h-11 shrink-0"
+        >
+          Same as claimed
+        </button>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="field-label">Recovered hrs</span>
@@ -118,6 +149,7 @@ function OutcomeForm({
             step={0.1}
             value={hoursText}
             onChange={(e) => setHoursText(e.target.value)}
+            placeholder="—"
             aria-label="Recovered hours"
             className="input mt-1 text-base font-semibold"
           />
