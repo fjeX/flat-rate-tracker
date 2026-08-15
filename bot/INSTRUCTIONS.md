@@ -955,6 +955,36 @@ second pair of eyes on the wording and the look, not as the primary gate.
    Password and Confirm Password. If that field is gone, a stolen session is
    enough to take the account over. Report it as CRITICAL. Fill in nothing.
 
+### 8j. Rate limiting (shipped 2026-08-14)
+
+Abuse-prone and expensive endpoints now refuse you after a threshold. **A "Too
+many …" message is the feature working, not a bug.** Do not report one unless it
+appears on a *first, fresh* attempt — that would be a real defect.
+
+What is limited, and the message you'd see:
+
+| Action | Budget | Message |
+|---|---|---|
+| Sign in | 8 per 15 min per email, 20 per 10 min per IP | "Too many sign-in attempts. Please wait a few minutes and try again." |
+| Sign up | 6 per hour per IP | "Too many sign-up attempts from your network…" |
+| Password reset request | 4 per hour per email | "Too many reset requests…" |
+| Email change (/account) | 5 per hour | "Too many email change requests…" |
+| Photo upload | 60 per hour | "Too many photo uploads in a short time…" |
+| Backup export | 10 per hour | "Too many exports in a short time…" |
+
+Notes that matter for how you run:
+
+- **A SUCCESSFUL sign-in spends budget too.** The check runs before the password
+  is verified, so signing in and out repeatedly counts the same as failing. Sign
+  in once and keep the session; do not re-authenticate between sections.
+- **You share an IP with the deploy write-smoke and the auto-remediation runs**,
+  which also sign in. If a deploy happened minutes before your run, some of the
+  20-per-10-min IP budget is already spent. Being told to wait is not breakage.
+- **§8g's Export is capped at 10 per hour.** One export per run is what the
+  section asks for; do not loop it.
+- The two endpoints that spend real money — Report a Bug (§8e) and admin Verify —
+  are limited too, but you already never submit either. Keep it that way.
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:
@@ -982,6 +1012,11 @@ You are an LLM driving a browser; sometimes *you* fumble. Protocol:
 
 1. **Retry once.** If an action fails, take a screenshot, reload the page, and
    try the exact same thing again.
+   - ⛔ **Exception: never retry a "Too many …" rate-limit message** (§8j). A
+     retry is guaranteed to fail again, and "it failed twice" is exactly the rule
+     that would turn correct behavior into a reported bug. Worse, each retry
+     spends more of the budget and pushes the wait out further. Note it as
+     expected, move on, and come back later if the section still needs covering.
 2. Only if it fails twice does it go in the report as a bug — with the
    screenshot description, the exact steps, and any visible error text.
 3. If it worked the second time, report it as **FLAKY**, not broken.
