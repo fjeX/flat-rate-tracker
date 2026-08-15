@@ -66,6 +66,29 @@ function ResetPasswordInner() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
+  // The verify effect below reads the fragment, but its deps come from the
+  // QUERY STRING, so a fragment that changes while this page stays mounted is
+  // never re-parsed. Today no in-app route navigates to /reset-password — every
+  // real arrival is a fresh document load — so this is dormant rather than
+  // broken. It goes live the day someone adds a "forgot password" link inside
+  // the authed app, which is exactly the kind of change nobody would connect to
+  // this file. Bumping a counter re-runs the parse.
+  const [hashTick, setHashTick] = useState(0);
+  useEffect(() => {
+    const onHashChange = () => {
+      // Only for a fragment that actually carries a recovery answer. A bare "#"
+      // or an in-page anchor must NOT re-run the parse: an empty fragment
+      // settles "invalid", which would tear down an already-verified form under
+      // someone who is mid-reset. `history.replaceState` (the scrub below) does
+      // not fire hashchange, so the scrub cannot feed this back on itself.
+      if (/(?:access_token|error_description|error)=/.test(window.location.hash)) {
+        setHashTick((t) => t + 1);
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   useEffect(() => {
     // GoTrue answers in one of TWO shapes and this page has to accept both.
     //
@@ -91,8 +114,15 @@ function ResetPasswordInner() {
     const isRecovery = hash.get("type") === "recovery";
 
     let cancelled = false;
+    // Drop the one-time credential out of the address bar so it isn't left in
+    // history, or leaked by a Referer header on the next navigation. This runs
+    // on EVERY terminal state, not just success: `setSession` is a network
+    // call, so it can fail transiently on a token that is still perfectly
+    // valid, and the old code left that live access/refresh pair sitting in the
+    // URL and in history precisely on the path where something went wrong.
     const settle = (next: Phase, why = "") => {
       if (cancelled) return;
+      window.history.replaceState({}, "", "/reset-password");
       setReason(why);
       setPhase(next);
     };
@@ -127,16 +157,13 @@ function ResetPasswordInner() {
         return settle("invalid", "This page needs a reset link to work.");
       }
 
-      // Drop the one-time credential out of the address bar so it isn't left
-      // in history, or leaked by a Referer header on the next navigation.
-      window.history.replaceState({}, "", "/reset-password");
       settle("ready");
     });
 
     return () => {
       cancelled = true;
     };
-  }, [code, linkError]);
+  }, [code, linkError, hashTick]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

@@ -21,7 +21,7 @@ import type {
   RoMatch,
   SubOpCode,
 } from "@/lib/types";
-import { isoDate } from "@/lib/periods";
+import { hhmmInTz, isoDate } from "@/lib/periods";
 import {
   saveEntry,
   deleteEntryAction,
@@ -90,6 +90,7 @@ export function useLogRoForm({
   checkDuplicates = !onSave,
   trackRoTime = false,
   defaultLoggedTime = "",
+  timeZone = "",
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -122,6 +123,15 @@ export function useLogRoForm({
    * the honest failure: a wrong number you can see beats a right one you can't.
    */
   defaultLoggedTime?: string;
+  /**
+   * The user's configured timezone, needed so Save & New can re-read the clock
+   * for the NEXT RO. `defaultLoggedTime` is computed once during the server
+   * render and cannot be reused for that: after three Save & News it is three
+   * ROs stale. Reading the clock here is safe because a reset only ever happens
+   * in an event handler, well after hydration — the constraint that forced
+   * `defaultLoggedTime` server-side applies to render, not to this.
+   */
+  timeZone?: string;
 }) {
   const router = useRouter();
   const isEdit = Boolean(existingEntry);
@@ -220,6 +230,12 @@ export function useLogRoForm({
   // Duplicate-RO prompt: when saving a NEW RO whose number already exists, we
   // pause and ask the user (edit existing vs. log a separate repair).
   const [dupMatches, setDupMatches] = useState<RoMatch[] | null>(null);
+  // Backing out of that prompt ABANDONS the save — the write was deferred and
+  // never ran. Dismissing reads as "close this warning", not "throw away the
+  // RO", and the form still holding every line makes it unanswerable from the
+  // screen. The only other signal is the ABSENCE of the green saved banner,
+  // which is not a signal. This says it out loud until the tech acts again.
+  const [abandonedRoNumber, setAbandonedRoNumber] = useState<string | null>(null);
   // Retro capture. The RO is ALREADY SAVED before any of this renders — the
   // prompt defers navigation, it never gates the persist. If anything here
   // throws, the tech still keeps their ticket.
@@ -521,6 +537,11 @@ export function useLogRoForm({
 
   function resetForm() {
     setDate(isoDate());
+    // Re-read the clock rather than restoring `defaultLoggedTime`. Carrying the
+    // previous RO's time onto the next one writes a wrong number that looks
+    // right — the tech typed 09:15 for the last RO and the next one is now
+    // stamped 09:15 too, silently, with nothing on screen saying it is stale.
+    setLoggedTime(trackRoTime ? hhmmInTz(timeZone) : "");
     setRoNumber("");
     setYear("");
     // Back to null (not "") when autofill is on, so the next RO picks the saved
@@ -534,6 +555,7 @@ export function useLogRoForm({
     setLines([]);
     clearComebackMeta();
     setError(null);
+    setAbandonedRoNumber(null);
     setVehicleOpen(false);
     setNotesOpen(false);
     setCapturedPhoto(null);
@@ -641,6 +663,9 @@ export function useLogRoForm({
 
   function handleSave(afterSave?: () => void) {
     setError(null);
+    // Any fresh save attempt answers the abandoned one — clear the note so it
+    // can't outlive the situation it describes.
+    setAbandonedRoNumber(null);
     const ro = roNumber.trim();
     // Edits skip the duplicate check (the number already belongs to this RO),
     // as do embedders that opted out (guest mode's in-memory onSave has no DB).
@@ -682,6 +707,7 @@ export function useLogRoForm({
   function handleDupClose() {
     pendingAfterSave.current = undefined;
     setDupMatches(null);
+    setAbandonedRoNumber(roNumber.trim() || null);
   }
 
   function handleSaveAndNew() {
@@ -738,6 +764,7 @@ export function useLogRoForm({
     vehicleOpen, setVehicleOpen,
     error,
     savedRoNumber,
+    abandonedRoNumber,
     isSubmitting,
     isDeleting,
     isChecking,
