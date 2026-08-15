@@ -1,0 +1,90 @@
+# Dependabot — weekly dependency intelligence for FRT.
+#
+# ┌───────────────────────────────────────────────────────────────────────────┐
+# │  DO NOT MERGE DEPENDABOT PRs ON GITHUB. NOT EVEN ONE. NOT EVEN A PATCH.   │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# WHY — read this before clicking anything green.
+#
+# github.com/fjeX/flat-rate-tracker is not where FRT is developed. It is a SUBTREE
+# PUSH TARGET. The source of truth is Claude-EA at projects/flat-rate-tracker/,
+# published with:
+#
+#     git subtree push --prefix=projects/flat-rate-tracker frt master
+#
+# A subtree push can only fast-forward. The moment a commit exists on frt/master
+# that Claude-EA's subtree history does not contain — and a merged Dependabot PR
+# is exactly that commit — every future push is rejected non-fast-forward, and
+# recovering means the commit-tree reconciliation procedure (never a force-push).
+# That is a recurring, avoidable tax, and merging one patch bump buys it forever.
+#
+# HOW TO ACTUALLY USE THESE PRs
+# Treat them as a READ-ONLY FEED. The value is the diff, the changelog link and
+# the compatibility score — not the merge button.
+#
+#   1. Read the PR. Decide if you want it.
+#   2. Apply it in Claude-EA:  cd projects/flat-rate-tracker && npm install pkg@version
+#   3. Verify:  npx tsc --noEmit && npm test && npm run build
+#   4. Commit in Claude-EA, then subtree push. frt/master fast-forwards, as designed.
+#   5. Close the PR on GitHub UNMERGED. Dependabot will not reopen it.
+#
+# The weekly `npm audit --audit-level=high` job in ci.yml is the independent
+# safety net: if a PR gets closed and forgotten, the audit still goes red.
+
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: sunday
+      time: "09:00"
+      timezone: America/Los_Angeles
+
+    # Low, on purpose. These are advisory PRs that get closed unmerged, so an
+    # unbounded queue is pure noise. Security updates are not subject to this cap.
+    open-pull-requests-limit: 5
+
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: scope
+
+    # Grouped so a quiet week is one or two PRs to skim rather than nine.
+    # Majors are deliberately left ungrouped — a major deserves its own PR, its
+    # own changelog read, and its own decision.
+    groups:
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+      development-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+
+    ignore:
+      # React and Next are pinned to exact versions in package.json and move
+      # together with real deploy risk (the visual gate re-photographs every
+      # baseline, and @playwright/test must stay in step with the pinned
+      # PLAYWRIGHT_IMAGE in scripts/deploy.sh). Majors here are a planned piece
+      # of work, not a Sunday morning PR. Minor and patch still come through,
+      # and security advisories are never ignored regardless of this setting.
+      - dependency-name: next
+        update-types: [version-update:semver-major]
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+
+  # Keeps actions/checkout and actions/setup-node current in ci.yml. Same rule as
+  # above: read it, apply it in Claude-EA, close the PR unmerged.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: sunday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"

@@ -112,8 +112,14 @@ check is exhaustive over the OLD schema, so a new column can be silently dropped
 from every backup and still compile.
 
 Fix on a dev machine, not here:
-  npx supabase gen types typescript --db-url <db-url> > ${TYPES_PATH}
+  npx --yes supabase@latest gen types typescript --db-url <db-url> > ${TYPES_PATH}
 then resolve the resulting backup-manifest.ts compile errors and commit both.
+
+The Supabase CLI is deliberately NOT a devDependency (removed 2026-08-14). It was
+92 MB and a postinstall binary download on every npm ci — including inside the
+Docker build, which never runs it — and it was the source of the repo's only
+CRITICAL advisory. Migrations go through docker exec psql, not the CLI, so type
+generation is its single use. npx fetches it on demand for that one command.
 `,
 );
 process.exit(1);
