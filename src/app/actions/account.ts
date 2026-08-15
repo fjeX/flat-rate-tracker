@@ -4,6 +4,7 @@ import { createClient as createIsolatedClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { serverSupabaseUrl } from "@/lib/supabase/config";
 import { revalidatePath } from "next/cache";
+import { rateLimitAll, clientIp, LIMITS } from "@/lib/rate-limit";
 import { check, formText } from "@/lib/validation/core";
 import {
   profileFormSchema,
@@ -44,6 +45,42 @@ export async function updateEmail(
   const { email } = parsed.data;
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  // Every call here mails a confirmation — GoTrue sends to the OLD address as
+  // well as the new one, so an ungated loop mail-bombs an inbox the caller does
+  // not necessarily own. Keyed by user id and by the TARGET address: without the
+  // second key, one account could spray many strangers' inboxes while staying
+  // inside its own budget.
+  //
+  // This returns { error } rather than throwing because the account form renders
+  // it inline; it never redirects.
+  const ip = await clientIp();
+  const limited = await rateLimitAll([
+    { bucket: "email-change-user", identifier: user.id, rule: LIMITS.emailChange },
+    {
+      bucket: "email-change-target",
+      identifier: email.toLowerCase(),
+      rule: LIMITS.emailChange,
+    },
+    {
+      bucket: "email-change-ip",
+      identifier: ip,
+      rule: {
+        limit: LIMITS.emailChange.limit * 8,
+        windowSec: LIMITS.emailChange.windowSec,
+      },
+    },
+  ]);
+  if (!limited.ok) {
+    return {
+      error: "Too many email change requests. Please wait a while and try again.",
+    };
+  }
+
   const { error } = await supabase.auth.updateUser({ email });
 
   if (error) return { error: error.message };

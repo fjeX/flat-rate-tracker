@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { MAX_BUG_PHOTOS, MAX_BUG_PHOTO_BYTES } from "@/lib/bug-reports";
+import { reportServerError } from "@/lib/report-error-server";
+import { enforceRateLimit, rateLimit, LIMITS } from "@/lib/rate-limit";
 import { formText, validate } from "@/lib/validation/core";
 import {
   bugTriageSchema,
@@ -18,6 +20,9 @@ const SIGNED_URL_TTL_SECONDS = 60;
 // fire-and-forget: the relevant DB write already happened, so a webhook failure
 // never surfaces to the caller. Both the triage (on submit) and investigate (on
 // Verify) hooks share one secret and this one poster.
+//
+// THIS FUNCTION SPENDS MONEY. Every call hands a job to a headless Claude run.
+// Callers must gate it — see the rate limits at each call site below.
 async function fireBugWebhook(url: string | undefined, reportId: string): Promise<void> {
   const secret = process.env.BUG_TRIAGE_WEBHOOK_SECRET;
   if (!url || !secret) return; // automation not configured — skip silently
@@ -62,6 +67,15 @@ export async function submitBugReport(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated.");
 
+  // Filing a report writes a row plus up to MAX_BUG_PHOTOS storage objects.
+  // Well above anyone bug-bashing a new build; a loop is stopped in seconds.
+  await enforceRateLimit(
+    "bug-submit",
+    user.id,
+    LIMITS.bugSubmit,
+    "You've filed a lot of reports in the last hour — please wait a bit before sending another.",
+  );
+
   const report = await db.insertBugReport(supabase, {
     description: clean.description,
     pageUrl: clean.pageUrl || null,
@@ -102,7 +116,26 @@ export async function submitBugReport(
     }
   }
 
-  await fireBugWebhook(process.env.BUG_TRIAGE_WEBHOOK_URL, report.id);
+  // AUTO-TRIAGE IS GATED SEPARATELY, AND MORE TIGHTLY, THAN THE REPORT ITSELF.
+  //
+  // The report is the user's data — a tech who found four bugs in one shift
+  // gets to file four bugs. The Claude triage run is the part that costs money,
+  // so it has its own, smaller budget. Over that budget the report is still
+  // saved in full; it just waits for a human in the admin inbox.
+  const triage = await rateLimit("bug-triage-webhook", user.id, LIMITS.bugTriageWebhook);
+  if (triage.ok) {
+    await fireBugWebhook(process.env.BUG_TRIAGE_WEBHOOK_URL, report.id);
+  } else {
+    // Never skip silently. A report that quietly never got triaged looks exactly
+    // like one the automation handled — so the skip is recorded where a missing
+    // artifact is visible, the same rule the morning digest follows.
+    await reportServerError(
+      new Error(
+        `Auto-triage skipped for report ${report.id}: rate limit reached (retry in ${triage.retryAfterSec}s). Report saved; triage it by hand.`,
+      ),
+      { url: "action:submitBugReport/triageRateLimited" },
+    );
+  }
 
   return { reportId: report.id, photosAttached, photosFailed };
 }
@@ -130,7 +163,11 @@ async function requireAdmin() {
   const supabase = await createClient();
   const isAdmin = await db.isCurrentUserAdmin(supabase);
   if (!isAdmin) throw new Error("Not authorized.");
-  return supabase;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+  return { supabase, userId: user.id };
 }
 
 // One report's screenshots, each with a freshly-minted signed URL. Called when
@@ -139,7 +176,7 @@ export async function listBugPhotosWithUrls(
   reportId: string,
 ): Promise<Array<{ id: string; url: string }>> {
   const id = validate(reportIdSchema, reportId);
-  const supabase = await requireAdmin();
+  const { supabase } = await requireAdmin();
   const photos = await db.listBugReportPhotos(supabase, id);
   const withUrls = await Promise.all(
     photos.map(async (p) => {
@@ -164,7 +201,7 @@ export async function setBugTriage(
   },
 ): Promise<void> {
   const parsed = validate(bugTriageSchema, { reportId, patch });
-  const supabase = await requireAdmin();
+  const { supabase, userId } = await requireAdmin();
 
   // "" is the clear-it answer for the two nullable axes; the schema has already
   // refused anything that is neither "" nor a member of the vocabulary.
@@ -191,9 +228,45 @@ export async function setBugTriage(
   await db.updateBugReportTriage(supabase, parsed.reportId, clean);
 
   // Marking a report "Verify" kicks off auto-investigation: headless Claude
-  // drafts a fix on a branch for review (fire-and-forget).
+  // drafts a fix on a branch for review (fire-and-forget). The triage patch
+  // above is already saved either way — only the Claude run is gated.
+  //
+  // Two keys, and the difference between them is the whole point:
+  //
+  //   per-user   an hourly budget. Denied here means a run that SHOULD have
+  //              happened didn't, so it gets reported.
+  //   per-report a de-duplicator. A double-clicked Verify button used to fire
+  //              two investigations on one report and pay for both. Denied here
+  //              is the feature working, so it stays quiet.
+  //
+  // Checked user-first so a double-click doesn't burn the report slot before we
+  // know whether the budget even allows a run.
   if (clean.status === "Verify") {
-    await fireBugWebhook(process.env.BUG_INVESTIGATE_WEBHOOK_URL, parsed.reportId);
+    const budget = await rateLimit(
+      "bug-investigate-user",
+      userId,
+      LIMITS.bugInvestigateUser,
+    );
+    if (!budget.ok) {
+      await reportServerError(
+        new Error(
+          `Auto-investigate skipped for report ${parsed.reportId}: hourly limit reached (retry in ${budget.retryAfterSec}s).`,
+        ),
+        { url: "action:setBugTriage/investigateRateLimited" },
+      );
+    } else {
+      const notADuplicate = await rateLimit(
+        "bug-investigate-report",
+        parsed.reportId,
+        LIMITS.bugInvestigateReport,
+      );
+      if (notADuplicate.ok) {
+        await fireBugWebhook(
+          process.env.BUG_INVESTIGATE_WEBHOOK_URL,
+          parsed.reportId,
+        );
+      }
+    }
   }
 
   revalidatePath("/admin/bugs");

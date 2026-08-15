@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import type { EntryPhoto } from "@/lib/types";
 import { MAX_PHOTOS_PER_ENTRY, MAX_PHOTO_BYTES } from "@/lib/photos";
+import { enforceRateLimit, LIMITS } from "@/lib/rate-limit";
 import { validate } from "@/lib/validation/core";
 import {
   entryIdSchema,
@@ -44,6 +45,17 @@ export async function uploadEntryPhoto(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated.");
+
+  // MAX_PHOTOS_PER_ENTRY caps how many photos one RO can hold and MAX_PHOTO_BYTES
+  // caps each file, but nothing capped how many ENTRIES a caller creates photos
+  // on — so total storage growth per account was unbounded. This is the missing
+  // third bound. 60/hour is far more than a tech documenting a day's ROs.
+  await enforceRateLimit(
+    "photo-upload",
+    user.id,
+    LIMITS.photoUpload,
+    "Too many photo uploads in a short time — please wait a few minutes.",
+  );
 
   // Enforce the per-entry cap server-side.
   const existing = await db.countEntryPhotos(supabase, id);
