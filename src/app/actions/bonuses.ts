@@ -3,14 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import { BONUS_CATEGORIES } from "@/lib/bonuses";
-import type { Bonus, BonusCategory, NewBonus } from "@/lib/types";
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function isBonusCategory(v: string): v is BonusCategory {
-  return (BONUS_CATEGORIES as readonly string[]).includes(v);
-}
+import { validate } from "@/lib/validation/core";
+import {
+  bonusIdSchema,
+  entryIdSchema,
+  newBonusSchema,
+  recentRosLimitSchema,
+} from "@/lib/validation/actions";
+import type { Bonus, NewBonus } from "@/lib/types";
 
 function revalidateBonusScreens() {
   revalidatePath("/pay-period");
@@ -19,31 +19,24 @@ function revalidateBonusScreens() {
   revalidatePath("/history");
 }
 
-// Validate the shared fields for create/update. Amounts are dollars — allow
-// cents but keep them sane (numeric(8,2) tops out below 1,000,000).
-function validate(input: NewBonus): void {
-  if (!DATE_RE.test(input.date)) {
-    throw new Error("Date must be in YYYY-MM-DD format.");
-  }
-  if (!isBonusCategory(input.category)) {
-    throw new Error(`Unknown category: ${input.category}`);
-  }
-  if (!Number.isFinite(input.amount) || input.amount < 0 || input.amount > 999999) {
-    throw new Error("Amount must be a dollar figure of $0 or more.");
-  }
-}
-
-export async function createBonusAction(input: NewBonus): Promise<Bonus> {
-  validate(input);
-  const supabase = await createClient();
-  const bonus = await db.createBonus(supabase, {
+// The columns a spiff is made of. Written out rather than spread so a field
+// the schema doesn't know about can't reach the write even if one is added to
+// the type later.
+function bonusColumns(input: NewBonus) {
+  return {
     date: input.date,
     amount: input.amount,
     category: input.category,
     source: input.source?.trim() || null,
     note: input.note?.trim() || null,
     entryId: input.entryId ?? null,
-  });
+  };
+}
+
+export async function createBonusAction(input: NewBonus): Promise<Bonus> {
+  const clean = validate(newBonusSchema, input);
+  const supabase = await createClient();
+  const bonus = await db.createBonus(supabase, bonusColumns(clean));
   revalidateBonusScreens();
   return bonus;
 }
@@ -52,25 +45,18 @@ export async function updateBonusAction(
   id: string,
   input: NewBonus,
 ): Promise<Bonus> {
-  if (!id) throw new Error("Bonus ID is required.");
-  validate(input);
+  const bonusId = validate(bonusIdSchema, id);
+  const clean = validate(newBonusSchema, input);
   const supabase = await createClient();
-  const bonus = await db.updateBonus(supabase, id, {
-    date: input.date,
-    amount: input.amount,
-    category: input.category,
-    source: input.source?.trim() || null,
-    note: input.note?.trim() || null,
-    entryId: input.entryId ?? null,
-  });
+  const bonus = await db.updateBonus(supabase, bonusId, bonusColumns(clean));
   revalidateBonusScreens();
   return bonus;
 }
 
 export async function deleteBonusAction(id: string): Promise<void> {
-  if (!id) throw new Error("Bonus ID is required.");
+  const bonusId = validate(bonusIdSchema, id);
   const supabase = await createClient();
-  await db.deleteBonus(supabase, id);
+  await db.deleteBonus(supabase, bonusId);
   revalidateBonusScreens();
 }
 
@@ -79,8 +65,9 @@ export async function listBonusesForEntryAction(
   entryId: string,
 ): Promise<Bonus[]> {
   if (!entryId) return [];
+  const id = validate(entryIdSchema, entryId);
   const supabase = await createClient();
-  return db.listBonusesForEntry(supabase, entryId);
+  return db.listBonusesForEntry(supabase, id);
 }
 
 // Recent ROs for the optional "attach to RO" picker in the spiff form. Kept slim
@@ -93,8 +80,9 @@ export type RecentRo = {
 };
 
 export async function listRecentRosAction(limit = 20): Promise<RecentRo[]> {
+  const clean = validate(recentRosLimitSchema, limit);
   const supabase = await createClient();
-  const entries = await db.listEntries(supabase, { limit });
+  const entries = await db.listEntries(supabase, { limit: clean });
   return entries.map((e) => ({
     id: e.id,
     roNumber: e.roNumber,

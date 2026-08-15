@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import { LABOR_TYPES } from "@/lib/earnings";
+import { validate } from "@/lib/validation/core";
+import {
+  defaultLaborTypeSchema,
+  laborRatesSchema,
+} from "@/lib/validation/actions";
 import type { LaborType } from "@/lib/types";
-
-function isLaborType(v: string): v is LaborType {
-  return (LABOR_TYPES as readonly string[]).includes(v);
-}
 
 // Save the full set of rates in one shot. Each entry is a labor type and either
 // a positive rate or null (= clear it). Blank inputs from the settings card
@@ -16,18 +16,15 @@ function isLaborType(v: string): v is LaborType {
 export async function setLaborRatesAction(
   rates: { laborType: LaborType; hourlyRate: number | null }[],
 ): Promise<void> {
+  // Validated as a whole BEFORE the first write. The old loop checked each row
+  // as it reached it, so a bad rate in the third row left the first two saved —
+  // half a rate table is worse than none, because every dollar figure on the
+  // page is then computed from a mix.
+  const clean = validate(laborRatesSchema, rates);
+
   const supabase = await createClient();
 
-  for (const { laborType, hourlyRate } of rates) {
-    if (!isLaborType(laborType)) {
-      throw new Error(`Unknown labor type: ${laborType}`);
-    }
-    if (
-      hourlyRate !== null &&
-      (!Number.isFinite(hourlyRate) || hourlyRate < 0 || hourlyRate > 9999)
-    ) {
-      throw new Error("Rate must be a number between 0 and 9999.");
-    }
+  for (const { laborType, hourlyRate } of clean) {
     await db.setLaborRate(supabase, laborType, hourlyRate);
   }
 
@@ -44,11 +41,9 @@ export async function setLaborRatesAction(
 export async function setDefaultLaborTypeAction(
   laborType: LaborType | null,
 ): Promise<void> {
-  if (laborType !== null && !isLaborType(laborType)) {
-    throw new Error(`Unknown labor type: ${laborType}`);
-  }
+  const clean = validate(defaultLaborTypeSchema, laborType);
   const supabase = await createClient();
-  await db.updateSettings(supabase, { defaultLaborType: laborType });
+  await db.updateSettings(supabase, { defaultLaborType: clean });
   revalidatePath("/settings");
   revalidatePath("/log");
 }

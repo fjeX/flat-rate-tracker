@@ -10,6 +10,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { seedStarterOpCodesIfEmpty } from "@/lib/seed-opcodes";
 import { reportServerError } from "@/lib/report-error-server";
+import {
+  forwardedHostSchema,
+  oauthCodeSchema,
+} from "@/lib/validation/actions";
 
 function signinError(base: string, message: string) {
   return NextResponse.redirect(`${base}/signin?error=${encodeURIComponent(message)}`);
@@ -17,26 +21,35 @@ function signinError(base: string, message: string) {
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
   const oauthError = searchParams.get("error");
 
   // Behind Traefik the request origin can be the internal container address,
   // so prefer the forwarded host for the user-facing redirect.
-  const forwardedHost = request.headers.get("x-forwarded-host");
+  //
+  // The header decides where a browser carrying fresh auth cookies lands, and
+  // anything upstream can set it — so it is used only if it parses as a bare
+  // hostname. A malformed one falls back to the request's own origin, which is
+  // the same thing local dev already uses.
+  const forwardedHostRaw = request.headers.get("x-forwarded-host");
+  const forwardedHost = forwardedHostSchema.safeParse(forwardedHostRaw);
   const isLocalEnv = process.env.NODE_ENV === "development";
-  const base = isLocalEnv || !forwardedHost ? origin : `https://${forwardedHost}`;
+  const base =
+    isLocalEnv || !forwardedHost.success ? origin : `https://${forwardedHost.data}`;
 
   // User denied consent, or Google returned an error.
   if (oauthError) {
     return signinError(base, "Google sign-in was cancelled. Please try again.");
   }
 
-  if (!code) {
+  // A `code` that isn't shaped like one never reaches GoTrue: the exchange is
+  // the one call here that turns a query parameter into a session.
+  const code = oauthCodeSchema.safeParse(searchParams.get("code"));
+  if (!code.success) {
     return signinError(base, "Sign-in failed. Please try again.");
   }
 
   const supabase = await createClient();
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code.data);
   if (exchangeError) {
     return signinError(base, "Could not complete Google sign-in. Please try again.");
   }

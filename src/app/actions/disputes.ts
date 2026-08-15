@@ -7,28 +7,20 @@ import { disputeFromPack, pendingRecoveryApplication } from "@/lib/disputes";
 import { buildDisputePack } from "@/lib/dispute-pack";
 import { formatPeriodLabel, getRangeForPeriodKey } from "@/lib/periods";
 import { ratesToMap } from "@/lib/earnings";
-import { isDisputeStatus, type Dispute, type DisputeStatus } from "@/lib/types";
+import { type Dispute, type DisputeStatus } from "@/lib/types";
+import { validate } from "@/lib/validation/core";
+import {
+  disputeIdSchema,
+  disputeLineRecoverySchema,
+  disputeOutcomeSchema,
+  openDisputeSchema,
+  setDisputeStatusSchema,
+} from "@/lib/validation/actions";
 
 function revalidateDisputeScreens() {
   revalidatePath("/pay-period");
   revalidatePath("/insights");
   revalidatePath("/dashboard");
-}
-
-const MAX_HOURS = 99999; // numeric(7,2) ceiling
-const MAX_DOLLARS = 99999999; // numeric(10,2) ceiling
-
-function validHours(n: number, label: string): void {
-  if (!Number.isFinite(n) || n < 0 || n > MAX_HOURS) {
-    throw new Error(`${label} must be an hours figure of 0 or more.`);
-  }
-}
-
-function validDollars(n: number | null | undefined, label: string): void {
-  if (n === null || n === undefined) return;
-  if (!Number.isFinite(n) || n < 0 || n > MAX_DOLLARS) {
-    throw new Error(`${label} must be a dollar figure of $0 or more.`);
-  }
 }
 
 /**
@@ -49,11 +41,12 @@ function validDollars(n: number | null | undefined, label: string): void {
  * was shown, and sweeping in never-marked lines is a decision they make out loud.
  */
 export async function openDisputeAction(
-  periodKey: string,
+  periodKeyArg: string,
   options: { includePending?: boolean } = {},
 ): Promise<Dispute> {
-  if (!periodKey) throw new Error("Period is required.");
-  const includePending = options.includePending ?? false;
+  const clean = validate(openDisputeSchema, { periodKey: periodKeyArg, options });
+  const periodKey = clean.periodKey;
+  const includePending = clean.options.includePending ?? false;
   const supabase = await createClient();
 
   // A live dispute already exists for this period — hand it back instead of
@@ -116,10 +109,9 @@ export async function setDisputeStatusAction(
   id: string,
   status: DisputeStatus,
 ): Promise<void> {
-  if (!id) throw new Error("Dispute ID is required.");
-  if (!isDisputeStatus(status)) throw new Error(`Unknown status: ${status}`);
+  const clean = validate(setDisputeStatusSchema, { id, status });
   const supabase = await createClient();
-  await db.updateDispute(supabase, id, { status });
+  await db.updateDispute(supabase, clean.id, { status: clean.status });
   revalidateDisputeScreens();
 }
 
@@ -139,18 +131,13 @@ export async function recordDisputeOutcomeAction(
     status?: DisputeStatus;
   },
 ): Promise<void> {
-  if (!id) throw new Error("Dispute ID is required.");
-  validHours(input.recoveredHours, "Recovered hours");
-  validDollars(input.recoveredDollars, "Recovered dollars");
-  if (input.status !== undefined && !isDisputeStatus(input.status)) {
-    throw new Error(`Unknown status: ${input.status}`);
-  }
+  const clean = validate(disputeOutcomeSchema, { id, input });
   const supabase = await createClient();
-  await db.updateDispute(supabase, id, {
-    recoveredHours: input.recoveredHours,
-    recoveredDollars: input.recoveredDollars ?? null,
-    note: input.note?.trim() ?? undefined,
-    status: input.status,
+  await db.updateDispute(supabase, clean.id, {
+    recoveredHours: clean.input.recoveredHours,
+    recoveredDollars: clean.input.recoveredDollars ?? null,
+    note: clean.input.note?.trim() ?? undefined,
+    status: clean.input.status,
   });
   revalidateDisputeScreens();
 }
@@ -161,21 +148,23 @@ export async function setDisputeLineRecoveryAction(
   recoveredHours: number,
   recoveredDollars?: number | null,
 ): Promise<void> {
-  if (!lineId) throw new Error("Line ID is required.");
-  validHours(recoveredHours, "Recovered hours");
-  validDollars(recoveredDollars, "Recovered dollars");
-  const supabase = await createClient();
-  await db.updateDisputeLine(supabase, lineId, {
+  const clean = validate(disputeLineRecoverySchema, {
+    lineId,
     recoveredHours,
-    recoveredDollars: recoveredDollars ?? null,
+    recoveredDollars,
+  });
+  const supabase = await createClient();
+  await db.updateDisputeLine(supabase, clean.lineId, {
+    recoveredHours: clean.recoveredHours,
+    recoveredDollars: clean.recoveredDollars ?? null,
   });
   revalidateDisputeScreens();
 }
 
 export async function deleteDisputeAction(id: string): Promise<void> {
-  if (!id) throw new Error("Dispute ID is required.");
+  const disputeId = validate(disputeIdSchema, id);
   const supabase = await createClient();
-  await db.deleteDispute(supabase, id);
+  await db.deleteDispute(supabase, disputeId);
   revalidateDisputeScreens();
 }
 
@@ -194,9 +183,9 @@ export async function deleteDisputeAction(id: string): Promise<void> {
  * double-tap writes nothing the second time.
  */
 export async function applyDisputeRecoveryAction(
-  disputeId: string,
+  disputeIdArg: string,
 ): Promise<{ appliedLines: number; appliedHours: number }> {
-  if (!disputeId) throw new Error("Dispute ID is required.");
+  const disputeId = validate(disputeIdSchema, disputeIdArg);
   const supabase = await createClient();
 
   const disputes = await db.listDisputes(supabase);

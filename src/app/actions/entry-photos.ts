@@ -5,6 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import type { EntryPhoto } from "@/lib/types";
 import { MAX_PHOTOS_PER_ENTRY, MAX_PHOTO_BYTES } from "@/lib/photos";
+import { validate } from "@/lib/validation/core";
+import {
+  entryIdSchema,
+  photoIdSchema,
+  photoStoragePathSchema,
+} from "@/lib/validation/actions";
 
 const BUCKET = "ro-photos";
 
@@ -18,11 +24,21 @@ export async function uploadEntryPhoto(
   entryId: string,
   formData: FormData,
 ): Promise<EntryPhoto> {
-  if (!entryId) throw new Error("Entry ID is required.");
-  const file = formData.get("photo") as File | null;
+  const id = validate(entryIdSchema, entryId);
+  const photo0 = formData.get("photo");
+  // `formData.get` returns `File | string | null`, so a caller can send a plain
+  // string here — the old cast made that a File as far as the compiler knew,
+  // and it reached storage.upload() as one.
+  const file = photo0 instanceof File ? photo0 : null;
   if (!file || file.size === 0) throw new Error("No photo provided.");
   if (file.size > MAX_PHOTO_BYTES) {
     throw new Error("Photo is too large — try again.");
+  }
+  // Uploaded with contentType image/jpeg regardless of what arrives, so a file
+  // that announces itself as something else is announcing a mismatch. An empty
+  // type is still allowed: some clients send nothing at all.
+  if (file.type && !file.type.startsWith("image/")) {
+    throw new Error("Only image files can be attached to an RO.");
   }
 
   const supabase = await createClient();
@@ -30,12 +46,12 @@ export async function uploadEntryPhoto(
   if (!user) throw new Error("Not authenticated.");
 
   // Enforce the per-entry cap server-side.
-  const existing = await db.countEntryPhotos(supabase, entryId);
+  const existing = await db.countEntryPhotos(supabase, id);
   if (existing >= MAX_PHOTOS_PER_ENTRY) {
     throw new Error(`Limit reached — up to ${MAX_PHOTOS_PER_ENTRY} photos per RO.`);
   }
 
-  const storagePath = `${user.id}/${entryId}/${crypto.randomUUID()}.jpg`;
+  const storagePath = `${user.id}/${id}/${crypto.randomUUID()}.jpg`;
   const { error: uploadErr } = await supabase.storage
     .from(BUCKET)
     .upload(storagePath, file, { contentType: "image/jpeg", upsert: false });
@@ -43,7 +59,7 @@ export async function uploadEntryPhoto(
 
   let photo: EntryPhoto;
   try {
-    photo = await db.insertEntryPhoto(supabase, entryId, storagePath, file.size);
+    photo = await db.insertEntryPhoto(supabase, id, storagePath, file.size);
   } catch (err) {
     // Row insert failed — don't leave an orphaned storage object behind.
     await supabase.storage.from(BUCKET).remove([storagePath]);
@@ -57,17 +73,18 @@ export async function uploadEntryPhoto(
 
 export async function listEntryPhotosAction(entryId: string): Promise<EntryPhoto[]> {
   if (!entryId) return [];
+  const id = validate(entryIdSchema, entryId);
   const supabase = await createClient();
-  return db.listEntryPhotos(supabase, entryId);
+  return db.listEntryPhotos(supabase, id);
 }
 
 // Delete one photo: remove the storage object first (storage does NOT cascade),
 // then the DB row.
 export async function deleteEntryPhoto(photoId: string): Promise<void> {
-  if (!photoId) throw new Error("Photo ID is required.");
+  const id = validate(photoIdSchema, photoId);
   const supabase = await createClient();
 
-  const photo = await db.getEntryPhoto(supabase, photoId);
+  const photo = await db.getEntryPhoto(supabase, id);
   if (!photo) return; // already gone
 
   const { error: storageErr } = await supabase.storage
@@ -75,7 +92,7 @@ export async function deleteEntryPhoto(photoId: string): Promise<void> {
     .remove([photo.storagePath]);
   if (storageErr) throw storageErr;
 
-  await db.deleteEntryPhotoRow(supabase, photoId);
+  await db.deleteEntryPhotoRow(supabase, id);
 
   revalidatePath("/history");
   revalidatePath("/");
@@ -94,18 +111,18 @@ export async function deleteEntryPhoto(photoId: string): Promise<void> {
 //
 // Paths are {user_id}/{entry_id}/{uuid}.jpg, so the owner is the first segment.
 export async function getPhotoSignedUrl(storagePath: string): Promise<string> {
-  if (!storagePath) throw new Error("Storage path is required.");
+  const path = validate(photoStoragePathSchema, storagePath);
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated.");
-  if (!storagePath.startsWith(`${user.id}/`)) {
+  if (!path.startsWith(`${user.id}/`)) {
     throw new Error("Not authorized to view that photo.");
   }
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
   if (error) throw error;
   return data.signedUrl;
 }
@@ -113,8 +130,9 @@ export async function getPhotoSignedUrl(storagePath: string): Promise<string> {
 // Purge every storage object attached to an entry. Storage does not cascade on
 // row/entry delete, so callers that delete an entry must call this FIRST.
 export async function removeEntryPhotoStorage(entryId: string): Promise<void> {
+  const id = validate(entryIdSchema, entryId);
   const supabase = await createClient();
-  const paths = await db.listEntryPhotoPaths(supabase, entryId);
+  const paths = await db.listEntryPhotoPaths(supabase, id);
   if (paths.length > 0) {
     await supabase.storage.from(BUCKET).remove(paths);
   }

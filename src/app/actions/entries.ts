@@ -3,9 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import { isComebackKind } from "@/lib/types";
 import { observationsFromEntry } from "@/lib/true-time";
 import { reportServerError } from "@/lib/report-error-server";
+import { validate } from "@/lib/validation/core";
+import {
+  addLineSchema,
+  entryIdSchema,
+  lineIdSchema,
+  newEntrySchema,
+  offsetSchema,
+  roNumberQuerySchema,
+  setLineActualHoursSchema,
+  setLinePaidHoursSchema,
+} from "@/lib/validation/actions";
 import type {
   ActualSource,
   Entry,
@@ -54,8 +64,9 @@ async function syncObservations(
 // Create or update an entry. Returns the persisted entry so the client can
 // navigate / display success. Throws on validation or DB errors.
 export async function loadMoreEntries(offset: number): Promise<Entry[]> {
+  const safeOffset = validate(offsetSchema, offset);
   const supabase = await createClient();
-  return db.listEntries(supabase, { limit: 100, offset });
+  return db.listEntries(supabase, { limit: 100, offset: safeOffset });
 }
 
 // Find existing entries that already use this RO number. RO numbers are not
@@ -63,7 +74,7 @@ export async function loadMoreEntries(offset: number): Promise<Entry[]> {
 // and, if there are matches, asks the user whether they meant to edit an
 // existing one or log a genuinely new repair under the same number.
 export async function findDuplicateRos(roNumber: string): Promise<RoMatch[]> {
-  const ro = roNumber.trim();
+  const ro = validate(roNumberQuerySchema, roNumber).trim();
   if (!ro) return [];
   const supabase = await createClient();
   const matches = await db.getEntriesByRoNumber(supabase, ro);
@@ -82,24 +93,11 @@ export async function saveEntry(
   entryId?: string,
 ): Promise<Entry> {
   // --- server-side validation -------------------------------------------
-  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-  const roNumber = input.roNumber.trim();
-  if (!roNumber) throw new Error("RO number is required.");
-  if (!input.date) throw new Error("Date is required.");
-  if (!DATE_RE.test(input.date)) throw new Error("Date must be in YYYY-MM-DD format.");
-  if (input.opCodes.length === 0)
-    throw new Error("Add at least one op code.");
-  for (const line of input.opCodes) {
-    if (!Number.isFinite(line.flagHours) || line.flagHours < 0)
-      throw new Error("Flag hours must be a non-negative number.");
-    if (
-      line.actualHours !== null &&
-      (!Number.isFinite(line.actualHours) || line.actualHours < 0)
-    )
-      throw new Error("Actual hours must be a non-negative number.");
-  }
-  if (input.comebackKind != null && !isComebackKind(input.comebackKind))
-    throw new Error("Unrecognized comeback kind.");
+  // `clean` is the PARSED value, not `input`: the schema declares the fields an
+  // RO is made of, so anything else a caller attached is gone by this line
+  // rather than riding along into the DB mapper.
+  const clean = validate(newEntrySchema, input);
+  const id = entryId === undefined ? undefined : validate(entryIdSchema, entryId);
 
   const supabase = await createClient();
 
@@ -107,8 +105,8 @@ export async function saveEntry(
   // client. The DB CHECK would reject a comeback line carrying flag hours, but
   // that surfaces as a raw constraint violation; deciding it here means one
   // consistent answer no matter which form (or future caller) sent it.
-  const hasComebackLines = input.opCodes.some((l) => l.isComeback);
-  const opCodes = input.opCodes.map((l) =>
+  const hasComebackLines = clean.opCodes.some((l) => l.isComeback);
+  const opCodes = clean.opCodes.map((l) =>
     l.isComeback ? { ...l, flagHours: 0 } : l,
   );
 
@@ -118,22 +116,21 @@ export async function saveEntry(
   // persists what it's told.
 
   const normalized: NewEntry = {
-    ...input,
-    roNumber,
-    notes: input.notes.trim(),
+    ...clean,
+    notes: clean.notes.trim(),
     opCodes,
     // Entry-level comeback metadata without a single marked line describes
     // nothing. Clearing it here also means EDITING a comeback back into a
     // normal RO actually clears the columns instead of leaving them stale.
-    comebackKind: hasComebackLines ? (input.comebackKind ?? null) : null,
+    comebackKind: hasComebackLines ? clean.comebackKind : null,
     comebackOfEntryId:
-      hasComebackLines && input.comebackKind === "comeback_own"
-        ? (input.comebackOfEntryId ?? null)
+      hasComebackLines && clean.comebackKind === "comeback_own"
+        ? clean.comebackOfEntryId
         : null,
   };
 
-  const entry = entryId
-    ? await db.updateEntry(supabase, entryId, normalized)
+  const entry = id
+    ? await db.updateEntry(supabase, id, normalized)
     : await db.createEntry(supabase, normalized);
 
   await syncObservations(supabase, entry.id);
@@ -152,8 +149,9 @@ export async function saveEntry(
 }
 
 export async function deleteEntryLineAction(lineId: string): Promise<void> {
+  const id = validate(lineIdSchema, lineId);
   const supabase = await createClient();
-  await db.deleteEntryLine(supabase, lineId);
+  await db.deleteEntryLine(supabase, id);
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/history");
@@ -162,14 +160,15 @@ export async function deleteEntryLineAction(lineId: string): Promise<void> {
 }
 
 export async function deleteEntryAction(id: string): Promise<void> {
+  const entryId = validate(entryIdSchema, id);
   const supabase = await createClient();
   // Storage objects do NOT cascade when the entry (and its entry_photos rows)
   // are deleted — purge them explicitly first so the bucket keeps no orphans.
-  const photoPaths = await db.listEntryPhotoPaths(supabase, id);
+  const photoPaths = await db.listEntryPhotoPaths(supabase, entryId);
   if (photoPaths.length > 0) {
     await supabase.storage.from("ro-photos").remove(photoPaths);
   }
-  await db.deleteEntry(supabase, id);
+  await db.deleteEntry(supabase, entryId);
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/history");
@@ -181,14 +180,14 @@ export async function addOpCodeLineToEntryAction(
   entryId: string,
   line: Omit<NewEntryOpCode, "position">,
 ): Promise<void> {
-  if (!entryId) throw new Error("Entry ID is required.");
+  const clean = validate(addLineSchema, { entryId, line });
   const supabase = await createClient();
   try {
-    await db.addEntryLine(supabase, entryId, line);
+    await db.addEntryLine(supabase, clean.entryId, clean.line);
   } catch (err) {
     throw new Error(err instanceof Error ? err.message : "Failed to add op code.");
   }
-  await syncObservations(supabase, entryId);
+  await syncObservations(supabase, clean.entryId);
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/history");
@@ -205,12 +204,22 @@ export async function setLineActualHoursAction(
   // "estimate", and only it is held back from the pool.
   actualSource: ActualSource | null = "timer",
 ): Promise<void> {
+  const clean = validate(setLineActualHoursSchema, {
+    lineId,
+    actualHours,
+    actualSource,
+  });
   const supabase = await createClient();
-  await db.setLineActualHours(supabase, lineId, actualHours, actualSource);
+  await db.setLineActualHours(
+    supabase,
+    clean.lineId,
+    clean.actualHours,
+    clean.actualSource,
+  );
   // The single most important True Time hook: this is where a timed job's actual
   // hours actually arrive (the timer saves through here), so it is where most
   // observations are born — and where clearing the hours must retract one.
-  const owner = await db.getEntryIdForLine(supabase, lineId);
+  const owner = await db.getEntryIdForLine(supabase, clean.lineId);
   if (owner) await syncObservations(supabase, owner);
   revalidatePath("/");
   revalidatePath("/dashboard");
@@ -225,15 +234,9 @@ export async function setLinePaidHoursAction(
   lineId: string,
   paidHours: number | null,
 ): Promise<void> {
-  if (!lineId) throw new Error("Line ID is required.");
-  if (
-    paidHours !== null &&
-    (!Number.isFinite(paidHours) || paidHours < 0)
-  ) {
-    throw new Error("Paid hours must be a non-negative number.");
-  }
+  const clean = validate(setLinePaidHoursSchema, { lineId, paidHours });
   const supabase = await createClient();
-  await db.setLinePaidHours(supabase, lineId, paidHours);
+  await db.setLinePaidHours(supabase, clean.lineId, clean.paidHours);
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/history");

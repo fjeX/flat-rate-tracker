@@ -3,22 +3,36 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import type { FieldRegion } from "@/lib/types";
+import { formText, validate } from "@/lib/validation/core";
+import { roTemplateSchema, templateIdSchema } from "@/lib/validation/actions";
 
 // Upsert one template in the user's template array.
 // Accepts FormData so the image upload and DB write happen in the same server
 // call — eliminates the orphaned-storage bug from the old split client/server flow.
 export async function saveRoTemplateMetadata(formData: FormData): Promise<void> {
-  const id = formData.get("id") as string;
-  const name = ((formData.get("name") as string | null) ?? "").trim() || "Page 1";
-  const imageFile = formData.get("image") as File | null;
-  const existingStoragePath = formData.get("existingStoragePath") as string | null;
-  const regionsJson = formData.get("regions") as string;
+  const image = formData.get("image");
+  const imageFile = image instanceof File ? image : null;
 
-  if (!id) throw new Error("Template ID is required.");
-  const regions = JSON.parse(regionsJson) as FieldRegion[];
-  if (!Array.isArray(regions) || regions.length === 0)
-    throw new Error("At least one region is required.");
+  // The regions arrive as a JSON string in a form field, so this is the one
+  // place in the app where the server parses caller-supplied JSON. A malformed
+  // body used to surface as a raw SyntaxError from JSON.parse.
+  let regionsRaw: unknown;
+  try {
+    regionsRaw = JSON.parse(formText(formData, "regions") ?? "");
+  } catch {
+    throw new Error("Template regions are malformed.");
+  }
+
+  const { id, name: rawName, existingStoragePath, regions } = validate(
+    roTemplateSchema,
+    {
+      id: formText(formData, "id") ?? "",
+      name: formText(formData, "name") ?? "",
+      existingStoragePath: formText(formData, "existingStoragePath"),
+      regions: regionsRaw,
+    },
+  );
+  const name = rawName.trim() || "Page 1";
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -63,17 +77,18 @@ export async function saveRoTemplateMetadata(formData: FormData): Promise<void> 
 
 // Delete one template by id — removes the storage file and splices it from the array.
 export async function deleteRoTemplateAction(templateId: string): Promise<void> {
+  const id = validate(templateIdSchema, templateId);
   const supabase = await createClient();
   const settings = await db.getSettings(supabase);
 
-  const target = settings.roTemplates.find((t) => t.id === templateId);
+  const target = settings.roTemplates.find((t) => t.id === id);
   if (target?.imageStoragePath) {
     await supabase.storage
       .from("ro-templates")
       .remove([target.imageStoragePath]);
   }
 
-  const updated = settings.roTemplates.filter((t) => t.id !== templateId);
+  const updated = settings.roTemplates.filter((t) => t.id !== id);
   await db.updateSettings(supabase, { roTemplates: updated });
 
   revalidatePath("/settings");
