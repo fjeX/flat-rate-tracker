@@ -59,6 +59,8 @@ export type ImportBundle = {
     roTemplates?: unknown[] | null;
     defaultLaborType?: string | null;
     shareLaborTimes?: boolean;
+    /** v4. Absent in v1–v3 files — "keep the destination's answer". */
+    trackRoTime?: boolean;
   };
   entries: Entry[];
   opCodes: OpCode[];
@@ -99,9 +101,14 @@ export type ImportBundle = {
  * v3 (2026-08-12) carries the Schedule and Career tables and every user_settings
  * column. v1 and v2 files still restore — the RPC replaces a table only when the
  * payload names its key, so an older file leaves what it never described alone.
+ *
+ * v4 (2026-08-16) adds three COLUMNS rather than tables: entries.logged_time,
+ * entry_op_codes.is_upsell and user_settings.track_ro_time. Older files simply
+ * don't carry those keys, and the builder below fills each with the value that
+ * means "nobody said" — null, false, and omitted-so-keep-the-destination's.
  */
-export const CURRENT_BACKUP_VERSION = 3;
-export const SUPPORTED_BACKUP_VERSIONS = [1, 2, 3];
+export const CURRENT_BACKUP_VERSION = 4;
+export const SUPPORTED_BACKUP_VERSIONS = [1, 2, 3, 4];
 
 /** Row payload handed to import_replace_account(). Keys are table names. */
 export type ImportPayload = {
@@ -118,6 +125,7 @@ export type ImportPayload = {
     ro_template?: unknown[] | null;
     default_labor_type?: string | null;
     share_labor_times?: boolean;
+    track_ro_time?: boolean;
   };
   op_codes: Record<string, unknown>[];
   op_code_variants: Record<string, unknown>[];
@@ -225,6 +233,7 @@ export function buildImportPayload(
       ...(s.shareLaborTimes !== undefined
         ? { share_labor_times: s.shareLaborTimes }
         : {}),
+      ...(s.trackRoTime !== undefined ? { track_ro_time: s.trackRoTime } : {}),
     },
 
     op_codes: opCodes.map((oc) => ({
@@ -255,6 +264,9 @@ export function buildImportPayload(
     entries: entries.map((e) => ({
       id: entryIds.mint(e.id),
       date: e.date,
+      // Nullable, so `?? null` is the whole story: a pre-v4 file never carried
+      // it, and "this RO has no time recorded" is exactly right for those.
+      logged_time: e.loggedTime ?? null,
       ro_number: e.roNumber,
       vehicle_year: e.vehicle?.year ?? "",
       vehicle_make: e.vehicle?.make ?? "",
@@ -292,6 +304,11 @@ export function buildImportPayload(
         // losses — it is the answer to "did the shop actually pay me for this?"
         paid_hours: line.paidHours ?? null,
         is_comeback: line.isComeback ?? false,
+        // NOT NULL in the database, and the RPC populates rows against a null
+        // base — so a pre-v4 file without this key would write NULL and fail the
+        // whole import. `?? false` is both the correct reading and the fix.
+        // Comeback wins if a hand-edited file claims both, mirroring the db layer.
+        is_upsell: line.isComeback ? false : (line.isUpsell ?? false),
         labor_type: line.laborType ?? null,
         notes: line.notes ?? "",
         position: line.position,

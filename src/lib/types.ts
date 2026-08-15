@@ -90,6 +90,13 @@ export type EntryOpCode = {
   // An estimate is good enough to coach the tech who made it and NOT good
   // enough to enter the shared True Time pool — see lib/true-time.ts.
   actualSource?: ActualSource | null;
+  // This line was SOLD by the tech — work the customer didn't come in for.
+  // Orthogonal to laborType (which answers who pays) and mutually exclusive with
+  // isComeback by DB CHECK: rework you did for free is not a sale.
+  //
+  // Optional so line literals predating the feature still typecheck; the DB
+  // mapper always populates it.
+  isUpsell?: boolean;
 };
 
 export type Entry = {
@@ -98,6 +105,17 @@ export type Entry = {
   createdAt: string; // ISO timestamp
   updatedAt: string;
   date: string; // "YYYY-MM-DD"
+  // Wall-clock time of day on `date`, "HH:MM" 24-hour, or null.
+  //
+  // NOT a timestamp and NOT derived from createdAt. createdAt says when the row
+  // was written — for a tech who does all their paperwork at 9pm that is the
+  // same meaningless number twelve times over, which is the whole reason this
+  // field exists separately and is editable.
+  //
+  // null is the ordinary case: every RO logged before the feature, and every RO
+  // logged while `trackRoTime` is off. It renders as nothing — never as 00:00,
+  // and never backfilled from createdAt.
+  loggedTime?: string | null;
   roNumber: string;
   vehicle: Vehicle;
   opCodes: EntryOpCode[];
@@ -319,6 +337,11 @@ export type UserSettings = {
   // slot index (0-7, the --tag-hue-N theme tokens). Tags not listed keep
   // their deterministic hash colour.
   tagColors: Record<string, number>;
+  // Capture a time of day on each RO. Off by default, and off means the forms
+  // show no time field and write no `loggedTime` — not "capture it and hide it".
+  // A tech who logs the whole day at 9pm would otherwise bank a dozen 9pm
+  // timestamps that look like measurements.
+  trackRoTime: boolean;
 };
 
 // ------------------------------------------------------------------------
@@ -330,6 +353,8 @@ export type NewEntryOpCode = Omit<EntryOpCode, "id"> & { id?: string };
 
 export type NewEntry = {
   date: string;
+  /** "HH:MM" or null. Omitted entirely when the setting is off. */
+  loggedTime?: string | null;
   roNumber: string;
   vehicle: Vehicle;
   notes: string;

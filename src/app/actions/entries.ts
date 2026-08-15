@@ -15,6 +15,7 @@ import {
   roNumberQuerySchema,
   setLineActualHoursSchema,
   setLinePaidHoursSchema,
+  setLineUpsellSchema,
 } from "@/lib/validation/actions";
 import type {
   ActualSource,
@@ -221,6 +222,25 @@ export async function setLineActualHoursAction(
   // observations are born — and where clearing the hours must retract one.
   const owner = await db.getEntryIdForLine(supabase, clean.lineId);
   if (owner) await syncObservations(supabase, owner);
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/history");
+  revalidatePath("/pay-period");
+  revalidatePath("/insights");
+}
+
+// Mark (or unmark) one RO line as an upsell.
+//
+// No True Time sync: this changes nothing about flag or actual hours, so the
+// observations it would recompute are byte-identical. Every other line mutation
+// here calls syncObservations because it moves one of those two numbers.
+export async function setLineUpsellAction(
+  lineId: string,
+  isUpsell: boolean,
+): Promise<void> {
+  const clean = validate(setLineUpsellSchema, { lineId, isUpsell });
+  const supabase = await createClient();
+  await db.setLineUpsell(supabase, clean.lineId, clean.isUpsell);
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/history");

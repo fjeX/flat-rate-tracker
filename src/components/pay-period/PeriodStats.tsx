@@ -8,15 +8,21 @@ function Cell({
   label,
   value,
   highlighted = false,
+  sub,
 }: {
   label: string;
   value: string;
   highlighted?: boolean;
+  /** Small line under the figure — context that would otherwise need a tile. */
+  sub?: string;
 }) {
   return (
     <div className={`stat${highlighted ? " featured" : ""}`}>
       <div className="stat-label">{label}</div>
       <div className="stat-value tabular">{value}</div>
+      {sub && (
+        <div className="mt-0.5 text-[11px] text-[var(--fg-3)]">{sub}</div>
+      )}
     </div>
   );
 }
@@ -92,6 +98,27 @@ export function PeriodStats({
           }
           value={fmtPct(stats.efficiency)}
         />
+        {/* A tile, not a card. The page was rebuilt because it had grown to nine
+            cards of equal weight, and "what did I sell" is one number in the
+            supporting row — not a family alongside "did I get paid" and "what
+            did the work cost me".
+
+            Self-hiding: a tech who has never marked an upsell sees the row
+            exactly as it was. Once one is marked it stays visible even at 0.0h,
+            because a period where you sold nothing is the comparison. */}
+        {stats.upsellHours > 0 && (
+          <Cell
+            label="Upsold"
+            value={`${fmtHours(stats.upsellHours)}h`}
+            // The share, not a second total. Upsold hours are already inside
+            // Flag hrs, and printing them as a peer invites adding the two.
+            sub={
+              stats.flagHours > 0
+                ? `${Math.round((stats.upsellHours / stats.flagHours) * 100)}% of flagged`
+                : undefined
+            }
+          />
+        )}
         {earnings !== null && (
           <Cell label="Earnings" value={fmtMoney(earnings)} highlighted />
         )}

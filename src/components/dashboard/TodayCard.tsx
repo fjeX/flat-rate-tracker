@@ -31,6 +31,7 @@ export function TodayCard({
   library,
   todayShift = null,
   timezone = "",
+  trackRoTime = false,
 }: {
   date: string;
   stats: Stats;
@@ -40,6 +41,8 @@ export function TodayCard({
    * hours are entered yet. */
   todayShift?: ShiftDef | null;
   timezone?: string;
+  /** Passed straight through to Quick Add — this card doesn't use it itself. */
+  trackRoTime?: boolean;
 }) {
   const [hoursText, setHoursText] = useState<string>(toText(initialHours));
   const [savedHours, setSavedHours] = useState<number>(initialHours);
@@ -214,6 +217,8 @@ export function TodayCard({
         library={library}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
+        trackRoTime={trackRoTime}
+        timeZone={timezone}
       />
     </>
   );

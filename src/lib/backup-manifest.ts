@@ -94,6 +94,10 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
       ro_template: "carry",
       default_labor_type: "carry",
       share_labor_times: "carry",
+      // A preference about what the forms capture. Carried so a restored account
+      // keeps recording times instead of silently stopping — the loss would be
+      // invisible until someone noticed weeks of blank times later.
+      track_ro_time: "carry",
       // A backup is user-supplied JSON that a user can open in a text editor.
       // Carrying this would let anyone set "is_admin": true and import their way
       // to admin. The RPC must never read it from the payload.
@@ -162,6 +166,10 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
       vehicle_mileage: "carry",
       flag_hours: "carry",
       notes: "carry",
+      // When in the day the job happened. Unrecoverable if dropped: there is no
+      // other column it could be re-derived from (created_at answers a different
+      // question), so losing it loses the record outright.
+      logged_time: "carry",
       comeback_of_entry_id: "carry",
       comeback_kind: "carry",
       created_at: "carry",
@@ -192,6 +200,9 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
       // silent losses.
       paid_hours: "carry",
       is_comeback: "carry",
+      // "I sold this." Same standing as is_comeback and just as underivable —
+      // nothing else on the row says how the work was sold.
+      is_upsell: "carry",
       labor_type: "carry",
       notes: "carry",
       position: "carry",

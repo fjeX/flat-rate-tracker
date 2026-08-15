@@ -1,7 +1,9 @@
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { hasAnyRate, ratesToMap } from "@/lib/earnings";
+import { hhmmInTz } from "@/lib/periods";
 import { LogRoForm } from "@/components/forms/LogRoForm";
 
 export default async function LogPage({
@@ -30,6 +32,14 @@ export default async function LogPage({
   const laborTypeEnabled =
     hasAnyRate(ratesToMap(laborRates)) || settings.defaultLaborType !== null;
 
+  // Computed here, not in the client component: a clock read during render must
+  // produce the same string on the server and on the hydrating client, and it
+  // cannot. Same reason `today` is derived from the timezone cookie server-side
+  // everywhere else in the app.
+  const cookieStore = await cookies();
+  const tz = cookieStore.get("frt_timezone")?.value ?? "";
+  const defaultLoggedTime = settings.trackRoTime ? hhmmInTz(tz) : "";
+
   return (
     <LogRoForm
       initialOpCodes={opCodes}
@@ -37,6 +47,8 @@ export default async function LogPage({
       roTemplates={settings.roTemplates}
       defaultLaborType={settings.defaultLaborType}
       laborTypeEnabled={laborTypeEnabled}
+      trackRoTime={settings.trackRoTime}
+      defaultLoggedTime={defaultLoggedTime}
     />
   );
 }

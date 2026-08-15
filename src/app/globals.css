@@ -517,19 +517,49 @@ body {
 
 /* ── RO list ─────────────────────────────────────────── */
 .ro-list { }
+/* The row is a container, not a control. It stopped being a <button> when the
+   Upsell shortcut moved inside it — a button nested in a button is invalid HTML
+   and browsers recover by dropping one, which is a coin flip over whether the
+   row or the shortcut still works. The padding lives on .ro-row-main so the
+   whole tappable area is the button, not a div with a button drawn on it. */
 .ro-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px;
+  display: flex; align-items: stretch;
   border-bottom: 1px solid var(--line-soft);
-  cursor: pointer;
   transition: background 120ms;
   width: 100%;
-  text-align: left;
-  background: transparent;
-  border-left: none; border-right: none; border-top: none;
 }
 .ro-row:last-child { border-bottom: none; }
 .ro-row:hover { background: var(--bg-3); }
+
+.ro-row-main {
+  display: flex; align-items: center; gap: 12px;
+  flex: 1; min-width: 0;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: inherit;
+}
+
+/* Sits against the hours, right where the eye already is after reading the RO.
+   Quiet until hovered: it is a shortcut, not the row's purpose. */
+.ro-upsell {
+  display: flex; align-items: center; gap: 4px;
+  flex-shrink: 0;
+  min-height: var(--tap-min);
+  padding: 0 14px 0 10px;
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: color 120ms;
+}
+.ro-upsell:hover { color: var(--brand); }
 
 /* Reveal for a capped list (RoList maxRows). Only the Pay Period page caps —
    a settled period is 50-90 rows and reconciliation is the real drill-down. */

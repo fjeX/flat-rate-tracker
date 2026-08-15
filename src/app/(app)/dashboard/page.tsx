@@ -378,6 +378,7 @@ export default async function DashboardPage() {
                 : null
             }
             timezone={tz ?? ""}
+            trackRoTime={settings.trackRoTime}
           />
           <StatCard label="This Week"      stats={statsWeek} />
           <StatCard label="Pay Period"     stats={statsPeriod} />
@@ -413,6 +414,9 @@ export default async function DashboardPage() {
               entries={recentEntries}
               library={library}
               rates={rateMap}
+              // Dashboard only. The customer approves extra work while the day is
+              // still running, and this is the page that's open then.
+              showAddUpsell
               emptyState={
                 <EmptyState
                   icon={<ClipboardList size={22} />}

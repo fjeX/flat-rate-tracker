@@ -60,6 +60,10 @@ const defaultSettings: UserSettings = {
   // setting a guest can flip.
   shareLaborTimes: false,
   tagColors: {},
+  // Guest mode is the try-it-out demo, and there is no Settings screen in it to
+  // turn this on — so the log form stays as it is. A guest who signs up gets the
+  // real default (off) from their own settings row.
+  trackRoTime: false,
 };
 
 // Demo tags so the guest library shows off grouping out of the box.

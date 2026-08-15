@@ -288,6 +288,7 @@ export type Database = {
           date: string
           flag_hours: number
           id: string
+          logged_time: string | null
           notes: string
           ro_number: string
           updated_at: string
@@ -305,6 +306,7 @@ export type Database = {
           date: string
           flag_hours?: number
           id?: string
+          logged_time?: string | null
           notes?: string
           ro_number: string
           updated_at?: string
@@ -322,6 +324,7 @@ export type Database = {
           date?: string
           flag_hours?: number
           id?: string
+          logged_time?: string | null
           notes?: string
           ro_number?: string
           updated_at?: string
@@ -353,6 +356,7 @@ export type Database = {
           flag_hours: number
           id: string
           is_comeback: boolean
+          is_upsell: boolean
           labor_type: string | null
           notes: string
           op_code_id: string | null
@@ -370,6 +374,7 @@ export type Database = {
           flag_hours?: number
           id?: string
           is_comeback?: boolean
+          is_upsell?: boolean
           labor_type?: string | null
           notes?: string
           op_code_id?: string | null
@@ -387,6 +392,7 @@ export type Database = {
           flag_hours?: number
           id?: string
           is_comeback?: boolean
+          is_upsell?: boolean
           labor_type?: string | null
           notes?: string
           op_code_id?: string | null
@@ -589,6 +595,7 @@ export type Database = {
           ro_template: Json | null
           split_day: number
           tag_colors: Json
+          track_ro_time: boolean
           updated_at: string
           user_id: string
         }
@@ -602,6 +609,7 @@ export type Database = {
           ro_template?: Json | null
           split_day?: number
           tag_colors?: Json
+          track_ro_time?: boolean
           updated_at?: string
           user_id: string
         }
@@ -615,6 +623,7 @@ export type Database = {
           ro_template?: Json | null
           split_day?: number
           tag_colors?: Json
+          track_ro_time?: boolean
           updated_at?: string
           user_id?: string
         }

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { COMEBACK_KINDS, COMEBACK_KIND_LABELS } from "@/lib/types";
 import type { ComebackKind, NewEntry, OpCode, RoMatch, SubOpCode } from "@/lib/types";
-import { isoDate } from "@/lib/periods";
+import { hhmmInTz, isoDate } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { findDuplicateRos, saveEntry } from "@/app/actions/entries";
 import { DuplicateRoDialog } from "@/components/forms/DuplicateRoDialog";
@@ -44,10 +44,16 @@ export function QuickAddModal({
   library: initialLibrary,
   open,
   onClose,
+  trackRoTime = false,
+  timeZone = "",
 }: {
   library: OpCode[];
   open: boolean;
   onClose: () => void;
+  /** The user's "time of day on each RO" setting. Off = no field, no value. */
+  trackRoTime?: boolean;
+  /** IANA zone from the frt_timezone cookie; "" falls back to this device's. */
+  timeZone?: string;
 }) {
   const router = useRouter();
 
@@ -55,6 +61,15 @@ export function QuickAddModal({
   // get logged in the moment or never, so the fast path is one tab away.
   const [mode, setMode] = useState<QuickAddMode>("ro");
   const [roNumber, setRoNumber] = useState("");
+  // Read fresh on every open, not once on the dashboard's render: TodayCard
+  // changes this component's `key` when the modal opens, so React throws the old
+  // instance away and this initialiser runs again. That matters here more than
+  // on /log — the dashboard is the page a tech leaves open all day, and a time
+  // captured at page load would be hours stale by the time they used it.
+  //
+  // Safe against hydration for the same reason: Modal renders null while closed,
+  // so this value reaches the DOM only in an instance created by a click.
+  const [loggedTime, setLoggedTime] = useState(() => hhmmInTz(timeZone));
   const [lines, setLines] = useState<QuickLine[]>([]);
   const [library, setLibrary] = useState<OpCode[]>(initialLibrary);
   const [search, setSearch] = useState("");
@@ -270,6 +285,10 @@ export function QuickAddModal({
     try {
       const input: NewEntry = {
         date: isoDate(),
+        // Absent, not null, when the setting is off — see NewEntry.loggedTime.
+        ...(trackRoTime
+          ? { loggedTime: loggedTime.trim() === "" ? null : loggedTime }
+          : {}),
         roNumber: roNumber.trim(),
         vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
         notes: "",
@@ -362,6 +381,24 @@ export function QuickAddModal({
               aria-describedby={error ? "quick-add-error" : undefined}
               className="mono flex-1 bg-transparent text-base font-semibold tabular-nums text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
             />
+            {/* Shown rather than captured silently. Quick Add drops the vehicle,
+                the notes and the labor type to stay fast — but those are fields
+                the tech chose to skip, and a timestamp written invisibly is data
+                they never agreed to. One glance, one tap to correct. */}
+            {trackRoTime && (
+              <>
+                <label htmlFor="quick-add-time" className="sr-only">
+                  Time
+                </label>
+                <input
+                  id="quick-add-time"
+                  type="time"
+                  value={loggedTime}
+                  onChange={(e) => setLoggedTime(e.target.value)}
+                  className="focus-ring rounded-full bg-transparent px-1 text-xs text-[var(--fg-3)] focus:outline-none"
+                />
+              </>
+            )}
           </div>
         </div>
 

@@ -8,6 +8,7 @@ import type { Entry, OpCode, UserSettings } from "@/lib/types";
 import {
   endOfMonth,
   endOfWeek,
+  formatLoggedTime,
   getPeriodForDate,
   startOfMonth,
   startOfWeek,
@@ -71,13 +72,37 @@ function fmtTime(isoTimestamp: string, tz?: string): string {
   });
 }
 
-function fmtRowDate(date: string, today: string, createdAt: string, tz?: string): string {
+/**
+ * "Aug 14 · 9:42 AM" for one row.
+ *
+ * WHICH TIME THIS IS — the one decision worth reading before changing it.
+ *
+ * This row has always shown `created_at`: when the RO was written down. That is
+ * a decent stand-in for a tech who logs jobs as they finish them, and a bad one
+ * for a tech who writes the whole day up at 9pm — every row reads 9:47 PM.
+ *
+ * `logged_time` is the answer to the question this slot was always ASKING, so it
+ * wins when it exists. The fallback is unchanged, so no existing row loses
+ * anything, and no row ever shows both — one slot, one value, best available.
+ *
+ * The alternative (show logged_time only, blank otherwise) would silently strip
+ * the time off every RO logged before the feature. The one this replaces (leave
+ * History on created_at) is worse still: the same RO would read 9:42 AM in the
+ * dashboard list and 9:47 PM here.
+ */
+function fmtRowDate(
+  date: string,
+  today: string,
+  createdAt: string,
+  loggedTime: string | null | undefined,
+  tz?: string,
+): string {
   const yesterday = (() => {
     const d = new Date(today + "T12:00:00");
     d.setDate(d.getDate() - 1);
     return d.toISOString().slice(0, 10);
   })();
-  const time = fmtTime(createdAt, tz);
+  const time = formatLoggedTime(loggedTime) ?? fmtTime(createdAt, tz);
   if (date === today) return `Today · ${time}`;
   if (date === yesterday) return `Yesterday · ${time}`;
   const MONTHS = [
@@ -105,7 +130,7 @@ function RoRow({
     .filter(Boolean)
     .join(" ")
     .trim();
-  const dateLine = fmtRowDate(entry.date, today, entry.createdAt, tz);
+  const dateLine = fmtRowDate(entry.date, today, entry.createdAt, entry.loggedTime, tz);
 
   return (
     <button

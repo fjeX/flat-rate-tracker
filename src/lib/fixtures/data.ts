@@ -95,6 +95,7 @@ type FixtureOpLine = {
   paid_hours: number | null;
   labor_type: string | null;
   is_comeback: boolean;
+  is_upsell: boolean;
   notes: string;
   position: number;
 };
@@ -104,6 +105,12 @@ const opLineRows: FixtureOpLine[] = [];
 
 let roSeq = 0;
 let lineSeq = 0;
+
+// Wall-clock "HH:MM" for an RO, spread deterministically across a shift so the
+// list rows show a plausible sequence of jobs rather than the same time repeated.
+// Zero-padded and inside 08:00–15:59, which is what the column's CHECK accepts.
+const loggedTimeFor = (seq: number) =>
+  `${String(8 + (seq % 8)).padStart(2, "0")}:${String((seq * 7) % 60).padStart(2, "0")}`;
 
 WORK_DAYS.forEach((date, dayIx) => {
   // 1–3 ROs per day, cycling deterministically. Day 9 gets zero ROs on purpose:
@@ -123,6 +130,9 @@ WORK_DAYS.forEach((date, dayIx) => {
       const op = opCodes[(roSeq + l) % opCodes.length];
       const flag = op.flag_hours;
       flagTotal += flag;
+      // Every 17th RO is a comeback — rare enough to be realistic, frequent
+      // enough that the comeback badge lands in at least one snapshot.
+      const isComeback = roSeq % 17 === 16 && l === 0;
       opLineRows.push({
         id: id("11ce", lineSeq++),
         entry_id: entryId,
@@ -135,9 +145,16 @@ WORK_DAYS.forEach((date, dayIx) => {
         actual_hours: null,
         paid_hours: null,
         labor_type: l === 0 ? "customer_pay" : "warranty",
-        // Every 17th RO is a comeback — rare enough to be realistic, frequent
-        // enough that the comeback badge lands in at least one snapshot.
-        is_comeback: roSeq % 17 === 16 && l === 0,
+        is_comeback: isComeback,
+        // The upsell is the LAST line — the shape a real one takes, added to a
+        // ticket after the customer approved it. Roughly one RO in five, which
+        // puts the Upsold tile on /pay-period and a populated "What you sold"
+        // on /insights in front of the camera instead of their empty states.
+        //
+        // Guarded against the comeback line: the DB CHECK forbids both, and a
+        // fixture that produces a row the database would refuse is a fixture
+        // photographing something that cannot exist.
+        is_upsell: !isComeback && roSeq % 5 === 2 && l === lines - 1,
         notes: "",
         position: l,
       });
@@ -150,6 +167,10 @@ WORK_DAYS.forEach((date, dayIx) => {
       // fixture RO is never mistaken for a real one if this data ever leaks.
       ro_number: `9099${String(10_000 + roSeq).slice(-5)}`,
       date,
+      // Most ROs carry one; every 6th deliberately does not, so the "no time
+      // recorded" row — the shape of every RO logged before the feature — is
+      // photographed beside the ones that do.
+      logged_time: roSeq % 6 === 5 ? null : loggedTimeFor(roSeq),
       flag_hours: Number(flagTotal.toFixed(2)),
       vehicle_year,
       vehicle_make,
@@ -204,6 +225,7 @@ const UNPAIRED_DAY = "2026-03-07"; // Saturday
       paid_hours: null,
       labor_type: "customer_pay",
       is_comeback: false,
+      is_upsell: false,
       notes: "",
       position: l,
     });
@@ -214,6 +236,7 @@ const UNPAIRED_DAY = "2026-03-07"; // Saturday
     user_id: FIXTURE_USER_ID,
     ro_number: `9099${String(10_000 + roSeq).slice(-5)}`,
     date: UNPAIRED_DAY,
+    logged_time: loggedTimeFor(roSeq),
     flag_hours: Number(flagTotal.toFixed(2)),
     vehicle_year,
     vehicle_make,
@@ -292,6 +315,10 @@ export const userSettings = {
   default_labor_type: "customer_pay",
   is_admin: false,
   share_labor_times: false,
+  // ON, so the settings card photographs in its enabled state and the log form
+  // shows its time field. The fixture clock is pinned (instrumentation.ts), so
+  // the prefilled value is as deterministic as everything else here.
+  track_ro_time: true,
   period_overrides: {},
   ro_template: null,
   tag_colors: {},

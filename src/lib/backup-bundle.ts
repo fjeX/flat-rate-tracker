@@ -93,6 +93,9 @@ export function buildBackupBundle(parts: BackupParts, exportedAt: string): Impor
       roTemplates: s.roTemplates,
       defaultLaborType: s.defaultLaborType,
       shareLaborTimes: s.shareLaborTimes,
+      // v4. Entry-level logged_time and line-level is_upsell need no mention
+      // here — they ride inside parts.entries, which is carried whole.
+      trackRoTime: s.trackRoTime,
     },
 
     entries: parts.entries,

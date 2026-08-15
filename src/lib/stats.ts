@@ -7,6 +7,7 @@ import {
   type WorkSchedule,
 } from "./schedule";
 import { expandDaysOff } from "./streak";
+import { upsellFlagHours } from "./upsells";
 
 export type Stats = {
   flagHours: number;
@@ -26,6 +27,14 @@ export type Stats = {
   comebackHours: number; // rework performed free — RO-side lines AND ledger rows
   waitingHours: number; // wait_parts + wait_approval
   shopHours: number; // meetings, cleanup, dispatch limbo
+  /**
+   * Flag hours on lines the tech marked as upsells — work they sold.
+   *
+   * A SUBSET of flagHours, not an addition to it: the same hours are already in
+   * that total, and the useful figure is what share of the work you turned was
+   * work you found. Never add it to anything.
+   */
+  upsellHours: number;
 };
 
 export function computeEfficiency(
@@ -117,6 +126,10 @@ export function aggregateStats(
     comebackHours,
     waitingHours,
     shopHours,
+    // Through lib/upsells rather than another reduce here, so this figure and
+    // the /insights trend cannot come to different conclusions about what an
+    // upsold line is worth.
+    upsellHours: includedEntries.reduce((s, e) => s + upsellFlagHours(e), 0),
   };
 }
 
