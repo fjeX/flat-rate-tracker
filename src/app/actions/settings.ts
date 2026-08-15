@@ -12,6 +12,18 @@ import {
 } from "@/lib/import-remap";
 import { buildBackupBundle } from "@/lib/backup-bundle";
 import { reportServerError } from "@/lib/report-error-server";
+import { validate } from "@/lib/validation/core";
+import {
+  goalHoursSchema,
+  importBundleSchema,
+  periodKeySchema,
+  periodOverrideSchema,
+  referenceRateSchema,
+  shareLaborTimesSchema,
+  splitDaySchema,
+  timezoneSchema,
+  weekStartDaySchema,
+} from "@/lib/validation/actions";
 import type { Json } from "@/lib/supabase/database.types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -36,14 +48,19 @@ function revalidateAll() {
 }
 
 export async function setPeriodOverrideAction(
-  periodKey: string,
-  start: string,
-  end: string,
+  periodKeyArg: string,
+  startArg: string,
+  endArg: string,
 ): Promise<void> {
-  if (!periodKey) throw new Error("Period key is required.");
-  if (!DATE_RE.test(start) || !DATE_RE.test(end))
-    throw new Error("Dates must be in YYYY-MM-DD format.");
-  if (start > end) throw new Error("Start date must be on or before end date.");
+  const {
+    periodKey,
+    start,
+    end,
+  } = validate(periodOverrideSchema, {
+    periodKey: periodKeyArg,
+    start: startArg,
+    end: endArg,
+  });
 
   const supabase = await createClient();
   const settings = await db.getSettings(supabase);
@@ -86,9 +103,9 @@ function orphanedDays(from: string, to: string): string {
 }
 
 export async function clearPeriodOverrideAction(
-  periodKey: string,
+  periodKeyArg: string,
 ): Promise<void> {
-  if (!periodKey) throw new Error("Period key is required.");
+  const periodKey = validate(periodKeySchema, periodKeyArg);
 
   const supabase = await createClient();
   const settings = await db.getSettings(supabase);
@@ -106,11 +123,9 @@ export async function clearPeriodOverrideAction(
 // ---------------------------------------------------------------------------
 
 export async function setGoalHoursAction(goalHours: number): Promise<void> {
-  if (!Number.isInteger(goalHours) || goalHours < 1 || goalHours > 999) {
-    throw new Error("Goal hours must be a whole number between 1 and 999.");
-  }
+  const clean = validate(goalHoursSchema, goalHours);
   const supabase = await createClient();
-  await db.updateSettings(supabase, { goalHours });
+  await db.updateSettings(supabase, { goalHours: clean });
   revalidatePath("/settings");
   revalidatePath("/");
   revalidatePath("/history");
@@ -122,14 +137,9 @@ export async function setGoalHoursAction(goalHours: number): Promise<void> {
 export async function setReferenceRateAction(
   rate: number | null,
 ): Promise<void> {
-  if (
-    rate !== null &&
-    (!Number.isFinite(rate) || rate < 0 || rate > 9999)
-  ) {
-    throw new Error("Reference rate must be a number between 0 and 9999.");
-  }
+  const clean = validate(referenceRateSchema, rate);
   const supabase = await createClient();
-  await db.updateSettings(supabase, { referenceHourlyRate: rate });
+  await db.updateSettings(supabase, { referenceHourlyRate: clean });
   revalidatePath("/settings");
   revalidatePath("/pay-period");
   revalidatePath("/insights");
@@ -145,9 +155,10 @@ export async function setReferenceRateAction(
 export async function setShareLaborTimesAction(
   share: boolean,
 ): Promise<void> {
+  const clean = validate(shareLaborTimesSchema, share);
   const supabase = await createClient();
-  await db.updateSettings(supabase, { shareLaborTimes: share });
-  if (!share) {
+  await db.updateSettings(supabase, { shareLaborTimes: clean });
+  if (!clean) {
     // Tolerates a pre-migration DB — revoking consent must never error out.
     await db.clearAllLaborTimeObservations(supabase);
   }
@@ -156,18 +167,17 @@ export async function setShareLaborTimesAction(
 }
 
 export async function setSplitDayAction(splitDay: number): Promise<void> {
-  if (!Number.isInteger(splitDay) || splitDay < 1 || splitDay > 30) {
-    throw new Error("Split day must be an integer between 1 and 30.");
-  }
+  const clean = validate(splitDaySchema, splitDay);
   const supabase = await createClient();
-  await db.updateSettings(supabase, { splitDay });
+  await db.updateSettings(supabase, { splitDay: clean });
   revalidatePeriodScreens();
   revalidatePath("/settings");
 }
 
 export async function setWeekStartDayAction(day: 0 | 1): Promise<void> {
+  const clean = validate(weekStartDaySchema, day);
   const cookieStore = await cookies();
-  cookieStore.set("frt_week_start", String(day), {
+  cookieStore.set("frt_week_start", String(clean), {
     maxAge: 60 * 60 * 24 * 365,
     path: "/",
     sameSite: "lax",
@@ -177,13 +187,16 @@ export async function setWeekStartDayAction(day: 0 | 1): Promise<void> {
 }
 
 export async function setTimezoneAction(tz: string): Promise<void> {
+  // Shape first, then existence: the schema decides this is a plausible zone
+  // name, Intl decides whether it is a real one.
+  const clean = validate(timezoneSchema, tz);
   try {
-    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    Intl.DateTimeFormat(undefined, { timeZone: clean });
   } catch {
     throw new Error("Invalid timezone.");
   }
   const cookieStore = await cookies();
-  cookieStore.set("frt_timezone", tz, {
+  cookieStore.set("frt_timezone", clean, {
     maxAge: 60 * 60 * 24 * 365 * 10,
     path: "/",
     sameSite: "lax",
@@ -291,12 +304,21 @@ export async function exportDataAction(): Promise<string> {
 // catches it. src/app/actions/use-server-exports.test.ts guards the pattern.
 // Consumers import ImportBundle from @/lib/import-remap directly.
 export async function importDataAction(bundle: ImportBundle): Promise<void> {
-  if (!SUPPORTED_BACKUP_VERSIONS.includes(bundle.version)) {
-    throw new Error(`Unsupported backup version ${bundle.version}.`);
+  // Shape check before anything reads a field off this. A backup is a FILE the
+  // user chose, so it is the one input here that arrives hand-editable by
+  // design — every other action is at least shaped by the app that called it.
+  //
+  // The parsed value is deliberately NOT used downstream. `buildImportPayload`
+  // is the whitelist for what reaches the database (field by field, is_admin
+  // excluded on purpose, and tested), and re-shaping a user's backup through a
+  // schema on the way there could only subtract from it.
+  //
+  // Version first, so an old file still hears why it was refused rather than
+  // being told which key inside it is the wrong type.
+  if (!SUPPORTED_BACKUP_VERSIONS.includes(bundle?.version)) {
+    throw new Error(`Unsupported backup version ${bundle?.version}.`);
   }
-  if (!Array.isArray(bundle.entries) || !Array.isArray(bundle.opCodes)) {
-    throw new Error("Invalid backup format.");
-  }
+  validate(importBundleSchema, bundle);
 
   const supabase = await createClient();
 

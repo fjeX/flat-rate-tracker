@@ -10,7 +10,6 @@ import {
   bucketFor,
   flushAccumulators,
   HOLD_KIND,
-  isTimerStatus,
   MAX_TIMER_SLOTS,
   msToHours,
   nextFreeSlot,
@@ -19,6 +18,14 @@ import {
   lineTakenByOtherSlot,
 } from "@/lib/timer";
 import { capForSlot, type TimerCapContext } from "@/lib/timer-schedule";
+import { validate } from "@/lib/validation/core";
+import {
+  attachTimerSchema,
+  saveTimerSchema,
+  timerIdSchema,
+  timerLineSchema,
+  timerStatusSchema,
+} from "@/lib/validation/actions";
 
 // Timer state lives in `active_timers` — one row per slot, up to 3 concurrent
 // jobs. Every action here is slot-scoped: acting on one timer must never touch
@@ -124,10 +131,13 @@ async function pauseOtherWorkingSlots(
  * double-count the original guard was actually there to prevent.
  */
 export async function attachRoToTimerAction(
-  entryId: string,
-  lineId: string | null = null,
+  entryIdArg: string,
+  lineIdArg: string | null = null,
 ): Promise<void> {
-  if (!entryId) throw new Error("Pick an RO first.");
+  const { entryId, lineId } = validate(attachTimerSchema, {
+    entryId: entryIdArg,
+    lineId: lineIdArg,
+  });
   const supabase = await createClient();
 
   const entry = await db.getEntry(supabase, entryId);
@@ -179,10 +189,13 @@ export async function attachRoToTimerAction(
  * for `paused`).
  */
 export async function setTimerStatusAction(
-  timerId: string,
-  status: string,
+  timerIdArg: string,
+  statusArg: string,
 ): Promise<void> {
-  if (!isTimerStatus(status)) throw new Error("Unknown timer status.");
+  const { timerId, status } = validate(timerStatusSchema, {
+    timerId: timerIdArg,
+    status: statusArg,
+  });
   const supabase = await createClient();
   const { slot, all } = await requireSlot(supabase, timerId);
 
@@ -204,9 +217,13 @@ export async function setTimerStatusAction(
 
 /** Choose which op-code line a timer's work hours will land on. */
 export async function setTimerLineAction(
-  timerId: string,
-  lineId: string | null,
+  timerIdArg: string,
+  lineIdArg: string | null,
 ): Promise<void> {
+  const { timerId, lineId } = validate(timerLineSchema, {
+    timerId: timerIdArg,
+    lineId: lineIdArg,
+  });
   const supabase = await createClient();
   const { slot } = await requireSlot(supabase, timerId);
 
@@ -234,7 +251,8 @@ export async function setTimerLineAction(
 
 /** Zero a timer's banked time but keep the slot and its RO. The clock restarts
  * from zero if the slot was accruing. */
-export async function resetTimerAction(timerId: string): Promise<void> {
+export async function resetTimerAction(timerIdArg: string): Promise<void> {
+  const timerId = validate(timerIdSchema, timerIdArg);
   const supabase = await createClient();
   const { slot } = await requireSlot(supabase, timerId);
   const accruing = bucketFor(slot.status) !== null;
@@ -248,7 +266,8 @@ export async function resetTimerAction(timerId: string): Promise<void> {
 }
 
 /** Drop a timer entirely, discarding its time. The slot number frees up. */
-export async function releaseTimerAction(timerId: string): Promise<void> {
+export async function releaseTimerAction(timerIdArg: string): Promise<void> {
+  const timerId = validate(timerIdSchema, timerIdArg);
   const supabase = await createClient();
   const { slot } = await requireSlot(supabase, timerId);
   await db.deleteTimerSlot(supabase, slot.id);
@@ -283,10 +302,13 @@ export type TimerSaveResult = {
  * the second save silently discarded the first.
  */
 export async function saveTimerAction(
-  timerId: string,
-  lineId: string,
+  timerIdArg: string,
+  lineIdArg: string,
 ): Promise<TimerSaveResult> {
-  if (!lineId) throw new Error("Pick an op code to save this time to.");
+  const { timerId, lineId } = validate(saveTimerSchema, {
+    timerId: timerIdArg,
+    lineId: lineIdArg,
+  });
   const supabase = await createClient();
   const { slot } = await requireSlot(supabase, timerId);
 

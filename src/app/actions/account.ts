@@ -4,12 +4,23 @@ import { createClient as createIsolatedClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { serverSupabaseUrl } from "@/lib/supabase/config";
 import { revalidatePath } from "next/cache";
+import { check, formText } from "@/lib/validation/core";
+import {
+  profileFormSchema,
+  updateEmailSchema,
+  updatePasswordSchema,
+} from "@/lib/validation/actions";
 
 export async function updateProfile(
   formData: FormData,
 ): Promise<{ error?: string; message?: string }> {
-  const firstName = (formData.get("first_name") as string | null)?.trim() ?? "";
-  const lastName = (formData.get("last_name") as string | null)?.trim() ?? "";
+  const parsed = check(profileFormSchema, {
+    firstName: formText(formData, "first_name") ?? "",
+    lastName: formText(formData, "last_name") ?? "",
+  });
+  if (!parsed.ok) return { error: parsed.error };
+  const firstName = parsed.data.firstName.trim();
+  const lastName = parsed.data.lastName.trim();
 
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({
@@ -26,9 +37,11 @@ export async function updateProfile(
 export async function updateEmail(
   formData: FormData,
 ): Promise<{ error?: string; message?: string }> {
-  const email = (formData.get("email") as string | null)?.trim() ?? "";
-
-  if (!email) return { error: "Email is required." };
+  const parsed = check(updateEmailSchema, {
+    email: formText(formData, "email") ?? "",
+  });
+  if (!parsed.ok) return { error: parsed.error };
+  const { email } = parsed.data;
 
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ email });
@@ -74,12 +87,13 @@ async function passwordIsCorrect(email: string, password: string): Promise<boole
 export async function updatePassword(
   formData: FormData,
 ): Promise<{ error?: string; message?: string }> {
-  const currentPassword = (formData.get("current_password") as string | null) ?? "";
-  const newPassword = (formData.get("new_password") as string | null) ?? "";
-  const confirmPassword = (formData.get("confirm_password") as string | null) ?? "";
-
-  if (newPassword.length < 8) return { error: "Password must be at least 8 characters." };
-  if (newPassword !== confirmPassword) return { error: "Passwords do not match." };
+  const parsed = check(updatePasswordSchema, {
+    currentPassword: formText(formData, "current_password") ?? "",
+    newPassword: formText(formData, "new_password") ?? "",
+    confirmPassword: formText(formData, "confirm_password") ?? "",
+  });
+  if (!parsed.ok) return { error: parsed.error };
+  const { currentPassword, newPassword } = parsed.data;
 
   const supabase = await createClient();
   const {

@@ -9,6 +9,12 @@ import { serverSupabaseUrl } from "@/lib/supabase/config";
 import { seedStarterOpCodesIfEmpty } from "@/lib/seed-opcodes";
 import { reportServerError } from "@/lib/report-error-server";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { check, formText } from "@/lib/validation/core";
+import {
+  passwordResetRequestSchema,
+  signInSchema,
+  signUpSchema,
+} from "@/lib/validation/actions";
 
 function toSigninWithError(message: string): never {
   redirect(`/signin?error=${encodeURIComponent(message)}`);
@@ -34,15 +40,14 @@ async function siteOrigin(): Promise<string> {
 }
 
 export async function signUp(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-
-  if (!email || !password) {
-    toSignupWithError("Email and password are required.");
-  }
-  if (password.length < 8) {
-    toSignupWithError("Password must be at least 8 characters.");
-  }
+  // Validated BEFORE the rate limiter, same order as before: a malformed
+  // request was never worth a token out of someone's hourly budget.
+  const parsed = check(signUpSchema, {
+    email: formText(formData, "email") ?? "",
+    password: formText(formData, "password") ?? "",
+  });
+  if (!parsed.ok) toSignupWithError(parsed.error);
+  const { email, password } = parsed.data;
 
   // Brute-force / spam-signup speed bump (per IP). Fail-open — inert until
   // Upstash is configured (Phase 1). Limit is generous: a human never hits it,
@@ -105,12 +110,12 @@ export async function signUp(formData: FormData) {
 }
 
 export async function signIn(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-
-  if (!email || !password) {
-    toSigninWithError("Email and password are required.");
-  }
+  const parsed = check(signInSchema, {
+    email: formText(formData, "email") ?? "",
+    password: formText(formData, "password") ?? "",
+  });
+  if (!parsed.ok) toSigninWithError(parsed.error);
+  const { email, password } = parsed.data;
 
   // Two-key brute-force protection: per-IP (broad, stops a host hammering many
   // accounts) and per-email (protects one account from a distributed guess).
@@ -157,8 +162,11 @@ export async function signIn(formData: FormData) {
 // matters right now: SMTP is still the stock placeholder, so this currently
 // errors on every call and the report is the only place it will be visible.
 export async function requestPasswordReset(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
-  if (!email) toForgotWithError("Enter the email address on your account.");
+  const parsed = check(passwordResetRequestSchema, {
+    email: formText(formData, "email") ?? "",
+  });
+  if (!parsed.ok) toForgotWithError(parsed.error);
+  const { email } = parsed.data;
 
   // Two keys, same reasoning as signIn: per-IP stops one host spraying many
   // addresses, per-email stops a single account being mail-bombed through the

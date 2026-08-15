@@ -3,14 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { MAX_BUG_PHOTOS, MAX_BUG_PHOTO_BYTES } from "@/lib/bug-reports";
+import { formText, validate } from "@/lib/validation/core";
 import {
-  MAX_BUG_PHOTOS,
-  MAX_BUG_PHOTO_BYTES,
-  MAX_BUG_DESCRIPTION_CHARS,
-  BUG_SEVERITIES,
-  BUG_CATEGORIES,
-  BUG_STATUSES,
-} from "@/lib/bug-reports";
+  bugTriageSchema,
+  reportIdSchema,
+  submitBugSchema,
+} from "@/lib/validation/actions";
 
 const BUCKET = "bug-photos";
 const SIGNED_URL_TTL_SECONDS = 60;
@@ -50,13 +49,12 @@ export type SubmitBugResult = {
 export async function submitBugReport(
   formData: FormData,
 ): Promise<SubmitBugResult> {
-  const description = (formData.get("description") as string | null)?.trim() ?? "";
-  if (!description) throw new Error("Please describe the bug before sending.");
-  if (description.length > MAX_BUG_DESCRIPTION_CHARS) {
-    throw new Error(
-      `Description is too long — keep it under ${MAX_BUG_DESCRIPTION_CHARS} characters.`,
-    );
-  }
+  const clean = validate(submitBugSchema, {
+    description: formText(formData, "description") ?? "",
+    pageUrl: formText(formData, "page_url"),
+    userAgent: formText(formData, "user_agent"),
+    viewport: formText(formData, "viewport"),
+  });
 
   const supabase = await createClient();
   const {
@@ -65,10 +63,12 @@ export async function submitBugReport(
   if (!user) throw new Error("Not authenticated.");
 
   const report = await db.insertBugReport(supabase, {
-    description,
-    pageUrl: (formData.get("page_url") as string | null) || null,
-    userAgent: (formData.get("user_agent") as string | null) || null,
-    viewport: (formData.get("viewport") as string | null) || null,
+    description: clean.description,
+    pageUrl: clean.pageUrl || null,
+    userAgent: clean.userAgent || null,
+    viewport: clean.viewport || null,
+    // Server-side, never the client's to claim: which build a report came from
+    // is evidence, and evidence a caller can set is not evidence.
     appBuild: process.env.NEXT_PUBLIC_APP_BUILD || null,
   });
 
@@ -138,8 +138,9 @@ async function requireAdmin() {
 export async function listBugPhotosWithUrls(
   reportId: string,
 ): Promise<Array<{ id: string; url: string }>> {
+  const id = validate(reportIdSchema, reportId);
   const supabase = await requireAdmin();
-  const photos = await db.listBugReportPhotos(supabase, reportId);
+  const photos = await db.listBugReportPhotos(supabase, id);
   const withUrls = await Promise.all(
     photos.map(async (p) => {
       const { data } = await supabase.storage
@@ -162,9 +163,11 @@ export async function setBugTriage(
     triageNotes?: string;
   },
 ): Promise<void> {
-  if (!reportId) throw new Error("Report id is required.");
+  const parsed = validate(bugTriageSchema, { reportId, patch });
   const supabase = await requireAdmin();
 
+  // "" is the clear-it answer for the two nullable axes; the schema has already
+  // refused anything that is neither "" nor a member of the vocabulary.
   const clean: {
     severity?: string | null;
     category?: string | null;
@@ -172,33 +175,25 @@ export async function setBugTriage(
     triageNotes?: string | null;
   } = {};
 
-  if (patch.severity !== undefined) {
-    if (patch.severity === "") clean.severity = null;
-    else if ((BUG_SEVERITIES as readonly string[]).includes(patch.severity))
-      clean.severity = patch.severity;
-    else throw new Error("Invalid severity.");
+  if (parsed.patch.severity !== undefined) {
+    clean.severity = parsed.patch.severity || null;
   }
-  if (patch.category !== undefined) {
-    if (patch.category === "") clean.category = null;
-    else if ((BUG_CATEGORIES as readonly string[]).includes(patch.category))
-      clean.category = patch.category;
-    else throw new Error("Invalid category.");
+  if (parsed.patch.category !== undefined) {
+    clean.category = parsed.patch.category || null;
   }
-  if (patch.status !== undefined) {
-    if (!(BUG_STATUSES as readonly string[]).includes(patch.status))
-      throw new Error("Invalid status.");
-    clean.status = patch.status;
+  if (parsed.patch.status !== undefined) {
+    clean.status = parsed.patch.status;
   }
-  if (patch.triageNotes !== undefined) {
-    clean.triageNotes = patch.triageNotes.trim() || null;
+  if (parsed.patch.triageNotes !== undefined) {
+    clean.triageNotes = parsed.patch.triageNotes.trim() || null;
   }
 
-  await db.updateBugReportTriage(supabase, reportId, clean);
+  await db.updateBugReportTriage(supabase, parsed.reportId, clean);
 
   // Marking a report "Verify" kicks off auto-investigation: headless Claude
   // drafts a fix on a branch for review (fire-and-forget).
   if (clean.status === "Verify") {
-    await fireBugWebhook(process.env.BUG_INVESTIGATE_WEBHOOK_URL, reportId);
+    await fireBugWebhook(process.env.BUG_INVESTIGATE_WEBHOOK_URL, parsed.reportId);
   }
 
   revalidatePath("/admin/bugs");
