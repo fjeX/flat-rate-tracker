@@ -22,6 +22,17 @@ function toForgotWithError(message: string): never {
   redirect(`/forgot-password?error=${encodeURIComponent(message)}`);
 }
 
+// The user-facing origin. Behind Traefik the request origin is the internal
+// container address, so it has to come from the forwarded header — the same
+// reason /auth/callback does it. Any URL built from this and handed to GoTrue
+// must also be in ADDITIONAL_REDIRECT_URLS or the mail is silently not sent.
+async function siteOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
+}
+
 export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -48,7 +59,14 @@ export async function signUp(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    // Where the confirmation link lands. /auth/callback already exchanges the
+    // code and seeds the starter op codes — the same landing Google sign-in
+    // uses — so a confirmed account arrives complete instead of empty.
+    options: { emailRedirectTo: `${await siteOrigin()}/auth/callback` },
+  });
 
   if (error) {
     const msg = error.message?.toLowerCase() ?? "";
@@ -59,7 +77,20 @@ export async function signUp(formData: FormData) {
     }
   }
 
-  // Seed default op code library for the new account.
+  // With email confirmation ON, signUp returns NO session: the account exists
+  // but cannot be used until the link is clicked. Falling through to /dashboard
+  // here would bounce off the proxy to /signin with no explanation — the user
+  // would think signing up had failed. Seeding is skipped too, because there is
+  // no session for RLS to hang the rows on; /auth/callback does it after they
+  // confirm.
+  //
+  // Branching on the session rather than on a config flag keeps this correct
+  // whichever way ENABLE_EMAIL_AUTOCONFIRM is set.
+  if (!data.session) {
+    redirect("/signup?check=1");
+  }
+
+  // Confirmation off: the user is signed in already. Seed and go.
   // Non-fatal — if this fails the user can add codes manually.
   try {
     await seedStarterOpCodesIfEmpty(supabase);
@@ -69,9 +100,6 @@ export async function signUp(formData: FormData) {
     await reportServerError(err, { url: "action:signUp/seedStarterOpCodes" });
   }
 
-  // Local dev has email confirmation disabled, so the user is signed in
-  // immediately. On phase-2+ with confirmation on, the user would land here
-  // but have no session until they click the confirm link — adjust then.
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }
@@ -145,14 +173,7 @@ export async function requestPasswordReset(formData: FormData) {
     toForgotWithError("Too many reset requests. Please wait a while and try again.");
   }
 
-  // Behind Traefik the request origin is the internal container address, so the
-  // user-facing host has to come from the forwarded header — same reason
-  // /auth/callback does it. This URL must also be listed in the GoTrue
-  // ADDITIONAL_REDIRECT_URLS allow-list or the mail is never sent.
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const origin = `${proto}://${host}`;
+  const origin = await siteOrigin();
 
   // IMPLICIT FLOW ON PURPOSE — do not "fix" this back to the SSR client.
   //

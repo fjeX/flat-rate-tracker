@@ -5,9 +5,9 @@ import { GoogleButton } from "@/components/auth/google-button";
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reset?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, reset } = await searchParams;
   const safeError = error && error.length <= 150 && !/https?:\/\/|<|>/.test(error)
     ? error
     : error
@@ -24,6 +24,15 @@ export default async function SignInPage({
       </div>
       <div className="card w-full max-w-sm p-6">
         <h1 className="text-xl font-semibold mb-4">Sign in</h1>
+
+        {/* Arriving from a completed password reset. Without this the redirect
+            reads as "it dumped me back at the login screen" rather than "that
+            worked, now prove it". */}
+        {reset && !safeError && (
+          <div role="status" className="mb-4 rounded-[var(--radius-sm)] border border-[var(--good)] bg-[var(--good-bg)] px-3 py-2 text-sm text-[var(--good)]">
+            Password updated. Sign in with your new password.
+          </div>
+        )}
 
         {safeError && (
           <div role="alert" className="mb-4 rounded-[var(--radius-sm)] border border-[var(--bad)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">

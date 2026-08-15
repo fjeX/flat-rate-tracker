@@ -159,9 +159,18 @@ function ResetPasswordInner() {
       setError(updateError.message);
       return;
     }
+
     setPhase("done");
-    // The recovery session is a real session, so they are already signed in.
-    router.refresh();
+
+    // Sign out EVERYWHERE, then make them sign in with the new password.
+    //
+    // Global scope is the point. A reset is what someone does when they think
+    // their account is compromised, so every other live session has to die
+    // with the old password — otherwise the intruder keeps the session they
+    // already had and the reset accomplishes nothing. It also means the new
+    // password gets proven once, here, instead of assumed.
+    await supabase.auth.signOut();
+    router.replace("/signin?reset=1");
   }
 
   return (
@@ -228,14 +237,10 @@ function ResetPasswordInner() {
       )}
 
       {phase === "done" && (
-        <>
-          <p className="mb-4 text-sm text-[var(--good)]">
-            Password updated. You&apos;re signed in.
-          </p>
-          <Link href="/dashboard" className="btn btn-primary btn-block">
-            Go to dashboard
-          </Link>
-        </>
+        <p className="text-sm text-[var(--good)]">
+          Password updated. Signing you out of all devices — taking you to sign
+          in…
+        </p>
       )}
     </Shell>
   );

@@ -5,9 +5,9 @@ import { GoogleButton } from "@/components/auth/google-button";
 export default async function SignUpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; check?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, check } = await searchParams;
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -18,8 +18,28 @@ export default async function SignUpPage({
         </Link>
       </div>
       <div className="card w-full max-w-sm p-6">
-        <h1 className="text-xl font-semibold mb-4">Create account</h1>
+        <h1 className="text-xl font-semibold mb-4">
+          {check ? "Check your email" : "Create account"}
+        </h1>
 
+        {/* Email confirmation is on, so signUp returns no session. Without this
+            state the redirect would land on /dashboard, bounce to /signin, and
+            read as "signing up didn't work". */}
+        {check ? (
+          <>
+            <p className="mb-3 text-sm text-[var(--fg-2)]">
+              Your account is created. We sent a confirmation link — click it to
+              finish setting up and sign in.
+            </p>
+            <p className="mb-4 text-sm text-[var(--fg-3)]">
+              Nothing after a few minutes? Check your spam folder.
+            </p>
+            <Link href="/signin" className="btn btn-ghost btn-block">
+              Back to sign in
+            </Link>
+          </>
+        ) : (
+        <>
         {error && (
           <div role="alert" className="mb-4 rounded-[var(--radius-sm)] border border-[var(--bad)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
             {error}
@@ -70,6 +90,8 @@ export default async function SignUpPage({
             Sign in
           </Link>
         </p>
+        </>
+        )}
       </div>
     </main>
   );
