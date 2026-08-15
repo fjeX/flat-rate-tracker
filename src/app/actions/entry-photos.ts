@@ -83,9 +83,26 @@ export async function deleteEntryPhoto(photoId: string): Promise<void> {
 
 // Mint a short-lived signed URL for viewing a photo. Called on open — the result
 // is never cached in persistent state.
+//
+// Every exported function in a "use server" module is a public endpoint: any
+// signed-in caller can invoke this with any string, not just the paths the UI
+// happens to pass. Storage RLS (own_ro_photos, folder-scoped to auth.uid())
+// already refuses to sign someone else's object, so this was never exploitable
+// — but "safe because one policy in one migration says so" is a thinner
+// guarantee than it looks, and signing a URL is precisely the operation that
+// converts a path into readable bytes.
+//
+// Paths are {user_id}/{entry_id}/{uuid}.jpg, so the owner is the first segment.
 export async function getPhotoSignedUrl(storagePath: string): Promise<string> {
   if (!storagePath) throw new Error("Storage path is required.");
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+  if (!storagePath.startsWith(`${user.id}/`)) {
+    throw new Error("Not authorized to view that photo.");
+  }
   const { data, error } = await supabase.storage
     .from(BUCKET)
     .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);

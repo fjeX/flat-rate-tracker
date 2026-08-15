@@ -24,6 +24,21 @@ export async function saveRoTemplateMetadata(formData: FormData): Promise<void> 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated.");
 
+  // existingStoragePath arrives from the client, and it is handed straight to
+  // storage.upload() with upsert:true below — so unchecked it is an offer to
+  // overwrite any object in the bucket by naming it. The bucket's RLS policy
+  // (own_ro_template_images, folder-scoped to auth.uid()) does refuse it, which
+  // is why this was never exploitable. But that leaves the guarantee resting on
+  // one policy in one migration, and the bug-photos bucket right next door
+  // already carries a cross-user admin read policy — the day someone adds the
+  // equivalent here, this line becomes the hole. Two independent checks.
+  //
+  // Rejecting rather than silently rewriting: a path outside the caller's own
+  // folder is not a mistake the server should quietly correct.
+  if (existingStoragePath && !existingStoragePath.startsWith(`${user.id}/`)) {
+    throw new Error("Invalid template image path.");
+  }
+
   const storagePath = existingStoragePath ?? `${user.id}/template_${id}`;
 
   if (imageFile && imageFile.size > 0) {

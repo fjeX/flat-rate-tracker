@@ -107,17 +107,20 @@ export async function submitBugReport(
   return { reportId: report.id, photosAttached, photosFailed };
 }
 
-// Mint a short-lived signed URL for viewing a report screenshot. Admin-only in
-// practice — the bug-photos RLS only lets the owner or an admin read the object.
-export async function getBugPhotoSignedUrl(storagePath: string): Promise<string> {
-  if (!storagePath) throw new Error("Storage path is required.");
-  const supabase = await createClient();
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
-  if (error) throw error;
-  return data.signedUrl;
-}
+// REMOVED: getBugPhotoSignedUrl(storagePath).
+//
+// It signed an arbitrary caller-supplied path in the bug-photos bucket and had
+// NO callers — the inbox reads screenshots through listBugPhotosWithUrls below,
+// which is behind requireAdmin(). Being unused did not make it harmless: every
+// export from a "use server" module is a live endpoint, so it stayed reachable
+// by any signed-in caller with any string.
+//
+// It is deleted rather than fixed because a guard would have to be written
+// around a question nothing asks. This bucket is also the one with a cross-user
+// admin read policy (admin_read_bug_photos), so an unguarded signer here is the
+// single worst place in the app for one to sit. If a per-reporter view of their
+// own screenshots is ever built, it needs its own action with its own ownership
+// check — not this one restored.
 
 // --- Admin inbox actions -------------------------------------------------------
 // RLS already gates every read/write to admins; these add an explicit check so a
