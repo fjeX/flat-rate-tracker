@@ -12,6 +12,7 @@ import {
 } from "@/lib/import-remap";
 import { buildBackupBundle } from "@/lib/backup-bundle";
 import { reportServerError } from "@/lib/report-error-server";
+import { enforceRateLimit, LIMITS } from "@/lib/rate-limit";
 import { validate } from "@/lib/validation/core";
 import {
   goalHoursSchema,
@@ -211,6 +212,17 @@ export async function setTimezoneAction(tz: string): Promise<void> {
 
 export async function exportDataAction(): Promise<string> {
   const supabase = await createClient();
+
+  // The heaviest read in the app: every table the user owns, serialised in one
+  // go. Nobody backs up ten times an hour, and an ungated loop is a free way to
+  // pin the database.
+  await enforceRateLimit(
+    "export-data",
+    await db.getCurrentUserId(supabase),
+    LIMITS.exportData,
+    "Too many exports in a short time — please wait a few minutes.",
+  );
+
   const [
     settings,
     entries,
@@ -322,6 +334,16 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
 
   const supabase = await createClient();
 
+  // Gated AFTER the shape checks, deliberately: a malformed file is refused for
+  // free and never costs the user a slot in their own hourly budget. Same order
+  // the auth actions use.
+  await enforceRateLimit(
+    "import-data",
+    await db.getCurrentUserId(supabase),
+    LIMITS.importData,
+    "Too many imports in a short time — please wait a few minutes.",
+  );
+
   // Validate dates up front purely to give a readable message. The import
   // itself is atomic now, so a bad value further in would roll the whole thing
   // back rather than half-apply — but "Invalid date in clock record" beats a raw
@@ -382,6 +404,17 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
 export async function clearAllDataAction(): Promise<void> {
   const supabase = await createClient();
   const userId = await db.getCurrentUserId(supabase);
+
+  // The most destructive action in the app. The limit is not really about load
+  // — it is a brake: three wipes an hour is already far past deliberate, and a
+  // scripted loop of this against a hijacked session is the worst thing a
+  // signed-in caller can do to a tech's pay history.
+  await enforceRateLimit(
+    "clear-all-data",
+    userId,
+    LIMITS.clearAllData,
+    "Too many data resets in a short time — please wait a while.",
+  );
 
   // Purge photo storage objects first — deleting entries cascades the DB rows,
   // but Supabase storage doesn't cascade, so paths would otherwise be orphaned.

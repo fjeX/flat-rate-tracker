@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { serverSupabaseUrl } from "@/lib/supabase/config";
 import { seedStarterOpCodesIfEmpty } from "@/lib/seed-opcodes";
 import { reportServerError } from "@/lib/report-error-server";
-import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { rateLimit, rateLimitAll, clientIp, LIMITS } from "@/lib/rate-limit";
 import { check, formText } from "@/lib/validation/core";
 import {
   passwordResetRequestSchema,
@@ -49,14 +49,11 @@ export async function signUp(formData: FormData) {
   if (!parsed.ok) toSignupWithError(parsed.error);
   const { email, password } = parsed.data;
 
-  // Brute-force / spam-signup speed bump (per IP). Fail-open — inert until
-  // Upstash is configured (Phase 1). Limit is generous: a human never hits it,
-  // a script gets stopped cold.
+  // Brute-force / spam-signup speed bump (per IP). Live today on the in-memory
+  // window; switches to Upstash automatically after the Vercel cutover. Limit
+  // is generous: a human never hits it, a script gets stopped cold.
   const ip = await clientIp();
-  const signupLimit = await rateLimit("signup", ip, {
-    limit: 6,
-    windowSec: 3600,
-  });
+  const signupLimit = await rateLimit("signup", ip, LIMITS.signup);
   if (!signupLimit.ok) {
     toSignupWithError(
       "Too many sign-up attempts from your network. Please try again later.",
@@ -119,13 +116,16 @@ export async function signIn(formData: FormData) {
 
   // Two-key brute-force protection: per-IP (broad, stops a host hammering many
   // accounts) and per-email (protects one account from a distributed guess).
-  // Fail-open — inert until Upstash is configured (Phase 1).
   const ip = await clientIp();
-  const [ipLimit, emailLimit] = await Promise.all([
-    rateLimit("signin-ip", ip, { limit: 20, windowSec: 600 }),
-    rateLimit("signin-email", email.toLowerCase(), { limit: 8, windowSec: 900 }),
+  const attemptLimit = await rateLimitAll([
+    { bucket: "signin-ip", identifier: ip, rule: LIMITS.signinIp },
+    {
+      bucket: "signin-email",
+      identifier: email.toLowerCase(),
+      rule: LIMITS.signinEmail,
+    },
   ]);
-  if (!ipLimit.ok || !emailLimit.ok) {
+  if (!attemptLimit.ok) {
     toSigninWithError(
       "Too many sign-in attempts. Please wait a few minutes and try again.",
     );
@@ -171,13 +171,17 @@ export async function requestPasswordReset(formData: FormData) {
   // Two keys, same reasoning as signIn: per-IP stops one host spraying many
   // addresses, per-email stops a single account being mail-bombed through the
   // form. Tighter than sign-in because a legitimate user needs one email, not
-  // eight. Fail-open — inert until Upstash is configured.
+  // eight.
   const ip = await clientIp();
-  const [ipLimit, emailLimit] = await Promise.all([
-    rateLimit("reset-ip", ip, { limit: 10, windowSec: 3600 }),
-    rateLimit("reset-email", email.toLowerCase(), { limit: 4, windowSec: 3600 }),
+  const resetLimit = await rateLimitAll([
+    { bucket: "reset-ip", identifier: ip, rule: LIMITS.resetIp },
+    {
+      bucket: "reset-email",
+      identifier: email.toLowerCase(),
+      rule: LIMITS.resetEmail,
+    },
   ]);
-  if (!ipLimit.ok || !emailLimit.ok) {
+  if (!resetLimit.ok) {
     toForgotWithError("Too many reset requests. Please wait a while and try again.");
   }
 
