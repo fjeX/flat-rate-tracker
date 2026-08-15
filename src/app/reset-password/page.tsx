@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -73,6 +73,10 @@ function ResetPasswordInner() {
   // broken. It goes live the day someone adds a "forgot password" link inside
   // the authed app, which is exactly the kind of change nobody would connect to
   // this file. Bumping a counter re-runs the parse.
+  // Once this page has reached a terminal answer, only a genuinely NEW recovery
+  // answer may replace it. See the guard in the verify effect for why that is
+  // load-bearing rather than defensive.
+  const settledRef = useRef(false);
   const [hashTick, setHashTick] = useState(0);
   useEffect(() => {
     const onHashChange = () => {
@@ -113,6 +117,21 @@ function ResetPasswordInner() {
     // is good enough" hole this whole page is built to avoid.
     const isRecovery = hash.get("type") === "recovery";
 
+    // Whether the CURRENT url still carries a recovery answer of any shape.
+    //
+    // The scrub below is a `history.replaceState`, and Next syncs native
+    // history calls into `useSearchParams` — so scrubbing empties `code` /
+    // `linkError`, this effect's deps change, and it re-runs against the URL it
+    // just emptied. Re-deriving from that replaces a real answer ("that link
+    // expired") with the catch-all ("this page needs a reset link"), which is
+    // the user-blaming copy this page exists to avoid. It shipped that way for
+    // about ten minutes on 2026-08-15 and the smoke suite called it "flaky".
+    //
+    // The same re-run also lands on the PKCE success path, where scrubbing
+    // `?code=` would tear the form out from under someone mid-reset.
+    const hasAnswer = Boolean(code || linkError || hashError || accessToken);
+    if (settledRef.current && !hasAnswer) return;
+
     let cancelled = false;
     // Drop the one-time credential out of the address bar so it isn't left in
     // history, or leaked by a Referer header on the next navigation. This runs
@@ -122,6 +141,8 @@ function ResetPasswordInner() {
     // URL and in history precisely on the path where something went wrong.
     const settle = (next: Phase, why = "") => {
       if (cancelled) return;
+      // Before the scrub, so the re-run the scrub provokes sees it.
+      settledRef.current = true;
       window.history.replaceState({}, "", "/reset-password");
       setReason(why);
       setPhase(next);
