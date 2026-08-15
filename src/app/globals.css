@@ -582,6 +582,17 @@ body {
   border-color: var(--brand-soft);
   background: var(--bg-3);
 }
+/* 34px pill, 46px target. A 44px-tall pill would have made every RO row taller
+   for a shortcut, so the hit area is expanded instead — the same trick the
+   op-code line controls use, and quality.spec.ts's touch-target check knows to
+   read this ::after and add its negative inset to the box.
+   Not optional: that check failed on the dashboard at 34px, which is exactly
+   what it is for. */
+.ro-upsell::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
 
 /* ── Date / time pills ───────────────────────────────
    The RO date and time-of-day controls on the log form and in Quick Add. They
