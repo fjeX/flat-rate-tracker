@@ -1,0 +1,116 @@
+# FRT continuous integration.
+#
+# WHERE THIS RUNS
+# This file only does anything in the standalone repo github.com/fjeX/flat-rate-tracker,
+# where it sits at the repo root. In Claude-EA it lives at
+# projects/flat-rate-tracker/.github/workflows/ and is inert — GitHub Actions only
+# reads .github/ at the root of a repository. That is intentional: FRT's CI belongs
+# to FRT, and Claude-EA is a notebook, not an app.
+#
+# WHAT THIS IS AND IS NOT
+# This is a CHEAP, EARLY signal — it proves the lockfile installs deterministically
+# and that the code compiles and passes its unit tests on a clean machine.
+#
+# It is NOT the deploy gate. `scripts/deploy.sh` on the VM is the real gate: it
+# builds the image, photographs it in fixture mode before the swap, runs write
+# smokes against the live site after the swap, and rolls back on failure. Nothing
+# here replaces that, and a green check here must never be read as "safe to ship".
+# The 2026-08-05 "use server" re-export incident compiled, type-checked and built
+# perfectly, then threw on the first render of every authenticated page.
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly audit heartbeat, Sundays 09:00 PT (16:00 UTC). This exists so the
+    # vulnerability check still runs during a quiet week with no commits — the
+    # whole point of a weekly cadence is catching advisories published against
+    # code you did not touch.
+    - cron: "0 16 * * 0"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the Dockerfile's node:20-alpine. If one moves, move both —
+          # a CI that passes on a different major than production builds on is
+          # testing a configuration nobody ships.
+          node-version: "20"
+          cache: npm
+
+      # `npm ci`, never `npm install`: it installs exactly the lockfile and fails
+      # if package.json and package-lock.json have drifted. `npm install` would
+      # quietly rewrite the lockfile and test something other than what ships.
+      - name: Install (locked)
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      # The build needs these to exist but never dials them — verified locally on
+      # 2026-08-14 with placeholder values. They are publishable (client-side)
+      # keys, not secrets, but there is no reason to put real project identifiers
+      # in a workflow file when a placeholder proves the same thing.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+
+      # Fails on high or critical. This was brought to zero on 2026-08-14, so it
+      # starts green and any red is genuinely new. Do not soften this threshold to
+      # make a red build go away — raise a finding or fix the dependency.
+      - name: npm audit (high and above)
+        run: npm audit --audit-level=high
+
+  lint:
+    name: Lint (non-blocking)
+    runs-on: ubuntu-latest
+    # NON-BLOCKING ON PURPOSE, AND THIS IS TEMPORARY.
+    #
+    # As of 2026-08-14 `npm run lint` reports 13 errors + 1 warning that predate
+    # this workflow — mostly react-hooks/set-state-in-effect, plus a rules-of-hooks
+    # error in tests/e2e/fixtures.ts. They were NOT introduced by the Next 16.3.1
+    # bump: eslint-plugin-react-hooks was already 7.1.1 in the previous lockfile.
+    # They accumulated unnoticed because nothing has ever gated on lint.
+    #
+    # Making this blocking today would mean a CI that is red from the moment it is
+    # born, and vitest.config.ts already spells out why that is worse than no
+    # signal at all: a red exit code that does not mean anything trains everyone to
+    # ignore the result. Fix the 13, then delete continue-on-error and this comment.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
