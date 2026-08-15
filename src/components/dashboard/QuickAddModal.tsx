@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { PillInput } from "@/components/ui/PillInput";
 import { COMEBACK_KINDS, COMEBACK_KIND_LABELS } from "@/lib/types";
 import type { ComebackKind, NewEntry, OpCode, RoMatch, SubOpCode } from "@/lib/types";
 import { hhmmInTz, isoDate } from "@/lib/periods";
@@ -390,12 +391,11 @@ export function QuickAddModal({
                 <label htmlFor="quick-add-time" className="sr-only">
                   Time
                 </label>
-                <input
+                <PillInput
                   id="quick-add-time"
                   type="time"
                   value={loggedTime}
                   onChange={(e) => setLoggedTime(e.target.value)}
-                  className="focus-ring rounded-full bg-transparent px-1 text-xs text-[var(--fg-3)] focus:outline-none"
                 />
               </>
             )}

@@ -9,6 +9,7 @@ import { RetroTimePrompt } from "@/components/forms/RetroTimePrompt";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import type { Entry, LaborType, NewEntry, OpCode, RoTemplate } from "@/lib/types";
 import type { OpCodeDraft } from "./OpCodeModals";
+import { PillInput } from "@/components/ui/PillInput";
 import { DuplicateRoDialog } from "./DuplicateRoDialog";
 import { useLogRoForm } from "./useLogRoForm";
 import { RoScanSection } from "./RoScanSection";
@@ -91,24 +92,13 @@ export function LogRoForm({
       <div className="section-title" style={{ marginBottom: 16 }}>
         <span aria-hidden="true">{isEdit ? `Edit RO #${existingEntry!.roNumber}` : "New repair order"}</span>
         <label htmlFor="ro-date" className="sr-only">Date</label>
-        <input
+        <PillInput
           id="ro-date"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
           aria-required="true"
-          className="focus-ring rounded-full px-2"
-          style={{
-            background: "transparent",
-            border: "none",
-            outline: "none",
-            minHeight: 44,
-            fontSize: 12,
-            color: "var(--fg-3)",
-            letterSpacing: "0.04em",
-            cursor: "pointer",
-          }}
         />
         {/* Sits beside the date because it IS part of the date — a wall-clock
             time on that day, not an independent fact. Not `required`: clearing
@@ -117,22 +107,11 @@ export function LogRoForm({
         {timeFieldShown && (
           <>
             <label htmlFor="ro-time" className="sr-only">Time</label>
-            <input
+            <PillInput
               id="ro-time"
               type="time"
               value={loggedTime}
               onChange={(e) => setLoggedTime(e.target.value)}
-              className="focus-ring rounded-full px-2"
-              style={{
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                minHeight: 44,
-                fontSize: 12,
-                color: "var(--fg-3)",
-                letterSpacing: "0.04em",
-                cursor: "pointer",
-              }}
             />
           </>
         )}

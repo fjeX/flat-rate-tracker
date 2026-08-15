@@ -146,11 +146,11 @@ export function RoList({
                   </div>
                 )}
               </div>
-              <div className="hours tabular">
-                {fmtHours(e.flagHours)}
-                <span className="unit">h</span>
-              </div>
             </button>
+            {/* Between the RO information and the hours, in that order — its own
+                control with its own edge, rather than something crowding the
+                hours column. The row's tap area still covers the hours (see
+                .ro-row-main::after); this button sits above it. */}
             {upsellShortcut && (
               <button
                 type="button"
@@ -162,6 +162,10 @@ export function RoList({
                 Upsell
               </button>
             )}
+            <div className="hours tabular">
+              {fmtHours(e.flagHours)}
+              <span className="unit">h</span>
+            </div>
             </div>
           );
         })}

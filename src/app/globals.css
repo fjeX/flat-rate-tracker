@@ -520,10 +520,14 @@ body {
 /* The row is a container, not a control. It stopped being a <button> when the
    Upsell shortcut moved inside it — a button nested in a button is invalid HTML
    and browsers recover by dropping one, which is a coin flip over whether the
-   row or the shortcut still works. The padding lives on .ro-row-main so the
-   whole tappable area is the button, not a div with a button drawn on it. */
+   row or the shortcut still works.
+
+   ORDER: [RO + vehicle + codes] [Upsell] [hours]. The shortcut is its own
+   control between the two, not something crowding the hours column. */
 .ro-row {
-  display: flex; align-items: stretch;
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line-soft);
   transition: background 120ms;
   width: 100%;
@@ -532,34 +536,101 @@ body {
 .ro-row:hover { background: var(--bg-3); }
 
 .ro-row-main {
-  display: flex; align-items: center; gap: 12px;
   flex: 1; min-width: 0;
-  padding: 12px 14px;
   cursor: pointer;
   text-align: left;
   background: transparent;
   border: none;
+  padding: 0;
   font: inherit;
   color: inherit;
 }
+/* The hit area is the WHOLE row, including the hours, even though the button
+   only wraps the text. Splitting the hours out is what let the Upsell shortcut
+   sit between them; without this, tapping the hours would stop opening the RO —
+   a target that silently shrank. Same stretched-overlay trick the op-code line
+   buttons use, and it keeps both controls real <button>s for the keyboard. */
+.ro-row-main::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
 
-/* Sits against the hours, right where the eye already is after reading the RO.
-   Quiet until hovered: it is a shortcut, not the row's purpose. */
+/* Its own control, with its own edge, sitting to the right of the RO and
+   vehicle information — deliberately not tucked against the hours, where it
+   read as part of the number. Raised above the row's stretched hit area so it
+   receives its own clicks. */
 .ro-upsell {
+  position: relative;
+  z-index: 1;
   display: flex; align-items: center; gap: 4px;
   flex-shrink: 0;
-  min-height: var(--tap-min);
-  padding: 0 14px 0 10px;
-  background: transparent;
-  border: none;
+  min-height: 34px;
+  padding: 0 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
   font: inherit;
   font-size: 12px;
   font-weight: 600;
   color: var(--fg-3);
   cursor: pointer;
-  transition: color 120ms;
+  transition: color 120ms, border-color 120ms, background 120ms;
 }
-.ro-upsell:hover { color: var(--brand); }
+.ro-upsell:hover {
+  color: var(--brand);
+  border-color: var(--brand-soft);
+  background: var(--bg-3);
+}
+
+/* ── Date / time pills ───────────────────────────────
+   The RO date and time-of-day controls on the log form and in Quick Add. They
+   were bare transparent inputs, which read as text rather than as something you
+   could touch — a border is the whole point of this class.
+
+   `color-scheme` is what makes the browser's own calendar and time popups dark.
+   It is already declared on :root and inherits, but it is pinned here as well:
+   this is the one place a UA stylesheet quirk or a stray ancestor would show up
+   as a white popup over a dark page, and the popup is not otherwise stylable —
+   no CSS reaches inside it. */
+.pill-input {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--fg-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  /* Was already 44px as a bare input. The border doesn't grow the target —
+     it makes the target that was always there visible. */
+  min-height: var(--tap-min);
+  padding: 0 10px;
+  cursor: pointer;
+  color-scheme: dark;
+  transition: border-color 120ms, color 120ms, background 120ms;
+}
+.theme-light .pill-input { color-scheme: light; }
+.pill-input:hover {
+  border-color: var(--brand-soft);
+  color: var(--fg-1);
+  background: var(--bg-3);
+}
+.pill-input:focus-visible {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: var(--ring);
+}
+/* The UA's calendar/clock glyph. Dimmed to sit with the pill's text, and full
+   strength on hover so it still reads as the affordance it is. */
+.pill-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.5;
+  margin-left: 6px;
+  padding: 0;
+  transition: opacity 120ms;
+}
+.pill-input:hover::-webkit-calendar-picker-indicator { opacity: 1; }
 
 /* Reveal for a capped list (RoList maxRows). Only the Pay Period page caps —
    a settled period is 50-90 rows and reconciliation is the real drill-down. */
