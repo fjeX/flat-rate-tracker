@@ -94,6 +94,13 @@ test.describe("signed out", () => {
       "/reset-password?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired",
     );
     await expect(page.getByText(EXPIRED)).toBeVisible();
+    // The sibling test above has always asserted this; this one didn't, and the
+    // asymmetry is why it reported "flaky" instead of "failed" on 2026-08-15.
+    // `toBeVisible` polls, so it passes the moment EXPIRED paints — even if the
+    // page then REPLACES it with the catch-all a tick later, which is exactly
+    // what a URL scrub did by clearing the query string this effect keys off.
+    // Asserting the end state is what makes the flip visible.
+    await expect(page.getByText(NEEDS_LINK)).toHaveCount(0);
     await expect(page.getByLabel(NEW_PASSWORD_FIELD)).toHaveCount(0);
   });
 });
