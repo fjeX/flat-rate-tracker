@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setTimezoneAction } from "@/app/actions/settings";
+import { useClientValue } from "@/lib/client-storage";
 
 const TIMEZONES = [
   { label: "Eastern (ET) — New York", value: "America/New_York" },
@@ -14,24 +15,28 @@ const TIMEZONES = [
   { label: "Hawaii (HT)", value: "Pacific/Honolulu" },
 ];
 
+// Module scope so the reference is stable, and it returns the same string on
+// every call — both required of a useClientValue reader.
+const detectTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 export function TimezoneCard({ initialTimezone }: { initialTimezone: string }) {
   const router = useRouter();
-  const [tz, setTz] = useState(initialTimezone);
+  // The browser's timezone is a client-only fact: on the server this resolves
+  // to the VM's zone, which is not the tech's. "" until hydration, then the
+  // real one, so the server never renders a zone it is guessing at.
+  const detected = useClientValue(detectTimezone, "");
+  // Null means "not chosen in this session" — fall back to the saved cookie,
+  // then to what the browser reports.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const tz = chosen ?? (initialTimezone || detected);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  useEffect(() => {
-    // If no timezone cookie yet, pre-fill with browser's detected timezone
-    if (!initialTimezone) {
-      setTz(Intl.DateTimeFormat().resolvedOptions().timeZone);
-    }
-  }, [initialTimezone]);
-
   function save(next: string) {
     setSaved(false);
     setError(null);
-    setTz(next);
+    setChosen(next);
     startTransition(async () => {
       try {
         await setTimezoneAction(next);

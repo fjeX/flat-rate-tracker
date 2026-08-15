@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateProfile, updateEmail, updatePassword } from "@/app/actions/account";
 import { setWeekStartDayAction } from "@/app/actions/settings";
+import { useStored, writeStored } from "@/lib/client-storage";
+
+// Also read by the anti-FOUC inline script in app/layout.tsx, which runs before
+// React and therefore reads localStorage directly. Keep the spelling in step.
+const THEME_KEY = "theme";
 
 interface Props {
   initialFirstName: string;
@@ -61,21 +66,18 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
   const [passwordResult, setPasswordResult] = useState<{ error?: string; message?: string }>({});
   const [passwordPending, startPasswordTransition] = useTransition();
 
-  // Theme
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  // Theme. Dark is both the default and the server's answer — the real value
+  // lives in localStorage, so it can only be known after hydration.
+  const theme = useStored<"dark" | "light">(
+    THEME_KEY,
+    (raw) => (raw === "light" ? "light" : "dark"),
+    "dark",
+    "dark",
+  );
 
   // Week start preference
   const [weekStartDay, setWeekStartDay] = useState<0 | 1>(initialWeekStartDay);
   const [weekPending, startWeekTransition] = useTransition();
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("theme");
-      if (stored === "light") setTheme("light");
-    } catch {
-      // localStorage not available (SSR or private mode)
-    }
-  }, []);
 
   function handleWeekStartDay(next: 0 | 1) {
     setWeekStartDay(next);
@@ -86,16 +88,13 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
   }
 
   function applyTheme(next: "dark" | "light") {
-    setTheme(next);
-    try {
-      localStorage.setItem("theme", next);
-      if (next === "light") {
-        document.documentElement.classList.add("theme-light");
-      } else {
-        document.documentElement.classList.remove("theme-light");
-      }
-    } catch {
-      // ignore
+    // writeStored persists AND notifies, so `theme` above updates from the
+    // store — no separate setState to keep in step with what was written.
+    writeStored(THEME_KEY, next);
+    if (next === "light") {
+      document.documentElement.classList.add("theme-light");
+    } else {
+      document.documentElement.classList.remove("theme-light");
     }
   }
 

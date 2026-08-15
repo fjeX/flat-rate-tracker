@@ -42,6 +42,39 @@ const MAX_H = 460;
 const POS_KEY = "frt:pip_pos";
 const SIZE_KEY = "frt:pip_size";
 
+// Restore the persisted position/size, clamped to the current viewport — a
+// window that shrank since last visit must not strand the pip off-screen.
+// Both return null on the server, where there is no localStorage to read.
+function readStoredPos(): { x: number; y: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(POS_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as { x: number; y: number };
+    return {
+      x: Math.max(8, Math.min(window.innerWidth - MIN_W - 8, p.x)),
+      y: Math.max(8, Math.min(window.innerHeight - 48, p.y)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readStoredSize(): PipSize | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SIZE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as PipSize;
+    return {
+      w: Math.max(MIN_W, Math.min(MAX_W, s.w)),
+      h: Math.max(MIN_H, Math.min(MAX_H, s.h)),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function TimerPip({
   slots,
   entries,
@@ -56,34 +89,17 @@ export function TimerPip({
   const [expanded, setExpanded] = useState(false);
   const [pending, startPending] = useTransition();
 
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const [size, setSize] = useState<PipSize | null>(null);
+  // Read during the initial render rather than adopted in a mount effect. Safe
+  // here specifically because everything this component renders is gated on
+  // `mounted` below — the server and the hydrating render both produce nothing,
+  // so a value the server could not have known cannot cause a mismatch. Drag
+  // and resize keep writing to these setters exactly as before.
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(readStoredPos);
+  const [size, setSize] = useState<PipSize | null>(readStoredSize);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ mx: number; my: number; px: number; py: number } | null>(null);
   const resizeStart = useRef<{ mx: number; my: number; w: number; h: number } | null>(null);
   const didDrag = useRef(false);
-
-  // Restore persisted position/size once on mount, clamped to the viewport
-  useEffect(() => {
-    try {
-      const rawPos = localStorage.getItem(POS_KEY);
-      if (rawPos) {
-        const p = JSON.parse(rawPos) as { x: number; y: number };
-        setPos({
-          x: Math.max(8, Math.min(window.innerWidth - MIN_W - 8, p.x)),
-          y: Math.max(8, Math.min(window.innerHeight - 48, p.y)),
-        });
-      }
-      const rawSize = localStorage.getItem(SIZE_KEY);
-      if (rawSize) {
-        const s = JSON.parse(rawSize) as PipSize;
-        setSize({
-          w: Math.max(MIN_W, Math.min(MAX_W, s.w)),
-          h: Math.max(MIN_H, Math.min(MAX_H, s.h)),
-        });
-      }
-    } catch { /* ignore */ }
-  }, []);
 
   useEffect(() => {
     try {

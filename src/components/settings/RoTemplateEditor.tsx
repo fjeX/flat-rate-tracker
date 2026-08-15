@@ -114,7 +114,10 @@ export function RoTemplateEditor({
 }) {
   const [imageFile,      setImageFile]      = useState<File | null>(null);
   const [imageObjectUrl, setImageObjectUrl] = useState<string | null>(null);
-  const [loadingImg,     setLoadingImg]     = useState(false);
+  // Seeded true when there is a stored image to fetch, so the effect below only
+  // ever turns it OFF. Starting false and flipping it on inside the effect meant
+  // one render advertising "no image, none loading" before the spinner appeared.
+  const [loadingImg,     setLoadingImg]     = useState(() => !!initialTemplate?.imageStoragePath);
   const [regions,        setRegions]        = useState<FieldRegion[]>(initialTemplate?.regions ?? []);
   const [activeField,    setActiveField]    = useState<FieldId>("roNumber");
   const [ghostBox,       setGhostBox]       = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -133,7 +136,6 @@ export function RoTemplateEditor({
   // Load existing template image on mount.
   useEffect(() => {
     if (!initialTemplate?.imageStoragePath || imageFile) return;
-    setLoadingImg(true);
     createClient()
       .storage.from("ro-templates")
       .createSignedUrl(initialTemplate.imageStoragePath, 3600)

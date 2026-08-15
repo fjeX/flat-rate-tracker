@@ -1,23 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Switch } from "@/components/ui/Switch";
+import { setQuickAddEnabled, useQuickAddEnabled } from "@/lib/quick-add-pref";
 
-const KEY = "frt:quick_add_enabled";
+const subscribeNoop = () => () => {};
 
 export function QuickAddCard() {
-  const [enabled, setEnabled] = useState(true);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(KEY);
-    if (stored === "false") setEnabled(false);
-    setMounted(true);
-  }, []);
+  // Shared with the dashboard's TodayCard through one store, so toggling here
+  // moves the floating button immediately instead of on the next reload.
+  const enabled = useQuickAddEnabled();
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
 
   function handleToggle(next: boolean) {
-    setEnabled(next);
-    localStorage.setItem(KEY, String(next));
+    setQuickAddEnabled(next);
   }
 
   return (

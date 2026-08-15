@@ -9,6 +9,8 @@
 // original single-file component. No behavior change.
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useStored, writeStored } from "@/lib/client-storage";
+import { DEFAULT_MAKE_KEY, deriveAutoFill, deriveMake } from "@/lib/default-make";
 import type {
   ComebackKind,
   Entry,
@@ -42,6 +44,9 @@ export type LineDraft = NewEntryOpCode & {
   // never sent to the server.
   flagBeforeComeback?: number;
 };
+
+// useStored wants a parser; this value is already the string we want.
+const keepRaw = (raw: string) => raw;
 
 function linesFromEntry(entry: Entry | undefined): LineDraft[] {
   if (!entry) return [];
@@ -101,11 +106,23 @@ export function useLogRoForm({
   const [date, setDate] = useState(existingEntry?.date ?? isoDate());
   const [roNumber, setRoNumber] = useState(existingEntry?.roNumber ?? "");
   const [year, setYear] = useState(existingEntry?.vehicle.year ?? "");
-  const [make, setMake] = useState(existingEntry?.vehicle.make ?? "");
+  // null = "the user has not touched this field", which is what lets the saved
+  // default fill in below. Distinct from "" — clearing the box must leave it
+  // cleared, not re-seed it from storage on the next render.
+  const [makeInput, setMakeInput] = useState<string | null>(existingEntry?.vehicle.make ?? null);
   const [model, setModel] = useState(existingEntry?.vehicle.model ?? "");
   const [vin, setVin] = useState(existingEntry?.vehicle.vin ?? "");
   const [mileage, setMileage] = useState(existingEntry?.vehicle.mileage ?? "");
-  const [autoFill, setAutoFill] = useState(false);
+  // Autofill and the default make are one fact stored in one place: a saved
+  // make MEANS autofill is on. Reading it through the store rather than seeding
+  // state in a mount effect keeps `make` out of the SSR HTML, which matters
+  // because it renders straight into an <input value>, and a value the server
+  // could not know is the #418 hydration mismatch this app has hit twice.
+  const savedMake = useStored(DEFAULT_MAKE_KEY, keepRaw, "", "");
+  const [autoFillChoice, setAutoFillChoice] = useState<boolean | null>(null);
+  const autoFill = deriveAutoFill(autoFillChoice, isEdit, savedMake);
+  const make = deriveMake(makeInput, autoFill, savedMake);
+  const setMake = setMakeInput;
   const [notes, setNotes] = useState(existingEntry?.notes ?? "");
   const [lines, setLines] = useState<LineDraft[]>(() =>
     linesFromEntry(existingEntry),
@@ -199,29 +216,24 @@ export function useLogRoForm({
 
   const roInputRef = useRef<HTMLInputElement>(null);
 
-  // On new-RO load, restore autofill make from localStorage if the user saved one.
-  useEffect(() => {
-    if (isEdit) return;
-    const saved = localStorage.getItem("frt_default_make");
-    if (saved) {
-      setAutoFill(true);
-      setMake((m) => m || saved);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   function handleMakeChange(value: string) {
     setMake(value);
-    if (autoFill) localStorage.setItem("frt_default_make", value);
+    if (autoFill) {
+      // Pin the choice: clearing the field writes "" to storage, and a bare
+      // derivation would then read "no saved make" as "autofill is off" and
+      // uncheck the box under the user mid-edit.
+      setAutoFillChoice(true);
+      writeStored(DEFAULT_MAKE_KEY, value);
+    }
   }
 
   function handleAutoFillToggle(checked: boolean) {
-    setAutoFill(checked);
-    if (checked) {
-      localStorage.setItem("frt_default_make", make);
-    } else {
-      localStorage.removeItem("frt_default_make");
-    }
+    setAutoFillChoice(checked);
+    // Turning it off drops the stored default, so freeze whatever is on screen
+    // into local state first — otherwise the box the user is looking at would
+    // empty itself as a side effect of unchecking a checkbox.
+    if (!checked) setMakeInput(make);
+    writeStored(DEFAULT_MAKE_KEY, checked ? make : null);
   }
 
   // Close the op-code picker when clicking anywhere outside it.
@@ -482,7 +494,10 @@ export function useLogRoForm({
     setDate(isoDate());
     setRoNumber("");
     setYear("");
-    if (!autoFill) setMake("");
+    // Back to null (not "") when autofill is on, so the next RO picks the saved
+    // default up again — same end state as the old "leave make alone" branch,
+    // since handleMakeChange keeps that default equal to what was typed.
+    setMake(autoFill ? null : "");
     setModel("");
     setVin("");
     setMileage("");

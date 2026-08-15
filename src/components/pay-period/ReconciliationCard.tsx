@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
@@ -15,7 +15,7 @@ import {
 } from "@/lib/reconcile";
 import { Select } from "@/components/ui/Select";
 import { buildDisputePack, formatDisputePackText } from "@/lib/dispute-pack";
-import { getExportedAt, recordExport } from "@/lib/dispute-exports";
+import { recordExport, useExportedAt } from "@/lib/dispute-exports";
 import { setLinePaidHoursAction } from "@/app/actions/entries";
 
 // Resolve a line's display label the same way RoList does — library code,
@@ -161,12 +161,9 @@ export function ReconciliationCard({
   const [markError, setMarkError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
-  // Breadcrumb of the last export for this period (localStorage). Read after
-  // mount to avoid an SSR/CSR mismatch on the "Exported …" hint.
-  const [exportedAt, setExportedAt] = useState<string | null>(null);
-  useEffect(() => {
-    if (periodKey) setExportedAt(getExportedAt(periodKey));
-  }, [periodKey]);
+  // Breadcrumb of the last export for this period (localStorage). Null through
+  // SSR and hydration, so the "Exported …" hint can't mismatch.
+  const exportedAt = useExportedAt(periodKey);
 
   const libraryById = new Map(library.map((oc) => [oc.id, oc]));
   const summary = reconcileEntries(entries);
@@ -182,8 +179,8 @@ export function ReconciliationCard({
 
   function markExported() {
     if (!periodKey) return;
+    // No re-read needed — recordExport notifies the store useExportedAt reads.
     recordExport(periodKey);
-    setExportedAt(getExportedAt(periodKey));
   }
 
   async function copyDisputeText() {
