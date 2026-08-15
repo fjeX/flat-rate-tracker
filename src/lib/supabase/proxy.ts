@@ -7,29 +7,12 @@ import type { Database } from "./database.types";
 import { authCookieName, serverSupabaseUrl } from "./config";
 import { FIXTURE_MODE } from "@/lib/fixtures/enabled";
 
-// Auth pages redirect logged-in users to the app. Guest routes allow anyone.
-const AUTH_PAGES = ["/signin", "/signup"];
-const GUEST_ROUTES = ["/guest"];
-// Password recovery. BOTH pages must pass through in BOTH directions.
-//
-//   /reset-password — signed-out on arrival from the email link, then signed-in
-//     the instant the code exchange succeeds. An AUTH_PAGES-style bounce would
-//     fire mid-flow, one step before the user sets the password they came for.
-//
-//   /forgot-password — this was in AUTH_PAGES and it deadlocked a real user.
-//     Clicking a recovery link SIGNS YOU IN (GoTrue's /verify establishes a
-//     session before redirecting). So the moment any link is clicked, the
-//     bounce-to-dashboard rule made "request another one" unreachable, exactly
-//     when the person needs it most. A signed-in user asking to reset their
-//     password is a normal request — the mail only ever goes to their own
-//     address — and it must never be answered with a redirect.
-const RECOVERY_ROUTES = ["/reset-password", "/forgot-password"];
-// OAuth callback — hit before the user has a session, so it must pass through
-// unauthenticated. The handler at /auth/callback exchanges the code and sets
-// the auth cookies itself.
-const CALLBACK_ROUTES = ["/auth/"];
-// Public routes that don't require auth (landing page, etc.)
-const PUBLIC_ROUTES = ["/"];
+// Which route is reachable in which auth state now lives in ./proxy-routes as a
+// pure function, so it can be unit tested. It could not be, inline here, and a
+// signed-in user got deadlocked out of /forgot-password as a result — see that
+// module's header. This file keeps the cookie and session plumbing; the routing
+// decision belongs to decideAuthRedirect().
+import { decideAuthRedirect } from "./proxy-routes";
 
 export async function updateSession(request: NextRequest) {
   /**
@@ -80,29 +63,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
-  const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
-  const isGuestRoute = GUEST_ROUTES.some((p) => pathname.startsWith(p));
-  const isCallbackRoute = CALLBACK_ROUTES.some((p) => pathname.startsWith(p));
-  const isPublicRoute = PUBLIC_ROUTES.some((p) => pathname === p);
-  const isRecoveryRoute = RECOVERY_ROUTES.some((p) => pathname.startsWith(p));
-
-  if (
-    !user &&
-    !isAuthPage &&
-    !isGuestRoute &&
-    !isCallbackRoute &&
-    !isPublicRoute &&
-    !isRecoveryRoute
-  ) {
+  const redirectTo = decideAuthRedirect(request.nextUrl.pathname, Boolean(user));
+  if (redirectTo) {
     const url = request.nextUrl.clone();
-    url.pathname = "/signin";
-    return NextResponse.redirect(url);
-  }
-
-  if (user && (isAuthPage || isPublicRoute)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = redirectTo;
     return NextResponse.redirect(url);
   }
 
