@@ -3,7 +3,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { createClient as createIsolatedClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { serverSupabaseUrl } from "@/lib/supabase/config";
 import { seedStarterOpCodesIfEmpty } from "@/lib/seed-opcodes";
 import { reportServerError } from "@/lib/report-error-server";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
@@ -152,8 +154,29 @@ export async function requestPasswordReset(formData: FormData) {
   const proto = h.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+  // IMPLICIT FLOW ON PURPOSE — do not "fix" this back to the SSR client.
+  //
+  // The app's normal client is PKCE, which binds the emailed link to a
+  // code-verifier COOKIE in the browser that asked for it. That makes a reset
+  // link unusable anywhere else: request it on your phone, open the mail on
+  // your laptop, and you get a perfectly valid code the laptop can never
+  // exchange. For a link whose entire job is to rescue someone who is locked
+  // out, "only works in the browser you started from" is a trap — and the
+  // failure is invisible, because the link looks fine right up until it isn't.
+  //
+  // An isolated implicit client sends no challenge, so GoTrue returns the
+  // tokens in the URL fragment and the link stands alone on any device.
+  // /reset-password reads both shapes; this is now the one it will usually see.
+  //
+  // The trade: the token rides in the fragment instead of being cookie-bound.
+  // It is single-use, short-lived, never sent to the server by the browser, and
+  // /reset-password strips it from the address bar as soon as it is consumed.
+  const mailer = createIsolatedClient(
+    serverSupabaseUrl(),
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false } },
+  );
+  const { error } = await mailer.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/reset-password`,
   });
   if (error) {
