@@ -985,6 +985,57 @@ Notes that matter for how you run:
 - The two endpoints that spend real money — Report a Bug (§8e) and admin Verify —
   are limited too, but you already never submit either. Keep it that way.
 
+### 8k. RO time of day + upsell marking (shipped 2026-08-15 — newest code, hunt it hard)
+
+Two new things, both brand new tonight.
+
+**Time of day on an RO.** Settings → Logging → "Time of day on each RO" is a
+switch, **off by default**. Off means the log form shows no time field and no
+time is stored — that is the designed behaviour, not a missing feature.
+
+Turn it ON, then:
+
+- Log an RO. The time field sits beside the date at the top of the form, already
+  filled with the current time in your timezone. **The whole pill must open the
+  picker when clicked, not just the little clock glyph** — clicking the text and
+  getting only a caret is the bug this shipped to fix.
+- Change the time to something distinctive (say `07:15`), save, and check the RO
+  row on the dashboard reads `#… · <date> · 7:15 AM`. Then open the RO — the
+  detail modal shows the same time on the date line.
+- **The "Logged …" line inside the RO modal is a DIFFERENT fact** (when the row
+  was written) and will not match the time you typed. That is correct. Do not
+  report the two disagreeing.
+- Clear the time and save: the RO should show its date with no time at all —
+  never `12:00 AM`, never a dash.
+- Turn the switch back OFF and edit that same RO. **The time you recorded must
+  survive** — turning the capture off must not erase history.
+- An RO logged before tonight has no time; its row shows the date alone. On
+  **/history** those older rows still show a time, because that page falls back
+  to when the row was written. Also correct.
+
+**Upsell marking.** On the dashboard's Recent ROs, each row has an **Upsell**
+button between the RO information and the hours.
+
+- Tap it: the RO opens with the op-code picker already up and a checkbox already
+  ticked, reading "Mark as an upsell". Add a code and confirm the new line shows
+  a filled `Upsell` tag.
+- Do it again but UNTICK the box first — the line must come back unmarked.
+- Open any RO and tap the `Upsell` tag on an existing line: it toggles both ways
+  and survives a reload.
+- **A comeback line has no Upsell control at all.** The database refuses that
+  combination outright, so its absence is deliberate. If you find a line showing
+  both tags, that is a real bug and worth the report on its own.
+- Edit an RO that has an upsold line (change its notes, save). **The marking must
+  survive the edit** — a wipe here is the failure mode this design was built
+  around.
+- Then check the two read surfaces:
+  - **/pay-period** — an "Upsold" tile in the stat row with `Xh` and "% of
+    flagged". Upsold hours are a SUBSET of flag hours; if the tile ever exceeds
+    the Flag hrs figure, something is badly wrong.
+  - **/insights** — a "What you sold" section near the bottom. It renders even
+    with nothing marked (it explains how to fill it), so its absence is a bug and
+    an empty state is not.
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:
