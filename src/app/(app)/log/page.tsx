@@ -49,6 +49,7 @@ export default async function LogPage({
       laborTypeEnabled={laborTypeEnabled}
       trackRoTime={settings.trackRoTime}
       defaultLoggedTime={defaultLoggedTime}
+      timeZone={tz}
     />
   );
 }

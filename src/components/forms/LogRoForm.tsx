@@ -29,6 +29,7 @@ export function LogRoForm({
   checkDuplicates,
   trackRoTime = false,
   defaultLoggedTime = "",
+  timeZone = "",
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -41,12 +42,13 @@ export function LogRoForm({
   checkDuplicates?: boolean;
   trackRoTime?: boolean;
   defaultLoggedTime?: string;
+  timeZone?: string;
 }) {
   // Destructure into locals rather than reading `x` in JSX: the hook returns
   // refs, and the react-compiler lint rule otherwise taints every `x` read as
   // "accessing a ref during render".
   const {
-    isEdit, savedRoNumber, date, setDate, roNumber, setRoNumber, error, roInputRef,
+    isEdit, savedRoNumber, abandonedRoNumber, date, setDate, roNumber, setRoNumber, error, roInputRef,
     loggedTime, setLoggedTime, trackRoTime: timeFieldShown,
     library, handleScanResult, lines, search, setSearch, pickerOpen, setPickerOpen,
     pickerRef, filteredLibrary, totalFlag, quickChips, customOpen, setCustomOpen,
@@ -66,7 +68,7 @@ export function LogRoForm({
   } = useLogRoForm({
     initialOpCodes, existingEntry, onSave, onCreateOpCode, redirectTo,
     defaultLaborType, laborTypeEnabled, checkDuplicates,
-    trackRoTime, defaultLoggedTime,
+    trackRoTime, defaultLoggedTime, timeZone,
   });
 
   return (
@@ -277,6 +279,28 @@ export function LogRoForm({
           }}
         >
           {error}
+        </div>
+      )}
+
+      {/* ---- Backed out of the duplicate prompt: the RO was NOT saved ----
+           Sits directly above the save bar because that is where the tech is
+           looking when they expect the green banner. Warn, not error: nothing
+           failed, but nothing was written either. ---- */}
+      {abandonedRoNumber && (
+        <div
+          role="status"
+          style={{
+            borderRadius: 8,
+            border: "1px solid color-mix(in oklab, var(--warn) 40%, transparent)",
+            background: "var(--warn-bg)",
+            padding: "8px 12px",
+            fontSize: 13,
+            color: "var(--warn)",
+            marginBottom: 12,
+          }}
+        >
+          Not saved — RO #{abandonedRoNumber} already exists. Save again to pick
+          Edit or Log as new, or change the RO number.
         </div>
       )}
 
