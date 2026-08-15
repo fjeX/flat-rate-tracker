@@ -70,6 +70,10 @@ function linesFromEntry(entry: Entry | undefined): LineDraft[] {
     paidHours: oc.paidHours ?? null,
     // Form-owned, unlike paidHours — the toggle below edits this directly.
     isComeback: oc.isComeback ?? false,
+    // Pure pass-through, like paidHours. Upsells are marked in the RO detail
+    // modal, not here; carrying the flag through the round-trip is what stops an
+    // ordinary edit from looking like an unmark.
+    isUpsell: oc.isUpsell ?? false,
   }));
 }
 
@@ -84,6 +88,8 @@ export function useLogRoForm({
   defaultLaborType = null,
   laborTypeEnabled = false,
   checkDuplicates = !onSave,
+  trackRoTime = false,
+  defaultLoggedTime = "",
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -99,11 +105,34 @@ export function useLogRoForm({
   // custom onSave is provided (guest mode has no DB to check) — DB-backed
   // embedders like the timer's Log RO modal must opt back in explicitly.
   checkDuplicates?: boolean;
+  /** The user's "time of day on each RO" setting. Off = no field, no value. */
+  trackRoTime?: boolean;
+  /**
+   * "HH:MM" to prefill a NEW RO with, computed by the server in the user's
+   * timezone at request time.
+   *
+   * It is a prop rather than a `new Date()` read in here for one reason: this
+   * hook renders on the server too, and a clock read during render produces a
+   * different string on the server than on the hydrating client — which is the
+   * #418 hydration mismatch this app has already hit twice, on a value that
+   * goes straight into an `<input value>`.
+   *
+   * The cost is that a /log tab left open for hours prefills the time it was
+   * opened. That is visible in the field and editable before saving, which is
+   * the honest failure: a wrong number you can see beats a right one you can't.
+   */
+  defaultLoggedTime?: string;
 }) {
   const router = useRouter();
   const isEdit = Boolean(existingEntry);
 
   const [date, setDate] = useState(existingEntry?.date ?? isoDate());
+  // An EXISTING RO keeps whatever it has, including nothing. Prefilling "now"
+  // onto an RO logged three weeks ago would invent a measurement, and the empty
+  // field is the truthful state — the tech can fill it in if they remember.
+  const [loggedTime, setLoggedTime] = useState(
+    existingEntry ? (existingEntry.loggedTime ?? "") : defaultLoggedTime,
+  );
   const [roNumber, setRoNumber] = useState(existingEntry?.roNumber ?? "");
   const [year, setYear] = useState(existingEntry?.vehicle.year ?? "");
   // null = "the user has not touched this field", which is what lets the saved
@@ -525,6 +554,13 @@ export function useLogRoForm({
       try {
         const input: NewEntry = {
           date,
+          // Omitted ENTIRELY when the setting is off, which is not the same as
+          // sending null. Absent means "this form never asked", so editing an
+          // old RO with the setting off leaves its recorded time alone; null
+          // means "the user cleared the box" and really does clear it.
+          ...(trackRoTime
+            ? { loggedTime: loggedTime.trim() === "" ? null : loggedTime }
+            : {}),
           roNumber: roNumber.trim(),
           vehicle: {
             year: year.trim(),
@@ -559,6 +595,7 @@ export function useLogRoForm({
             laborType: line.laborType,
             paidHours: line.paidHours ?? null, // pass-through so edits never wipe it
             isComeback: line.isComeback ?? false,
+            isUpsell: line.isUpsell ?? false, // pass-through, same reason
           })),
         };
         if (onSave) {
@@ -694,6 +731,7 @@ export function useLogRoForm({
     existingEntry,
     // shell fields
     date, setDate,
+    loggedTime, setLoggedTime, trackRoTime,
     roNumber, setRoNumber,
     notes, setNotes,
     notesOpen, setNotesOpen,

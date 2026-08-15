@@ -30,7 +30,7 @@ import { buildImportPayload, type ImportBundle, type ImportPayload } from "./imp
 function fullBundle(): ImportBundle {
   const ts = "2026-01-01T00:00:00Z";
   return {
-    version: 3,
+    version: 4,
     exportedAt: ts,
     settings: {
       splitDay: 15,
@@ -41,6 +41,7 @@ function fullBundle(): ImportBundle {
       roTemplates: [],
       defaultLaborType: "warranty",
       shareLaborTimes: true,
+      trackRoTime: true,
     },
     opCodes: [
       {
@@ -74,6 +75,7 @@ function fullBundle(): ImportBundle {
         createdAt: ts,
         updatedAt: ts,
         date: "2026-01-01",
+        loggedTime: "09:42",
         roNumber: "12345",
         vehicle: { year: "2020", make: "Ford", model: "F-150", vin: "V", mileage: "80000" },
         flagHours: 1,
@@ -92,6 +94,7 @@ function fullBundle(): ImportBundle {
             actualHours: 0.8,
             paidHours: 1,
             isComeback: false,
+            isUpsell: true,
             laborType: "warranty",
             notes: "",
             position: 0,
@@ -312,6 +315,40 @@ describe("payload shape", () => {
     expect(payload.work_schedules?.[0]).toMatchObject({
       anchor_monday: "2025-12-29",
       rotation_weeks: 2,
+    });
+  });
+
+  // --- v4: three columns, and the pre-v4 file that never mentions them -----
+  //
+  // The failure this pins is not "the value is wrong", it is "the KEY is
+  // missing". is_upsell is NOT NULL, and the RPC populates rows against a null
+  // base, so an absent key writes NULL and rolls the entire import back — a
+  // backup taken last week would stop restoring at all.
+  it("fills the v4 columns for a backup written before they existed", () => {
+    const old = fullBundle();
+    delete old.entries[0].loggedTime;
+    delete old.entries[0].opCodes[0].isUpsell;
+    delete old.settings.trackRoTime;
+    const built = buildImportPayload(old, { newId: () => "NEW" });
+
+    expect(built.entries[0]).toHaveProperty("logged_time", null);
+    expect(built.entry_op_codes[0]).toHaveProperty("is_upsell", false);
+    // Settings are the opposite rule: absent must stay absent, or restoring an
+    // old file would reset a preference the destination account already made.
+    expect(built.settings).not.toHaveProperty("track_ro_time");
+  });
+
+  it("refuses to call a comeback line an upsell, even from a hand-edited file", () => {
+    // The DB CHECK (entry_op_codes_upsell_not_comeback) would reject the row and
+    // roll back the whole import. Resolving it here means a file someone edited
+    // by hand still restores, minus a claim that contradicts itself.
+    const hostile = fullBundle();
+    hostile.entries[0].opCodes[0].isComeback = true;
+    hostile.entries[0].opCodes[0].isUpsell = true;
+    const built = buildImportPayload(hostile, { newId: () => "NEW" });
+    expect(built.entry_op_codes[0]).toMatchObject({
+      is_comeback: true,
+      is_upsell: false,
     });
   });
 

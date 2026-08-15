@@ -192,6 +192,9 @@ export const entryLineSchema = z.object({
   isComeback: z
     .boolean({ error: "Comeback must be true or false." })
     .optional(),
+  isUpsell: z
+    .boolean({ error: "Upsell must be true or false." })
+    .optional(),
   actualSource: actualSource.nullable().optional(),
 });
 
@@ -200,6 +203,21 @@ export const newEntrySchema = z.object({
     .string({ error: "Date is required." })
     .min(1, { error: "Date is required." })
     .refine(isCalendarDate, { error: "Date must be in YYYY-MM-DD format." }),
+  // Wall-clock "HH:MM", or null for "no time recorded", or absent entirely when
+  // the tracking setting is off. The pattern is the DB CHECK
+  // (entries_logged_time_hhmm) and not a stricter opinion of our own — a value
+  // the column would accept must not be refused here.
+  //
+  // No `.default()`: absent has to stay absent so the DB layer can tell "the
+  // form never asked" from "the user cleared it", which is what stops an edit
+  // made with the setting off from wiping a time recorded when it was on.
+  loggedTime: z
+    .string({ error: "Time must be text." })
+    .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, {
+      error: "Time must be in HH:MM format.",
+    })
+    .nullable()
+    .optional(),
   roNumber: requiredText("RO number is required.", TEXT_LIMITS.roNumber),
   vehicle: vehicleSchema,
   notes: freeText(TEXT_LIMITS.notes).optional().default(""),
@@ -220,6 +238,11 @@ export const setLineActualHoursSchema = z.object({
   lineId: lineIdSchema,
   actualHours: hours("Actual hours", MAX_NUMERIC_5_2).nullable(),
   actualSource: actualSource.nullable().optional().default("timer"),
+});
+
+export const setLineUpsellSchema = z.object({
+  lineId: lineIdSchema,
+  isUpsell: z.boolean({ error: "Upsell must be true or false." }),
 });
 
 export const setLinePaidHoursSchema = z.object({
@@ -747,6 +770,10 @@ export const referenceRateSchema = z
 
 export const shareLaborTimesSchema = z.boolean({
   error: "Sharing preference must be true or false.",
+});
+
+export const trackRoTimeSchema = z.boolean({
+  error: "Time tracking preference must be true or false.",
 });
 
 const SPLIT_MESSAGE = "Split day must be an integer between 1 and 30.";

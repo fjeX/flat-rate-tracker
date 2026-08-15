@@ -21,6 +21,12 @@ import {
 } from "@/lib/periods";
 import { inferCodeDurations } from "@/lib/time-inference";
 import {
+  topUpsoldCodes,
+  upsellByPeriod,
+  type UpsellPeriodPoint,
+  type UpsoldCode,
+} from "@/lib/upsells";
+import {
   dayShapes,
   mixBands,
   mixDrivers,
@@ -736,6 +742,138 @@ function TrendSection({
   );
 }
 
+/**
+ * What you sold — upsold hours per pay period, plus the codes you sell most.
+ *
+ * ALL TIME, ignoring the window chips, for the same reason Trend does: six
+ * periods is a trend and one week is a single bar.
+ *
+ * Rendered even when nothing has ever been marked, unlike every self-hiding
+ * section above. Same call as Claims and recovery, made for the same reason —
+ * Liem went looking for that card, found nothing, and could not tell whether the
+ * feature existed or he had no data. An empty state that says how to fill it
+ * answers both.
+ */
+function UpsellSection({
+  points,
+  codes,
+  today,
+}: {
+  points: UpsellPeriodPoint[];
+  codes: UpsoldCode[];
+  today: string;
+}) {
+  const totalHours = points.reduce((s, p) => s + p.upsellHours, 0);
+  const totalFlag = points.reduce((s, p) => s + p.flagHours, 0);
+  const overallShare = totalFlag > 0 ? totalHours / totalFlag : null;
+
+  if (totalHours === 0) {
+    return (
+      <section>
+        <div className="section-title">What you sold</div>
+        <Card>
+          <p className="text-sm text-[var(--fg-2)]">
+            Nothing marked as an upsell yet. Tap{" "}
+            <span className="font-medium text-[var(--fg-1)]">Upsell</span> on an
+            RO in your dashboard to add a line you sold, or tap the Upsell tag on
+            any line already on a ticket.
+          </p>
+          <p className="mt-2 text-xs text-[var(--fg-3)]">
+            Once a few are marked, this shows how much of the work you turn is
+            work you found — the part of the job nobody else measures.
+          </p>
+        </Card>
+      </section>
+    );
+  }
+
+  // Scaled to the biggest share on show, not to 100%. A healthy upsell share is
+  // a long way short of the whole ticket, so a 0–100% axis draws six near-empty
+  // bars and hides the only thing the chart is for — whether it is rising.
+  // Floored so one strong period can't make an ordinary one look like nothing.
+  const peak = Math.max(0.1, ...points.map((p) => p.share ?? 0));
+
+  return (
+    <section>
+      <div className="section-title">What you sold</div>
+      <Card>
+        <p className="text-sm text-[var(--fg-1)]">
+          <span className="font-medium">{fmtHours(totalHours)}h</span> upsold
+          across these {points.length}{" "}
+          {points.length === 1 ? "period" : "periods"}
+          {overallShare !== null && (
+            <> — {Math.round(overallShare * 100)}% of everything you flagged</>
+          )}
+          .
+        </p>
+
+        <ul className="mt-3 space-y-2">
+          {points.map((p) => {
+            const share = p.share ?? 0;
+            return (
+              <li key={p.key} className="flex items-center gap-3 text-xs">
+                <span className="w-20 flex-shrink-0 text-[var(--fg-3)]">
+                  {p.label}
+                  {p.end >= today && (
+                    <b className="block text-[11px] font-normal">In progress</b>
+                  )}
+                </span>
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg-3)]">
+                  {/* A period with no upsells keeps an empty track rather than a
+                      stub: zero really is zero here, and a minimum-width bar
+                      would claim a sale that didn't happen. */}
+                  <span
+                    className="block h-full rounded-full bg-[var(--good)]"
+                    style={{ width: `${(share / peak) * 100}%` }}
+                  />
+                </span>
+                <span className="w-24 flex-shrink-0 text-right tabular-nums text-[var(--fg-2)]">
+                  {fmtHours(p.upsellHours)}h
+                  <span className="ml-1 text-[var(--fg-3)]">
+                    {p.share === null ? "—" : `${Math.round(share * 100)}%`}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+
+        {codes.length > 0 && (
+          <div className="mt-4 border-t border-[var(--line)] pt-3">
+            <div className="field-label mb-2">Most upsold</div>
+            <ul className="space-y-1.5">
+              {codes.map((c) => (
+                <li
+                  key={c.opCodeId ?? `custom:${c.code}`}
+                  className="flex items-baseline justify-between gap-3 text-xs"
+                >
+                  <span className="min-w-0">
+                    <span className="font-mono text-[var(--brand)]">{c.code}</span>
+                    {c.description && (
+                      <span className="ml-2 text-[var(--fg-3)]">
+                        {c.description}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex-shrink-0 tabular-nums text-[var(--fg-2)]">
+                    {fmtHours(c.hours)}h
+                    <span className="ml-1 text-[var(--fg-3)]">
+                      ×{c.count}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
+      <p className="mt-2 px-1 text-xs text-[var(--fg-3)]">
+        Upsold hours are part of your flagged total, not extra on top of it.
+      </p>
+    </section>
+  );
+}
+
 function RecoverySection({
   lifetime,
   insights,
@@ -929,6 +1067,19 @@ export function InsightsView({
     [entries, denomByDay, splitDay, periodOverrides],
   );
 
+  // Deliberately NOT built from `trend`, which carries PAIRED flag hours (its
+  // numbers are the numerator of an efficiency percentage, so days with no
+  // denominator are excluded). Upsold work on an unclocked Saturday is still
+  // upsold — dividing by the paired total would report shares above 100%.
+  const upsells = useMemo(
+    () => upsellByPeriod(entries, { splitDay, periodOverrides }),
+    [entries, splitDay, periodOverrides],
+  );
+  const upsoldCodes = useMemo(
+    () => topUpsoldCodes(entries, library),
+    [entries, library],
+  );
+
   const lifetime = disputes ? lifetimeRecovery(disputes) : null;
   const insights = disputes ? outcomeInsights(disputes) : [];
   const hasWorkedDays = weekdays.some((w) => w.efficiency !== null);
@@ -1034,6 +1185,7 @@ export function InsightsView({
       <BigJobsSection rows={bigJobs.rows} coverage={bigJobs.coverage} />
       <MaintenanceTimesSection inference={inference} />
       {trend.length > 0 && <TrendSection points={trend} today={today} />}
+      <UpsellSection points={upsells} codes={upsoldCodes} today={today} />
       {/* Gated only on the migration having landed — the section handles
           "nothing recovered yet" itself. */}
       {lifetime !== null && (

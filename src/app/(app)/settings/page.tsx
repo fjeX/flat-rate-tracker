@@ -10,6 +10,7 @@ import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
 import { RoTemplateCard } from "@/components/settings/RoTemplateCard";
 import { TimezoneCard } from "@/components/settings/TimezoneCard";
 import { QuickAddCard } from "@/components/settings/QuickAddCard";
+import { RoTimeCard } from "@/components/settings/RoTimeCard";
 import { TrueTimeCard } from "@/components/settings/TrueTimeCard";
 import Link from "next/link";
 
@@ -60,6 +61,7 @@ export default async function SettingsPage() {
         <h2 className="section-title">Logging</h2>
         <div className="space-y-6">
           <QuickAddCard />
+          <RoTimeCard initialTrack={settings.trackRoTime} />
           <RoTemplateCard userId={user!.id} initialTemplates={settings.roTemplates} />
         </div>
       </section>

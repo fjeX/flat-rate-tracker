@@ -34,6 +34,9 @@ function toEntryOpCode(row: EntryOpCodeRow): EntryOpCode {
     // ?? false, not a bare read: a DB that hasn't run the Phase 2 migration
     // returns undefined here, and "not marked" is the honest reading of that.
     isComeback: row.is_comeback ?? false,
+    // Same reading for the same reason — a pre-migration DB doesn't return the
+    // column at all, and "nobody marked this as sold" is what that means.
+    isUpsell: row.is_upsell ?? false,
   };
 }
 
@@ -44,6 +47,8 @@ function toEntry(row: EntryRow & { entry_op_codes?: EntryOpCodeRow[] }): Entry {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     date: row.date,
+    // Nullable and left null — never defaulted from created_at. See the type.
+    loggedTime: row.logged_time ?? null,
     roNumber: row.ro_number,
     vehicle: {
       year: row.vehicle_year,
@@ -143,6 +148,18 @@ function comebackSafeFlagHours(line: NewEntryOpCode): number {
   return line.isComeback ? 0 : line.flagHours;
 }
 
+// Same treatment for the upsell flag, against the same class of accident.
+// `entry_op_codes_upsell_not_comeback` refuses a line marked as both, and the
+// two toggles live in different places (the log form marks comebacks, the RO
+// modal's Add Upsell path marks sales) — so a line can pick up both without
+// either UI ever showing them together.
+//
+// Comeback wins because it is the stronger claim: it forces flag hours to zero
+// by CHECK, and "I sold zero hours of work" is not a sale worth counting.
+function upsellSafe(line: NewEntryOpCode): boolean {
+  return line.isComeback ? false : (line.isUpsell ?? false);
+}
+
 function toLineInsert(
   entryId: string,
   line: NewEntryOpCode,
@@ -176,6 +193,10 @@ function toLineInsert(
     // Nullable columns below can stay conditional: for them, the NULL that the
     // union produces IS the intended value.
     is_comeback: line.isComeback ?? false,
+    // NOT NULL, so it obeys the rule above: always present, never conditional.
+    // An RO with one upsold line and one ordinary line is precisely the mixed
+    // shape that turns an omitted key into a 23502 on the row without it.
+    is_upsell: upsellSafe(line),
     notes: line.notes ?? "",
   };
   // Only include sub_op_code_id when set — safe on DBs that haven't run migration yet.
@@ -216,6 +237,11 @@ function toLineUpdate(
     // clears it must clear the column too. Unlike paid_hours, this is the
     // form's to write.
     is_comeback: line.isComeback ?? false,
+    // is_upsell is DELIBERATELY ABSENT, like paid_hours. Marking a sale happens
+    // in the RO detail modal (setLineUpsell), not in the log form — so if this
+    // column were listed here, editing an RO's notes would silently unmark every
+    // upsold line on it. That is the exact bug the diff-based update exists to
+    // prevent; a column belongs in this list only if the form can actually set it.
   };
 }
 
@@ -240,6 +266,13 @@ export async function createEntry(
     vehicle_mileage: input.vehicle.mileage,
     notes: input.notes,
   };
+  // Nullable, so omitting it lands the NULL we want anyway — but only set it
+  // when the caller actually carried a time. `undefined` means "the tracking
+  // setting is off and this form never asked", which is not the same statement
+  // as "this RO has no time".
+  if (input.loggedTime !== undefined) {
+    entryInsert.logged_time = input.loggedTime;
+  }
   // Omitted when unset so inserts still work against a DB that hasn't run the
   // Phase 2 migration — same guard as the per-line columns.
   if (input.comebackOfEntryId) {
@@ -278,6 +311,10 @@ export async function updateEntry(
 ): Promise<Entry> {
   const update: Database["public"]["Tables"]["entries"]["Update"] = {};
   if (patch.date !== undefined) update.date = patch.date;
+  // undefined leaves the column alone; explicit null clears it. That split is
+  // what lets a tech with the setting OFF edit an RO they logged while it was
+  // ON without wiping the time — the form simply doesn't mention the field.
+  if (patch.loggedTime !== undefined) update.logged_time = patch.loggedTime;
   if (patch.roNumber !== undefined) update.ro_number = patch.roNumber;
   if (patch.notes !== undefined) update.notes = patch.notes;
   if (patch.comebackOfEntryId !== undefined) {
@@ -465,6 +502,41 @@ export async function addLineActualHours(
   if (updateError) throw updateError;
 
   return { previous, total };
+}
+
+// Mark (or unmark) a single line as an upsell — work the tech SOLD rather than
+// work the customer came in for.
+//
+// Its own write path for the same reason setLinePaidHours has one: is_upsell is
+// not a column the log form owns (see toLineUpdate), so this is the only place
+// it changes. The RO detail modal calls it directly, and the Add Upsell flow
+// sets it at insert time instead.
+//
+// A comeback line can never be an upsell — the DB CHECK refuses it — so this
+// refuses it first, with a sentence a human can act on rather than a raw 23514.
+export async function setLineUpsell(
+  supabase: DbClient,
+  lineId: string,
+  isUpsell: boolean,
+): Promise<void> {
+  if (isUpsell) {
+    const { data, error: readErr } = await supabase
+      .from("entry_op_codes")
+      .select("is_comeback")
+      .eq("id", lineId)
+      .maybeSingle();
+    if (readErr) throw readErr;
+    if (data?.is_comeback) {
+      throw new Error(
+        "That line is marked as a comeback — unpaid rework can't also be an upsell.",
+      );
+    }
+  }
+  const { error } = await supabase
+    .from("entry_op_codes")
+    .update({ is_upsell: isUpsell })
+    .eq("id", lineId);
+  if (error) throw error;
 }
 
 // Update just a single line's paid_hours — used by the pay-period reconciliation

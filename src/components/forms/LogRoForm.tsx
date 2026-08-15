@@ -26,6 +26,8 @@ export function LogRoForm({
   defaultLaborType = null,
   laborTypeEnabled = false,
   checkDuplicates,
+  trackRoTime = false,
+  defaultLoggedTime = "",
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -36,12 +38,15 @@ export function LogRoForm({
   defaultLaborType?: LaborType | null;
   laborTypeEnabled?: boolean;
   checkDuplicates?: boolean;
+  trackRoTime?: boolean;
+  defaultLoggedTime?: string;
 }) {
   // Destructure into locals rather than reading `x` in JSX: the hook returns
   // refs, and the react-compiler lint rule otherwise taints every `x` read as
   // "accessing a ref during render".
   const {
     isEdit, savedRoNumber, date, setDate, roNumber, setRoNumber, error, roInputRef,
+    loggedTime, setLoggedTime, trackRoTime: timeFieldShown,
     library, handleScanResult, lines, search, setSearch, pickerOpen, setPickerOpen,
     pickerRef, filteredLibrary, totalFlag, quickChips, customOpen, setCustomOpen,
     newLibraryOpen, setNewLibraryOpen, newLibraryPending, subPickerOc, setSubPickerOc,
@@ -60,6 +65,7 @@ export function LogRoForm({
   } = useLogRoForm({
     initialOpCodes, existingEntry, onSave, onCreateOpCode, redirectTo,
     defaultLaborType, laborTypeEnabled, checkDuplicates,
+    trackRoTime, defaultLoggedTime,
   });
 
   return (
@@ -104,6 +110,32 @@ export function LogRoForm({
             cursor: "pointer",
           }}
         />
+        {/* Sits beside the date because it IS part of the date — a wall-clock
+            time on that day, not an independent fact. Not `required`: clearing
+            it is a legitimate answer ("I don't remember when"), and an empty box
+            saves as no time rather than blocking the RO. */}
+        {timeFieldShown && (
+          <>
+            <label htmlFor="ro-time" className="sr-only">Time</label>
+            <input
+              id="ro-time"
+              type="time"
+              value={loggedTime}
+              onChange={(e) => setLoggedTime(e.target.value)}
+              className="focus-ring rounded-full px-2"
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                minHeight: 44,
+                fontSize: 12,
+                color: "var(--fg-3)",
+                letterSpacing: "0.04em",
+                cursor: "pointer",
+              }}
+            />
+          </>
+        )}
       </div>
 
       {/* ---- Scan banner (new RO only) ---- */}

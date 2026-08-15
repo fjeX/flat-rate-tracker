@@ -3,8 +3,10 @@ import {
   addDays,
   endOfMonth,
   endOfWeek,
+  formatLoggedTime,
   getPeriodForDate,
   getRangeForPeriodKey,
+  hhmmInTz,
   startOfMonth,
   startOfWeek,
 } from "./periods";
@@ -324,5 +326,79 @@ describe("startOfWeek / endOfWeek", () => {
 
   it("Monday start: week starts on Monday itself", () => {
     expect(startOfWeek("2026-06-08", 1)).toBe("2026-06-08");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RO time of day
+// ---------------------------------------------------------------------------
+
+describe("hhmmInTz", () => {
+  // 17:30 UTC on a March day: PDT is UTC-7, so 10:30 in Los Angeles.
+  const instant = new Date("2026-03-12T17:30:00Z");
+
+  it("reads the wall clock in the requested zone, not the runtime's", () => {
+    expect(hhmmInTz("America/Los_Angeles", instant)).toBe("10:30");
+    expect(hhmmInTz("America/New_York", instant)).toBe("13:30");
+    expect(hhmmInTz("UTC", instant)).toBe("17:30");
+  });
+
+  it("zero-pads, so string ordering matches clock ordering", () => {
+    expect(hhmmInTz("UTC", new Date("2026-03-12T04:05:00Z"))).toBe("04:05");
+  });
+
+  it("renders midnight as 00:00, never 24:00", () => {
+    // en-GB with hour12:false does produce "24:00", which the column's CHECK
+    // rejects — this is why the formatter asks for hourCycle h23. An RO logged
+    // just after midnight would otherwise fail to save, once a day, forever.
+    expect(hhmmInTz("UTC", new Date("2026-03-12T00:00:00Z"))).toBe("00:00");
+    expect(hhmmInTz("UTC", new Date("2026-03-12T00:59:00Z"))).toBe("00:59");
+  });
+
+  it("produces a value the database will accept", () => {
+    const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+    for (let h = 0; h < 24; h++) {
+      const d = new Date(Date.UTC(2026, 2, 12, h, 7));
+      expect(hhmmInTz("UTC", d)).toMatch(HHMM);
+    }
+  });
+
+  it("falls back to the local clock for a zone that doesn't exist", () => {
+    expect(hhmmInTz("Mars/Olympus_Mons", instant)).toMatch(
+      /^([01][0-9]|2[0-3]):[0-5][0-9]$/,
+    );
+  });
+});
+
+describe("formatLoggedTime", () => {
+  it("renders a 12-hour clock with a meridiem", () => {
+    expect(formatLoggedTime("09:42")).toBe("9:42 AM");
+    expect(formatLoggedTime("13:05")).toBe("1:05 PM");
+  });
+
+  it("gets the two ends of the clock right", () => {
+    // The two values a naive `h % 12` renders as "0:00".
+    expect(formatLoggedTime("00:00")).toBe("12:00 AM");
+    expect(formatLoggedTime("12:00")).toBe("12:00 PM");
+    expect(formatLoggedTime("23:59")).toBe("11:59 PM");
+  });
+
+  it("returns null for anything that isn't a time", () => {
+    // Null renders as nothing at all. The alternative — a synthetic Date — turns
+    // a garbled value into "Invalid Date" or a confident, wrong "12:00 AM".
+    expect(formatLoggedTime(null)).toBeNull();
+    expect(formatLoggedTime(undefined)).toBeNull();
+    expect(formatLoggedTime("")).toBeNull();
+    expect(formatLoggedTime("9:42")).toBeNull();
+    expect(formatLoggedTime("24:00")).toBeNull();
+    expect(formatLoggedTime("12:60")).toBeNull();
+    expect(formatLoggedTime("nope")).toBeNull();
+  });
+
+  it("round-trips whatever hhmmInTz produces", () => {
+    for (let h = 0; h < 24; h++) {
+      const stored = hhmmInTz("UTC", new Date(Date.UTC(2026, 2, 12, h, 30)));
+      expect(formatLoggedTime(stored)).not.toBeNull();
+    }
   });
 });

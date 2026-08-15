@@ -10,7 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { EntryPhotos } from "@/components/ro/EntryPhotos";
 import { LinkedSpiffs } from "@/components/bonuses/LinkedSpiffs";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
-import { formatDateLong } from "@/lib/periods";
+import { formatDateLong, formatLoggedTime } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { entryEarnings, fmtMoney, hasAnyRate, lineEarnings, type RateMap } from "@/lib/earnings";
 import {
@@ -18,6 +18,7 @@ import {
   deleteEntryAction,
   deleteEntryLineAction,
   setLineActualHoursAction,
+  setLineUpsellAction,
 } from "@/app/actions/entries";
 
 export function RoDetailModal({
@@ -26,11 +27,18 @@ export function RoDetailModal({
   rates = {},
   onClose,
   onDeleted,
+  autoOpenAddLine = false,
 }: {
   entry: Entry;
   library?: OpCode[];
   rates?: RateMap;
   onClose: () => void;
+  /**
+   * Open with the op-code picker already up and the new line pre-marked as an
+   * upsell. Set by the dashboard's Upsell shortcut, which exists to remove the
+   * two taps between "the customer said yes" and "the line is on the RO".
+   */
+  autoOpenAddLine?: boolean;
   // Called after the whole RO is deleted. When provided, the parent owns the
   // post-delete refresh (e.g. History prunes its paginated "Load more" state,
   // which a bare router.refresh() can't reach). Falls back to router.refresh().
@@ -55,7 +63,15 @@ export function RoDetailModal({
     <Modal open onClose={onClose} title={`RO #${entry.roNumber}`} wide>
       <div className="space-y-4">
         <div className="text-xs text-[var(--fg-3)]">
-          <div>{formatDateLong(entry.date)}</div>
+          {/* The time the tech recorded for the WORK sits on the date line,
+              because it is part of that date. The "Logged" line below is a
+              different fact — when the row was written — and they are kept
+              visually apart so a 9pm batch entry can't be read as a 9pm job. */}
+          <div>
+            {formatDateLong(entry.date)}
+            {formatLoggedTime(entry.loggedTime) &&
+              ` · ${formatLoggedTime(entry.loggedTime)}`}
+          </div>
           <div className="mt-0.5">
             Logged{" "}
             {new Date(entry.createdAt).toLocaleString(undefined, {
@@ -131,6 +147,8 @@ export function RoDetailModal({
         <AddOpCodePicker
           entryId={entry.id}
           library={library}
+          autoOpen={autoOpenAddLine}
+          defaultUpsell={autoOpenAddLine}
           onAdded={() => router.refresh()}
         />
 
@@ -236,7 +254,28 @@ function LineRow({
   );
   const [saving, startSave] = useTransition();
   const [deleting, startDelete] = useTransition();
+  const [markingUpsell, startUpsell] = useTransition();
+  const [upsell, setUpsell] = useState(line.isUpsell ?? false);
   const [error, setError] = useState<string | null>(null);
+
+  // Marking works both ways and on any line, not only ones added through the
+  // Upsell shortcut. Most upsells get written down with the rest of the RO at
+  // the end of the job, and a flag that can only be set at insert time would
+  // miss those — leaving the "hours you sold" figure quietly short.
+  function toggleUpsell() {
+    const next = !upsell;
+    setError(null);
+    setUpsell(next); // optimistic; reverted below if the server refuses
+    startUpsell(async () => {
+      try {
+        await setLineUpsellAction(line.id, next);
+        router.refresh();
+      } catch (e) {
+        setUpsell(!next);
+        setError(e instanceof Error ? e.message : "Couldn't save that.");
+      }
+    });
+  }
 
   const ref = line.opCodeId ? libraryById.get(line.opCodeId) : undefined;
   const code = line.custom
@@ -302,6 +341,30 @@ function LineRow({
             <Badge tone="warn" className="ml-2">
               Comeback
             </Badge>
+          )}
+          {/* A toggle, not a label — and deliberately visible even when off, or
+              there would be no way to mark a line the log form already saved.
+              Hidden entirely on a comeback: the DB refuses that combination, so
+              offering the control would be offering an error. */}
+          {!line.isComeback && (
+            <button
+              type="button"
+              onClick={toggleUpsell}
+              disabled={markingUpsell}
+              aria-pressed={upsell}
+              title={
+                upsell
+                  ? "Marked as an upsell — tap to unmark"
+                  : "Mark this line as an upsell"
+              }
+              className={`ml-2 rounded-full border px-2 py-0.5 text-[11px] font-medium disabled:opacity-50 ${
+                upsell
+                  ? "border-transparent bg-[var(--good)] text-[var(--bg-1)]"
+                  : "border-[var(--line)] text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+              }`}
+            >
+              Upsell
+            </button>
           )}
           {description && <ExpandableDescription text={description} />}
           {/* A comeback line reads 0.0h and, with rates on, "$0.00" in the
@@ -370,16 +433,27 @@ function AddOpCodePicker({
   entryId,
   library,
   onAdded,
+  autoOpen = false,
+  defaultUpsell = false,
 }: {
   entryId: string;
   library: OpCode[];
   onAdded: () => void;
+  autoOpen?: boolean;
+  defaultUpsell?: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [subPickOc, setSubPickOc] = useState<OpCode | null>(null);
+  // Pre-checked when the shortcut opened this, and clearable in one tap.
+  //
+  // Not every line added after the fact is a sale — sometimes you just forgot
+  // one — so the flag is shown rather than applied silently. A button labelled
+  // "Upsell" that quietly marks whatever you pick would put work you never sold
+  // into the figure the whole feature exists to produce.
+  const [markUpsell, setMarkUpsell] = useState(defaultUpsell);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
@@ -421,6 +495,7 @@ function AddOpCodePicker({
           notes: "",
           subOpCodeId: subOpCodeId ?? null,
           laborType: null,
+          isUpsell: markUpsell,
         });
         onAdded();
         setSearch("");
@@ -444,6 +519,21 @@ function AddOpCodePicker({
 
   return (
     <div ref={containerRef} className="relative">
+      {/* Above the picker, not below it: the tech reads this BEFORE choosing a
+          code, and a checkbox found after the list has already been tapped is a
+          checkbox that never gets read. Rendered for both steps, since a code
+          with variants adds its line from the sub-picker. */}
+      {open && (
+        <label className="mb-2 flex min-h-[44px] cursor-pointer items-center gap-2 text-xs text-[var(--fg-2)]">
+          <input
+            type="checkbox"
+            checked={markUpsell}
+            onChange={(e) => setMarkUpsell(e.target.checked)}
+            className="h-3.5 w-3.5 accent-[var(--brand)]"
+          />
+          Mark as an upsell — work you sold, not what they came in for
+        </label>
+      )}
       {!open ? (
         <button
           type="button"

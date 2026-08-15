@@ -124,6 +124,61 @@ describe(`backup manifest ↔ import_replace_account (${file})`, () => {
     ).toBe(true);
   });
 
+  // ---------------------------------------------------------------------
+  // user_settings, column by column — the hole the table checks left open.
+  //
+  // Every other carried table is restored with jsonb_populate_recordset, which
+  // takes whatever columns the payload has: name the table and its columns come
+  // along. user_settings is the one exception. It is UPDATEd column by column on
+  // purpose (a missing key must keep the destination's value, which
+  // jsonb_populate_record cannot express), so a NEW COLUMN there is restored
+  // only if someone writes a line for it.
+  //
+  // Nothing caught that. The manifest fails tsc until the column is ruled on,
+  // and the payload test fails until the builder emits it — so a column could be
+  // declared `carry`, exported, and built into a correct payload while this
+  // function ignored it. track_ro_time (2026-08-16) is the column that walked
+  // through, and it will not be the last one added to this table.
+  // ---------------------------------------------------------------------
+  const settingsManifest = BACKUP_MANIFEST.user_settings;
+  const carriedSettingsColumns = settingsManifest.carried
+    ? Object.entries(settingsManifest.columns)
+        .filter(([, d]) => d === "carry")
+        .map(([c]) => c)
+    : [];
+
+  it("has user_settings columns to check", () => {
+    // An empty list would make the check below pass vacuously, which is how a
+    // guard quietly stops guarding.
+    expect(carriedSettingsColumns.length).toBeGreaterThan(5);
+  });
+
+  it.each(carriedSettingsColumns)(
+    "user_settings.%s: the RPC restores it by name",
+    (column) => {
+      // Assignment specifically, not a bare mention: `s ? 'goal_hours'` inside
+      // some other column's CASE would satisfy a substring search while writing
+      // nothing. The SET list is `column = CASE …`.
+      const assigns = new RegExp(`\\b${column}\\s*=\\s*CASE\\b`, "i").test(code);
+      expect(
+        assigns,
+        `user_settings.${column} is marked \`carry\` but ${file} never assigns it. ` +
+          `Export will put it in the backup file and import will silently ignore ` +
+          `it — the setting reverts to the destination account's value with no error.`,
+      ).toBe(true);
+    },
+  );
+
+  it("actually fails when a settings column is missing from the RPC", () => {
+    // Pin the matcher against a source where it MUST fire. "All clear" and "the
+    // regex matches nothing" look identical from the outside.
+    const withColumn = "UPDATE user_settings SET track_ro_time = CASE WHEN s ? 'x' THEN true ELSE track_ro_time END";
+    const mentionsOnly = "UPDATE user_settings SET goal_hours = CASE WHEN s ? 'track_ro_time' THEN 1 ELSE goal_hours END";
+    const re = (col: string) => new RegExp(`\\b${col}\\s*=\\s*CASE\\b`, "i");
+    expect(re("track_ro_time").test(withColumn)).toBe(true);
+    expect(re("track_ro_time").test(mentionsOnly)).toBe(false);
+  });
+
   it("never reads an excluded column from the payload", () => {
     // is_admin is the one that matters: a backup is a file the user can edit, so
     // the RPC naming it anywhere outside a comment is a privilege escalation.

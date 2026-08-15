@@ -41,6 +41,9 @@ function toSettings(row: SettingsRow): UserSettings {
     // `?? false` also covers a pre-migration DB. Defaulting to false is the
     // safe direction for a consent flag: an unknown answer is never consent.
     shareLaborTimes: row.share_labor_times ?? false,
+    // Same `?? false`, same reason in a different key: an unknown answer must
+    // not put a new field in front of someone who never asked for it.
+    trackRoTime: row.track_ro_time ?? false,
   };
 }
 
@@ -64,6 +67,7 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
       referenceHourlyRate: null,
       tagColors: {},
       shareLaborTimes: false,
+      trackRoTime: false,
     };
   }
   return toSettings(data);
@@ -78,6 +82,7 @@ export type SettingsPatch = {
   referenceHourlyRate?: number | null;
   tagColors?: Record<string, number>;
   shareLaborTimes?: boolean;
+  trackRoTime?: boolean;
 };
 
 export async function updateSettings(
@@ -101,6 +106,9 @@ export async function updateSettings(
   if (patch.tagColors !== undefined) update.tag_colors = patch.tagColors;
   if (patch.shareLaborTimes !== undefined)
     update.share_labor_times = patch.shareLaborTimes;
+  // Needs a column-level UPDATE grant to be writable at all — granted in
+  // 20260816000000_ro_time_and_upsell.sql. See the lock_is_admin migration.
+  if (patch.trackRoTime !== undefined) update.track_ro_time = patch.trackRoTime;
 
   const { data, error } = await supabase
     .from("user_settings")

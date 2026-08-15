@@ -44,6 +44,51 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+/**
+ * Wall-clock "HH:MM" right now in `tz`, 24-hour and zero-padded — the default
+ * value the log forms put in the RO time field.
+ *
+ * The timezone is consulted HERE and nowhere else. Once the string is stored it
+ * is a plain wall-clock reading against the RO's own date, so reviewing an RO
+ * from another timezone shows the time that was entered rather than a converted
+ * one. That is the whole reason logged_time is text and not a timestamptz.
+ *
+ * `hourCycle: "h23"` is load-bearing: en-GB with hour12:false renders midnight
+ * as "24:00", which the column's CHECK rejects outright. Falls back to the
+ * runtime's own clock for an unknown zone, matching isoDateInTz.
+ */
+export function hhmmInTz(tz: string, d: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz || undefined,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(d);
+  } catch {
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+}
+
+/**
+ * "9:42 AM" for display, from a stored "HH:MM". Returns null for null, an empty
+ * string or anything that isn't a wall-clock time — a garbled value renders as
+ * nothing rather than as "Invalid Date" or a silent 12:00 AM.
+ *
+ * Formatting is done by hand rather than through Intl on a synthetic Date: the
+ * stored value has no date and no zone, and handing it to a Date would invite
+ * exactly the timezone conversion this field exists to avoid.
+ */
+export function formatLoggedTime(hhmm: string | null | undefined): string | null {
+  if (!hhmm) return null;
+  const m = /^([01][0-9]|2[0-3]):([0-5][0-9])$/.exec(hhmm);
+  if (!m) return null;
+  const hour24 = Number(m[1]);
+  const suffix = hour24 < 12 ? "AM" : "PM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${m[2]} ${suffix}`;
+}
+
 function daysInMonth(year: number, month1: number): number {
   // month1 is 1-based. new Date(y, m, 0) = last day of month m-1+1 == m.
   return new Date(year, month1, 0).getDate();

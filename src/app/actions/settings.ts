@@ -23,6 +23,7 @@ import {
   shareLaborTimesSchema,
   splitDaySchema,
   timezoneSchema,
+  trackRoTimeSchema,
   weekStartDaySchema,
 } from "@/lib/validation/actions";
 import type { Json } from "@/lib/supabase/database.types";
@@ -164,6 +165,21 @@ export async function setShareLaborTimesAction(
     await db.clearAllLaborTimeObservations(supabase);
   }
   revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
+// Capture a time of day on each RO. Purely forward-looking: turning it OFF stops
+// the forms asking and stops new ROs recording a time, and deliberately does NOT
+// erase the times already recorded — unlike the True Time flag above, this is a
+// display-and-capture preference, not a consent to share anything with anyone.
+// Deleting a tech's own history because they closed a form field would be its own
+// kind of data loss.
+export async function setTrackRoTimeAction(track: boolean): Promise<void> {
+  const clean = validate(trackRoTimeSchema, track);
+  const supabase = await createClient();
+  await db.updateSettings(supabase, { trackRoTime: clean });
+  revalidatePath("/settings");
+  revalidatePath("/log");
   revalidatePath("/dashboard");
 }
 
