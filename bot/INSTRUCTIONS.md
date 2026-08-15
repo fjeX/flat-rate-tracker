@@ -920,6 +920,41 @@ something if you idle first and read fast:
 precisely what hides the bug. `RefreshFlusher` (app layout) is what keeps this
 working; if it has been removed from the tree, expect this check to fail.
 
+### 8i. Password recovery & account security (shipped 2026-08-14)
+
+🛑 **NEVER COMPLETE A PASSWORD CHANGE OR RESET.** Your credentials are the same
+ones `deploy.sh` uses for its smoke gate. Changing them locks you out AND makes
+every future deploy roll back. Everything below is look-only: render the pages,
+read the copy, submit nothing that would change a password. Do **not** submit
+the /forgot-password form either — it emails a real address and each request
+invalidates the previous link.
+
+Five auth bugs shipped in one day on 2026-08-14, all of them "a page reachable
+in the wrong state, or copy that lies about why something failed". There is
+automated coverage now (`tests/smoke/auth.smoke.ts`), so treat this section as a
+second pair of eyes on the wording and the look, not as the primary gate.
+
+1. **/signin has a "Forgot your password?" link**, under the Sign in button and
+   above the "or" divider. If it is missing, a locked-out tech has no route at
+   all — report it.
+2. **Visit `/forgot-password` while logged in.** It must LOAD, showing "Reset
+   your password" and a "Send reset link" button. If it bounces you to
+   /dashboard, that is the 2026-08-14 deadlock regressing — clicking any reset
+   link signs you in, so a bounce here strands anyone whose first link is spent.
+   Report it as HIGH. **Do not submit the form.**
+3. **Visit `/reset-password` while logged in.** It must show "This page needs a
+   reset link to work" and NO password fields. If it offers a "New password"
+   form just because you are signed in, that is a **security regression** —
+   anyone at an unlocked machine could change the password without knowing the
+   old one. Report it as CRITICAL.
+4. **Visit `/reset-password#error=access_denied&error_code=otp_expired`.** It
+   must say the link "has expired or has already been used", NOT "this page
+   needs a reset link". The second wording blames the user for a token that
+   simply timed out; that exact bug shipped.
+5. **On /account, the Password card must ask for "Current Password"** above New
+   Password and Confirm Password. If that field is gone, a stolen session is
+   enough to take the account over. Report it as CRITICAL. Fill in nothing.
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:
