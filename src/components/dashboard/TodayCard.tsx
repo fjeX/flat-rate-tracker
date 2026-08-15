@@ -9,9 +9,10 @@ import { computeEfficiency, fmtHours, fmtPct } from "@/lib/stats";
 import type { Stats } from "@/lib/stats";
 import type { OpCode } from "@/lib/types";
 import { QuickAddModal } from "./QuickAddModal";
+import { useQuickAddEnabled } from "@/lib/quick-add-pref";
 import { RollingNumber } from "@/components/ui/RollingNumber";
 
-const QUICK_ADD_KEY = "frt:quick_add_enabled";
+
 
 function toText(hours: number): string {
   return hours > 0 ? String(hours) : "";
@@ -45,17 +46,13 @@ export function TodayCard({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [quickAddEnabled, setQuickAddEnabled] = useState(true);
+  // One store shared with Settings' QuickAddCard — see lib/quick-add-pref.
+  const quickAddEnabled = useQuickAddEnabled();
   const [modalOpen, setModalOpen] = useState(false);
 
   // Set after mount and ticked once a minute — the server can't know the
   // client's clock, so pace renders "—" on first paint instead of mismatching.
   const [nowMin, setNowMin] = useState<number | null>(null);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(QUICK_ADD_KEY);
-    if (stored === "false") setQuickAddEnabled(false);
-  }, []);
 
   useEffect(() => {
     if (!todayShift) return;
@@ -208,7 +205,12 @@ export function TodayCard({
         </div>
       </div>
 
+      {/* The key changes on open, so React discards the previous instance and
+          every useState initialiser runs fresh — replacing eleven by-hand
+          resets inside the modal. Safe to also remount on close: Modal renders
+          null when closed, so there is no exit animation to interrupt. */}
       <QuickAddModal
+        key={modalOpen ? "open" : "closed"}
         library={library}
         open={modalOpen}
         onClose={() => setModalOpen(false)}

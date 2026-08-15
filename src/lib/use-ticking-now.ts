@@ -31,7 +31,22 @@ export function useTickingNow(running: boolean): number | null {
   // Adopt the real clock once mounted, even when nothing is accruing — the
   // ticking effect below returns early in that case and would leave `now` null
   // indefinitely.
+  //
+  // Deliberately an effect, and deliberately NOT converted to the
+  // useSyncExternalStore pattern in lib/client-storage that the other
+  // set-state-in-effect sites moved to. That pattern needs getSnapshot to return
+  // an Object.is-stable value; the whole point of this hook is a value that
+  // changes every second, so a snapshot reading Date.now() would re-render
+  // without end. Caching it in a module-level mutable would work but makes the
+  // per-caller `running` flag global — one shared worker for components that
+  // are individually started and stopped.
+  //
+  // The rule's concern is cascading renders. This is one setState, once, on
+  // mount, on a value that is null until then by design (see the #418 history
+  // above). Rewriting delicate, twice-regressed timing code to satisfy a lint
+  // rule it does not actually apply to is the worse trade.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNow(Date.now());
   }, []);
 

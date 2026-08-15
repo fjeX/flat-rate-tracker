@@ -95,22 +95,17 @@ export function QuickAddModal({
     }
   }, [pickerOpen]);
 
+  // Focus only. This used to also reset eleven pieces of state by hand on every
+  // open, which is React's documented anti-pattern for "reset state when a prop
+  // changes" — each setState is a fresh render, and any field added later has to
+  // remember to join the list or it silently leaks between openings. TodayCard
+  // now passes a `key` that changes each time the modal opens, so React discards
+  // the instance and every useState initialiser runs again. Adding state here no
+  // longer requires touching anything.
   useEffect(() => {
-    if (open) {
-      setMode("ro");
-      setRoNumber("");
-      setLines([]);
-      setLibrary(initialLibrary);
-      setSearch("");
-      setError(null);
-      setPickerOpen(false);
-      setCustomOpen(false);
-      setNewLibraryOpen(false);
-      setSubPickerOc(null);
-      setComebackKind(null);
-      setTimeout(() => roInputRef.current?.focus(), 60);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!open) return;
+    const id = setTimeout(() => roInputRef.current?.focus(), 60);
+    return () => clearTimeout(id);
   }, [open]);
 
   const filteredLibrary = useMemo(() => {

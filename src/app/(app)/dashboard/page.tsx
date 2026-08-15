@@ -95,9 +95,11 @@ export default async function DashboardPage() {
   const weekStart = startOfWeek(today, weekStartDay);
   const weekEnd = endOfWeek(today, weekStartDay);
 
-  const ninetyDaysAgo = tz
-    ? isoDateInTz(tz, new Date(Date.now() - 90 * 86_400_000))
-    : isoDate(new Date(Date.now() - 90 * 86_400_000));
+  // Derived from `today` (already timezone-corrected) rather than by subtracting
+  // 90 × 86_400_000 ms from now. Those differ: a fixed 90×24h span crosses a DST
+  // boundary an hour short, landing on the previous calendar date twice a year.
+  // Calendar arithmetic on the ISO date is what "90 days ago" actually means.
+  const ninetyDaysAgo = addDays(today, -90);
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
   const [entries, clocks, library, laborRates, gamification, schedules, daysOff, confirmedZeroDays, shiftOverrides, unpaidTime, disputeList] = await Promise.all([
