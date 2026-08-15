@@ -91,21 +91,16 @@ jobs:
         run: npm audit --audit-level=high
 
   lint:
-    name: Lint (non-blocking)
+    name: Lint
     runs-on: ubuntu-latest
-    # NON-BLOCKING ON PURPOSE, AND THIS IS TEMPORARY.
+    # BLOCKING as of 2026-08-15. It shipped non-blocking for one day because 13
+    # pre-existing errors would have made this workflow red at birth, and a red
+    # signal that means nothing trains everyone to ignore the real one. Those 13
+    # are fixed, `npm run lint` exits 0, and the gate is now worth having.
     #
-    # As of 2026-08-14 `npm run lint` reports 13 errors + 1 warning that predate
-    # this workflow — mostly react-hooks/set-state-in-effect, plus a rules-of-hooks
-    # error in tests/e2e/fixtures.ts. They were NOT introduced by the Next 16.3.1
-    # bump: eslint-plugin-react-hooks was already 7.1.1 in the previous lockfile.
-    # They accumulated unnoticed because nothing has ever gated on lint.
-    #
-    # Making this blocking today would mean a CI that is red from the moment it is
-    # born, and vitest.config.ts already spells out why that is worse than no
-    # signal at all: a red exit code that does not mean anything trains everyone to
-    # ignore the result. Fix the 13, then delete continue-on-error and this comment.
-    continue-on-error: true
+    # One warning remains on purpose (<img> on the landing page). Warnings do not
+    # fail eslint, so do not "fix" this job by adding --max-warnings=0 without
+    # first clearing it — that is how a gate becomes red at birth all over again.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
