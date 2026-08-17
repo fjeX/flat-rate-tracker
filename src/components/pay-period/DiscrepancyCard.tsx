@@ -35,7 +35,13 @@ export function DiscrepancyCard({
     const value = parsedPaid;
     startTransition(async () => {
       try {
-        await setPaidPeriodHoursAction(periodKey, value);
+        // Validation answers with { error } — a thrown one would be redacted in
+        // production. Only DB failures reach the catch.
+        const res = await setPaidPeriodHoursAction(periodKey, value);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
         setSavedPaid(value);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to save.");

@@ -3,6 +3,7 @@ import {
   payStatus,
   reconcileEntries,
   unreconciledLines,
+  allPayLines,
   shortfallDollars,
   PAY_EPS,
   sortUnreconciledLines,
@@ -142,6 +143,79 @@ describe("unreconciledLines", () => {
     const rows = unreconciledLines(entries);
     expect(rows.map((r) => r.line.id)).toEqual(["a", "c"]);
     expect(rows.map((r) => r.status)).toEqual(["pending", "short"]);
+  });
+});
+
+describe("allPayLines", () => {
+  it("returns every line with its status, from the same input unreconciledLines narrows", () => {
+    const entries = [
+      entry([
+        line({ id: "a", flagHours: 2, paidHours: null }), // pending
+        line({ id: "b", flagHours: 2, paidHours: 2 }), // paid
+        line({ id: "c", flagHours: 3, paidHours: 1 }), // short
+        line({ id: "d", flagHours: 1, paidHours: 3 }), // over
+      ]),
+    ];
+    const all = allPayLines(entries);
+    expect(all.map((r) => r.line.id)).toEqual(["a", "b", "c", "d"]);
+    expect(all.map((r) => r.status)).toEqual([
+      "pending",
+      "paid",
+      "short",
+      "over",
+    ]);
+    // The whole point of keeping the two separate: the working list is
+    // unchanged by the existence of the wide one.
+    expect(unreconciledLines(entries).map((r) => r.line.id)).toEqual(["a", "c"]);
+  });
+
+  it("keeps entry-then-position order across multiple entries", () => {
+    const entries = [
+      entry([line({ id: "a1", position: 0 }), line({ id: "a2", position: 1 })], {
+        id: "e1",
+        roNumber: "100",
+      }),
+      entry([line({ id: "b1", position: 0, paidHours: 1 })], {
+        id: "e2",
+        roNumber: "101",
+      }),
+    ];
+    expect(allPayLines(entries).map((r) => r.line.id)).toEqual([
+      "a1",
+      "a2",
+      "b1",
+    ]);
+  });
+
+  it("returns an empty list for entries with no lines", () => {
+    expect(allPayLines([entry([])])).toEqual([]);
+    expect(allPayLines([])).toEqual([]);
+  });
+
+  // RO #67104 as it really sits in the DB: flagged 1.30, paid 5.00. It is off
+  // unreconciledLines forever, so this row is the only way the tech can reach
+  // it to put it back to pending.
+  it("surfaces the overpaid #67104 shape that unreconciledLines drops", () => {
+    const entries = [
+      entry([line({ id: "l67104", flagHours: 1.3, paidHours: 5 })], {
+        roNumber: "67104",
+      }),
+    ];
+    const all = allPayLines(entries);
+    expect(all).toHaveLength(1);
+    expect(all[0].status).toBe("over");
+    expect(all[0].entry.roNumber).toBe("67104");
+    expect(unreconciledLines(entries)).toEqual([]);
+  });
+
+  it("a cleared line (paid back to null) reads as pending again", () => {
+    const entries = [
+      entry([line({ id: "l67104", flagHours: 1.3, paidHours: null })], {
+        roNumber: "67104",
+      }),
+    ];
+    expect(allPayLines(entries)[0].status).toBe("pending");
+    expect(unreconciledLines(entries).map((r) => r.line.id)).toEqual(["l67104"]);
   });
 });
 

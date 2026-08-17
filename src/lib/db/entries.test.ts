@@ -521,4 +521,25 @@ describe("updateEntry (diff-based line reconciliation)", () => {
     expect(afterEdit.opCodes[0].paidHours).toBe(1.5);
     expect(afterEdit.opCodes[0].id).toBe(rline.id);
   });
+
+  // Clearing a reconciled line back to Pending is how a mistyped paid figure
+  // gets corrected — RO #67104 was left at 5.00 against a 1.30 flag and had to
+  // be fixed with hand-written SQL because nothing could write NULL. The value
+  // must stay null the whole way down: `undefined` here would be dropped from
+  // the PATCH body and silently leave the old figure in place.
+  it("writes NULL when a reconciled line is cleared back to Pending", async () => {
+    const store = new FakeStore();
+    const supabase = makeFakeDb(store);
+
+    const created = await createEntry(supabase, newEntry());
+    const line = created.opCodes[0];
+
+    await setLinePaidHours(supabase, line.id, 5);
+    expect((await getEntry(supabase, created.id))!.opCodes[0].paidHours).toBe(5);
+
+    await setLinePaidHours(supabase, line.id, null);
+    const cleared = await getEntry(supabase, created.id);
+    expect(cleared!.opCodes[0].paidHours).toBeNull();
+    expect(cleared!.opCodes[0].id).toBe(line.id); // same row, not replaced
+  });
 });

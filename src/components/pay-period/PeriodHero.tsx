@@ -93,7 +93,13 @@ function AwaitingPayHero({
     setError(null);
     startSaving(async () => {
       try {
-        await setPaidPeriodHoursAction(periodKey, parsed);
+        // Validation answers with { error } — a thrown one would be redacted in
+        // production. Only DB failures reach the catch.
+        const res = await setPaidPeriodHoursAction(periodKey, parsed);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
         onSaved();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to save.");

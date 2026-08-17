@@ -744,7 +744,9 @@ export function useLogRoForm({
     } catch {
       // Deliberately swallowed. The RO is saved; a failed estimate write is the
       // least important thing in this flow, and trapping the tech on a modal to
-      // tell them about it would cost more than the number is worth.
+      // tell them about it would cost more than the number is worth. The
+      // action's { error } return is ignored here for the same reason — this is
+      // the one call site that genuinely does not want to hear about it.
     }
     finishRetro();
   }
