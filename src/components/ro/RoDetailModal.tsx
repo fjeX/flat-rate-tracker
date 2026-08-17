@@ -301,7 +301,13 @@ function LineRow({
     setError(null);
     startSave(async () => {
       try {
-        await setLineActualHoursAction(line.id, parsed);
+        // Validation answers with { error } — a thrown one would be redacted in
+        // production. Only DB failures reach the catch.
+        const res = await setLineActualHoursAction(line.id, parsed);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed");

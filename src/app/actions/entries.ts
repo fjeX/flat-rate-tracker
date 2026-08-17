@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { observationsFromEntry } from "@/lib/true-time";
 import { reportServerError } from "@/lib/report-error-server";
-import { validate } from "@/lib/validation/core";
+import { check, validate } from "@/lib/validation/core";
 import {
   addLineSchema,
   entryIdSchema,
@@ -196,6 +196,16 @@ export async function addOpCodeLineToEntryAction(
   revalidatePath("/insights");
 }
 
+// Record (or clear) the hours a line actually took.
+//
+// RETURNS { error } RATHER THAN THROWING, and every hours-writing action here
+// does the same. A thrown Error crossing the Server Actions boundary has its
+// message replaced with a generic string plus a digest in a production build —
+// only the server log keeps the sentence. So "Actual hours can't be more than
+// 999.99." reached the tech as an opaque line and the cap looked like a bug in
+// the app. `check()` is the non-throwing sibling of `validate()` for exactly
+// this: the message travels as data, which nothing redacts. DB failures still
+// throw, because those have no sentence worth showing anyway.
 export async function setLineActualHoursAction(
   lineId: string,
   actualHours: number | null,
@@ -204,12 +214,14 @@ export async function setLineActualHoursAction(
   // shared True Time pool exactly as it did before. Only retro capture passes
   // "estimate", and only it is held back from the pool.
   actualSource: ActualSource | null = "timer",
-): Promise<void> {
-  const clean = validate(setLineActualHoursSchema, {
+): Promise<{ error?: string }> {
+  const parsed = check(setLineActualHoursSchema, {
     lineId,
     actualHours,
     actualSource,
   });
+  if (!parsed.ok) return { error: parsed.error };
+  const clean = parsed.data;
   const supabase = await createClient();
   await db.setLineActualHours(
     supabase,
@@ -227,6 +239,7 @@ export async function setLineActualHoursAction(
   revalidatePath("/history");
   revalidatePath("/pay-period");
   revalidatePath("/insights");
+  return {};
 }
 
 // Mark (or unmark) one RO line as an upsell.
@@ -249,12 +262,15 @@ export async function setLineUpsellAction(
 }
 
 // Record (or clear) the flag hours the shop actually paid on a single RO line.
-// null clears it back to "not yet reconciled". Mirrors setLineActualHoursAction.
+// null clears it back to "not yet reconciled". Mirrors setLineActualHoursAction,
+// including the { error } return — see the note there for why it isn't a throw.
 export async function setLinePaidHoursAction(
   lineId: string,
   paidHours: number | null,
-): Promise<void> {
-  const clean = validate(setLinePaidHoursSchema, { lineId, paidHours });
+): Promise<{ error?: string }> {
+  const parsed = check(setLinePaidHoursSchema, { lineId, paidHours });
+  if (!parsed.ok) return { error: parsed.error };
+  const clean = parsed.data;
   const supabase = await createClient();
   await db.setLinePaidHours(supabase, clean.lineId, clean.paidHours);
   revalidatePath("/");
@@ -262,4 +278,5 @@ export async function setLinePaidHoursAction(
   revalidatePath("/history");
   revalidatePath("/pay-period");
   revalidatePath("/insights");
+  return {};
 }

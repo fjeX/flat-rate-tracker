@@ -10,6 +10,15 @@ touch the database directly, never read app source code to "verify" behavior —
 you test what a user sees, nothing else. You have no permission prompts, so be
 deliberate: only interact with tracker.slimelab.cc.
 
+**One narrow exception, and only where a section explicitly says so:** you may
+read a named constant out of a named source file when a check needs to compare
+the running app against what the repo currently declares (§8g does this with
+`CURRENT_BACKUP_VERSION`). That is not "verifying behavior from the source" —
+it is reading the expected value so the comparison has something honest to test
+against, instead of a number hardcoded in this checklist that goes stale. The
+rule above still stands everywhere else: you never explain, excuse or diagnose
+what you saw in the browser by reading the code behind it.
+
 **⛔ Never yield or end your turn until the report file is written.** You run
 headless (`claude -p`): the instant you background a wait or hand your turn back,
 the runner treats the session as finished and exits — losing the entire run with
@@ -319,8 +328,26 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
   IS the title; click it for the jump list and the custom-date actions.
 - **Two-column at ≥900px**, single column below. Check both widths.
 
-**Entering paid hours from the awaiting-pay hero writes to the database.** Use a
-period you're willing to reconcile, and note it in "Data created tonight".
+**Entering paid hours from the awaiting-pay hero writes to the database — and
+there is no way to delete a `paid_periods` record once it exists.** (Verified
+in source: `setPaidPeriodHoursAction` takes a non-nullable `hours` and always
+upserts; nothing anywhere clears or deletes a paid-period row.) So the rule
+here is not "revert it" — it's **never create one you can't restore**:
+
+- Only enter paid-period hours on a period that **already has a value**.
+  Overwriting an existing number and then writing the original number back IS
+  a genuine restore, because the upsert can put the old number back exactly.
+  Record that exact existing value before you touch it, and restore it before
+  you write the report.
+- If **no** period already has a paid-hours value, **skip this test** and
+  record it in the report as `SKIPPED — no period already has paid hours;
+  entering one cannot be undone`. That is a perfectly good outcome, same as
+  any other section you never reach.
+
+This is different from §5's rule below, and deliberately so: §5's field can be
+cleared back to Pending/empty by the app, so §5 still requires a real revert.
+This field cannot be cleared by anything — not the bot, not a real user — so
+the only safe move is to not create the unrevertable state in the first place.
 
 **Info bubbles (ⓘ)** sit beside the collapse chevron on "Did I get paid?",
 "Spiffs & Bonuses" and "What did the work cost me?". Open each one: it must open
@@ -349,9 +376,22 @@ Reference rail in every mode.
     on top and pushes not-yet-reconciled ("pending") lines to the bottom.
   - Change the sort, then mark a line paid. The remaining rows must keep their
     order — if the list reshuffles under you, report it.
-- Mark 1–2 lines as paid (full amount) and mark one line **short-paid**
-  (e.g. paid 1.5 of 2.0 hrs). Verify statuses update (pending/paid/short)
-  and shortfall dollars appear if pay rates are set.
+- **Before marking anything, record each line's current status and paid
+  hours** (most will be Pending/empty — write that down, not just "Pending",
+  since that IS the prior value you'll restore). Mark 1–2 lines as paid (full
+  amount) and mark one line **short-paid** (e.g. paid 1.5 of 2.0 hrs). Verify
+  statuses update (pending/paid/short) and shortfall dollars appear if pay
+  rates are set.
+- **Revert every line you touched back to its recorded prior value before you
+  write the report — mandatory, not best-effort.** A line that was
+  Pending/empty must go back to Pending/empty, not to "reconciled against its
+  flag hours" — a Pending line contributes zero to paid-hours totals and a
+  reconciled one does not, so leaving it reconciled is not a restore, it's a
+  different mutation. This is what §3z's "note it in Data created tonight" is
+  not a substitute for: noting is not reverting. (2026-08-16: a line on RO
+  #67104 was left at `paid_hours 5.00` against `flag_hours 1.30` overnight,
+  inflating that account's paid-hours totals until it was hand-corrected with
+  SQL — that must not happen again.)
 - If a dispute-pack export exists for short lines, open it and confirm the
   print view renders with the short lines listed.
 - **Second-round claims** (fixed 2026-08-12, `dispute-track-offer-missing`). A
@@ -870,10 +910,15 @@ the streak, snapshots and career hours that §8b checks against. Export only.
 
 - **Export downloads:** click Export, confirm a `.json` file downloads without an
   error toast and is more than a few KB. A 0-byte or failed download is a bug.
-- **It must be version 3.** Open the file and confirm `"version": 3`. A lower
-  number means an older build is deployed than expected — report it. (This
-  checklist demanded version 2 until 2026-08-13, so a correct build failed this
-  check every night from the moment v3 shipped in 416589b / 794da9e.)
+- **Its version must match the app's, not a number written in this doc.**
+  Read `CURRENT_BACKUP_VERSION` out of `src/lib/import-remap.ts` (you can read
+  repo source from where the run executes), then open the export and confirm
+  `"version"` equals that value exactly — not `>=`. A mismatch means a stale
+  build is deployed (the container is serving an older bundle than the repo
+  you just read) and should be reported. Do not hardcode the expected number
+  here — this checklist has drifted behind three straight version bumps
+  (v2→v3→v4) from doing exactly that, and equality against the source is what
+  keeps this check able to catch a stale deploy at all.
 - **The v2 sections must be present**, because a backup that silently omits them
   restores an incomplete account (that was the 2026-08-05 Critical bug):
   `laborRates`, `disputes`, `unpaidTime`, plus the long-standing `entries`,
@@ -881,9 +926,13 @@ the streak, snapshots and career hours that §8b checks against. Export only.
 - **The v3 sections must also be present** — these are what a migration would
   otherwise drop: `workSchedules`, `daysOff`, `shiftOverrides`,
   `confirmedZeroDays`, `portfolioSnapshots`, `careerMilestones`.
-- **Spot-check that lines carry their real state.** Find any entry op code line
-  in the JSON and confirm the keys `paidHours`, `isComeback` and `laborType`
-  exist. If lines are missing those keys the export has regressed — the import
+- **Spot-check that lines and entries carry their real state**, against
+  whatever fields `src/lib/import-remap.ts` currently reads onto each (the
+  list below is a snapshot, not the ceiling — if the source has grown more
+  fields since, check those too):
+  - Entry op code lines: `paidHours`, `isComeback`, `laborType`, `isUpsell`.
+  - Entries: `loggedTime`.
+  If any of these keys are missing, the export has regressed — the import
   used to drop exactly these, which silently destroyed reconciliation history.
 - If Settings → Data or the Export button is missing, note `SKIPPED — not present`.
 
@@ -990,8 +1039,11 @@ Notes that matter for how you run:
 Two new things, both brand new tonight.
 
 **Time of day on an RO.** Settings → Logging → "Time of day on each RO" is a
-switch, **off by default**. Off means the log form shows no time field and no
-time is stored — that is the designed behaviour, not a missing feature.
+switch, **off by default** — this is verified (migration default is
+`not null default false`, and 7 of 8 prod accounts read false). Off means the
+log form shows no time field and no time is stored — that is the designed
+behaviour, not a missing feature. Do not re-test or re-report this as an open
+question; check only that the switch is where §8k leaves it (see below).
 
 Turn it ON, then:
 
@@ -1012,6 +1064,13 @@ Turn it ON, then:
 - An RO logged before tonight has no time; its row shows the date alone. On
   **/history** those older rows still show a time, because that page falls back
   to when the row was written. Also correct.
+- **End the run with the switch OFF. Always OFF — never "whatever state it was
+  in when you arrived."** Restoring the found state is not this checklist's
+  convention and must not be invented: off is the default the app ships with,
+  so it's what the bot account should sit at between runs. If the switch is
+  already ON when you arrive, that's real signal (something outside this run
+  turned it on) and belongs in the report as a finding, not as a state to
+  preserve by leaving it alone.
 
 **Upsell marking.** On the dashboard's Recent ROs, each row has an **Upsell**
 button between the RO information and the hours.

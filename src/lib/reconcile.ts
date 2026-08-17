@@ -83,11 +83,17 @@ export function reconcileEntries(entries: Entry[]): ReconcileSummary {
   return summary;
 }
 
-// One line that still needs attention (pending or short), with enough context
-// for the reconciliation UI to render a row without re-deriving anything.
-export type UnreconciledLine = {
+// One line with its derived status, plus enough context for the reconciliation
+// UI to render a row without re-deriving anything.
+export type PayLine = {
   entry: Entry;
   line: EntryOpCode;
+  status: PayStatus;
+};
+
+// The same row, narrowed to the two statuses that still need work. Everything
+// that counts, badges or totals "unreconciled" work speaks in these.
+export type UnreconciledLine = PayLine & {
   status: Extract<PayStatus, "pending" | "short">;
 };
 
@@ -102,6 +108,29 @@ export function unreconciledLines(entries: Entry[]): UnreconciledLine[] {
       if (status === "pending" || status === "short") {
         out.push({ entry, line, status });
       }
+    }
+  }
+  return out;
+}
+
+// Every line across the given entries, in entry-then-position order, whatever
+// its status.
+//
+// DISPLAY ONLY. This exists so the reconciliation list can offer "show all
+// lines" — a line paid or overpaid is off `unreconciledLines()` forever, and
+// until this existed there was no screen in the app that could correct a paid
+// figure entered wrong. Nothing that counts, badges or totals may read this:
+// "unreconciled" still means pending-or-short and only `unreconciledLines()`
+// answers that question.
+export function allPayLines(entries: Entry[]): PayLine[] {
+  const out: PayLine[] = [];
+  for (const entry of entries) {
+    for (const line of entry.opCodes) {
+      out.push({
+        entry,
+        line,
+        status: payStatus(line.flagHours, paidOf(line)),
+      });
     }
   }
   return out;
@@ -133,18 +162,28 @@ function compareNumbers(a: number, b: number): number {
 }
 
 /**
- * Order unreconciled rows for display. Pure and total — returns a new array and
- * never mutates the input.
+ * Order reconciliation rows for display.
+ *
+ * NAME IS HISTORICAL — it takes any `PayLine`, not just unreconciled ones, and
+ * the type system will not stop you handing it the widened "show all lines"
+ * list. That is deliberate (see below), but it means the name is not a filter:
+ * sorting does not narrow anything, and only `unreconciledLines()` decides what
+ * counts as unreconciled.
+ *
+ * Generic over the row type so the
+ * "show all lines" list (which carries paid/over rows too) sorts identically to
+ * the working list. Pure and total — returns a new array and never mutates the
+ * input.
  *
  * Every comparator ends on the same tiebreak chain (date, then RO number string,
  * then line position) so the order is stable and deterministic: re-sorting after
  * marking a line paid can't shuffle the rows around the tech's place on the page.
  */
-export function sortUnreconciledLines(
-  rows: UnreconciledLine[],
+export function sortUnreconciledLines<T extends PayLine>(
+  rows: T[],
   sort: ReconcileSort = "ro",
-): UnreconciledLine[] {
-  const tiebreak = (a: UnreconciledLine, b: UnreconciledLine): number =>
+): T[] {
+  const tiebreak = (a: PayLine, b: PayLine): number =>
     a.entry.date.localeCompare(b.entry.date) ||
     a.entry.roNumber.localeCompare(b.entry.roNumber) ||
     a.line.position - b.line.position;
@@ -162,7 +201,7 @@ export function sortUnreconciledLines(
     }
     // Biggest gap first, so the money is at the top. A pending line has no
     // known shortfall yet, so it counts as 0 and sinks below real shorts.
-    const gap = (r: UnreconciledLine) =>
+    const gap = (r: PayLine) =>
       r.status === "short" ? r.line.flagHours - (r.line.paidHours ?? 0) : 0;
     return gap(b) - gap(a) || tiebreak(a, b);
   });
