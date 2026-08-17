@@ -100,11 +100,13 @@ write the report anyway. Writing the report file is the one thing you may never 
 # which is a real but DIFFERENT bug (a yielded turn exiting 0) — so a timeout
 # arrived looking like an already-diagnosed problem.
 #   124 → killed at the wall, still working  → bot-runner-timeout
+#   137 → SIGKILL, i.e. out of memory        → bot-runner-oom
 #     0 → exited "successfully", no report   → bot-runner-hang
 #  else → crashed                            → bot-runner-crash
 classify() {
   case "$1" in
     124) echo "timeout" ;;
+    137) echo "oom" ;;
     0)   echo "yield" ;;
     *)   echo "crash" ;;
   esac
@@ -113,15 +115,43 @@ classify() {
 fingerprint_for() {
   case "$1" in
     timeout) echo "bot-runner-timeout" ;;
+    oom)     echo "bot-runner-oom" ;;
     yield)   echo "bot-runner-hang" ;;
     *)       echo "bot-runner-crash" ;;
   esac
 }
 
+# On 2026-08-16 at 03:57 this run's `claude` reached 4.38 GB anon RSS and the
+# kernel OOM-killer took it -- and cron.service with it. `claude` is a native
+# binary, so NODE_OPTIONS/--max-old-space-size do nothing; a cgroup is the only
+# thing that actually bounds it. 5G sits well clear of the 4.38 GB peak but
+# below the point where the 22 containers next door start losing pages, so a
+# runaway now costs us the night's report instead of the whole VM.
+#
+# MemorySwapMax=0 is NOT optional and NOT belt-and-suspenders. MemoryMax alone
+# caps RAM only: the kernel answers the overage by paging the process out to the
+# VM's 4 GB swap, so the run survives, crawls, and drags every container next to
+# it down with the I/O -- verified here, a 500 MB allocation under a 100 MB cap
+# exits 0. Pinning swap to 0 is what converts "thrash the box" into "kill this
+# one run", which is the whole point of the cap.
+#
+# Best-effort by design: cron's PAM session normally starts the user manager,
+# but the user does not linger, so if it is absent we run UNCAPPED rather than
+# skip the night entirely. A missing cap is a bad night; a skipped run is worse.
+MEM_MAX="${FRT_BOT_MEM_MAX:-5G}"
+if systemd-run --user --scope -q -p MemoryMax=200M -p MemorySwapMax=0 true >/dev/null 2>&1; then
+  CAP=(systemd-run --user --scope -q -p "MemoryMax=$MEM_MAX" -p "MemorySwapMax=0" --)
+  CAP_NOTE="cap $MEM_MAX"
+else
+  CAP=()
+  CAP_NOTE="UNCAPPED"
+  echo "WARN: systemd-run --user unavailable -- running without a memory cap" >>"$LOG_FILE"
+fi
+
 run_attempt() {
   local n="$1" prompt="$2" budget="$3" rc=0
-  echo "=== attempt $n started $(date +%T) (budget ${budget}m) ===" >>"$LOG_FILE"
-  timeout "${budget}m" claude -p "$prompt" \
+  echo "=== attempt $n started $(date +%T) (budget ${budget}m, $CAP_NOTE) ===" >>"$LOG_FILE"
+  timeout "${budget}m" "${CAP[@]}" claude -p "$prompt" \
       --dangerously-skip-permissions \
       >>"$LOG_FILE" 2>&1 || rc=$?
   echo "=== attempt $n finished $(date +%T): claude exited $rc ===" >>"$LOG_FILE"
@@ -175,6 +205,7 @@ if [[ -f "$REPORT_FILE" ]]; then
   if [[ "$RETRIED" == "1" ]]; then
     case "$CAUSE" in
       timeout) WHAT="was killed at its ${TIMEOUT_MIN}m time limit while still working" ;;
+      oom)     WHAT="was killed by the kernel for exceeding the ${MEM_MAX} memory cap" ;;
       yield)   WHAT="exited without writing a report" ;;
       *)       WHAT="exited with an error (rc=$ATTEMPT_RC)" ;;
     esac
