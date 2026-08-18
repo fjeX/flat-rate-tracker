@@ -1,4 +1,5 @@
 import { test as base } from "@playwright/test";
+import { FIXTURE_NOW_ISO } from "@/lib/fixtures/enabled";
 
 /**
  * Shared setup for the canary suite.
@@ -64,6 +65,46 @@ export const test = base.extend<UiFixtures>({
         else document.documentElement.classList.remove("theme-light");
       } catch {}
     }, theme);
+    /**
+     * Freeze the BROWSER's clock, the same way instrumentation.ts freezes the
+     * server's — and for the same reason it overrides the constructor rather
+     * than threading a `now` parameter: "today" is read in several places and
+     * a new one can be added tomorrow.
+     *
+     * FRT_FIXTURE_MODE is deliberately server-only (not NEXT_PUBLIC_, so one
+     * image serves both prod and the canary), so the client bundle cannot know
+     * it is in a frozen world. The guest routes are "use client" and derive the
+     * date in the browser — guest/history/page.tsx calls isoDate() -> new Date()
+     * — so they render against the REAL calendar. guest-history shows the
+     * current pay period, so its baseline went stale by itself every 1st and
+     * 16th: captured 2026-08-13 as "AUG 1 - AUG 15", it passed on the 14th and
+     * 15th and failed from the 16th when the period rolled. A gate that goes
+     * red for reasons unrelated to the diff is how it becomes a rubber stamp.
+     *
+     * This must be an initScript, not page.clock.setFixedTime() in the test.
+     * setFixedTime injects over CDP and races the page's first render — these
+     * pages compute the date at mount, so it landed for some projects and not
+     * others: one 2026-08-17 regeneration produced MAR for dark-desktop, a
+     * still-AUG dark-mobile, and a light-desktop holding a dark render. An
+     * initScript is guaranteed to run before any page script, every time.
+     */
+    await context.addInitScript((iso) => {
+      const fixed = new Date(iso).getTime();
+      const RealDate = Date;
+      class FrozenDate extends RealDate {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        constructor(...args: any[]) {
+          // `new Date()` means "now" and must freeze; every explicit form
+          // (timestamp, ISO string, y/m/d…) has to keep working untouched.
+          if (args.length === 0) super(fixed);
+          else super(...(args as [number]));
+        }
+        static now() {
+          return fixed;
+        }
+      }
+      globalThis.Date = FrozenDate as DateConstructor;
+    }, FIXTURE_NOW_ISO);
     await use(context);
   },
 });
