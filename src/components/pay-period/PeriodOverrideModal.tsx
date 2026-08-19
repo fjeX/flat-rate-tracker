@@ -19,6 +19,10 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { formatDateLong, type PeriodRange } from "@/lib/periods";
 import { aggregateStatsAuto, fmtHours, fmtPct, type ScheduleContext } from "@/lib/stats";
+import {
+  efficiencyDisplay,
+  type EfficiencyDisplay,
+} from "@/lib/efficiency-display";
 import { fmtMoney, hasAnyRate, periodEarnings, type RateMap } from "@/lib/earnings";
 import { setPeriodOverrideAction } from "@/app/actions/settings";
 import type { ScheduleFallback } from "@/lib/wage-check";
@@ -67,6 +71,11 @@ type Snapshot = {
   flagHours: number;
   denomHours: number;
   efficiency: number | null;
+  // The classification, not just the raw number. Carried on the snapshot so the
+  // preview cannot state a percentage the page behind it is refusing to state
+  // for the same range — the whole reason this modal exists is that it must
+  // agree with that page.
+  efficiencyDisplay: EfficiencyDisplay;
   earnings: number | null;
 };
 
@@ -89,6 +98,7 @@ export function snapshot(
     flagHours: stats.flagHours,
     denomHours: stats.denomHours ?? stats.clockedHours,
     efficiency: stats.efficiency,
+    efficiencyDisplay: efficiencyDisplay(stats),
     earnings: hasAnyRate(rates) ? periodEarnings(inRange, rates) : null,
   };
 }
@@ -119,6 +129,70 @@ function DeltaRow({
       </span>
     </div>
   );
+}
+
+/**
+ * The efficiency row — the one figure here that can stop existing.
+ *
+ * A delta needs two numbers. When either side is withheld there is no honest
+ * arrow to draw: "0% → 138%" reads as a fix that happened, "138% → —" reads as
+ * work that vanished, and "— → —" reads as a broken app. All three are the same
+ * situation: for at least one of these two date ranges, most or all of the
+ * flagged hours landed on days the app cannot put a length to, so the
+ * percentage for that range describes almost none of the work in it.
+ *
+ * So the row states that instead of comparing. No arrow, no strikethrough, no
+ * "+0%". The sentence underneath (rendered by the caller, in the same voice as
+ * the pay-period hero) says which hours and what to do about it.
+ *
+ * Same classifier as the hero and the stat tile on the page behind this modal,
+ * so the three can never disagree about whether a figure is printable.
+ */
+function EfficiencyDeltaRow({
+  before,
+  after,
+}: {
+  before: EfficiencyDisplay;
+  after: EfficiencyDisplay;
+}) {
+  const b = pctText(before);
+  const a = pctText(after);
+  if (b !== null && a !== null) {
+    return <DeltaRow label="Efficiency" before={b} after={a} />;
+  }
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1 text-sm">
+      <span className="text-[var(--fg-3)]">Efficiency</span>
+      <span className="text-right text-[var(--fg-2)]">nothing to compare</span>
+    </div>
+  );
+}
+
+/**
+ * What to print for one side of the row, or null when nothing may be printed.
+ *
+ * `none` is NOT withheld — it means the range had no measurable days at all and
+ * no excluded hours either, which is the plain "—" the grid has always shown for
+ * an absent figure. Folding it in with the withheld kinds would put "nothing to
+ * compare" (and a sentence about excluded hours that do not exist) in front of a
+ * tech who simply widened a range into an empty week.
+ */
+function pctText(display: EfficiencyDisplay): string | null {
+  if (display.kind === "shown") return fmtPct(display.pct);
+  if (display.kind === "none") return fmtPct(null);
+  return null;
+}
+
+/** Hours behind a withheld percentage, for the sentence under the rows. */
+function excludedHours(display: EfficiencyDisplay): number {
+  return display.kind === "all_excluded" || display.kind === "mostly_excluded"
+    ? display.excludedHours
+    : 0;
+}
+
+/** Withheld — as opposed to merely absent. Only this state gets the sentence. */
+function isWithheld(display: EfficiencyDisplay): boolean {
+  return display.kind === "all_excluded" || display.kind === "mostly_excluded";
 }
 
 function PeriodOverrideBody({
@@ -252,10 +326,9 @@ function PeriodOverrideBody({
               before={`${fmtHours(before.denomHours)}h`}
               after={`${fmtHours(after.denomHours)}h`}
             />
-            <DeltaRow
-              label="Efficiency"
-              before={fmtPct(before.efficiency)}
-              after={fmtPct(after.efficiency)}
+            <EfficiencyDeltaRow
+              before={before.efficiencyDisplay}
+              after={after.efficiencyDisplay}
             />
             {before.earnings !== null && after.earnings !== null && (
               <DeltaRow
@@ -265,6 +338,28 @@ function PeriodOverrideBody({
               />
             )}
           </div>
+
+          {(isWithheld(before.efficiencyDisplay) ||
+            isWithheld(after.efficiencyDisplay)) && (
+            <p className="text-xs text-[var(--fg-3)]">
+              No efficiency comparison for these dates —{" "}
+              <span className="font-medium text-[var(--fg-2)]">
+                {fmtHours(
+                  Math.max(
+                    excludedHours(before.efficiencyDisplay),
+                    excludedHours(after.efficiencyDisplay),
+                  ),
+                )}
+                h
+              </span>{" "}
+              {/* The {" "} above is load-bearing: text after an expression
+                  container loses its leading space in the JSX transform, which
+                  is how "1 daywith" shipped in PeriodStats. */}
+              of the flagged work in one of these ranges landed on days with no
+              clocked hours and no schedule, so the percentage would leave out
+              most of it. Everything else above still moves.
+            </p>
+          )}
 
           <p className="text-xs text-[var(--fg-3)]">
             New range: {formatDateLong(start)} – {formatDateLong(end)}.

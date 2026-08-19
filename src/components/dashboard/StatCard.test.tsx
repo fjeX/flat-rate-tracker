@@ -27,9 +27,16 @@ afterEach(cleanup);
 
 // A period whose every flagged hour landed on days the app cannot measure:
 // numerator 0 over a denominator built from an unrelated zero-work day.
+//
+// SCHEDULE-DRIVEN, which is the ordinary case for a tech who has a schedule and
+// does not type clock figures: `clockedHours` is 0 because no clock row was
+// ever entered, while `denomHours` is the 8.0h the schedule supplied and the
+// figure the withheld percentage was divided by.
 const HOLLOWED = {
   flagHours: 36,
   clockedHours: 0,
+  denomHours: 8,
+  denomSource: "scheduled",
   efficiency: 0,
   unpairedFlagHours: 36,
   unpairedDays: 2,
@@ -47,6 +54,10 @@ const MEASURED_ZERO = {
 
 const PCT = /\d+% efficiency/;
 
+// The hours line the tile falls back to. Same locator for both the withheld
+// case and the control, so neither assertion can pass on a stale selector.
+const HOURS_LINE = /\d+\.\d+h (clocked|scheduled|clocked \+ scheduled)/;
+
 describe("StatCard", () => {
   it("does not print a percentage when every flagged hour was excluded", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,10 +66,36 @@ describe("StatCard", () => {
     expect(document.body.textContent ?? "").not.toMatch(PCT);
   });
 
-  it("falls back to the clocked-hours line it already used for a null figure", () => {
+  it("falls back to the hours line it already used for a null figure", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     render(<StatCard label="Pay Period" stats={HOLLOWED as any} />);
-    expect(screen.getByText(/clocked/)).toBeTruthy();
+    expect(screen.getByText(HOURS_LINE)).toBeTruthy();
+  });
+
+  // The fallback used to print `clockedHours`, which is 0.0h on any period whose
+  // denominator came from the schedule. So withholding the percentage swapped
+  // one contradiction for another: "36.0h" over "0.0h clocked", on a period the
+  // app measured against 8.0h. PeriodStats.tsx:78-88 documents fixing exactly
+  // this for its own Hours tile; the dashboard tile still had it.
+  it("prints the denominator it measured against, not the empty clock total", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    render(<StatCard label="Pay Period" stats={HOLLOWED as any} />);
+    expect(screen.getByText("8.0h scheduled")).toBeTruthy();
+    expect(document.body.textContent ?? "").not.toMatch(/0\.0h/);
+  });
+
+  // No schedule at all: denomHours is absent, so the line falls back to the
+  // clock total and keeps the word it always used. Without this the fix above
+  // could be a rename that quietly broke the no-schedule tech.
+  it("still says 'clocked' when there is no schedule", () => {
+    render(
+      <StatCard
+        label="This Week"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        stats={{ ...MEASURED_ZERO, efficiency: null } as any}
+      />,
+    );
+    expect(screen.getByText("8.0h clocked")).toBeTruthy();
   });
 
   it("still prints a genuinely measured 0% — the figure is the point of the tile", () => {
@@ -69,5 +106,9 @@ describe("StatCard", () => {
     render(<StatCard label="Pay Period" stats={MEASURED_ZERO as any} />);
     expect(document.body.textContent ?? "").toMatch(PCT);
     expect(document.body.textContent ?? "").toMatch(/0% efficiency/);
+    // …and when the percentage IS printed the hours line is not — the same
+    // HOURS_LINE locator the withheld assertions above rely on, proving it can
+    // both match and fail to match for the right reasons.
+    expect(document.body.textContent ?? "").not.toMatch(HOURS_LINE);
   });
 });

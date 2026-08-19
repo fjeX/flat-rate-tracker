@@ -417,7 +417,16 @@ export function aggregateStatsAuto(
   range: { start: string; end: string },
   unpaid: UnpaidTime[] = [],
   schedule: ScheduleContext | null = null,
-): Stats & { denomHours?: number; denomSource?: DenomSource | null } {
+): Stats & {
+  denomHours?: number;
+  denomSource?: DenomSource | null;
+  // Present whenever the schedule branch ran. Widened onto the union so callers
+  // that have to CLASSIFY the efficiency (lib/efficiency-display) can read the
+  // excluded hours the schedule aggregator already computed, instead of being
+  // handed a number with no way to tell whether it means anything.
+  unpairedFlagHours?: number;
+  unpairedDays?: number;
+} {
   if (schedule && schedule.schedules.length > 0) {
     return aggregateStatsWithSchedule(entries, clocks, range, schedule, unpaid);
   }

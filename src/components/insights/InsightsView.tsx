@@ -44,6 +44,7 @@ import {
   periodTrend,
   ratioOrder,
   ratioTier,
+  trendEfficiencyDisplay,
   weekdayEfficiency,
   type Gain,
   type Leak,
@@ -632,7 +633,14 @@ function BestDaysSection({
   );
 }
 
-function TrendSection({
+/**
+ * Exported for its co-located test, the same way PeriodOverrideModal exports
+ * `snapshot`. Driving the whole InsightsView through RTL to reach this chart
+ * would exercise a dozen sibling sections and go red whenever any of them was
+ * mid-edit — a regression test that fails for other people's reasons gets
+ * muted, and then it isn't a gate.
+ */
+export function TrendSection({
   points,
   today,
 }: {
@@ -648,6 +656,23 @@ function TrendSection({
   // because the hours in it are real.
   const complete = points.filter((p) => p.end < today);
 
+  // The printable percentage per bar, or null when there isn't one.
+  //
+  // Routed through the trend-shape adapter, NOT efficiencyDisplay directly: a
+  // PeriodTrendPoint keeps its unpaired hours OUTSIDE `flagHours` while
+  // ScheduleStats keeps them inside, and the classifier is written against the
+  // ScheduleStats convention. See trendEfficiencyDisplay in lib/insights.
+  //
+  // Keyed by period key rather than recomputed at each use, so the label, the
+  // bar height, the axis and the caption below cannot answer differently.
+  const shownPct = new Map<string, number | null>(
+    points.map((p) => {
+      const d = trendEfficiencyDisplay(p);
+      return [p.key, d.kind === "shown" ? d.pct : null];
+    }),
+  );
+  const measured = (p: PeriodTrendPoint) => shownPct.get(p.key) != null;
+
   // THE SAME RULE NOW SETS THE AXIS, which is what was wrong with this chart.
   // Scaling to the tallest bar of ANY period let an unfinished one define the
   // ceiling: a period one day in, with one day of denominator, read 1565% and
@@ -655,10 +680,19 @@ function TrendSection({
   // comparable to the ones beside it, so it does not get to set the scale
   // either — it just clips, marked, with its true figure printed above it.
   //
+  // A WITHHELD percentage is excluded from the scale for the same reason and
+  // one more: it is not merely incomparable, it is not a measurement. A
+  // fortnight whose flagged work all landed on unscheduled Saturdays produces a
+  // number built from a hollowed-out numerator, and letting it set the ceiling
+  // would rescale five honest bars against a figure the chart is refusing to
+  // print. If nothing is measured the floor stands alone at 100.
+  //
   // Floored at 100 so the chart always contains par. Without the floor a tech
   // having a bad run sees every bar near the top, which reads as a good month.
-  const scaleSource = complete.length > 0 ? complete : points;
-  const ceiling = Math.max(100, ...scaleSource.map((p) => p.efficiency ?? 0));
+  const completeMeasured = complete.filter(measured);
+  const scaleSource =
+    completeMeasured.length > 0 ? completeMeasured : points.filter(measured);
+  const ceiling = Math.max(100, ...scaleSource.map((p) => shownPct.get(p.key)!));
   const BAR_MAX = 108;
   const parOffset = (100 / ceiling) * BAR_MAX;
   // Hours that are in no percentage on this page, because the app never learned
@@ -672,10 +706,12 @@ function TrendSection({
 
   const deltaFrom = complete.length >= 2 ? complete[complete.length - 2] : null;
   const deltaTo = complete.length >= 2 ? complete[complete.length - 1] : null;
-  const delta =
-    deltaTo?.efficiency != null && deltaFrom?.efficiency != null
-      ? deltaTo.efficiency - deltaFrom.efficiency
-      : null;
+  // Both endpoints have to be printable. "came in at 0%, down from 138%" is the
+  // same hollowed-numerator claim as the bar label, stated in a full sentence —
+  // worse, not better, because a sentence sounds deliberate.
+  const fromPct = deltaFrom ? (shownPct.get(deltaFrom.key) ?? null) : null;
+  const toPct = deltaTo ? (shownPct.get(deltaTo.key) ?? null) : null;
+  const delta = toPct != null && fromPct != null ? toPct - fromPct : null;
 
   return (
     <section>
@@ -690,15 +726,22 @@ function TrendSection({
             <span className="trend-par-label">100%</span>
           </div>
           {points.map((point) => {
-            const value = point.efficiency ?? 0;
-            const clipped = value > ceiling;
+            const pct = shownPct.get(point.key) ?? null;
+            // A withheld bar still DRAWS — the flagged hours in it are real and
+            // a missing column would read as a period that never happened. What
+            // it does not do is claim a height: this bar's height IS its
+            // percentage, so a withheld figure has no height to draw, and it
+            // falls to the same minimum stub an all-zero period gets. The dash
+            // above it, and the "not counted" caption below the chart, say why.
+            const value = pct ?? 0;
+            const clipped = pct !== null && value > ceiling;
             // Every bar keeps a visible stub so an all-zero period still reads
             // as a period rather than as missing data.
             const height = Math.max(4, (Math.min(value, ceiling) / ceiling) * BAR_MAX);
             const running = point.end >= today;
             return (
               <div key={point.key} className="trend-col">
-                <span className="trend-val">{fmtPct(point.efficiency)}</span>
+                <span className="trend-val">{fmtPct(pct)}</span>
                 <div
                   className={[
                     "trend-bar",
@@ -733,11 +776,11 @@ function TrendSection({
           <p className="mt-3 text-xs text-[var(--fg-2)]">
             {deltaTo!.label} came in at{" "}
             <span className="font-medium text-[var(--fg-1)]">
-              {fmtPct(deltaTo!.efficiency)}
+              {fmtPct(toPct)}
             </span>
             , {delta > 0 ? "up from" : "down from"}{" "}
             <span className="font-medium text-[var(--fg-1)]">
-              {fmtPct(deltaFrom!.efficiency)}
+              {fmtPct(fromPct)}
             </span>{" "}
             in {deltaFrom!.label}.
           </p>

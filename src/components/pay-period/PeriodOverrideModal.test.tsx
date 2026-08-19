@@ -22,8 +22,11 @@
 //
 // The assertion is the invariant the bug broke: the modal's before-snapshot
 // figure EQUALS the page's figure for an unchanged range.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import React from "react";
 import {
+  PeriodOverrideModal,
   scheduleContextFrom,
   snapshot,
 } from "./PeriodOverrideModal";
@@ -181,5 +184,149 @@ describe("custom-dates modal agrees with the page it opened on top of", () => {
     expect(
       scheduleContextFrom({ ...PAGE_SCHEDULE, schedules: [] }, TODAY),
     ).toBeNull();
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// The SECOND bug in this modal: it printed the percentage the page refused to.
+//
+// `zero-efficiency-hero-copy` gated the hero and the dashboard tile. The
+// custom-dates preview kept calling fmtPct(before.efficiency) raw, so for the
+// very same range the hero was withholding, this modal stated a figure — and
+// stated it as a DELTA, which is a stronger claim than a bare number: an arrow
+// between two percentages says "this changed from X to Y", and when one side is
+// a hollowed-out numerator the arrow is describing a movement that did not
+// happen.
+//
+// The behaviour under test is not "hide the number". It is: a comparison needs
+// two comparable numbers, and when it hasn't got them it says so instead of
+// drawing an arrow.
+// ───────────────────────────────────────────────────────────────────────────
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+vi.mock("@/app/actions/settings", () => ({
+  setPeriodOverrideAction: vi.fn(),
+}));
+
+afterEach(cleanup);
+
+// ONE locator for both directions. The controls below reuse this exact
+// constant, so a negative assertion cannot pass because the regex went stale
+// (memory/feedback_negative_assertions_go_vacuous.md).
+const ANY_PCT = /\d+%/;
+
+// Sat 2026-07-18: 20.0h flagged, unscheduled and unclocked → unpairable.
+// Mon 2026-07-20:  2.0h flagged on a scheduled 8.0h day → counted.
+// Tue 2026-07-21: 12.0h flagged on a scheduled 8.0h day → counted.
+const D_ENTRIES: Entry[] = [
+  entry("2026-07-18", 20),
+  entry("2026-07-20", 2),
+  entry("2026-07-21", 12),
+];
+const D_CLOCKS: DailyClock[] = [];
+// Mon–Fri of that week. Before-range efficiency is a clean, measurable
+// 14.0h ÷ 16.0h = 88%, with nothing excluded.
+const D_RANGE = { start: "2026-07-20", end: "2026-07-24" };
+const D_TODAY = "2026-07-27";
+const D_SCHEDULE = scheduleContextFrom(
+  {
+    schedules: [SCHEDULE_5X8],
+    daysOff: [],
+    confirmedZeroDays: [],
+    today: D_TODAY,
+    shiftOverrides: {},
+  },
+  D_TODAY,
+);
+
+function openModal(range: { start: string; end: string } = D_RANGE) {
+  return render(
+    <PeriodOverrideModal
+      open
+      periodKey="2026-07-B"
+      initialRange={{ key: "2026-07-B", start: range.start, end: range.end }}
+      entries={D_ENTRIES}
+      clocks={D_CLOCKS}
+      unpaid={[]}
+      schedule={D_SCHEDULE}
+      rates={{}}
+      paidFlagHours={null}
+      onClose={() => {}}
+    />,
+  );
+}
+
+/** Drag the start date back — the impact block only renders once dates differ. */
+function setStart(value: string) {
+  const input = document.getElementById("period-override-start");
+  if (!input) throw new Error("no start input");
+  fireEvent.change(input, { target: { value } });
+}
+
+function setEnd(value: string) {
+  const input = document.getElementById("period-override-end");
+  if (!input) throw new Error("no end input");
+  fireEvent.change(input, { target: { value } });
+}
+
+describe("the custom-dates preview never states a percentage the page withholds", () => {
+  it("sanity-checks the fixture: the two ranges really are shown vs withheld", () => {
+    const before = snapshot(D_ENTRIES, D_CLOCKS, [], D_SCHEDULE, {}, D_RANGE);
+    const after = snapshot(D_ENTRIES, D_CLOCKS, [], D_SCHEDULE, {}, {
+      start: "2026-07-18",
+      end: D_RANGE.end,
+    });
+
+    expect(before.efficiencyDisplay.kind).toBe("shown");
+    expect(fmtPct(before.efficiency)).toBe("88%");
+    // 20.0h of the 34.0h flagged in the wider range is unpairable, so the
+    // percentage there would describe well under half the work.
+    expect(after.efficiencyDisplay.kind).toBe("mostly_excluded");
+  });
+
+  it("draws no arrow and prints no percentage when one side is withheld", () => {
+    openModal();
+    setStart("2026-07-18");
+
+    const text = document.body.textContent ?? "";
+    // The preview is live — the rows that CAN be compared still are.
+    expect(text).toMatch(/Flagged hours/);
+    expect(text).toMatch(/34\.0h/);
+    // And the efficiency row says so in words rather than drawing 88% → 88%.
+    expect(text).toMatch(/nothing to compare/);
+    expect(text).toMatch(/No efficiency comparison for these dates/);
+    expect(text).not.toMatch(ANY_PCT);
+  });
+
+  // "no percentage exists here" and "the percentage that exists would be a lie"
+  // are different facts (memory/feedback_undefined_is_not_absent.md). A tech who
+  // widened a range into an empty weekend has excluded nothing, and telling him
+  // about hours the app could not measure — when there are none — is noise.
+  it("keeps the plain em dash for a range with nothing to measure at all", () => {
+    openModal({ start: "2026-07-11", end: "2026-07-12" }); // Sat + Sun, no work
+    setEnd("2026-07-11");
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/Efficiency—/);
+    expect(text).not.toMatch(/nothing to compare/);
+    expect(text).not.toMatch(/No efficiency comparison for these dates/);
+  });
+
+  it("compares normally when both sides are measurable — the control", () => {
+    // Same ANY_PCT locator. Moving the start FORWARD to the Tuesday keeps every
+    // flagged hour on a day with a known length, so the row is an honest
+    // 88% → 150% with the arrow it deserves.
+    openModal();
+    setStart("2026-07-21");
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(ANY_PCT);
+    expect(text).toMatch(/88%/);
+    expect(text).toMatch(/150%/);
+    expect(text).toMatch(/→/);
+    expect(text).not.toMatch(/nothing to compare/);
+    expect(text).not.toMatch(/No efficiency comparison for these dates/);
   });
 });

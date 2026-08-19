@@ -1002,6 +1002,11 @@ something if you idle first and read fast:
    - On `/pay-period`, expand **Spiffs & Bonuses** and note the **"Spiffs
      total"** row. Expanding the card counts as an interaction, so do it
      *before* the idle window below, not after.
+   - If the period has no spiffs yet the row does not exist — the card reads
+     "No spiffs or bonuses logged this period." instead. That sentence is your
+     baseline, and it must be REPLACED by a Spiffs total row showing the new
+     amount. Do not report a missing row as a fault in that case; §6 may have
+     legitimately left this period back at zero.
    - **Leave the tab alone for at least 45 seconds**, same as step 2 — don't
      click anything.
    - Tap **Add** on the Spiffs & Bonuses card and save a spiff with a real

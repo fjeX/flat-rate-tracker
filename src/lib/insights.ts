@@ -16,6 +16,10 @@
 // started: a weekday with one unclocked heavy day would read 300%.
 import { HEAVY_FLAG_HOURS } from "./mix";
 import { computeEfficiency, type DayDenom } from "./stats";
+import {
+  efficiencyDisplay,
+  type EfficiencyDisplay,
+} from "./efficiency-display";
 import { formatPeriodLabel, getPeriodForDate } from "./periods";
 import {
   isComebackKind,
@@ -685,6 +689,40 @@ export type PeriodTrendPoint = {
   unpairedFlagHours: number;
   unpairedDays: number;
 };
+
+/**
+ * Classify a trend point's percentage — through the ONE shared classifier.
+ *
+ * WHY THIS ADAPTER EXISTS. The two shapes that carry unpaired hours use
+ * OPPOSITE conventions, with identical field names, so handing a trend point
+ * straight to efficiencyDisplay is silently wrong rather than a type error:
+ *
+ *   ScheduleStats.flagHours     RAW period total. `unpairedFlagHours` is a
+ *                               SUBSET of it (stats.ts builds it from the plain
+ *                               aggregateStats base, which sums every entry).
+ *   PeriodTrendPoint.flagHours  PAIRED total ONLY. The pairing loop below adds
+ *                               an unpaired day's hours to `unpairedFlagHours`
+ *                               and `continue`s, so they were never in
+ *                               `flagHours` at all.
+ *
+ * efficiencyDisplay computes `counted = flagHours - unpairedFlagHours`. Pass a
+ * trend point unchanged and that is 0 - 42 = -42 counted hours: a negative
+ * numerator, no type error, no test failure, a wrong answer. The addition here
+ * restores the raw total the classifier is written against.
+ *
+ * A shape adapter, NOT a second predicate — every decision is still made by
+ * efficiencyDisplay (memory/feedback_duplicate_derivations_drift.md).
+ */
+export function trendEfficiencyDisplay(
+  point: PeriodTrendPoint,
+): EfficiencyDisplay {
+  return efficiencyDisplay({
+    flagHours: point.flagHours + point.unpairedFlagHours,
+    efficiency: point.efficiency,
+    unpairedFlagHours: point.unpairedFlagHours,
+    unpairedDays: point.unpairedDays,
+  });
+}
 
 /**
  * Efficiency per pay period, oldest → newest, capped to the most recent `limit`.
