@@ -18,6 +18,34 @@ describe("isJwtFutureError", () => {
     expect(isJwtFutureError(pgError("PGRST303"))).toBe(true);
   });
 
+  /**
+   * The one assertion in this file that is not circular.
+   *
+   * Every other case here builds its own error object and then checks the
+   * predicate against the shape this file chose — which proves the predicate
+   * matches a string we picked, not the string PostgREST actually sends. If
+   * the real code were PGRST301 (where JWT claim failures have historically
+   * landed) the whole retry would be inert and every test above would still
+   * be green.
+   *
+   * So this is the verbatim body captured from the FRT production app log,
+   * `docker compose logs app` on the VM, 2026-08-19:
+   *
+   *   ⨯ Error: {"code":"PGRST303","details":null,"hint":null,
+   *             "message":"JWT issued at future"}
+   *
+   * Note `details` and `hint` are null here, not "" — real PostgREST, not the
+   * tidied fixture above. Anyone changing the predicate has to keep this one
+   * passing.
+   */
+  it("matches the body PostgREST really sent in production", () => {
+    const captured = JSON.parse(
+      '{"code":"PGRST303","details":null,"hint":null,"message":"JWT issued at future"}',
+    );
+    expect(isJwtFutureError(captured)).toBe(true);
+    expect(isMissingTable(captured)).toBe(false);
+  });
+
   it("is false for PGRST205, null, undefined and a plain Error", () => {
     // PGRST205 is the missing-table code — the two predicates must not overlap,
     // or a pre-migration table would be retried and a stale token hidden.
@@ -59,7 +87,7 @@ describe("retryOnce", () => {
     }
   });
 
-  it("waits the delay before retrying — and defaults to 750ms, not 0", async () => {
+  it("waits the delay before retrying — and defaults past the known-accepted age, not 0", async () => {
     // The whole point of the number: the observed rejection window is a token
     // 0.3-0.4s old, so an immediate retry is still inside it. Fake timers, so
     // proving that costs the suite nothing in wall clock.
@@ -82,13 +110,15 @@ describe("retryOnce", () => {
     expect(fn).toHaveBeenCalledTimes(2);
     await expect(promise).resolves.toBe("second");
 
-    expect(JWT_FUTURE_RETRY_MS).toBeGreaterThanOrEqual(500);
+    // Must clear the only token age ever observed to be ACCEPTED (~1s), not
+    // merely the ages observed to be refused. See the constant's comment.
+    expect(JWT_FUTURE_RETRY_MS).toBeGreaterThan(1000);
   });
 
   it("lets concurrent retries overlap — N reads cost one delay, not N", async () => {
     // The dashboard fires ~17 reads in one Promise.all. If they all hit the
     // same window they must sleep together; a shared queue or per-call
-    // serialisation would turn a 750ms blip into 12s.
+    // serialisation would turn one blip into N delays back to back.
     vi.useFakeTimers();
     const make = () =>
       vi.fn().mockRejectedValueOnce(JWT_FUTURE()).mockResolvedValueOnce("ok");

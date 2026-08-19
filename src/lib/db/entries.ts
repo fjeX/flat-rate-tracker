@@ -109,16 +109,21 @@ export async function listEntries(
   return (data ?? []).map(toEntry);
 }
 
+// retryOnce: the (app) layout fans this out per running timer slot, so it is
+// on the same pre-page path as listTimerSlots.
 export async function getEntry(
   supabase: DbClient,
   id: string,
 ): Promise<Entry | null> {
-  const { data, error } = await supabase
-    .from("entries")
-    .select("*, entry_op_codes(*)")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("entries")
+      .select("*, entry_op_codes(*)")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  });
   return data ? toEntry(data) : null;
 }
 

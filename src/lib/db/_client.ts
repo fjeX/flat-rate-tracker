@@ -64,9 +64,26 @@ export function isJwtFutureError(err: unknown): boolean {
 // is still sub-second, hits the same window, and converts a recoverable blip
 // into a guaranteed 500 that also looks like the retry "didn't help".
 //
-// 750ms is chosen to clear the observed rejection band with margin while
-// staying well under any human's patience for a page that was already loading.
-export const JWT_FUTURE_RETRY_MS = 750;
+// 1250ms, and the extra 500 over the original 750 is the whole point.
+//
+// What the incidents actually pin down is narrow: refused at 0.30s and 0.40s,
+// accepted "past a second". The interval between 0.40s and 1.0s was never
+// measured, so the true width of the rejection band is unknown. 750ms was
+// derived from the wrong end of that range — it clears the ages we happened to
+// OBSERVE, not the ages we know are ACCEPTED.
+//
+// The worst case is not the observed one. auth-js refreshes when the token has
+// under 90s of life left, and it re-checks the session on every PostgREST
+// request, so a request arriving inside that margin mints a token and issues
+// the query microseconds later — age ~0.00s, not 0.30s. At 750ms that retry
+// lands at ~0.75s, still inside the unmeasured region, and a second PGRST303
+// rethrows: the same 500, now slower. At 1250ms it lands past the only age
+// ever seen to work.
+//
+// The cost of being wrong in each direction is lopsided: too short buys a
+// guaranteed 500, too long buys half a second on a request that was already
+// failing. Pay the half second.
+export const JWT_FUTURE_RETRY_MS = 1250;
 
 // Run a READ once, and if — and only if — it fails with PGRST303, wait and run
 // it exactly once more.
@@ -83,8 +100,8 @@ export const JWT_FUTURE_RETRY_MS = 750;
 // dependable second request.
 //
 // Concurrency note: the dashboard fires its reads in parallel, so if several
-// land in the same rejection window they each sleep 750ms *at the same time*.
-// The page pays ~750ms once, not once per read.
+// land in the same rejection window they each sleep *at the same time*.
+// The page pays one delay, not one per read.
 export async function retryOnce<T>(
   fn: () => Promise<T>,
   delayMs: number = JWT_FUTURE_RETRY_MS,

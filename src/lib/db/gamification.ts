@@ -262,12 +262,18 @@ async function listAllEntriesChronological(supabase: DbClient): Promise<Entry[]>
 async function listAllDailyClocks(supabase: DbClient): Promise<DailyClock[]> {
   const out: DailyClock[] = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("daily_clock_hours")
-      .select("user_id, date, hours")
-      .order("date", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
+    // Per page, never around the loop: retrying the loop would re-request
+    // pages already collected and double them into `out`.
+    const page = from;
+    const data = await retryOnce(async () => {
+      const { data, error } = await supabase
+        .from("daily_clock_hours")
+        .select("user_id, date, hours")
+        .order("date", { ascending: true })
+        .range(page, page + PAGE - 1);
+      if (error) throw error;
+      return data;
+    });
     for (const r of data ?? []) {
       out.push({ userId: r.user_id, date: r.date, hours: Number(r.hours) });
     }
@@ -280,11 +286,15 @@ async function listAllDailyClocks(supabase: DbClient): Promise<DailyClock[]> {
 async function listAllPhotoEntryIds(supabase: DbClient): Promise<string[]> {
   const out: string[] = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("entry_photos")
-      .select("entry_id")
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
+    const page = from;
+    const data = await retryOnce(async () => {
+      const { data, error } = await supabase
+        .from("entry_photos")
+        .select("entry_id")
+        .range(page, page + PAGE - 1);
+      if (error) throw error;
+      return data;
+    });
     out.push(...(data ?? []).map((r) => r.entry_id));
     if (!data || data.length < PAGE) break;
   }

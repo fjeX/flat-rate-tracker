@@ -1,7 +1,7 @@
 // Actual paid-flag-hours per pay period (for discrepancy checks).
 import type { Database } from "@/lib/supabase/database.types";
 import type { PaidPeriod } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 
 type PaidRow = Database["public"]["Tables"]["paid_period_hours"]["Row"];
 
@@ -29,11 +29,14 @@ export async function getPaidPeriod(
 }
 
 export async function listPaidPeriods(supabase: DbClient): Promise<PaidPeriod[]> {
-  const { data, error } = await supabase
-    .from("paid_period_hours")
-    .select("*")
-    .order("period_key", { ascending: false });
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("paid_period_hours")
+      .select("*")
+      .order("period_key", { ascending: false });
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toPaidPeriod);
 }
 
