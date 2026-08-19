@@ -58,7 +58,7 @@ import { RoList } from "@/components/ro/RoList";
 import { reconcileEntries } from "@/lib/reconcile";
 import { PaidCheckCard } from "./PaidCheckCard";
 import { PeriodHero } from "./PeriodHero";
-import { PeriodOverrideModal } from "./PeriodOverrideModal";
+import { PeriodOverrideModal, scheduleContextFrom } from "./PeriodOverrideModal";
 import { PeriodStats } from "./PeriodStats";
 import { PeriodTitleBar } from "./PeriodTitleBar";
 import { SpiffsCard } from "./SpiffsCard";
@@ -411,17 +411,13 @@ export function PayPeriodView({
           entries={neighborEntries ?? entries}
           clocks={clocks}
           unpaid={unpaid}
-          schedule={
-            schedule && schedule.schedules.length > 0
-              ? {
-                  schedules: schedule.schedules,
-                  daysOff: schedule.daysOff,
-                  confirmedZeroDays: [],
-                  today,
-                  shiftOverrides: schedule.shiftOverrides,
-                }
-              : null
-          }
+          // Converted by the modal's own adapter, never re-assembled here. The
+          // literal that used to sit at this call site passed
+          // `confirmedZeroDays: []`, which dropped every confirmed real-zero
+          // day from the modal's denominator and made it read 365% where the
+          // hero read 183% for the same unchanged range. Same bug class as
+          // history/page.tsx's hardcoded [] (8692d27).
+          schedule={scheduleContextFrom(schedule, today)}
           rates={rates}
           paidFlagHours={paidFlagHours}
           onClose={() => setOverrideOpen(false)}

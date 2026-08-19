@@ -62,12 +62,19 @@ docker compose --profile canary logs app-canary 2>&1 | grep -q "FIXTURE MODE" \
 ok "fixture mode confirmed"
 
 log "Regenerating baselines"
+# `=all`, never the default `=changed`. Playwright's `changed` mode only rewrites
+# a baseline the comparison already rejected, so anything drifting UNDER
+# maxDiffPixelRatio (0.002) is left in place forever. Measured: the date-only
+# delta on guest-history is 0.00288 at desktop but 0.00049 at mobile — so
+# guest-history-dark-mobile silently "matched", never got rewritten, and kept a
+# stale pay period the gate is structurally blind to. Regeneration has to be
+# total or the mobile baselines rot in the dark.
 docker run --rm --network host \
   --user "$(id -u):$(id -g)" \
   -v "$REPO_DIR:/work" -w /work \
   -e HOME=/tmp -e FRT_CANARY_URL="$CANARY_URL" \
   "$PLAYWRIGHT_IMAGE" \
-  npx playwright test --config=playwright.visual.config.ts --update-snapshots
+  npx playwright test --config=playwright.visual.config.ts --update-snapshots=all
 
 canary_down
 trap - EXIT

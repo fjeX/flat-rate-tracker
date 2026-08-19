@@ -17,7 +17,12 @@ import {
   type UnpaidTimePatch,
   type UnpaidTimeSource,
 } from "@/lib/types";
-import { getCurrentUserId, isMissingTable, type DbClient } from "./_client";
+import {
+  getCurrentUserId,
+  isMissingTable,
+  retryOnce,
+  type DbClient,
+} from "./_client";
 
 type UnpaidTimeRow = Database["public"]["Tables"]["unpaid_time"]["Row"];
 
@@ -49,13 +54,16 @@ export async function listUnpaidTime(
   supabase: DbClient,
   range?: { from?: string; to?: string },
 ): Promise<UnpaidTime[]> {
-  let q = supabase.from("unpaid_time").select("*");
-  if (range?.from) q = q.gte("date", range.from);
-  if (range?.to) q = q.lte("date", range.to);
-  const { data, error } = await q
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    let q = supabase.from("unpaid_time").select("*");
+    if (range?.from) q = q.gte("date", range.from);
+    if (range?.to) q = q.lte("date", range.to);
+    const { data, error } = await q
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toUnpaidTime);
 }
 

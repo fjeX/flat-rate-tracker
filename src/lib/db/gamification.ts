@@ -38,7 +38,7 @@ import {
 } from "@/lib/snapshots";
 import { addDays } from "@/lib/periods";
 import type { DailyClock } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 import { listOpCodes } from "./op-codes";
 import {
   listConfirmedZeroDaysSafe,
@@ -85,11 +85,14 @@ export async function listDaysOffSafe(supabase: DbClient): Promise<DayOff[] | nu
 }
 
 export async function listDaysOff(supabase: DbClient): Promise<DayOff[]> {
-  const { data, error } = await supabase
-    .from("days_off")
-    .select("*")
-    .order("start_date", { ascending: false });
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("days_off")
+      .select("*")
+      .order("start_date", { ascending: false });
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toDayOff);
 }
 
@@ -118,10 +121,13 @@ export async function deleteDayOff(supabase: DbClient, id: string): Promise<void
 // ------------------------------------------------------------------------
 
 export async function listCareerMilestones(supabase: DbClient): Promise<number[]> {
-  const { data, error } = await supabase
-    .from("career_milestones")
-    .select("threshold");
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("career_milestones")
+      .select("threshold");
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map((r) => r.threshold).sort((a, b) => a - b);
 }
 
@@ -185,11 +191,14 @@ function toSnapshot(row: SnapshotRow): PortfolioSnapshot {
 }
 
 export async function listSnapshots(supabase: DbClient): Promise<PortfolioSnapshot[]> {
-  const { data, error } = await supabase
-    .from("portfolio_snapshots")
-    .select("*")
-    .order("seq", { ascending: false });
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("portfolio_snapshots")
+      .select("*")
+      .order("seq", { ascending: false });
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toSnapshot);
 }
 
@@ -215,13 +224,19 @@ export type EntryDay = { date: string; flagHours: number };
 export async function listAllEntryDays(supabase: DbClient): Promise<EntryDay[]> {
   const out: EntryDay[] = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("entries")
-      .select("date, flag_hours")
-      .order("date", { ascending: true })
-      .order("created_at", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
+    // Retried per PAGE, not around the whole loop: a retry of the loop would
+    // re-request pages already collected and double them into `out`.
+    const page = from;
+    const data = await retryOnce(async () => {
+      const { data, error } = await supabase
+        .from("entries")
+        .select("date, flag_hours")
+        .order("date", { ascending: true })
+        .order("created_at", { ascending: true })
+        .range(page, page + PAGE - 1);
+      if (error) throw error;
+      return data;
+    });
     for (const r of data ?? []) {
       out.push({ date: r.date, flagHours: Number(r.flag_hours) });
     }

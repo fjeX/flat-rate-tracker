@@ -3,7 +3,10 @@
 import { useState, useTransition } from "react";
 import type { Stats } from "@/lib/stats";
 import { fmtHours } from "@/lib/stats";
-import { setPaidPeriodHoursAction } from "@/app/actions/paid-periods";
+import {
+  deletePaidPeriodAction,
+  setPaidPeriodHoursAction,
+} from "@/app/actions/paid-periods";
 import { toText, parseHours, verdictFor } from "@/lib/discrepancy";
 
 export function DiscrepancyCard({
@@ -49,6 +52,37 @@ export function DiscrepancyCard({
     });
   }
 
+  // The way back out. Blanking the input can't do this: parseHours("") is null
+  // and commit() early-returns, and the column is NOT NULL so there is no
+  // "unset" value to write — clearing means deleting the row. Without it a
+  // mistyped figure pins the period to settled/short/over forever.
+  function reset() {
+    if (savedPaid === null) return;
+    if (
+      !window.confirm(
+        "Clear the paid flag hours for this period? It goes back to awaiting " +
+          "pay and the discrepancy verdict disappears. You can enter a new " +
+          "figure any time.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await deletePaidPeriodAction(periodKey);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        setSavedPaid(null);
+        setPaidText("");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to clear.");
+      }
+    });
+  }
+
   const diff = parsedPaid === null ? null : parsedPaid - logged;
 
   const diffColor =
@@ -69,27 +103,46 @@ export function DiscrepancyCard({
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <label className="block">
-          <span className="field-label">
-            Actual paid flag hrs
-          </span>
-          <input
-            type="number"
-            min={0}
-            step={0.1}
-            value={paidText}
-            onChange={(e) => setPaidText(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            placeholder="—"
-            className="input mt-1 text-lg font-semibold"
-          />
-        </label>
+        <div className="block">
+          <label className="block">
+            <span className="field-label">
+              Actual paid flag hrs
+            </span>
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              value={paidText}
+              onChange={(e) => setPaidText(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              placeholder="—"
+              className="input mt-1 text-lg font-semibold"
+            />
+          </label>
+          {savedPaid !== null && (
+            <button
+              type="button"
+              // Taking focus off the input would fire its onBlur commit first,
+              // racing an upsert against this delete in the same transition.
+              // Keeping focus where it is means only one write happens.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={reset}
+              disabled={isPending}
+              // Same ghost button every other secondary action on this page
+              // uses. No colour/padding utilities: globals.css is unlayered, so
+              // .btn-sm silently beats a Tailwind px-0 or text-[…] anyway.
+              className="btn btn-sm btn-ghost min-h-11 mt-2"
+            >
+              Reset to unpaid
+            </button>
+          )}
+        </div>
         <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
           <div className="field-label">
             Logged flag hrs

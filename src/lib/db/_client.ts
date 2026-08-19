@@ -31,3 +31,76 @@ export function isMissingTable(err: unknown): boolean {
   if (e.code === "PGRST205" || e.code === "42P01") return true;
   return /schema cache|does not exist/i.test(e.message ?? "");
 }
+
+// "This access token is from the future" — PostgREST PGRST303.
+//
+// GoTrue mints a fresh access token and the very next PostgREST request refuses
+// it with `JWT issued at future`. This is NOT clock drift between containers,
+// and four separate investigations burned themselves proving it: every
+// container on the VM shares one time namespace (/proc/1/ns/time reads
+// time:[4026531834] on the host and inside the app container alike), so their
+// clocks are physically the same clock and cannot diverge by so much as a tick.
+//
+// What it actually is: a sub-second race inside PostgREST's own `iat`
+// validation. On 2026-08-19 a token minted at 10:00:47.792Z was rejected twice,
+// at 10:00:48.097Z and 10:00:48.108Z — the token was ~0.30s old — and the exact
+// same request served fine by hand a moment later. Five earlier occurrences
+// were single log lines nobody saw; the sixth landed inside the dashboard's
+// ~17-way Promise.all of reads, so the render threw and the user got a 500.
+//
+// PostgREST 14.8 exposes no clock-leeway setting, so there is nowhere upstream
+// to fix it. The fix is to wait for the token to age and ask again.
+export function isJwtFutureError(err: unknown): boolean {
+  const e = err as { code?: string } | null;
+  if (!e) return false;
+  return e.code === "PGRST303";
+}
+
+// How long to wait before re-asking after a PGRST303.
+//
+// DO NOT "OPTIMISE" THIS TO 0. An immediate retry is the obvious change and it
+// is wrong: the evidence above is a token being refused at ~0.30-0.40s old and
+// accepted once it was past a second. A zero-delay retry fires while the token
+// is still sub-second, hits the same window, and converts a recoverable blip
+// into a guaranteed 500 that also looks like the retry "didn't help".
+//
+// 750ms is chosen to clear the observed rejection band with margin while
+// staying well under any human's patience for a page that was already loading.
+export const JWT_FUTURE_RETRY_MS = 750;
+
+// Run a READ once, and if — and only if — it fails with PGRST303, wait and run
+// it exactly once more.
+//
+// **Never wrap a mutation in this.** Roughly 70 of the data layer's ~92
+// throw-sites are .insert/.update/.upsert/.delete, and PostgREST gives no way
+// to know whether a rejected request reached the database, so a retry there
+// risks a double insert. That is why this is applied by hand at named read
+// functions rather than bolted into a shared query helper: a chokepoint would
+// silently cover the writes too.
+//
+// `fn` is re-invoked, not a pre-built query re-awaited, so callers must build
+// their query inside the callback — a spent PostgREST builder is not a
+// dependable second request.
+//
+// Concurrency note: the dashboard fires its reads in parallel, so if several
+// land in the same rejection window they each sleep 750ms *at the same time*.
+// The page pays ~750ms once, not once per read.
+export async function retryOnce<T>(
+  fn: () => Promise<T>,
+  delayMs: number = JWT_FUTURE_RETRY_MS,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    // Anything else — a missing table, RLS, a real query error — is rethrown
+    // untouched and immediately. Retrying those just doubles the latency of a
+    // failure that was never going to succeed.
+    if (!isJwtFutureError(err)) throw err;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    // Exactly one more attempt. A second PGRST303 is no longer the freshness
+    // race — the token is over a second old by now — so it means something
+    // genuinely wrong, and it rethrows to the error boundary. A loop here
+    // would hold a server render open indefinitely on every request instead.
+    return await fn();
+  }
+}

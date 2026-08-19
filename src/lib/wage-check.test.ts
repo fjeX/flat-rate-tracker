@@ -345,6 +345,7 @@ function fallback(over: Partial<ScheduleFallback> = {}): ScheduleFallback {
   return {
     schedules: [schedule5x8()],
     daysOff: [],
+    confirmedZeroDays: [],
     today: "2026-07-25",
     ...over,
   };
@@ -635,7 +636,7 @@ describe("effectiveHourly — in-progress day", () => {
       [],
       RATES,
       RANGE,
-      { schedules: [], daysOff: [], today: "2026-07-22" },
+      { schedules: [], daysOff: [], confirmedZeroDays: [], today: "2026-07-22" },
     );
     expect(r.ongoingDays).toEqual(["2026-07-22"]);
     expect(r.scheduledDays).toEqual([]);

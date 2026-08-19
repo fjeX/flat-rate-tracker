@@ -21,9 +21,46 @@ import { formatDateLong, type PeriodRange } from "@/lib/periods";
 import { aggregateStatsAuto, fmtHours, fmtPct, type ScheduleContext } from "@/lib/stats";
 import { fmtMoney, hasAnyRate, periodEarnings, type RateMap } from "@/lib/earnings";
 import { setPeriodOverrideAction } from "@/app/actions/settings";
+import type { ScheduleFallback } from "@/lib/wage-check";
 import type { DailyClock, Entry, UnpaidTime } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Build the modal's ScheduleContext from the schedule context the page already
+ * assembled for its own figures.
+ *
+ * This exists because the caller used to hand-write the object literal, and a
+ * hand-written literal is one field away from a different answer: it passed
+ * `confirmedZeroDays: []`, which under the shared pairDay rule demotes every
+ * confirmed real-zero day from "counted" to "unresolved" and drops it out of
+ * the denominator. The modal then divided the same flagged hours by a shorter
+ * denominator than the page behind it — 365% in the preview against 183% in
+ * the hero, for the identical unchanged range.
+ *
+ * So the conversion is a function, exported and tested, rather than a literal
+ * at a call site. Adding a field to ScheduleContext now breaks here, once,
+ * instead of silently defaulting somewhere.
+ *
+ * Returns null when there is no usable schedule — aggregateStatsAuto then falls
+ * back to clocked hours only, exactly as the page does.
+ */
+export function scheduleContextFrom(
+  schedule: ScheduleFallback | null | undefined,
+  today: string,
+): ScheduleContext | null {
+  if (!schedule || schedule.schedules.length === 0) return null;
+  return {
+    schedules: schedule.schedules,
+    daysOff: schedule.daysOff,
+    // Optional on ScheduleFallback because effectiveHourly never reads it;
+    // required here. This `?? []` is the ONLY place that default is allowed to
+    // be applied, and the page supplies the real list.
+    confirmedZeroDays: schedule.confirmedZeroDays ?? [],
+    today,
+    shiftOverrides: schedule.shiftOverrides,
+  };
+}
 
 type Snapshot = {
   roCount: number;
@@ -33,7 +70,9 @@ type Snapshot = {
   earnings: number | null;
 };
 
-function snapshot(
+// Exported for the regression test: this is the figure the modal shows, and it
+// has to equal the page's for an unchanged range.
+export function snapshot(
   entries: Entry[],
   clocks: DailyClock[],
   unpaid: UnpaidTime[],

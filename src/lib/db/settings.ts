@@ -6,7 +6,7 @@
 // foreign keys, neither of which a shared settings row could provide).
 import type { Database } from "@/lib/supabase/database.types";
 import type { FieldRegion, LaborType, PeriodOverride, RoTemplate, UserSettings } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 
 type SettingsRow = Database["public"]["Tables"]["user_settings"]["Row"];
 
@@ -49,12 +49,15 @@ function toSettings(row: SettingsRow): UserSettings {
 
 export async function getSettings(supabase: DbClient): Promise<UserSettings> {
   const userId = await getCurrentUserId(supabase);
-  const { data, error } = await supabase
-    .from("user_settings")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  });
   if (!data) {
     return {
       userId,

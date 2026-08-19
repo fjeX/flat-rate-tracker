@@ -112,6 +112,28 @@ let lineSeq = 0;
 const loggedTimeFor = (seq: number) =>
   `${String(8 + (seq % 8)).padStart(2, "0")}:${String((seq * 7) % 60).padStart(2, "0")}`;
 
+// ── reconciliation overrides ────────────────────────────────────────────────
+// Every line defaults to paid_hours: null (pending) — see the push below. That
+// left the ReconciliationCard's "Show all lines" toggle (which only renders
+// once doneCount > 0) permanently dark: nothing in the fixture ever left
+// "pending", so the card never had a reconciled line to reveal. These two
+// overrides put a realistic MIX in front of the camera without touching flag
+// hours, dates, RO numbers, or op codes — keyed by lineSeq (the same counter
+// used for each line's id, captured before increment at the push site below).
+// Both target lines sit on single-line ROs inside the 2026-03-01..15 period
+// (see UNPAIRED_DAY below for why that period matters to /pay-period) so the
+// default period view actually shows them:
+//   lineSeq 150 — RO 909910075, 2026-03-03, BRK-R (flag 1.6) — paid in full,
+//     the line that makes doneCount > 0 and the toggle appear.
+//   lineSeq 156 — RO 909910078, 2026-03-05, DIAG-1 (flag 1.0) — paid 0.5,
+//     the "short" branch (paid > 0 but < flag).
+// Every other line keeps paid_hours: null — the "still pending" branch — so
+// all three reconciliation statuses land in one snapshot.
+const RECONCILED_PAID_HOURS: Record<number, number> = {
+  150: 1.6,
+  156: 0.5,
+};
+
 WORK_DAYS.forEach((date, dayIx) => {
   // 1–3 ROs per day, cycling deterministically. Day 9 gets zero ROs on purpose:
   // an empty working day is a real layout case (the "no ROs logged" row).
@@ -133,8 +155,9 @@ WORK_DAYS.forEach((date, dayIx) => {
       // Every 17th RO is a comeback — rare enough to be realistic, frequent
       // enough that the comeback badge lands in at least one snapshot.
       const isComeback = roSeq % 17 === 16 && l === 0;
+      const thisLineIx = lineSeq++;
       opLineRows.push({
-        id: id("11ce", lineSeq++),
+        id: id("11ce", thisLineIx),
         entry_id: entryId,
         op_code_id: op.id,
         sub_op_code_id: null,
@@ -143,7 +166,7 @@ WORK_DAYS.forEach((date, dayIx) => {
         custom_description: null,
         flag_hours: flag,
         actual_hours: null,
-        paid_hours: null,
+        paid_hours: RECONCILED_PAID_HOURS[thisLineIx] ?? null,
         labor_type: l === 0 ? "customer_pay" : "warranty",
         is_comeback: isComeback,
         // The upsell is the LAST line — the shape a real one takes, added to a
