@@ -126,3 +126,54 @@ describe("efficiencyDisplay — the hollowed numerator", () => {
     expect(r.kind).toBe("all_excluded");
   });
 });
+
+describe("degenerate inputs cannot reach the screen", () => {
+  // None of these are reachable from today's producers. They are guarded
+  // because the classifier's contract makes both unpaired* fields optional, so
+  // a future caller can legally supply half of them — and the failure mode is
+  // a headline reading "NaN%" or "landed on 0 days", which is worse than any
+  // percentage it could have printed.
+  it("never lets a NaN reach the rendered output", () => {
+    // The contract is "no NaN on screen", not "suppress the figure": a real
+    // efficiency of 50 is still worth printing even if the hours total is
+    // garbage. What must never happen is an excludedHours of NaN being
+    // formatted into a sentence.
+    const d = efficiencyDisplay({ flagHours: NaN, efficiency: 50 });
+    for (const v of Object.values(d)) {
+      if (typeof v === "number") expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+
+  it("does not print NaN when the excluded hours are NaN", () => {
+    const d = efficiencyDisplay({
+      flagHours: 10,
+      efficiency: 50,
+      unpairedFlagHours: NaN,
+    });
+    if (d.kind === "all_excluded" || d.kind === "mostly_excluded") {
+      expect(Number.isFinite(d.excludedHours)).toBe(true);
+    }
+    expect(d.kind).toBe("shown");
+  });
+
+  it("never says the hours landed on zero days", () => {
+    // unpairedFlagHours supplied without unpairedDays.
+    const d = efficiencyDisplay({
+      flagHours: 10,
+      efficiency: 50,
+      unpairedFlagHours: 9,
+    });
+    expect(d.kind).toBe("mostly_excluded");
+    if (d.kind === "mostly_excluded") expect(d.days).toBeGreaterThanOrEqual(1);
+  });
+
+  it("still reports the real day count when it is given one — the control", () => {
+    const d = efficiencyDisplay({
+      flagHours: 10,
+      efficiency: 50,
+      unpairedFlagHours: 9,
+      unpairedDays: 4,
+    });
+    if (d.kind === "mostly_excluded") expect(d.days).toBe(4);
+  });
+});

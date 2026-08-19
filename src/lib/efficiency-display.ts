@@ -95,21 +95,31 @@ export function efficiencyDisplay(stats: {
   unpairedFlagHours?: number;
   unpairedDays?: number;
 }): EfficiencyDisplay {
-  const excludedHours = stats.unpairedFlagHours ?? 0;
+  // Non-finite in means non-finite out, and every comparison below is false
+  // against NaN — so an unguarded NaN falls through to `shown` and renders
+  // "NaN%" on the headline. Not reachable from today's producers; costs one
+  // line to make unreachable by construction.
+  const finite = (n: number | undefined) => (Number.isFinite(n) ? (n as number) : 0);
+  const flagHours = finite(stats.flagHours);
+  const excludedHours = finite(stats.unpairedFlagHours);
   // Exact, not an estimate: pairDay only ever files a day as unpaired when it
   // has flagged hours and no denominator, and an `unresolved` day always has
   // flag === 0. So the numerator behind `efficiency` is precisely this.
-  const counted = stats.flagHours - excludedHours;
+  const counted = flagHours - excludedHours;
 
-  if (excludedHours > 0 && counted * MIN_UNDERSTATEMENT_FACTOR <= stats.flagHours) {
-    const days = stats.unpairedDays ?? 0;
+  if (excludedHours > 0 && counted * MIN_UNDERSTATEMENT_FACTOR <= flagHours) {
+    // `unpairedDays` is optional alongside a required-in-practice
+    // `unpairedFlagHours`, so a caller can supply hours without days and the
+    // copy renders "landed on 0 days". If we know hours were excluded, at
+    // least one day held them — floor at 1 rather than print a falsehood.
+    const days = Math.max(1, finite(stats.unpairedDays));
     if (counted < EMPTY_HOURS) {
       return { kind: "all_excluded", excludedHours, days };
     }
     return {
       kind: "mostly_excluded",
       excludedHours,
-      totalHours: stats.flagHours,
+      totalHours: flagHours,
       days,
     };
   }
