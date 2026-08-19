@@ -48,8 +48,12 @@ export type ProjectionLabel =
 // A recent-pace average extrapolated from the first day or two of a period can
 // project an absurd multiple of the goal ("486h of 88h"). The arithmetic is
 // honest but the number reads as a bug, so past this multiple the hero reports
-// the state and drops the figure. Mirrors the dashboard's existing guard.
-const IMPLAUSIBLE_MULTIPLE = 1.5;
+// the state and drops the figure.
+//
+// Exported because the dashboard makes the identical call about the identical
+// forecast and used to hold its own hand-copied `1.5`. One judgement, one
+// number — see memory/feedback_duplicate_derivations_drift.md.
+export const IMPLAUSIBLE_MULTIPLE = 1.5;
 
 /**
  * What the in-progress hero should say about where the period lands.

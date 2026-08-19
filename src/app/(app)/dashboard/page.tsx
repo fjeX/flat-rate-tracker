@@ -17,6 +17,8 @@ import { aggregateStats, aggregateStatsWithSchedule, dailyDenominators, fmtHours
 import { shiftForDate } from "@/lib/schedule";
 import { fmtMoney, hasAnyRate, periodEarnings, ratesToMap } from "@/lib/earnings";
 import { computeForecast } from "@/lib/forecast";
+import { efficiencyDisplay } from "@/lib/efficiency-display";
+import { IMPLAUSIBLE_MULTIPLE } from "@/lib/period-mode";
 import { TodayCard } from "@/components/dashboard/TodayCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { StreakCard } from "@/components/dashboard/StreakCard";
@@ -218,6 +220,21 @@ export default async function DashboardPage() {
     goal: goalHours,
   });
 
+  // The pace card prints a forecast built from the RAW flagged total and, four
+  // lines below it, an efficiency computed from a per-day-gated numerator those
+  // same hours can fall out of. On the first day or two of a period that pairing
+  // said "Well ahead — on pace to clear your 45 flag hr goal" directly above
+  // "0% efficiency". Both numbers were right; together they were nonsense.
+  //
+  // The dashboard is the at-a-glance surface, so the fix here is to STOP
+  // CONTRADICTING ITSELF, not to grow an explanation: when the percentage would
+  // be hollow the foot falls back to `Day N / M`, the substitution this slot has
+  // always made when there is no efficiency to state. The forecast line stays —
+  // goal progress does not need a measurable day length, so it is still true.
+  // The full "these hours aren't in the ratio" account belongs to /pay-period,
+  // which owns period detail (memory/feedback_dashboard_stays_lean.md).
+  const periodEfficiency = efficiencyDisplay(statsPeriod);
+
   // Pill + ring colour follow the projection, not just the current point.
   // Four states: ahead / close (within 10%) / behind / insufficient-history.
   let pillClass = "";
@@ -247,10 +264,15 @@ export default async function DashboardPage() {
   if (hasGoal) {
     if (forecast.state === "insufficient-history") {
       forecastLine = "Not enough history yet to project — keep logging and this fills in.";
-    } else if (forecast.projected! >= goalHours * 1.5) {
+    } else if (forecast.projected! >= goalHours * IMPLAUSIBLE_MULTIPLE) {
       // Early in a period a strong recent average can extrapolate to an
       // implausible multiple of the goal ("486 of 88"). The math is honest but
       // the number reads broken — report the status, not the wild figure.
+      //
+      // The multiple is imported, not written here. This file and
+      // period-mode.ts each carried their own 1.5 for the identical judgement,
+      // on two surfaces a tap apart — the exact shape that drifts (see
+      // memory/feedback_duplicate_derivations_drift.md).
       forecastLine = `Well ahead — on pace to clear your ${goalHours} flag hr goal`;
     } else {
       forecastLine = `On pace for about ${Math.round(forecast.projected!)} of ${goalHours} flag hrs`;
@@ -346,8 +368,8 @@ export default async function DashboardPage() {
             <div className="pace-foot">
               <span>{formatPeriodLabel(period)}</span>
               <span>
-                {statsPeriod.efficiency !== null
-                  ? `${fmtPct(statsPeriod.efficiency)} efficiency`
+                {periodEfficiency.kind === "shown"
+                  ? `${fmtPct(periodEfficiency.pct)} efficiency`
                   : `Day ${currentDay} / ${periodDays}`}
               </span>
             </div>

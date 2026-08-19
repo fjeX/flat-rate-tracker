@@ -17,17 +17,37 @@ import { fmtHours, fmtPct } from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
 import { parseHours } from "@/lib/discrepancy";
 import { setPaidPeriodHoursAction } from "@/app/actions/paid-periods";
+import { efficiencyDisplay } from "@/lib/efficiency-display";
 import type { ProjectionLabel } from "@/lib/period-mode";
 
 function InProgressHero({
   flagHours,
   efficiency,
+  // Flag hours the app could not pair with a day length, and how many days they
+  // came from. Optional so the no-schedule shape (plain `aggregateStats`, which
+  // has no excluded-day concept) still compiles and behaves exactly as before.
+  unpairedFlagHours = 0,
+  unpairedDays = 0,
   projection,
 }: {
   flagHours: number;
   efficiency: number | null;
+  unpairedFlagHours?: number;
+  unpairedDays?: number;
   projection: ProjectionLabel;
 }) {
+  // Two independent pipelines meet in this one sentence — a per-day-gated
+  // efficiency and a forecast built from the RAW flagged total — and until this
+  // classification existed they could contradict each other out loud
+  // ("0% efficiency · well ahead of your goal so far", 2026-08-18). See
+  // lib/efficiency-display for the mechanism.
+  const eff = efficiencyDisplay({
+    flagHours,
+    efficiency,
+    unpairedFlagHours,
+    unpairedDays,
+  });
+
   return (
     <section className="period-hero" aria-label="Period progress">
       <p className="period-hero-eyebrow">Flagged so far</p>
@@ -36,8 +56,18 @@ function InProgressHero({
         <span className="unit">h</span>
       </p>
       <p className="period-hero-support">
-        {efficiency !== null && <>{fmtPct(efficiency)} efficiency</>}
-        {efficiency !== null && projection.kind !== "none" && " · "}
+        {/* The projection is NOT suppressed alongside a withheld percentage,
+            and it is not qualified either. It answers a different question —
+            flagged hours against the goal — and that question does not need a
+            measurable day length, so the forecast's raw total is the right
+            input and its claim is true. What was wrong was welding the two
+            clauses into one sentence with a middot: a withheld efficiency and
+            "well ahead of your goal" read as a contradiction sitting side by
+            side, and read as two separate facts once they are two separate
+            lines. So the efficiency clause LEAVES this line when it can't be
+            stated, rather than the projection being censored to protect it. */}
+        {eff.kind === "shown" && <>{fmtPct(eff.pct)} efficiency</>}
+        {eff.kind === "shown" && projection.kind !== "none" && " · "}
         {projection.kind === "projected" && (
           // Each figure keeps its unit — and "goal" keeps its number — on one
           // line. Without this the sentence orphans "goal" onto its own row.
@@ -64,6 +94,42 @@ function InProgressHero({
           </>
         )}
       </p>
+
+      {/* Never a silent blank — the same rule WorkCostCard states for its
+          effective-hourly headline, in the same voice: every branch names what
+          is missing.
+
+          It stops at NAMING it. The fix ("clock them or add them to your
+          schedule") lives in PeriodStats' "Not counted above" caption, which
+          renders in this same header band whenever these hours exist — a
+          strict superset of this state, so it is always on screen with this.
+          Repeating the instruction two elements apart is the pile-of-parts
+          noise the redesign removed; a figure gets one home. */}
+      {eff.kind === "all_excluded" && (
+        <p className="card-inset mt-3 px-3 py-2 text-xs text-[var(--fg-2)]">
+          No efficiency yet — all{" "}
+          <span className="font-medium text-[var(--fg-1)]">
+            {fmtHours(eff.excludedHours)}h
+          </span>{" "}
+          flagged so far landed on {eff.days === 1 ? "a day" : `${eff.days} days`}{" "}
+          {/* The {" "} above is load-bearing: text following an expression
+              container loses its leading space in the JSX transform. Same trap
+              that shipped "1 daywith" in PeriodStats. */}
+          with no hours to measure {eff.days === 1 ? "it" : "them"} against.
+        </p>
+      )}
+      {eff.kind === "mostly_excluded" && (
+        <p className="card-inset mt-3 px-3 py-2 text-xs text-[var(--fg-2)]">
+          Efficiency isn&apos;t shown —{" "}
+          <span className="font-medium text-[var(--fg-1)]">
+            {fmtHours(eff.excludedHours)}h
+          </span>{" "}
+          of the {fmtHours(eff.totalHours)}h flagged so far landed on{" "}
+          {eff.days === 1 ? "a day" : `${eff.days} days`} with no hours to
+          measure {eff.days === 1 ? "it" : "them"} against, so the percentage
+          would leave out most of your work.
+        </p>
+      )}
     </section>
   );
 }

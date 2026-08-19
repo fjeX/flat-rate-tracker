@@ -140,7 +140,15 @@ export function PayPeriodView({
   currentKey: string;
   selected: PeriodRange;
   hasOverride: boolean;
-  stats: Stats;
+  // Widened the same way PeriodStats widens it, and for the same reason: the
+  // page hands down a ScheduleStats whenever a schedule exists, and typing the
+  // prop as bare `Stats` erased the two excluded-day fields at the boundary —
+  // so the hero could not have seen them even though they were in scope.
+  // Optional, because the no-schedule path really does pass a plain Stats.
+  stats: Stats & {
+    unpairedFlagHours?: number;
+    unpairedDays?: number;
+  };
   paidFlagHours: number | null;
   entries: Entry[];
   // Entries spanning a margin either side of the selected period, for the
@@ -360,6 +368,13 @@ export function PayPeriodView({
             <PeriodHero.InProgress
               flagHours={stats.flagHours}
               efficiency={stats.efficiency}
+              // Flagged hours the app couldn't pair with a day length. Without
+              // these the hero prints a percentage computed from a numerator
+              // those hours were silently dropped out of, next to a projection
+              // that still counts them — which is how "0% efficiency · well
+              // ahead of your goal so far" shipped.
+              unpairedFlagHours={stats.unpairedFlagHours}
+              unpairedDays={stats.unpairedDays}
               projection={
                 forecast
                   ? projectionLabel(forecast, goalHours)
