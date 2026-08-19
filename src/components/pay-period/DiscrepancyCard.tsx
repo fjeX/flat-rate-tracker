@@ -167,7 +167,19 @@ export function DiscrepancyCard({
                 // covers keyboard AND pointer, unlike the onMouseDown guard
                 // below — which stays because Safari and Firefox/macOS don't
                 // focus a clicked button at all, leaving relatedTarget null.
-                if (e.relatedTarget === resetRef.current) return;
+                //
+                // The `resetRef.current &&` is load-bearing, not defensive
+                // noise. The reset button only renders once a figure is saved,
+                // so on a period with nothing saved yet resetRef.current is
+                // null — and `null === null` is true. Without this guard the
+                // comparison swallowed the save for every blur that carries no
+                // relatedTarget: pressing Enter (a programmatic .blur(), which
+                // is what this card's own "Press enter or click away to save"
+                // hint tells you to do) and clicking any non-focusable space.
+                // That silently discarded the first figure a tech ever typed
+                // into a period, with no error — and a successful reset returns
+                // the card to exactly that state.
+                if (resetRef.current && e.relatedTarget === resetRef.current) return;
                 commit();
               }}
               onKeyDown={(e) => {

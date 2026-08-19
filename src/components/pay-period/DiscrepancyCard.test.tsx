@@ -278,6 +278,80 @@ describe("the control case — an ordinary blur still saves", () => {
   });
 });
 
+describe("a period with nothing saved yet still saves — the null-relatedTarget paths", () => {
+  /**
+   * The guard that fixed the keyboard bug was written as
+   *
+   *     if (e.relatedTarget === resetRef.current) return;
+   *
+   * and the reset button only renders once a figure is saved. So with nothing
+   * saved, resetRef.current is null — and `null === null` is TRUE, which
+   * skipped the save for every blur carrying no relatedTarget.
+   *
+   * Two of the three ways out of a field carry a null relatedTarget: pressing
+   * Enter (a programmatic .blur(), which is exactly what this card's own
+   * "Press enter or click away to save" hint instructs) and clicking any
+   * non-focusable space. Only Tab survived.
+   *
+   * That silently discarded the FIRST figure a tech ever types into a period —
+   * the single most common use of this input — with no error shown. And a
+   * successful reset returns the card to precisely that state, so the reset
+   * feature handed the user the broken case as its normal outcome.
+   *
+   * The existing suite could not see it: nearly every case starts from a saved
+   * value, and every save assertion leaves the field by Tab.
+   */
+  it("saves on Enter when no figure is saved yet", async () => {
+    setup(null);
+    // The field must really hold focus: the handler below calls .blur(), and
+    // in jsdom (as in a browser) blurring an unfocused element does nothing.
+    field().focus();
+    edit("70");
+
+    // Enter is handled by the card's own onKeyDown, which calls .blur() —
+    // a programmatic blur, so relatedTarget is null in every browser.
+    fireEvent.keyDown(field(), { key: "Enter" });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:70`]);
+    expect(setPaidPeriodHoursAction).toHaveBeenCalledWith(PERIOD, 70);
+
+    await act(async () => {
+      releaseSave?.();
+    });
+  });
+
+  it("saves when focus leaves to nothing focusable", async () => {
+    setup(null);
+    edit("70");
+
+    // Clicking the card body, the page background, or iOS's keyboard "Done".
+    fireEvent.blur(field(), { relatedTarget: null });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:70`]);
+
+    await act(async () => {
+      releaseSave?.();
+    });
+  });
+
+  it("suppression still works when the button IS rendered — the control", async () => {
+    // Pairs with the two above. They assert a save HAPPENS on a null
+    // relatedTarget; this asserts the suppression it replaced still fires on a
+    // real one. Without it, "saves now" could pass by deleting the guard
+    // outright and reopening the keyboard bug.
+    setup(65);
+    edit("70");
+
+    tabTo(resetBtn());
+
+    expect(calls).toEqual([]);
+
+    await act(async () => {
+      releaseSave?.();
+    });
+  });
+});
+
 describe("the control is only there when there is something to clear", () => {
   it("is absent when no paid figure is saved", () => {
     setup(null);

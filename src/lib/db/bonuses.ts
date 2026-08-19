@@ -4,7 +4,7 @@
 // is always Number()'d, exactly like every other numeric in this layer.
 import type { Database } from "@/lib/supabase/database.types";
 import type { Bonus, BonusCategory, BonusPatch, NewBonus } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, type DbClient, retryOnce} from "./_client";
 
 type BonusRow = Database["public"]["Tables"]["bonuses"]["Row"];
 
@@ -29,13 +29,18 @@ function toBonus(row: BonusRow): Bonus {
 // ------------------------------------------------------------------------
 
 // Every bonus for the current user, newest-first. Used by the JSON export.
+// retryOnce: read during the /pay-period render's Promise.all, not just by the
+// JSON export.
 export async function listBonuses(supabase: DbClient): Promise<Bonus[]> {
-  const { data, error } = await supabase
-    .from("bonuses")
-    .select("*")
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("bonuses")
+      .select("*")
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toBonus);
 }
 
