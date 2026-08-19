@@ -12,7 +12,7 @@
 
 import type { Database } from "@/lib/supabase/database.types";
 import { isTimerStatus, type TimerSlot, type TimerStatus } from "@/lib/timer";
-import { getCurrentUserId, isMissingTable, type DbClient } from "./_client";
+import { getCurrentUserId, isMissingTable, retryOnce, type DbClient } from "./_client";
 
 type TimerRow = Database["public"]["Tables"]["active_timers"]["Row"];
 
@@ -33,13 +33,26 @@ function toTimerSlot(row: TimerRow): TimerSlot {
   };
 }
 
-/** All of the user's timer slots, lowest slot number first. */
+/**
+ * All of the user's timer slots, lowest slot number first.
+ *
+ * retryOnce because this is the FIRST PostgREST read of every authenticated
+ * render: the (app) layout awaits it, and React cannot render the page until
+ * the layout resolves. It therefore lands immediately after the proxy's
+ * getUser() — the call that mints or refreshes the token — which is exactly
+ * the freshness window PGRST303 lives in. Leaving this one unwrapped meant
+ * the crash still reproduced on every page while the page's own reads were
+ * fully covered.
+ */
 export async function listTimerSlots(supabase: DbClient): Promise<TimerSlot[]> {
-  const { data, error } = await supabase
-    .from("active_timers")
-    .select("*")
-    .order("slot", { ascending: true });
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("active_timers")
+      .select("*")
+      .order("slot", { ascending: true });
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toTimerSlot);
 }
 

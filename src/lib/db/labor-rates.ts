@@ -2,7 +2,7 @@
 // One row per (user, labor_type); a missing row means that type is unpriced.
 import type { Database } from "@/lib/supabase/database.types";
 import type { LaborRate, LaborType } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 
 type LaborRateRow = Database["public"]["Tables"]["labor_rates"]["Row"];
 
@@ -16,8 +16,11 @@ function toLaborRate(row: LaborRateRow): LaborRate {
 }
 
 export async function listLaborRates(supabase: DbClient): Promise<LaborRate[]> {
-  const { data, error } = await supabase.from("labor_rates").select("*");
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase.from("labor_rates").select("*");
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toLaborRate);
 }
 

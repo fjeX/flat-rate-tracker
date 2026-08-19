@@ -17,8 +17,15 @@ import {
   ratioTier,
   weekdayEfficiency,
 } from "./insights";
+import { buildUnpaidSummary } from "./unpaid-summary";
 import type { DayDenom } from "./stats";
-import type { DailyClock, Entry, EntryOpCode, OpCode } from "./types";
+import type {
+  DailyClock,
+  Entry,
+  EntryOpCode,
+  OpCode,
+  UnpaidTime,
+} from "./types";
 
 function line(over: Partial<EntryOpCode> = {}): EntryOpCode {
   return {
@@ -626,7 +633,7 @@ describe("leakBoard", () => {
       ],
       [],
     );
-    const board = leakBoard(rows);
+    const board = leakBoard(rows, []);
     expect(board.leaks.map((l) => l.kind).sort()).toEqual(["overrun", "rework"]);
     expect(board.leaks.find((l) => l.kind === "overrun")!.hours).toBeCloseTo(6, 5);
     expect(board.leaks.find((l) => l.kind === "rework")!.hours).toBeCloseTo(3, 5);
@@ -648,7 +655,7 @@ describe("leakBoard", () => {
       ],
       [],
     );
-    const board = leakBoard(rows);
+    const board = leakBoard(rows, []);
     expect(board.leaks).toHaveLength(1);
     expect(board.leaks[0].kind).toBe("rework");
     expect(board.totalHours).toBeCloseTo(2.5, 5);
@@ -663,7 +670,7 @@ describe("leakBoard", () => {
       ],
       [],
     );
-    const board = leakBoard(rows);
+    const board = leakBoard(rows, []);
     expect(board.leaks).toHaveLength(1);
     expect(board.leaks[0].kind).toBe("rework");
     expect(board.leaks[0].hours).toBeCloseTo(3.3, 5);
@@ -675,8 +682,8 @@ describe("leakBoard", () => {
       [entry([line({ custom: true, customCode: "FAST", flagHours: 10, actualHours: 7 })])],
       [],
     );
-    expect(leakBoard(rows).leaks).toHaveLength(0);
-    expect(leakBoard(rows).totalHours).toBe(0);
+    expect(leakBoard(rows, []).leaks).toHaveLength(0);
+    expect(leakBoard(rows, []).totalHours).toBe(0);
   });
 
   it("ignores a code that was never timed rather than guessing a loss", () => {
@@ -684,7 +691,7 @@ describe("leakBoard", () => {
       [entry([line({ custom: true, customCode: "NEVER", flagHours: 4, actualHours: null })])],
       [],
     );
-    expect(leakBoard(rows).leaks).toHaveLength(0);
+    expect(leakBoard(rows, []).leaks).toHaveLength(0);
   });
 
   it("orders worst first", () => {
@@ -697,9 +704,226 @@ describe("leakBoard", () => {
       ],
       [],
     );
-    const board = leakBoard(rows);
+    const board = leakBoard(rows, []);
     expect(board.leaks.map((l) => l.code)).toEqual(["BIG", "SMALL"]);
     expect(board.totalHours).toBeCloseTo(11, 5);
+  });
+});
+
+// ── The ledger half of the leak board ────────────────────────────────────────
+// Modelled on dispute-pack.test.ts's "collects comeback lines and ledger rows
+// without touching the variance total" — the one existing precedent for
+// asserting BOTH of buildUnpaidSummary's sources in one dataset.
+
+function ledgerRow(over: Partial<UnpaidTime> = {}): UnpaidTime {
+  return {
+    id: "u1",
+    userId: "u",
+    date: "2026-07-09",
+    hours: 3.5,
+    kind: "wait_parts",
+    entryId: null,
+    originalEntryId: null,
+    source: "manual",
+    note: "",
+    createdAt: "",
+    updatedAt: "",
+    ...over,
+  };
+}
+
+/** buildUnpaidSummary's ledger lines, exactly as InsightsView hands them over. */
+function ledgerLines(entries: Entry[], unpaid: UnpaidTime[]) {
+  return buildUnpaidSummary({ entries, unpaid, library: [] }).lines;
+}
+
+describe("leakBoard — unpaid-time ledger rows", () => {
+  it("gives waiting-on-parts its own row, which no op code could ever produce", () => {
+    // The bug in one assertion: the entries below contain no ledger-shaped work
+    // at all, because a ledger row HAS no op code. Before ledger rows were an
+    // input, 3.50h of real unpaid time was structurally unreachable here — not
+    // filtered out, not rounded away, unreachable.
+    const unpaid = [ledgerRow({ hours: 3.5 })];
+    const board = leakBoard(opCodePerformance([], []), ledgerLines([], unpaid));
+    expect(board.leaks).toHaveLength(1);
+    expect(board.leaks[0].code).toBe("Waiting on parts");
+    expect(board.leaks[0].kind).toBe("unpaid_clock");
+    expect(board.leaks[0].source).toBe("ledger");
+    expect(board.leaks[0].uses).toBe(1);
+    expect(board.leaks[0].ratio).toBeNull();
+    expect(board.totalHours).toBeCloseTo(3.5, 5);
+  });
+
+  it("groups by kind rather than listing every entry", () => {
+    const unpaid = [
+      ledgerRow({ id: "a", hours: 2, kind: "wait_parts", date: "2026-07-09" }),
+      ledgerRow({ id: "b", hours: 1.5, kind: "wait_parts", date: "2026-07-10" }),
+      ledgerRow({ id: "c", hours: 0.75, kind: "shop_time", date: "2026-07-11" }),
+    ];
+    const board = leakBoard(opCodePerformance([], []), ledgerLines([], unpaid));
+    expect(board.leaks.map((l) => l.code)).toEqual([
+      "Waiting on parts",
+      "Shop time",
+    ]);
+    expect(board.leaks[0].hours).toBeCloseTo(3.5, 5);
+    expect(board.leaks[0].uses).toBe(2);
+  });
+
+  it("files a ticketless comeback as rework, the way buildUnpaidSummary does", () => {
+    // Kind, not source, decides what a leak IS. A comeback with no RO behind it
+    // is still rework — it just has no op code to hang off — so it must land in
+    // the same bucket as the RO-side comeback lines, or the page would have two
+    // vocabularies for one thing.
+    const unpaid = [ledgerRow({ hours: 1.25, kind: "comeback_other" })];
+    const board = leakBoard(opCodePerformance([], []), ledgerLines([], unpaid));
+    expect(board.leaks[0].kind).toBe("rework");
+    expect(board.leaks[0].source).toBe("ledger");
+    expect(board.leaks[0].code).toBe("Comeback — another tech's work");
+  });
+
+  it("keeps a sub-six-minute ledger row, which is data and not a mis-tapped timer", () => {
+    // MIN_MEASURED_HOURS guards TIMER readings against book time. A ledger row
+    // was typed on purpose, so applying that floor here would put the board back
+    // out of step with the period's unpaid total for no reason.
+    const unpaid = [ledgerRow({ hours: 0.05, kind: "shop_time" })];
+    const board = leakBoard(opCodePerformance([], []), ledgerLines([], unpaid));
+    expect(board.leaks).toHaveLength(1);
+    expect(board.totalHours).toBeCloseTo(0.05, 5);
+  });
+
+  it("carries a single shared note as the row's detail, and nothing when they differ", () => {
+    const one = leakBoard(
+      opCodePerformance([], []),
+      ledgerLines([], [ledgerRow({ note: "dealer had none" })]),
+    );
+    expect(one.leaks[0].description).toBe("dealer had none");
+
+    const many = leakBoard(
+      opCodePerformance([], []),
+      ledgerLines(
+        [],
+        [
+          ledgerRow({ id: "a", note: "dealer had none" }),
+          ledgerRow({ id: "b", note: "wrong part shipped" }),
+        ],
+      ),
+    );
+    expect(many.leaks[0].description).toBe("");
+  });
+
+  it("does not count an RO comeback twice when the summary carries both sources", () => {
+    // buildUnpaidSummary returns BOTH sources; the op-code rows already carry
+    // the RO half as their rework row. Reading the whole list would print those
+    // hours a second time.
+    const entries = [
+      entry(
+        [line({ id: "b", custom: true, customCode: "BRK", flagHours: 0, actualHours: 2, isComeback: true })],
+        { id: "e2", comebackKind: "comeback_own" },
+      ),
+    ];
+    const rows = opCodePerformance(entries, []);
+    const board = leakBoard(rows, ledgerLines(entries, []));
+    expect(board.leaks).toHaveLength(1);
+    expect(board.leaks[0].source).toBe("opcode");
+    expect(board.totalHours).toBeCloseTo(2, 5);
+  });
+});
+
+// ── Reconciliation ───────────────────────────────────────────────────────────
+
+describe("leakBoard reconciles with buildUnpaidSummary", () => {
+  // THE TEST WHOSE ABSENCE LET THE BUG LIVE. On 2026-08-18 Insights totalled
+  // 3.3h for a period the Pay Period page totalled 6.80h for; on 2026-08-19,
+  // 4.8h against 8.20h. Same gap both days, 3.50h, and it was one ledger row.
+  //
+  // The comparison is against buildUnpaidSummary's OWN total for the same
+  // window — not against hand-written constants, which is what let two surfaces
+  // drift while both suites stayed green.
+  const range = { start: "2026-07-01", end: "2026-07-15" };
+
+  const entries: Entry[] = [
+    // Runs long. Its overrun is a leak but NOT unpaid-summary's business — the
+    // paid part of an overrunning job is still paid.
+    entry([line({ id: "a", custom: true, customCode: "DIAG", flagHours: 10, actualHours: 13 })], {
+      id: "e1",
+      date: "2026-07-06",
+    }),
+    // RO-side comeback: zero flag by DB CHECK, 3.3h of real work.
+    entry([line({ id: "b", custom: true, customCode: "BRK", flagHours: 0, actualHours: 3.3, isComeback: true })], {
+      id: "e2",
+      date: "2026-07-08",
+      comebackKind: "comeback_own",
+    }),
+    // Outside the window on purpose.
+    entry([line({ id: "c", custom: true, customCode: "BRK", flagHours: 0, actualHours: 7, isComeback: true })], {
+      id: "e3",
+      date: "2026-07-20",
+      comebackKind: "comeback_own",
+    }),
+  ];
+
+  const unpaid: UnpaidTime[] = [
+    ledgerRow({ id: "u1", date: "2026-07-09", hours: 3.5, kind: "wait_parts" }),
+    ledgerRow({ id: "u2", date: "2026-07-10", hours: 1, kind: "wait_parts" }),
+    ledgerRow({ id: "u3", date: "2026-07-11", hours: 0.75, kind: "shop_time" }),
+    ledgerRow({ id: "u4", date: "2026-07-12", hours: 1.25, kind: "comeback_other" }),
+    // Outside the window on purpose — big enough that leaking it would be loud.
+    ledgerRow({ id: "u5", date: "2026-07-20", hours: 9, kind: "wait_approval" }),
+  ];
+
+  // Scoped exactly the way InsightsView scopes it: one range object, one
+  // inclusive comparison, applied to both collections.
+  const scopedEntries = entries.filter(
+    (e) => e.date >= range.start && e.date <= range.end,
+  );
+  const scopedUnpaid = unpaid.filter(
+    (u) => u.date >= range.start && u.date <= range.end,
+  );
+
+  const summary = buildUnpaidSummary({
+    entries: scopedEntries,
+    unpaid: scopedUnpaid,
+    library: [],
+  });
+  const board = leakBoard(
+    opCodePerformance(scopedEntries, []),
+    summary.lines,
+  );
+
+  it("puts the same unpaid hours on the board as the Pay Period list", () => {
+    // Overrun is excluded because it is not unpaid time: those hours WERE paid,
+    // just not all of them. Everything else on the board must reconcile to the
+    // hour, and the expectation is read off the other derivation rather than
+    // written down here.
+    const unpaidLeakHours = board.leaks
+      .filter((l) => l.kind !== "overrun")
+      .reduce((sum, l) => sum + l.hours, 0);
+    expect(unpaidLeakHours).toBeCloseTo(summary.totalHours, 10);
+    // Sanity on the fixture itself: the ledger really is the bigger half, the
+    // way it was in production when this was missed.
+    expect(summary.totalHours).toBeCloseTo(9.8, 10);
+    expect(summary.waitingHours + summary.shopHours).toBeCloseTo(5.25, 10);
+  });
+
+  it("reconciles kind by kind, not just in total", () => {
+    const hoursOfKind = (kind: "rework" | "unpaid_clock") =>
+      board.leaks
+        .filter((l) => l.kind === kind)
+        .reduce((sum, l) => sum + l.hours, 0);
+    // buildUnpaidSummary's comebackHours covers RO comeback lines AND ledger
+    // comeback rows; the board's rework kind must cover exactly the same set.
+    expect(hoursOfKind("rework")).toBeCloseTo(summary.comebackHours, 10);
+    expect(hoursOfKind("unpaid_clock")).toBeCloseTo(
+      summary.waitingHours + summary.shopHours,
+      10,
+    );
+  });
+
+  it("honours the window on both sources, not just on entries", () => {
+    // A scope applied to entries and forgotten on the ledger is the same class
+    // of bug wearing a different hat.
+    expect(board.leaks.some((l) => l.code === "Waiting on approval")).toBe(false);
+    expect(board.totalHours).toBeCloseTo(9.8 + 3, 10);
   });
 });
 
@@ -790,7 +1014,7 @@ describe("opCodePerformance — implausible readings", () => {
     expect(rows[0].ratio).toBeNull();
     expect(rows[0].timedUses).toBe(0);
     expect(gainBoard(rows)).toHaveLength(0);
-    expect(leakBoard(rows).leaks).toHaveLength(0);
+    expect(leakBoard(rows, []).leaks).toHaveLength(0);
   });
 
   it("counts the bad reading so the tech can find and fix it", () => {

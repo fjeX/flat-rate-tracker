@@ -35,13 +35,20 @@ export default async function InsightsPage() {
   ]);
 
   // Null until their migrations land; every consumer treats null as "hide".
-  const [schedules, daysOff, confirmedZeroDays, shiftOverrides, disputes] =
+  //
+  // The unpaid-time ledger is loaded UNSCOPED, like the entries above: the
+  // window chips re-scope client-side, so fetching one period here would make
+  // "Month" and "All" quietly report the period's hours. Waiting on parts,
+  // waiting on approval and shop time are the unpaid hours that have no op
+  // code, so without this read the leak board could not see them at all.
+  const [schedules, daysOff, confirmedZeroDays, shiftOverrides, disputes, unpaid] =
     await Promise.all([
       db.listWorkSchedulesSafe(supabase),
       db.listDaysOffSafe(supabase),
       db.listConfirmedZeroDaysSafe(supabase),
       db.listShiftOverridesSafe(supabase),
       db.listDisputesSafe(supabase),
+      db.listUnpaidTimeSafe(supabase),
     ]);
 
   const range = dataRange(entries, clocks);
@@ -90,6 +97,7 @@ export default async function InsightsPage() {
           today={today}
           weekStartDay={weekStartDay}
           disputes={disputes}
+          unpaid={unpaid}
         />
       </div>
     </main>

@@ -1,7 +1,7 @@
 // Data layer for the user's personal op code library.
 import type { Database } from "@/lib/supabase/database.types";
 import type { NewOpCode, OpCode, OpCodePatch, SubOpCode } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 
 type OpCodeRow = Database["public"]["Tables"]["op_codes"]["Row"];
 type OpCodeVariantRow = Database["public"]["Tables"]["op_code_variants"]["Row"];
@@ -38,21 +38,32 @@ function toOpCode(row: OpCodeRow, variants: OpCodeVariantRow[]): OpCode {
 }
 
 export async function listOpCodes(supabase: DbClient): Promise<OpCode[]> {
-  const [opResult, varResult] = await Promise.all([
-    supabase.from("op_codes").select("*").order("sort_order", { ascending: true }),
-    supabase.from("op_code_variants").select("*"),
+  // Each half retries independently: they are already in flight together, so a
+  // shared PGRST303 window costs one 750ms wait for the pair, not two.
+  const [opRows, varRows] = await Promise.all([
+    retryOnce(async () => {
+      const { data, error } = await supabase
+        .from("op_codes")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return data;
+    }),
+    retryOnce(async () => {
+      const { data, error } = await supabase.from("op_code_variants").select("*");
+      if (error) throw error;
+      return data;
+    }),
   ]);
-  if (opResult.error) throw opResult.error;
-  if (varResult.error) throw varResult.error;
 
   const variantsByParent = new Map<string, OpCodeVariantRow[]>();
-  for (const v of varResult.data ?? []) {
+  for (const v of varRows ?? []) {
     const list = variantsByParent.get(v.op_code_id) ?? [];
     list.push(v);
     variantsByParent.set(v.op_code_id, list);
   }
 
-  return (opResult.data ?? []).map((row) =>
+  return (opRows ?? []).map((row) =>
     toOpCode(row, variantsByParent.get(row.id) ?? []),
   );
 }

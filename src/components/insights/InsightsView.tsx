@@ -44,6 +44,7 @@ import {
   periodTrend,
   ratioOrder,
   ratioTier,
+  trendEfficiencyDisplay,
   weekdayEfficiency,
   type Gain,
   type Leak,
@@ -58,7 +59,14 @@ import {
   type LifetimeRecovery,
   type OutcomeInsight,
 } from "@/lib/disputes";
-import type { Dispute, Entry, OpCode, PeriodOverride } from "@/lib/types";
+import { buildUnpaidSummary } from "@/lib/unpaid-summary";
+import type {
+  Dispute,
+  Entry,
+  OpCode,
+  PeriodOverride,
+  UnpaidTime,
+} from "@/lib/types";
 
 // Rows shown before the table collapses behind "Show all". Not a hard cap —
 // with sortable columns a hidden tail would mean sorting ascending silently
@@ -182,6 +190,12 @@ function SortHead({
 
 /** One line describing why a leak is a leak, in the tech's own vocabulary. */
 function leakWhy(leak: Leak): string {
+  // Ledger rows first: they have no op code, no book time and no ratio, so the
+  // only honest thing to count is how many entries are behind the hours. Said
+  // as "entries" rather than "lines" because they are not on a ticket at all.
+  if (leak.source === "ledger") {
+    return `${leak.uses} ${leak.uses === 1 ? "entry" : "entries"}, no flag hours`;
+  }
   const lines = `${leak.uses} ${leak.uses === 1 ? "job" : "jobs"}`;
   return leak.kind === "rework"
     ? `${leak.uses} comeback ${leak.uses === 1 ? "line" : "lines"}, zero flag`
@@ -211,8 +225,9 @@ function FindingLede({ board }: { board: LeakBoard }) {
           Nothing unpaid in this window.
         </p>
         <p className="mt-1 max-w-[60ch] text-sm" style={{ color: "var(--fg-2)" }}>
-          Every job you timed came in at or under its book time, and no comeback
-          hours went unflagged.
+          Every job you timed came in at or under its book time, no comeback
+          hours went unflagged, and your unpaid-time ledger is empty for this
+          window.
         </p>
       </div>
     );
@@ -231,9 +246,14 @@ function FindingLede({ board }: { board: LeakBoard }) {
           you weren&rsquo;t paid for
         </span>
       </div>
+      {/* Names the three sources instead of claiming "every source the app can
+          measure". The old wording was an affirmative claim about coverage the
+          board did not have — the unpaid-time ledger was structurally
+          unreachable from it — and a claim like that is worse than a gap,
+          because it tells the tech to stop looking. Say what is in the number. */}
       <p className="mt-2 max-w-[60ch] text-sm" style={{ color: "var(--fg-2)" }}>
-        Time you were on the clock for and no flag hour covered, from every
-        source the app can measure — ranked by what it cost you.
+        Jobs that ran past their book time, comebacks that flagged zero, and
+        every hour in your unpaid-time ledger — ranked by what it cost you.
       </p>
     </div>
   );
@@ -247,9 +267,12 @@ function LeakSection({ board }: { board: LeakBoard }) {
       <div className="section-title">What&rsquo;s costing you</div>
       <Card flush>
         {board.leaks.map((leak, i) => {
-          // Rework is always the worse kind: it paid nothing at all, where an
-          // overrun at least paid some of its time.
-          const tier = leak.kind === "rework" ? "bad" : ratioTier(leak.ratio) ?? "warn";
+          // An overrun at least paid some of its time; rework and unpaid clock
+          // paid none of it, so both are the worse kind. Keyed on "is this an
+          // overrun" rather than listing the bad kinds, so a fourth kind can
+          // never default itself into the softer colour.
+          const tier =
+            leak.kind === "overrun" ? ratioTier(leak.ratio) ?? "warn" : "bad";
           const pct = worst > 0 ? Math.max(2, (leak.hours / worst) * 100) : 0;
           return (
             <div key={leak.key} className="leak-row">
@@ -277,9 +300,11 @@ function LeakSection({ board }: { board: LeakBoard }) {
       </Card>
       <p className="mt-2 px-1 text-xs" style={{ color: "var(--fg-3)" }}>
         Overrun is actual minus flag on jobs you timed. Unpaid rework has no
-        ratio because it flags zero — the hours are the whole finding. Weekdays
-        aren&rsquo;t listed here: a slow day is slow because of the jobs on it,
-        so counting it again would inflate the total.
+        ratio because it flags zero — the hours are the whole finding. Ledger
+        time (waiting, shop time, comebacks with no ticket) has no op code, so
+        it is grouped by what it was. Weekdays aren&rsquo;t listed here: a slow
+        day is slow because of the jobs on it, so counting it again would
+        inflate the total.
       </p>
     </section>
   );
@@ -608,7 +633,14 @@ function BestDaysSection({
   );
 }
 
-function TrendSection({
+/**
+ * Exported for its co-located test, the same way PeriodOverrideModal exports
+ * `snapshot`. Driving the whole InsightsView through RTL to reach this chart
+ * would exercise a dozen sibling sections and go red whenever any of them was
+ * mid-edit — a regression test that fails for other people's reasons gets
+ * muted, and then it isn't a gate.
+ */
+export function TrendSection({
   points,
   today,
 }: {
@@ -624,6 +656,23 @@ function TrendSection({
   // because the hours in it are real.
   const complete = points.filter((p) => p.end < today);
 
+  // The printable percentage per bar, or null when there isn't one.
+  //
+  // Routed through the trend-shape adapter, NOT efficiencyDisplay directly: a
+  // PeriodTrendPoint keeps its unpaired hours OUTSIDE `flagHours` while
+  // ScheduleStats keeps them inside, and the classifier is written against the
+  // ScheduleStats convention. See trendEfficiencyDisplay in lib/insights.
+  //
+  // Keyed by period key rather than recomputed at each use, so the label, the
+  // bar height, the axis and the caption below cannot answer differently.
+  const shownPct = new Map<string, number | null>(
+    points.map((p) => {
+      const d = trendEfficiencyDisplay(p);
+      return [p.key, d.kind === "shown" ? d.pct : null];
+    }),
+  );
+  const measured = (p: PeriodTrendPoint) => shownPct.get(p.key) != null;
+
   // THE SAME RULE NOW SETS THE AXIS, which is what was wrong with this chart.
   // Scaling to the tallest bar of ANY period let an unfinished one define the
   // ceiling: a period one day in, with one day of denominator, read 1565% and
@@ -631,10 +680,19 @@ function TrendSection({
   // comparable to the ones beside it, so it does not get to set the scale
   // either — it just clips, marked, with its true figure printed above it.
   //
+  // A WITHHELD percentage is excluded from the scale for the same reason and
+  // one more: it is not merely incomparable, it is not a measurement. A
+  // fortnight whose flagged work all landed on unscheduled Saturdays produces a
+  // number built from a hollowed-out numerator, and letting it set the ceiling
+  // would rescale five honest bars against a figure the chart is refusing to
+  // print. If nothing is measured the floor stands alone at 100.
+  //
   // Floored at 100 so the chart always contains par. Without the floor a tech
   // having a bad run sees every bar near the top, which reads as a good month.
-  const scaleSource = complete.length > 0 ? complete : points;
-  const ceiling = Math.max(100, ...scaleSource.map((p) => p.efficiency ?? 0));
+  const completeMeasured = complete.filter(measured);
+  const scaleSource =
+    completeMeasured.length > 0 ? completeMeasured : points.filter(measured);
+  const ceiling = Math.max(100, ...scaleSource.map((p) => shownPct.get(p.key)!));
   const BAR_MAX = 108;
   const parOffset = (100 / ceiling) * BAR_MAX;
   // Hours that are in no percentage on this page, because the app never learned
@@ -648,10 +706,12 @@ function TrendSection({
 
   const deltaFrom = complete.length >= 2 ? complete[complete.length - 2] : null;
   const deltaTo = complete.length >= 2 ? complete[complete.length - 1] : null;
-  const delta =
-    deltaTo?.efficiency != null && deltaFrom?.efficiency != null
-      ? deltaTo.efficiency - deltaFrom.efficiency
-      : null;
+  // Both endpoints have to be printable. "came in at 0%, down from 138%" is the
+  // same hollowed-numerator claim as the bar label, stated in a full sentence —
+  // worse, not better, because a sentence sounds deliberate.
+  const fromPct = deltaFrom ? (shownPct.get(deltaFrom.key) ?? null) : null;
+  const toPct = deltaTo ? (shownPct.get(deltaTo.key) ?? null) : null;
+  const delta = toPct != null && fromPct != null ? toPct - fromPct : null;
 
   return (
     <section>
@@ -666,15 +726,22 @@ function TrendSection({
             <span className="trend-par-label">100%</span>
           </div>
           {points.map((point) => {
-            const value = point.efficiency ?? 0;
-            const clipped = value > ceiling;
+            const pct = shownPct.get(point.key) ?? null;
+            // A withheld bar still DRAWS — the flagged hours in it are real and
+            // a missing column would read as a period that never happened. What
+            // it does not do is claim a height: this bar's height IS its
+            // percentage, so a withheld figure has no height to draw, and it
+            // falls to the same minimum stub an all-zero period gets. The dash
+            // above it, and the "not counted" caption below the chart, say why.
+            const value = pct ?? 0;
+            const clipped = pct !== null && value > ceiling;
             // Every bar keeps a visible stub so an all-zero period still reads
             // as a period rather than as missing data.
             const height = Math.max(4, (Math.min(value, ceiling) / ceiling) * BAR_MAX);
             const running = point.end >= today;
             return (
               <div key={point.key} className="trend-col">
-                <span className="trend-val">{fmtPct(point.efficiency)}</span>
+                <span className="trend-val">{fmtPct(pct)}</span>
                 <div
                   className={[
                     "trend-bar",
@@ -709,11 +776,11 @@ function TrendSection({
           <p className="mt-3 text-xs text-[var(--fg-2)]">
             {deltaTo!.label} came in at{" "}
             <span className="font-medium text-[var(--fg-1)]">
-              {fmtPct(deltaTo!.efficiency)}
+              {fmtPct(toPct)}
             </span>
             , {delta > 0 ? "up from" : "down from"}{" "}
             <span className="font-medium text-[var(--fg-1)]">
-              {fmtPct(deltaFrom!.efficiency)}
+              {fmtPct(fromPct)}
             </span>{" "}
             in {deltaFrom!.label}.
           </p>
@@ -969,6 +1036,7 @@ export function InsightsView({
   today,
   weekStartDay,
   disputes,
+  unpaid,
 }: {
   entries: Entry[];
   denomByDay: Record<string, DayDenom>;
@@ -980,6 +1048,9 @@ export function InsightsView({
   // Null pre-migration — the recovery section disappears rather than crashing,
   // same contract as every other dispute-ledger read surface.
   disputes: Dispute[] | null;
+  // The unpaid-time ledger, unscoped. Null pre-migration, same contract; the
+  // leak board then shows only its op-code half, which is what it always was.
+  unpaid: UnpaidTime[] | null;
 }) {
   const [filter, setFilter] = useState<FilterKind>("all");
   const [sortCol, setSortCol] = useState<SortCol>("ratio");
@@ -1019,6 +1090,32 @@ export function InsightsView({
     return out;
   }, [denomByDay, range]);
 
+  // Scoped with the SAME range object and the same inclusive comparison as
+  // scopedEntries. A second filter here is how the leak board and the rest of
+  // the page would end up describing different windows.
+  const scopedUnpaid = useMemo(() => {
+    const rows = unpaid ?? [];
+    return range === null
+      ? rows
+      : rows.filter((u) => u.date >= range.start && u.date <= range.end);
+  }, [unpaid, range]);
+
+  // buildUnpaidSummary is the app's one flattening of unpaid time — the same
+  // function the Pay Period "Every unpaid record" list and the dispute pack
+  // read. The leak board takes its output rather than re-deriving the ledger,
+  // so the two surfaces cannot report different totals for one period. Rates
+  // are deliberately not passed: the board is an hours board, and the dollar
+  // figures would be computed and thrown away.
+  const unpaidSummary = useMemo(
+    () =>
+      buildUnpaidSummary({
+        entries: scopedEntries,
+        unpaid: scopedUnpaid,
+        library,
+      }),
+    [scopedEntries, scopedUnpaid, library],
+  );
+
   const opCodes = useMemo(
     () => opCodePerformance(scopedEntries, library),
     [scopedEntries, library],
@@ -1028,8 +1125,13 @@ export function InsightsView({
     [opCodes, sortCol, sortDir],
   );
   // Both derived from the SAME rows the table renders, so the leaderboard and
-  // the table can never disagree about one op code's hours.
-  const leaks = useMemo(() => leakBoard(opCodes), [opCodes]);
+  // the table can never disagree about one op code's hours. The leak board
+  // additionally takes the ledger half, which has no op code and therefore no
+  // row in either — see leakBoard.
+  const leaks = useMemo(
+    () => leakBoard(opCodes, unpaidSummary.lines),
+    [opCodes, unpaidSummary],
+  );
   const gains = useMemo(() => gainBoard(opCodes), [opCodes]);
   const weekdays = useMemo(
     () => weekdayEfficiency(scopedEntries, scopedDenom),
@@ -1089,10 +1191,16 @@ export function InsightsView({
   //   hasWindowContent — do the WINDOWED sections have anything to draw?
   //   hasAnyHistory    — is there anything in this account at all?
   // Trend and Recovery span all history, so they can't answer the first one.
-  const hasWindowContent = opCodes.length > 0 || hasWorkedDays;
+  // Ledger rows count as content. A window whose only record is "3.5h waiting
+  // on parts" has no entries and no worked days, and without this it rendered
+  // "No work recorded in this pay period" over hours the tech typed in himself
+  // — the same hiding bug one level up.
+  const hasWindowContent =
+    opCodes.length > 0 || hasWorkedDays || leaks.leaks.length > 0;
   const hasAnyHistory =
     entries.length > 0 ||
     Object.keys(denomByDay).length > 0 ||
+    (unpaid !== null && unpaid.length > 0) ||
     (lifetime !== null && lifetime.closedCount > 0);
 
   const chipRow = (

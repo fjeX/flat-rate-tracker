@@ -177,9 +177,21 @@ If the dashboard shows the "scheduled day looks empty" card, it now offers a
   waiting on parts / waiting on approval / shop time), and an optional note.
 - Saving with hours **0 or blank must be refused** with a visible error.
 - After a successful save the day leaves the list and does NOT come back on
-  reload. Efficiency must NOT change — unpaid hours are reported beside
-  efficiency, never subtracted from it. An efficiency figure that moves after
-  logging unpaid time is a bug.
+  reload.
+- **Efficiency is expected to move here — usually down — and that's correct.**
+  The invariant is narrower than it sounds: unpaid hours are never subtracted
+  from the *numerator* (flagged hours). But this day was previously EMPTY — it
+  had no clocked hours and hadn't been resolved, so it contributed to neither
+  side of efficiency at all. Resolving it as "Worked — unpaid" pulls the day's
+  full scheduled hours into the *denominator* for the first time (it's now a
+  "present" day, same as "Worked, zero flag"), while the numerator gets nothing
+  added. A drop in efficiency here is the day correctly counting against you
+  for the first time, not a bug.
+- What's still a bug: the **numerator** moving by anything other than the
+  day's real flag hours (should be nothing, since an empty day has none), or
+  the **denominator** figure for a day that was already counted (already had
+  clocked hours, or was already resolved) changing on this save — resolving
+  one empty day must not silently touch another day's contribution.
 
 ### 3. Timers (up to 3 concurrent — reworked 2026-07-24)
 The Timer page runs **up to 3 job timers at once**. The header reads
@@ -518,9 +530,23 @@ when both sources are present.
   "Total unpaid", the Pay Check-Up gap parts, and the dispute pack's "Total
   unpaid time" all describe the same period. Any disagreement between them is a
   real bug — say which two disagree and by how much.
-- **Efficiency must not move.** Note the period's efficiency %, add unpaid time,
-  reload, and confirm it is unchanged. This is the core design rule of the whole
-  feature (unpaid hours are reported *beside* efficiency, never subtracted).
+- **The numerator must not move — the denominator sometimes correctly does.**
+  The core design rule is narrower than "efficiency never changes": unpaid
+  hours are never subtracted from the *numerator* (flagged hours). Whether the
+  *denominator* moves depends on which unpaid source you're testing, and both
+  are worth checking on the same period:
+  - **§2b comeback**, added as a line on a day that **already has flag hours
+    logged**: note the period's efficiency %, add the comeback, reload, and
+    confirm efficiency is genuinely **unchanged** — the comeback flags 0 (no
+    numerator change) on a day that was already counted (no denominator
+    change either). Any movement at all here is a real bug.
+  - **§2c ledger row**, from resolving a previously-**empty** scheduled day:
+    efficiency is **expected to drop**, because that day's scheduled hours
+    enter the denominator for the first time (see §2c for the full mechanics).
+    Don't report that drop as a bug — the thing to verify instead is that the
+    move is *only* in the denominator: hand-check that the numerator only grew
+    by real flag hours logged that period (none, if the day was purely
+    unpaid).
 
 **Edge cases worth trying here** (pick 1–2 a night, rotate, and invent your own
 — the point is to find what wasn't thought of):
@@ -962,8 +988,38 @@ something if you idle first and read fast:
    - If either still shows the old value, the mitigation has regressed —
      report it as **HIGH**, and say explicitly whether a manual reload then
      shows the correct number (it will).
-5. Do the same check once for a **spiff** via Quick Add → Spiff, which goes
-   through `BonusForm` and had the identical defect.
+5. Do the same check once for a **spiff**, which goes through `BonusForm` and
+   had the identical defect — but do it **on `/pay-period`, not the dashboard**,
+   and read a **different** observable, because the pace figure structurally
+   cannot move for a spiff. Note that Quick Add cannot be used for this: the
+   Quick Add modal is mounted only on the dashboard's Today card and is behind
+   a user preference, so the spiff is added from the Spiffs & Bonuses card's
+   own **Add** button instead.
+   Bonuses are deliberately kept out of hours reconciliation (flag hours and
+   pace are flag-hours-only, by design — see the Spiffs card's own copy), so
+   watching the pace here would never catch anything either way; use the
+   Pay Period page's **Spiffs & Bonuses card** instead:
+   - On `/pay-period`, expand **Spiffs & Bonuses** and note the **"Spiffs
+     total"** row. Expanding the card counts as an interaction, so do it
+     *before* the idle window below, not after.
+   - If the period has no spiffs yet the row does not exist — the card reads
+     "No spiffs or bonuses logged this period." instead. That sentence is your
+     baseline, and it must be REPLACED by a Spiffs total row showing the new
+     amount. Do not report a missing row as a fault in that case; §6 may have
+     legitimately left this period back at zero.
+   - **Leave the tab alone for at least 45 seconds**, same as step 2 — don't
+     click anything.
+   - Tap **Add** on the Spiffs & Bonuses card and save a spiff with a real
+     dollar amount (e.g. "alignment spiff $25").
+   - **Within ~10 seconds, without reloading and without clicking anything
+     else,** re-read the Spiffs total.
+   - It must have gone **up by the spiff amount you just added**. If it still
+     shows the old total, the mitigation has regressed for the bonus path —
+     report it as **HIGH**, and say explicitly whether a manual reload then
+     shows the correct number (it will).
+   - This exercises the same `BonusForm` → `FLUSH_EVENT` → `RefreshFlusher`
+     repaint path as the RO half above, so it's a full-strength regression
+     check, not a weaker substitute for the pace check.
 
 ⚠️ Do not "verify" this by clicking around and then looking — clicking is
 precisely what hides the bug. `RefreshFlusher` (app layout) is what keeps this

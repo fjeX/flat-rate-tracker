@@ -10,7 +10,7 @@ import {
   type NewEntry,
   type NewEntryOpCode,
 } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 
 type EntryRow = Database["public"]["Tables"]["entries"]["Row"];
 type EntryOpCodeRow = Database["public"]["Tables"]["entry_op_codes"]["Row"];
@@ -85,34 +85,45 @@ export async function listEntries(
   supabase: DbClient,
   filter: ListEntriesFilter = {},
 ): Promise<Entry[]> {
-  let q = supabase
-    .from("entries")
-    .select("*, entry_op_codes(*)")
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
+  // Built inside retryOnce so the second attempt issues a genuinely new
+  // request rather than re-awaiting a spent builder. See retryOnce for why a
+  // freshly-minted token can be refused as "issued at future".
+  const data = await retryOnce(async () => {
+    let q = supabase
+      .from("entries")
+      .select("*, entry_op_codes(*)")
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
 
-  if (filter.from) q = q.gte("date", filter.from);
-  if (filter.to) q = q.lte("date", filter.to);
-  if (filter.limit !== undefined) {
-    const start = filter.offset ?? 0;
-    q = q.range(start, start + filter.limit - 1);
-  }
+    if (filter.from) q = q.gte("date", filter.from);
+    if (filter.to) q = q.lte("date", filter.to);
+    if (filter.limit !== undefined) {
+      const start = filter.offset ?? 0;
+      q = q.range(start, start + filter.limit - 1);
+    }
 
-  const { data, error } = await q;
-  if (error) throw error;
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toEntry);
 }
 
+// retryOnce: the (app) layout fans this out per running timer slot, so it is
+// on the same pre-page path as listTimerSlots.
 export async function getEntry(
   supabase: DbClient,
   id: string,
 ): Promise<Entry | null> {
-  const { data, error } = await supabase
-    .from("entries")
-    .select("*, entry_op_codes(*)")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("entries")
+      .select("*, entry_op_codes(*)")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  });
   return data ? toEntry(data) : null;
 }
 

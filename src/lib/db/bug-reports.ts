@@ -4,7 +4,7 @@
 // guards the data.
 import type { Database } from "@/lib/supabase/database.types";
 import type { BugReport, BugReportPhoto } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, type DbClient, retryOnce, isJwtFutureError} from "./_client";
 
 type BugReportRow = Database["public"]["Tables"]["bug_reports"]["Row"];
 type BugReportPhotoRow = Database["public"]["Tables"]["bug_report_photos"]["Row"];
@@ -90,12 +90,16 @@ export async function insertBugReportPhoto(
 // --- Admin-only reads/writes (RLS returns nothing to non-admins) ---------------
 
 // Every report, newest-first. Used by the /admin/bugs inbox.
+// retryOnce: renders /admin/bugs.
 export async function listAllBugReports(supabase: DbClient): Promise<BugReport[]> {
-  const { data, error } = await supabase
-    .from("bug_reports")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("bug_reports")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toBugReport);
 }
 
@@ -152,11 +156,21 @@ export async function isCurrentUserAdmin(supabase: DbClient): Promise<boolean> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return false;
-  const { data, error } = await supabase
-    .from("user_settings")
-    .select("is_admin")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  // retryOnce BEFORE the fail-closed decision. Failing closed is right for the
+  // missing-column case this was written for, but PGRST303 is a transient token
+  // blip, not a statement about admin-ness — and swallowing it here means
+  // (app)/admin/layout.tsx calls notFound(), so a real admin gets a 404 on the
+  // whole /admin tree, and the footer link vanishes on (app)/layout.tsx. Retry
+  // first, then fail closed on whatever is left.
+  const { data, error } = await retryOnce(async () => {
+    const res = await supabase
+      .from("user_settings")
+      .select("is_admin")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (res.error && isJwtFutureError(res.error)) throw res.error;
+    return res;
+  });
   if (error) return false;
   return data?.is_admin ?? false;
 }

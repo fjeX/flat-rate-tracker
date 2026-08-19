@@ -1,7 +1,7 @@
 // Daily clocked-in hours (one row per user per date).
 import type { Database } from "@/lib/supabase/database.types";
 import type { DailyClock } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 
 type ClockRow = Database["public"]["Tables"]["daily_clock_hours"]["Row"];
 
@@ -32,15 +32,20 @@ export async function listDailyClocks(
   supabase: DbClient,
   opts: { from?: string; to?: string } = {},
 ): Promise<DailyClock[]> {
-  let q = supabase
-    .from("daily_clock_hours")
-    .select("*")
-    .order("date", { ascending: false });
-  if (opts.from) q = q.gte("date", opts.from);
-  if (opts.to) q = q.lte("date", opts.to);
+  // Query rebuilt per attempt — retryOnce re-invokes the callback, and a spent
+  // PostgREST builder is not a dependable second request.
+  const data = await retryOnce(async () => {
+    let q = supabase
+      .from("daily_clock_hours")
+      .select("*")
+      .order("date", { ascending: false });
+    if (opts.from) q = q.gte("date", opts.from);
+    if (opts.to) q = q.lte("date", opts.to);
 
-  const { data, error } = await q;
-  if (error) throw error;
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toDailyClock);
 }
 

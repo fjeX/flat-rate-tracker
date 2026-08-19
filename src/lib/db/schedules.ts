@@ -18,7 +18,7 @@ import type {
   WorkSchedule,
 } from "@/lib/schedule";
 import { mondayOf } from "@/lib/schedule";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 
 type ScheduleRow = Database["public"]["Tables"]["work_schedules"]["Row"];
 
@@ -57,11 +57,14 @@ export async function listWorkSchedulesSafe(
 export async function listWorkSchedules(
   supabase: DbClient,
 ): Promise<WorkSchedule[]> {
-  const { data, error } = await supabase
-    .from("work_schedules")
-    .select("*")
-    .order("effective_from", { ascending: false });
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("work_schedules")
+      .select("*")
+      .order("effective_from", { ascending: false });
+    if (error) throw error;
+    return data;
+  });
   return (data ?? []).map(toWorkSchedule);
 }
 
@@ -115,10 +118,16 @@ export async function listShiftOverridesSafe(
   supabase: DbClient,
 ): Promise<ShiftOverrideMap | null> {
   try {
-    const { data, error } = await supabase
-      .from("work_shift_overrides")
-      .select("date, shift");
-    if (error) throw error;
+    // retryOnce sits INSIDE the try: a second PGRST303 is not a missing table,
+    // so it falls through to the rethrow below rather than being read as
+    // "feature not migrated yet" and silently hiding the schedule.
+    const data = await retryOnce(async () => {
+      const { data, error } = await supabase
+        .from("work_shift_overrides")
+        .select("date, shift");
+      if (error) throw error;
+      return data;
+    });
     const out: ShiftOverrideMap = {};
     for (const r of data ?? []) out[r.date] = r.shift as unknown as ShiftDef;
     return out;
@@ -165,11 +174,14 @@ export async function listConfirmedZeroDaysSafe(
   supabase: DbClient,
 ): Promise<string[] | null> {
   try {
-    const { data, error } = await supabase
-      .from("confirmed_zero_days")
-      .select("date")
-      .order("date", { ascending: false });
-    if (error) throw error;
+    const data = await retryOnce(async () => {
+      const { data, error } = await supabase
+        .from("confirmed_zero_days")
+        .select("date")
+        .order("date", { ascending: false });
+      if (error) throw error;
+      return data;
+    });
     return (data ?? []).map((r) => r.date);
   } catch (err) {
     if (isMissingTable(err)) return null;

@@ -1,5 +1,6 @@
 import type { Stats } from "@/lib/stats";
 import { fmtHours, fmtPct } from "@/lib/stats";
+import { efficiencyDisplay } from "@/lib/efficiency-display";
 import type { DenomSource } from "@/lib/types";
 import { fmtMoney } from "@/lib/earnings";
 import { EntranceGrid } from "@/components/ui/EntranceGrid";
@@ -59,6 +60,24 @@ export function PeriodStats({
   // the efficiency number as unflagged time with a dollar value (see wage-check).
   unflaggedTime?: { gapHours: number; dollars: number } | null;
 }) {
+  /**
+   * Same classifier as the hero directly above this grid.
+   *
+   * PayPeriodView renders PeriodHero and PeriodStats as SIBLINGS inside one
+   * `.pp-band`, so before this gate the band said both of these at once, one
+   * element apart (2026-08-19, the escalated case):
+   *
+   *     No efficiency yet — all 42.0h flagged so far landed on 2 days
+   *     with no hours to measure them against.
+   *     ROs 2   Hours · sched 8.0h   Efficiency · sched 0%
+   *
+   * The hero withholding a figure the tile beside it prints is worse than
+   * neither withholding it — it reads as the app disagreeing with itself. One
+   * classifier, both surfaces, no drift
+   * (memory/feedback_duplicate_derivations_drift.md).
+   */
+  const eff = efficiencyDisplay(stats);
+
   return (
     <div className="space-y-2">
       <EntranceGrid className="stat-grid">
@@ -96,7 +115,12 @@ export function PeriodStats({
                 ? "Efficiency · mixed"
                 : "Efficiency"
           }
-          value={fmtPct(stats.efficiency)}
+          /* Withheld reuses the em dash `fmtPct(null)` already prints for an
+             absent figure — no new state to learn, and no second copy of the
+             explanation. The "Not counted above" caption below renders for a
+             strict superset of this state (it fires on any unpaired hours at
+             all), so the reason is always on screen with the dash. */
+          value={eff.kind === "shown" ? fmtPct(eff.pct) : fmtPct(null)}
         />
         {/* A tile, not a card. The page was rebuilt because it had grown to nine
             cards of equal weight, and "what did I sell" is one number in the

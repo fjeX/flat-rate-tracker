@@ -3,7 +3,7 @@
 // line-mapper columns.
 import type { Database } from "@/lib/supabase/database.types";
 import type { EntryPhoto } from "@/lib/types";
-import { getCurrentUserId, type DbClient } from "./_client";
+import { getCurrentUserId, type DbClient, retryOnce} from "./_client";
 
 type EntryPhotoRow = Database["public"]["Tables"]["entry_photos"]["Row"];
 
@@ -103,13 +103,19 @@ export async function listEntryPhotoPaths(
 
 // Distinct entry ids that have at least one photo — powers the camera icon on
 // history rows without loading every photo row.
+// retryOnce: this sits in the top-level Promise.all of /history, /pay-period
+// and the dispute pack, with nothing between it and the RSC render, so a
+// PGRST303 here rejects the whole render into the error boundary.
 export async function listEntryIdsWithPhotos(
   supabase: DbClient,
 ): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("entry_photos")
-    .select("entry_id");
-  if (error) throw error;
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("entry_photos")
+      .select("entry_id");
+    if (error) throw error;
+    return data;
+  });
   return [...new Set((data ?? []).map((r) => r.entry_id))];
 }
 

@@ -16,8 +16,24 @@
 // started: a weekday with one unclocked heavy day would read 300%.
 import { HEAVY_FLAG_HOURS } from "./mix";
 import { computeEfficiency, type DayDenom } from "./stats";
+import {
+  efficiencyDisplay,
+  type EfficiencyDisplay,
+} from "./efficiency-display";
 import { formatPeriodLabel, getPeriodForDate } from "./periods";
-import type { DailyClock, Entry, OpCode, PeriodOverride } from "./types";
+import {
+  isComebackKind,
+  UNPAID_TIME_KIND_LABELS,
+  type DailyClock,
+  type Entry,
+  type OpCode,
+  type PeriodOverride,
+  type UnpaidTimeKind,
+} from "./types";
+// The ledger half of the leak board comes in already flattened by
+// buildUnpaidSummary — see the note on leakBoard. Importing the TYPE only keeps
+// this module pure; the caller does the building.
+import type { UnpaidLine } from "./unpaid-summary";
 
 // ---------------------------------------------------------------------------
 // Where your time goes — per-op-code actual vs flag
@@ -361,21 +377,45 @@ export function ratioTier(ratio: number | null): RatioTier | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Why a leak leaked. The two are measured differently and must stay
+ * Why a leak leaked. The three are measured differently and must stay
  * distinguishable on the page: an overrun is a job that pays SOME of its time,
- * rework is a job that pays NONE of it. Collapsing them into "hours lost" in the
- * UI as well as the arithmetic would hide the difference that matters most.
+ * rework is a job that pays NONE of it, and unpaid clock is time with no job on
+ * it at all. Collapsing them into "hours lost" in the UI as well as the
+ * arithmetic would hide the difference that matters most — a tech fixes an
+ * overrun by working differently, a comeback by working better, and waiting on
+ * parts by talking to somebody.
+ *
+ * "unpaid_clock" was added 2026-08-19 because the board had NO third kind and
+ * therefore no way to show a ledger row. Waiting on parts, waiting on approval
+ * and shop time are precisely the unpaid hours a flat-rate tech has no op code
+ * for, so a leaderboard built only from OpCodePerformance could never reach
+ * them: on 2026-08-18 that hid 3.50h — 51% of the period's real unpaid time —
+ * behind a subtitle claiming "every source the app can measure".
  */
-export type LeakKind = "overrun" | "rework";
+export type LeakKind = "overrun" | "rework" | "unpaid_clock";
+
+/**
+ * Which of buildUnpaidSummary's two sources a row came from.
+ *
+ * Carried because the wording differs and nothing else can tell them apart: an
+ * RO-side rework row is N comeback LINES on tickets, a ledger-side rework row is
+ * N ENTRIES the tech typed with no ticket at all. Same kind, same arithmetic,
+ * two different sentences.
+ */
+export type LeakSource = "opcode" | "ledger";
 
 export type Leak = {
   key: string;
   code: string;
   description: string;
   kind: LeakKind;
+  source: LeakSource;
   /** Hours on the clock that no flag hour paid for. */
   hours: number;
-  /** Lines behind the number — timed uses for an overrun, comebacks for rework. */
+  /**
+   * Rows behind the number — timed uses for an overrun, comeback lines for
+   * RO-side rework, ledger entries for anything from the ledger.
+   */
   uses: number;
   /** Present for an overrun so the row can show what the job runs at. */
   ratio: number | null;
@@ -406,8 +446,26 @@ export type LeakBoard = {
  *
  * Built from the same OpCodePerformance rows the table below renders, so the
  * leaderboard and the table can never report different hours for one op code.
+ *
+ * TWO SOURCES, NOT ONE — and the second argument is required for that reason.
+ * `rows` can only ever describe work that HAS an op code. The unpaid-time ledger
+ * (waiting on parts, waiting on approval, shop time, and comebacks with no
+ * ticket) has none by definition, so for as long as this function took one
+ * argument those hours were structurally unreachable, not merely missing. A
+ * defaulted parameter would let a caller reproduce that silently, so there
+ * isn't one.
+ *
+ * `unpaidLines` is buildUnpaidSummary's OWN output — the same flattening, the
+ * same kinds, the same note fallback — rather than a second derivation of the
+ * ledger written here. Two functions answering "how much unpaid time" WILL
+ * drift; only the *ledger* half is read (`source === "ledger"`), because the
+ * RO-comeback half is already on the board as each op code's rework row and
+ * counting it twice is the opposite bug.
  */
-export function leakBoard(rows: OpCodePerformance[]): LeakBoard {
+export function leakBoard(
+  rows: OpCodePerformance[],
+  unpaidLines: UnpaidLine[],
+): LeakBoard {
   const leaks: Leak[] = [];
 
   for (const row of rows) {
@@ -431,6 +489,7 @@ export function leakBoard(rows: OpCodePerformance[]): LeakBoard {
           code: row.code,
           description: row.description,
           kind: "overrun",
+          source: "opcode",
           hours: overrun,
           uses: row.timedUses,
           ratio: row.ratio,
@@ -449,11 +508,60 @@ export function leakBoard(rows: OpCodePerformance[]): LeakBoard {
         code: row.code,
         description: row.description,
         kind: "rework",
+        source: "opcode",
         hours: row.unpaidHours,
         uses: row.unpaidUses,
         ratio: null,
       });
     }
+  }
+
+  // ── the ledger half ───────────────────────────────────────────────────────
+  // Grouped BY KIND, not per row: "Waiting on parts · 3.5h" is the finding, and
+  // three separate 1.2h rows for the same cause would push the real leaders off
+  // the board. The kind is also the only label a ledger row has — there is no
+  // op code to name it by — so UNPAID_TIME_KIND_LABELS is what the tech reads.
+  const ledger = new Map<
+    UnpaidTimeKind,
+    { hours: number; uses: number; notes: Set<string> }
+  >();
+  for (const line of unpaidLines) {
+    if (line.source !== "ledger") continue;
+    let group = ledger.get(line.kind);
+    if (!group) {
+      group = { hours: 0, uses: 0, notes: new Set<string>() };
+      ledger.set(line.kind, group);
+    }
+    group.hours += line.hours;
+    group.uses += 1;
+    // buildUnpaidSummary already applied the `row.note ?? ""` fallback.
+    if (line.description) group.notes.add(line.description);
+  }
+
+  for (const [kind, group] of ledger) {
+    // MIN_MEASURED_HOURS is deliberately NOT applied here. It is a floor on
+    // TIMER readings against book time — six minutes is how the app tells a
+    // real measurement from a tapped-and-saved one. A ledger row was typed (or
+    // banked from a hold) by the tech on purpose, so a short one is data, not a
+    // mis-tap; dropping it would put this board back out of step with the
+    // period's unpaid total, which is the entire bug being fixed. Only an
+    // all-zero group is skipped, and it contributes nothing either way.
+    if (group.hours <= 0) continue;
+    leaks.push({
+      key: `ledger:${kind}`,
+      code: UNPAID_TIME_KIND_LABELS[kind],
+      // A single shared note is the row's detail; several different notes have
+      // no one answer, so the row says nothing rather than picking one.
+      description: group.notes.size === 1 ? [...group.notes][0] : "",
+      // A ledger comeback IS rework — it just has no ticket. Bucketed exactly
+      // the way buildUnpaidSummary buckets it into comebackHours, so the two
+      // surfaces cannot disagree about what counts as rework.
+      kind: isComebackKind(kind) ? "rework" : "unpaid_clock",
+      source: "ledger",
+      hours: group.hours,
+      uses: group.uses,
+      ratio: null,
+    });
   }
 
   leaks.sort((a, b) => b.hours - a.hours || b.uses - a.uses);
@@ -581,6 +689,40 @@ export type PeriodTrendPoint = {
   unpairedFlagHours: number;
   unpairedDays: number;
 };
+
+/**
+ * Classify a trend point's percentage — through the ONE shared classifier.
+ *
+ * WHY THIS ADAPTER EXISTS. The two shapes that carry unpaired hours use
+ * OPPOSITE conventions, with identical field names, so handing a trend point
+ * straight to efficiencyDisplay is silently wrong rather than a type error:
+ *
+ *   ScheduleStats.flagHours     RAW period total. `unpairedFlagHours` is a
+ *                               SUBSET of it (stats.ts builds it from the plain
+ *                               aggregateStats base, which sums every entry).
+ *   PeriodTrendPoint.flagHours  PAIRED total ONLY. The pairing loop below adds
+ *                               an unpaired day's hours to `unpairedFlagHours`
+ *                               and `continue`s, so they were never in
+ *                               `flagHours` at all.
+ *
+ * efficiencyDisplay computes `counted = flagHours - unpairedFlagHours`. Pass a
+ * trend point unchanged and that is 0 - 42 = -42 counted hours: a negative
+ * numerator, no type error, no test failure, a wrong answer. The addition here
+ * restores the raw total the classifier is written against.
+ *
+ * A shape adapter, NOT a second predicate — every decision is still made by
+ * efficiencyDisplay (memory/feedback_duplicate_derivations_drift.md).
+ */
+export function trendEfficiencyDisplay(
+  point: PeriodTrendPoint,
+): EfficiencyDisplay {
+  return efficiencyDisplay({
+    flagHours: point.flagHours + point.unpairedFlagHours,
+    efficiency: point.efficiency,
+    unpairedFlagHours: point.unpairedFlagHours,
+    unpairedDays: point.unpairedDays,
+  });
+}
 
 /**
  * Efficiency per pay period, oldest → newest, capped to the most recent `limit`.

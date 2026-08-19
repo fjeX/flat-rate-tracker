@@ -42,6 +42,26 @@ export type ScheduleFallback = {
    *  in progress, or to the future. */
   today: string;
   shiftOverrides?: ShiftOverrideMap;
+  /**
+   * ISO dates the tech confirmed as real zero-work days. effectiveHourly does
+   * not read this — a day with no flagged work has no numerator to divide, so
+   * it never reaches the fallback. It is carried anyway because this type is
+   * what callers hand around as "the schedule context", and a caller that has
+   * to REBUILD a ScheduleContext from it (PayPeriodView → PeriodOverrideModal)
+   * has nowhere to get the field from and quietly substitutes []. Under the
+   * shared pairing rule that turns every confirmed real-zero day into an
+   * unresolved one and drops it from the denominator, so the same period reads
+   * one efficiency in the modal and another in the hero.
+   *
+   * REQUIRED, deliberately. `effectiveHourly` ignores it, so the temptation is
+   * to mark it optional — but an omitted field is exactly how this bug shipped
+   * twice: once on the history page (fixed 8692d27) and again here, because a
+   * construction site that simply left it out still compiled. Required makes
+   * the next omission a type error instead of a wrong number on screen. Pass
+   * `[]` explicitly if a caller genuinely has none; that is a statement, not
+   * an accident.
+   */
+  confirmedZeroDays: string[];
 };
 
 function inRange(date: string, start: string, end: string): boolean {

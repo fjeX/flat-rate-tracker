@@ -3,6 +3,23 @@ import { Header } from "@/components/layout/Header";
 import { GuestNav } from "@/components/guest/GuestNav";
 import { ClaimAccountLink } from "@/components/guest/ClaimAccountLink";
 
+/**
+ * Never prerender the guest segment.
+ *
+ * These pages are "use client" and read "today" in the browser, so Next is free
+ * to prerender their shells at `next build` — which bakes the pay period that
+ * was current on BUILD DAY into the static HTML. The canary then serves that
+ * build-day markup to a browser whose clock is frozen to FIXTURE_NOW, the text
+ * disagrees, and React recovers the hydration mismatch by re-rendering from the
+ * root. That rewrites <html className> from the server prop in
+ * src/app/layout.tsx, which has no `theme-light` — so the class the <head>
+ * theme script added is wiped and the light-mode canary photographs a dark page.
+ *
+ * Segment config cannot live on the pages themselves ("use client" forbids it),
+ * so it lives on the layout and covers the whole /guest segment.
+ */
+export const dynamic = "force-dynamic";
+
 export default function GuestLayout({ children }: { children: React.ReactNode }) {
   return (
     <GuestStoreProvider>

@@ -206,15 +206,19 @@ export default async function PayPeriodPage({
       goalHours={goalHours}
       forecast={forecast}
       schedule={{
-        // Same context the efficiency denominator uses, so the effective-hourly
-        // figure and the efficiency figure can never disagree about which hours
-        // a day was worked.
+        // The SAME context the efficiency denominator above is built from —
+        // every field of it, not most of them. This literal used to claim that
+        // parity while omitting confirmedZeroDays, and PayPeriodView had to
+        // substitute [] to rebuild a ScheduleContext for the custom-dates
+        // modal. That dropped every confirmed real-zero day from the modal's
+        // denominator, so the modal read 365% where the hero read 183%.
         //
         // Passed even when no schedule exists (empty array): `today` is what
         // lets an in-progress shift be excluded rather than flagged as missing
         // data, and that matters to every user, schedule or not.
         schedules: schedules ?? [],
         daysOff: daysOff ?? [],
+        confirmedZeroDays: confirmedZeroDays ?? [],
         today,
         shiftOverrides: shiftOverrides ?? {},
       }}

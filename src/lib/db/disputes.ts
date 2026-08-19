@@ -20,7 +20,12 @@ import {
   type DisputeScope,
   type NewDispute,
 } from "@/lib/types";
-import { getCurrentUserId, isMissingTable, type DbClient } from "./_client";
+import {
+  getCurrentUserId,
+  isMissingTable,
+  retryOnce,
+  type DbClient,
+} from "./_client";
 
 type DisputeRow = Database["public"]["Tables"]["disputes"]["Row"];
 type DisputeLineRow = Database["public"]["Tables"]["dispute_lines"]["Row"];
@@ -100,22 +105,30 @@ function toDispute(row: DisputeRow, lines: DisputeLineRow[] = []): Dispute {
  * year) that a second round trip costs nothing.
  */
 export async function listDisputes(supabase: DbClient): Promise<Dispute[]> {
-  const { data: rows, error } = await supabase
-    .from("disputes")
-    .select("*")
-    .order("generated_at", { ascending: false });
-  if (error) throw error;
+  const rows = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("disputes")
+      .select("*")
+      .order("generated_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  });
   const disputes = rows ?? [];
   if (disputes.length === 0) return [];
 
-  const { data: lineRows, error: lineError } = await supabase
-    .from("dispute_lines")
-    .select("*")
-    .in(
-      "dispute_id",
-      disputes.map((d) => d.id),
-    );
-  if (lineError) throw lineError;
+  // Second round trip, so it needs its own retry — the first one succeeding
+  // says nothing about the token's age when this one is validated.
+  const lineRows = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("dispute_lines")
+      .select("*")
+      .in(
+        "dispute_id",
+        disputes.map((d) => d.id),
+      );
+    if (error) throw error;
+    return data;
+  });
 
   return disputes.map((d) => toDispute(d, lineRows ?? []));
 }
