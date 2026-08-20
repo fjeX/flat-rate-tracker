@@ -15,6 +15,12 @@ import type { DbClient } from "./_client";
  * live on /history, /pay-period, the dispute pack and /admin/bugs. The point of
  * driving the READ rather than the retry helper is that the helper's own tests
  * pass whether or not anything calls it.
+ *
+ * SCOPE: the client here is a hand-written fake, so this file proves the wrap
+ * is APPLIED — nothing more. It stays green even when the retry cannot reach
+ * PostgREST, which is exactly what happened for four weeks (Next's per-render
+ * fetch dedupe served attempt 2 attempt 1's cached failure). That the retry
+ * reaches the wire is pinned separately, over real HTTP, in dedupe-retry.test.ts.
  */
 
 // Verbatim from the FRT production app log, `docker compose logs app`.

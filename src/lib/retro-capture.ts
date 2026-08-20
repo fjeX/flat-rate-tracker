@@ -130,7 +130,15 @@ export function retroBuckets(flagHours: number): RetroBucket[] {
   return dedupeTop(buckets);
 }
 
-/** "2" not "2.0"; "2.5" stays "2.5". */
+/**
+ * "2" not "2.0"; "2.5" stays "2.5".
+ *
+ * Deliberately not fmtHours (checked again in the 2026-08-20 formatter sweep):
+ * these are LABELS on tappable bucket choices, not a reading of anything
+ * stored. A row of "2.0h / 2.5h / 3.0h" buttons is noisier than "2h / 2.5h /
+ * 3h", and no value here can be sub-resolution — the buckets are built by
+ * roundToStep, so the "<0.1" floor has nothing to protect.
+ */
 function trim(h: number): string {
   return Number.isInteger(h) ? String(h) : h.toFixed(1);
 }

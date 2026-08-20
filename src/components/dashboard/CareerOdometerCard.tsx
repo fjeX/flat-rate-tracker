@@ -10,7 +10,7 @@ import {
   careerRoadStops,
   nextCareerMilestone,
 } from "@/lib/career";
-import { fmtHours } from "@/lib/stats";
+import { fmtHours, fmtHoursGrouped } from "@/lib/format";
 
 function markLabel(threshold: number): string {
   return threshold >= 1000 ? `${threshold / 1000}k` : String(threshold);
@@ -30,10 +30,11 @@ export function CareerOdometerCard({
   const next = nextCareerMilestone(careerTotal);
   const hit = new Set(careerMilestones);
 
-  const valueText = careerTotal.toLocaleString("en-US", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
+  // Grouped, because a lifetime total is the one hours figure in the app that
+  // routinely reaches four digits. Not a private Intl call: that has no
+  // sub-resolution floor, so a career of one 0.02h line read "0.0" — while the
+  // legend below already used fmtHours. One card, one formatter.
+  const valueText = fmtHoursGrouped(careerTotal);
 
   return (
     <EntranceGrid className="card padded gami-odo" animationName="pace-grow">

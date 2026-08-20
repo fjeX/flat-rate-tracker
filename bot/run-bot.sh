@@ -52,8 +52,12 @@ BASE_PROMPT="You are the FRT nightly bot. Read bot/INSTRUCTIONS.md and follow it
 # 45m was the budget until 2026-08-13, when attempt 1 was killed at exactly
 # 45:00 (exit 124) — INSTRUCTIONS.md had grown 35 lines the afternoon before and
 # the checklist simply outgrew the budget. Runs were 31-33 min all week before
-# that commit, and the passing retry took 41m33s.
-TIMEOUT_MIN="${FRT_BOT_TIMEOUT_MIN:-75}"
+# that commit, and the passing retry took 41m33s. Raised 75m -> 90m on
+# 2026-08-20: attempt 1 hit 66m on 08-16 with LESS checklist than it now
+# carries, and that day's escalation work added six UI surfaces, an OCR step
+# that can stall ~90s on a CDN fetch, and dialog-reading on every delete.
+# From a 03:00 start this still leaves a 70m retry inside FINISH_BY.
+TIMEOUT_MIN="${FRT_BOT_TIMEOUT_MIN:-90}"
 # The 6 AM digest reads whatever report exists at 06:00. A retry finishing after
 # that is worse than no retry: the digest reports the report missing, which is
 # the alarm for "the bot never ran" firing on a run that was merely slow.

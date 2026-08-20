@@ -6,6 +6,7 @@ import type { Database } from "./database.types";
 import { authCookieName, serverSupabaseUrl } from "./config";
 import { FIXTURE_MODE } from "@/lib/fixtures/enabled";
 import { createFixtureClient } from "@/lib/fixtures/client";
+import { retryAwareFetch } from "@/lib/db/_client";
 
 export async function createClient() {
   // Fixture mode: hand back a client backed by frozen data instead of Postgres.
@@ -26,6 +27,13 @@ export async function createClient() {
     serverSupabaseUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
+      // Required for retryOnce (src/lib/db/_client.ts) to work at all inside a
+      // Server Component render. Next's per-render fetch dedupe would serve
+      // the retry the first attempt's cached PGRST303 without ever reaching
+      // PostgREST; this fetch stamps a header on the second attempt so it is a
+      // distinct cache key. It is a pass-through on every other request. Read
+      // the block comment above retryOnce before removing it.
+      global: { fetch: retryAwareFetch },
       cookieOptions: { name: authCookieName() },
       cookies: {
         getAll() {

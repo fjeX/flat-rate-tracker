@@ -18,6 +18,9 @@
 //   fmtHours2 — 2dp, exact, for documents. Rows add up to their totals on the
 //               page, because every figure is shown at the resolution it is
 //               stored at. Use this anywhere a reader may check the arithmetic.
+//
+// fmtHoursGrouped is fmtHours plus thousands separators, for four-digit
+// lifetime totals. It is a wrapper, not a third rule — see its own note.
 
 /** Display resolution of {@link fmtHours}: anything under this rounds to zero. */
 export const HOURS_DISPLAY_STEP = 0.1;
@@ -47,4 +50,31 @@ export function fmtHours2(n: number): string {
   // Normalise -0 so a line that nets to zero never prints "-0.00".
   const v = Object.is(n, -0) ? 0 : n;
   return v.toFixed(2);
+}
+
+/**
+ * Hours for the app UI with thousands grouping — `1,234.5` rather than
+ * `1234.5`. Same semantics as {@link fmtHours} in every other respect; use it
+ * only where a figure can plausibly reach four digits (career/lifetime totals).
+ *
+ * This composes {@link fmtHours} instead of reaching for `Intl` directly, which
+ * is the mistake it replaces. Two call sites — CareerOdometerCard and
+ * SnapshotSheet — each had a private `toLocaleString` with
+ * `maximumFractionDigits: 1`. That agrees with fmtHours on every rounding case
+ * (V8 formats from the shortest decimal representation, so 5.35 → "5.4" both
+ * ways); what it does NOT have is the sub-resolution floor, so a career total
+ * of 0.02 flag hours printed a flat "0.0" — the exact defect named at the top
+ * of this file, on a card whose own second figure already called fmtHours.
+ * Below the display resolution there is nothing to group, so fmtHours' own
+ * "<0.1" is returned verbatim rather than re-worded.
+ */
+export function fmtHoursGrouped(n: number): string {
+  const plain = fmtHours(n);
+  if (plain.includes("<")) return plain;
+  // `plain` is already rounded to the display resolution, so this only inserts
+  // separators — Intl is never given the chance to round a second time.
+  return Number(plain).toLocaleString("en-US", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
 }

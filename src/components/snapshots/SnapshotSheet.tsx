@@ -5,13 +5,7 @@ import { Check } from "lucide-react";
 import type { PortfolioSnapshot } from "@/lib/types";
 import { formatDateShort } from "@/lib/periods";
 import { MIN_PLAUSIBLE_AVG_VS_BOOK } from "@/lib/snapshots";
-
-function fmt(n: number): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: n % 1 === 0 ? 0 : 1,
-    maximumFractionDigits: 1,
-  });
-}
+import { fmtHoursGrouped } from "@/lib/format";
 
 // created_at is a UTC timestamp — format it in the user's timezone (the
 // frt_timezone cookie), not the server's, or a late-evening unlock shows
@@ -50,7 +44,11 @@ export function SnapshotSheet({
         </div>
         <div className="gami-sheet-cell">
           <div className="k">Hours flagged</div>
-          <div className="v">{fmt(s.totalFlagHours)}</div>
+          {/* Grouped: a snapshot cut at a later RO threshold sits thousands of
+              hours in. Trailing zero kept — this sheet is handed to a service
+              manager, so it should read like every other surface, and the old
+              private formatter dropped it ("2" for 2.0h). */}
+          <div className="v">{fmtHoursGrouped(s.totalFlagHours)}</div>
         </div>
         <div className="gami-sheet-cell">
           <div className="k">Avg vs book</div>

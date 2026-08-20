@@ -27,7 +27,25 @@ export function GuestRoDetailModal({
   const comebackActual = comebackLines.reduce((s, l) => s + (l.actualHours ?? 0), 0);
 
   function handleDelete() {
-    if (!window.confirm("Delete this RO? This can't be undone.")) return;
+    // Mirrors RoDetailModal: name the RO rather than describing every RO
+    // equally, so a mis-click can't nuke the wrong row. The date is in here
+    // on purpose — the shop recycles 5-digit RO numbers, so the number alone
+    // does not identify a ticket.
+    const ro = entry.roNumber?.trim();
+    const vehicle = [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const bits = [
+      vehicle || null,
+      Number.isFinite(entry.flagHours) ? `${fmtHours(entry.flagHours)}h flagged` : null,
+      // formatDateLong assumes "YYYY-MM-DD"; drop the clause rather than print
+      // "undefined undefined, NaN".
+      /^\d{4}-\d{2}-\d{2}$/.test(entry.date) ? formatDateLong(entry.date) : null,
+    ].filter(Boolean);
+    const head = ro ? `RO #${ro}` : "this RO";
+    const what = bits.length > 0 ? `${head} — ${bits.join(", ")}` : head;
+    if (!window.confirm(`Delete ${what}? This can't be undone.`)) return;
     deleteGuestEntry(entry.id);
     onClose();
   }
