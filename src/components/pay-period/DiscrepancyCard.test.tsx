@@ -403,3 +403,144 @@ describe("repaint contract", () => {
     window.removeEventListener("frt:flush-refresh", flushed);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression cover for `step={0.1}` on the "Actual paid flag hrs" input.
+//
+// The sibling field in PeriodHero writes this same column and had the same
+// attribute, where it was outright fatal: that input sits in a <form>, so
+// constraint validation ran on submit, `74.25` was `stepMismatch: true`, and
+// the button and Enter could not save a 2-decimal figure at all.
+//
+// THIS FIELD WAS NEVER BROKEN THAT WAY, and these tests do not pretend it was.
+// There is no <form> anywhere above it (not in this file, PaidCheckCard,
+// PayPeriodView, the pay-period page, or either layout), no submit button, and
+// Enter is handled by the card's own onKeyDown, which preventDefault()s and
+// blurs straight into commit(). Nothing native gates a write here.
+//
+// What `step={0.1}` did do is real, and it is a data bug rather than a dead
+// button: it gave the element an *allowed value step* of 0.1, so
+//
+//   - a legitimate saved 74.25 rendered `:invalid` on mount, and
+//   - one press of a spinner arrow rewrote a typed 74.25 to 74.3 in silence.
+//
+// Flat-rate stubs are full of two-decimal figures. A tech nudging the arrows to
+// correct a typo would have sent the shop's own number to the DB wrong, with
+// nothing on screen saying so. `step="any"` gives the element no allowed value
+// step, so there is nothing to snap to.
+describe("a 2-decimal figure — the shape a real paystub takes", () => {
+  /**
+   * One press of a spinner arrow, as the DOM performs it. Returns the value the
+   * field is left holding.
+   *
+   * With no allowed value step (`step="any"`) the stepper throws
+   * InvalidStateError rather than inventing one, which is the spec's way of
+   * saying "there is no next value" — the typed figure is left untouched. That
+   * swallow is the behaviour under test, so the control below proves this
+   * helper can still SEE a rounding when one happens.
+   */
+  function nudgeUp(el: HTMLInputElement): string {
+    try {
+      el.stepUp();
+    } catch {
+      /* no allowed value step — nothing to snap to */
+    }
+    return el.value;
+  }
+
+  it("control: nudgeUp really does observe 0.1-snapping when it happens", () => {
+    // Not vacuous. A bare `step="0.1"` number input MUST round 74.25 → 74.3
+    // through this exact helper; without this, "the value didn't change" would
+    // pass just as happily if stepUp() were a no-op for some unrelated reason.
+    const snapping = document.createElement("input");
+    snapping.type = "number";
+    snapping.step = "0.1";
+    snapping.value = "74.25";
+    expect(nudgeUp(snapping)).toBe("74.3");
+  });
+
+  it("a spinner nudge cannot silently round the typed figure", () => {
+    setup(65);
+    edit("74.25");
+    expect(nudgeUp(field())).toBe("74.25");
+  });
+
+  it("a legitimate saved figure does not render invalid", () => {
+    setup(74.25);
+    expect(field().value).toBe("74.25");
+    expect(field().validity.stepMismatch).toBe(false);
+    expect(field().validity.valid).toBe(true);
+  });
+
+  it("a typed 2-decimal figure is accepted by constraint validation", () => {
+    setup(65);
+    edit("74.25");
+    expect(field().validity.stepMismatch).toBe(false);
+    expect(field().validity.valid).toBe(true);
+  });
+
+  it("saves on blur", async () => {
+    setup(65);
+    edit("74.25");
+    tabTo(elsewhere());
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.25`]);
+    expect(setPaidPeriodHoursAction).toHaveBeenCalledWith(PERIOD, 74.25);
+
+    await act(async () => {
+      releaseSave?.();
+    });
+  });
+
+  it("saves on Enter — the route the card's own hint tells you to take", async () => {
+    setup(65);
+    field().focus();
+    edit("74.25");
+    fireEvent.keyDown(field(), { key: "Enter" });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.25`]);
+
+    await act(async () => {
+      releaseSave?.();
+    });
+  });
+
+  // The other shape a stub takes. It must not need a different route.
+  it("saves a small 2-decimal figure the same way", async () => {
+    setup(65);
+    edit("8.75");
+    tabTo(elsewhere());
+
+    expect(calls).toEqual([`upsert:${PERIOD}:8.75`]);
+
+    await act(async () => {
+      releaseSave?.();
+    });
+  });
+});
+
+describe("the `min={0}` floor — kept here, and doing exactly one thing", () => {
+  // The hero dropped `min={0}` because constraint validation gated its button
+  // and not its blur, so "-5" met a browser tooltip on one route and silence on
+  // the other. That split cannot exist here: this field has no validated route,
+  // so the floor blocks no write. It survives because it still keeps the
+  // spinner from stepping below zero — and it doubles as the live control that
+  // the validity assertions above are reading a real ValidityState.
+  it("control: `validity.valid` is a live locator on this field", () => {
+    setup(65);
+    edit("-5");
+    expect(field().validity.rangeUnderflow).toBe(true);
+    expect(field().validity.valid).toBe(false);
+  });
+
+  it("a negative still takes the app's route, not the browser's", async () => {
+    setup(65);
+    edit("-5");
+    // Clicking away is not a failed attempt: parseHours() returns null, commit()
+    // early-returns, nothing is written and nothing is shouted about.
+    tabTo(elsewhere());
+
+    expect(calls).toEqual([]);
+    expect(setPaidPeriodHoursAction).not.toHaveBeenCalled();
+  });
+});

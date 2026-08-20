@@ -50,7 +50,8 @@ export function RollingNumber({
     const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     if (!mq) return;
     // Route the initial read through rAF too, so the state update is never
-    // synchronous inside the effect body (matches CountUp.tsx's approach).
+    // synchronous inside the effect body — that forces a second render pass
+    // before the browser gets to paint.
     const raf = requestAnimationFrame(() => setReduceMotion(mq.matches));
     const handler = () => setReduceMotion(mq.matches);
     mq.addEventListener?.("change", handler);
