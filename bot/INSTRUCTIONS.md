@@ -46,6 +46,11 @@ So budget deliberately:
 - Work the checklist **in order** — it is ordered by value, not by convenience.
 - From the halfway mark on, prefer **finishing the report** over starting another
   section.
+- **Two tiers when you are behind.** Load-bearing — the money paths, must run:
+  §1, §2, §2b, §3, §3z–§5, §6, §7, §7e, §8, §8l. Regression-net — drop these
+  first, recording each as `SKIPPED — time`: §1c, §2a, §2c, §7d, §8b, §8d, §8f
+  and §9's seeded edge case. The regression-net tier watches surfaces that
+  shipped working; dropping one deliberately is cheap, a timeout is not.
 - A section you never reach must be listed in the report as **untested**. That is
   a perfectly good outcome and the reader can act on it. A run killed with no
   report at all is the only true failure.
@@ -103,11 +108,14 @@ sends you there.
 - **Add Template** opens the template editor. You don't need to complete a
   full template every night — confirm the editor opens and can be cancelled
   without creating a blank one.
-- If templates already exist, each row must offer edit and delete. Deleting a
-  template must ask "Delete this template? The scanner will no longer use it."
-  before removing it — a delete with no confirmation is a bug.
-- This card is the setup path for §2a's scanner. If §2a's scan behaves oddly,
-  check here first for a malformed template before reporting it as a scan bug.
+- If templates already exist, each row must offer edit and delete. Tap delete:
+  it must ask "Delete this template? The scanner will no longer use it." —
+  then **CANCEL. Never accept.** Any template on prod is Liem's real one,
+  carrying an uploaded photo and hand-drawn field regions you cannot recreate;
+  you are checking that the confirm appears, nothing more. A delete with no
+  confirmation — or a row that vanishes before you answer — is a bug.
+- This card is the setup path for §2a. If a scan behaves oddly, check here for
+  a malformed template before reporting it as a scan bug.
 
 ### 2. Log ROs (2–5 of them)
 - Log between 2 and 5 repair orders. Vary them each night:
@@ -140,29 +148,44 @@ sends you there.
   entries from previous nights — they are accumulated test data.
   - **Identify the row before you touch it — this list re-sorts (date desc,
     then created_at desc), so a row's on-screen position shifts as you add
-    entries and is never a safe handle.** Find the RO you mean to delete by
-    its own RO number, not by where it sits in the list, and confirm that
-    number is the one you intend before clicking Delete. The confirm dialog is
-    generic and names no RO — re-verify the target row a second time, right
-    before you accept the confirm. RO deletion is the highest-stakes delete on
-    the site (those hours feed pay and efficiency), so if you cannot uniquely
-    identify the row you meant, **skip the delete and report it** rather than
-    guess.
+    entries and is never a safe handle.** Find the RO by its **number *and*
+    date** (plus the vehicle, which the row also shows): the shop recycles
+    5-digit RO numbers, so the number alone does not identify a ticket.
+  - **The confirm dialog is your second check — read it before accepting.** It
+    names the row: `Delete RO #91630 — 2019 Ford F-250, 8.5h flagged, August 19,
+    2026? This can't be undone.` Every field must match the RO you meant. A bare
+    "Delete this RO?", or a dialog naming a different RO, date or vehicle, means
+    the sentence has stopped describing what you clicked — **cancel and report
+    it.** RO deletion is the highest-stakes delete on the site (those hours feed
+    pay and efficiency), so if the dialog disagrees with your target, or you
+    cannot uniquely identify the row you meant, **skip the delete and report
+    it** rather than guess.
 
 ### 2a. Scan RO ticket card (undocumented surface, new)
 At the top of the full Log RO form — new ROs only, it's gone once you're
 editing an existing one — sits a **"Scan RO ticket"** banner: "Auto-fills RO#,
 vehicle and op codes" with a camera button.
-- Tap it. It must open a real file picker / camera capture, not a dead button.
+- Tap it. **Two correct behaviours, depending on how many templates §1c shows:**
+  with 0 or 1 template a real file picker opens; with **2 or more** a "Which
+  template?" list opens first, and the picker follows once you choose one. Only
+  a tap that does nothing at all is a dead button.
 - The **ⓘ "First-time setup help"** toggle (sits just left of the "Scan RO"
   button) must open and close an info dropdown explaining how scanning works.
-- Scan (or upload) any photo, including a non-RO image. The bot cannot judge
-  OCR *accuracy* here — you're not grading whether it read the ticket
-  correctly — but it must not crash, hang, or silently do nothing. A result
-  banner (success, partial, or "not detected") is expected either way.
+- Upload `docs/design-directions/shots/a-log-light-desktop.png` — a real file in
+  this repo, and deliberately not an RO. You are not grading OCR *accuracy*
+  here; it must simply not crash or silently do nothing. Four outcomes are all
+  acceptable: a success summary, a partial one, "Nothing detected", or **"Scan
+  failed — fill in manually."** A **hang is a finding, not your fault** — the
+  OCR engine is fetched from a CDN the moment you tap, so a blocked fetch sticks
+  on "Scanning…" indefinitely. Give it ~90s, record it, and move on; do not
+  retry it into your budget.
 - If a photo is captured and photo evidence is enabled on this account, a
   green "Photo attached — saved with this RO" chip should appear with a
   working remove (✕) control.
+- **Abandon this form — never save the RO you scanned into.** The capture is
+  held for upload on save, so saving writes a junk image into prod storage.
+  Leave the page (or clear it with the ✕ chip) and log §2's ROs on a fresh
+  form.
 
 ### 2b. Comebacks / unpaid rework (new 2026-07-27)
 A comeback is work you redo for free, so it **flags zero hours**. Log at least
@@ -214,13 +237,18 @@ one most nights.
 ### 2c. "Worked — unpaid" empty days (new 2026-07-27)
 If the dashboard shows the "scheduled day looks empty" card, it now offers a
 **third** button, "Worked — unpaid", alongside "Day off" and "Worked, zero flag".
-- **This section may be legitimately unexercisable on this account, and that's
-  not a gap worth reporting.** The bot account resolves its own amber days
-  every night — you log real ROs against today, so by the next night that day
-  already has clocked hours and was never left empty for this card to catch.
-  If you never see the "scheduled day looks empty" card, note it as
-  `SKIPPED — no empty day on this account` and move on instead of flagging it
-  as untested.
+- **This section is often unexercisable — but the card's absence proves nothing
+  on its own.** The bot account usually resolves its own amber days: you log
+  real ROs against today, so by the next night that day already has clocked
+  hours. It is **not** structurally unreachable, though — on 2026-08-18 it WAS
+  exercisable, because the previous night's run had crashed and left a day with
+  nothing logged, and the harness has failed twice in two weeks, so expect the
+  card back roughly monthly. The card also renders nothing at all when it finds
+  no unresolved days, so a real regression in the amber-day derivation looks
+  exactly like a quiet night. **Before writing `SKIPPED — no empty day on this
+  account`, confirm on the §8c calendar that no amber day exists anywhere** —
+  last night's run volunteered exactly that corroboration unprompted, so it is
+  cheap.
 - Click it: an hours field, a "Where the time went" reason dropdown (comeback /
   waiting on parts / waiting on approval / shop time), and an optional note.
 - Saving with hours **0 or blank must be refused** with a visible error.
@@ -388,26 +416,37 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
   IS the title; click it for the jump list and the custom-date actions.
 - **Two-column at ≥900px**, single column below. Check both widths.
 
-**Entering paid hours from the awaiting-pay hero writes to the database — and
-there is no way to delete a `paid_periods` record once it exists.** (Verified
-in source: `setPaidPeriodHoursAction` takes a non-nullable `hours` and always
-upserts; nothing anywhere clears or deletes a paid-period row.) So the rule
-here is not "revert it" — it's **never create one you can't restore**:
+**Entering paid hours writes a `paid_periods` row on prod — and that write is
+now reversible.** The **"Reset to unpaid"** control in the "Did I get paid?"
+card deletes the row outright (§8l documents it), so the old rule here — never
+write to a period with nothing saved — is retired. It contradicted §8l, which
+requires exactly that write, and its premise stopped being true when Reset
+shipped. Writing one is safe; leaving one behind is not:
 
-- Only enter paid-period hours on a period that **already has a value**.
-  Overwriting an existing number and then writing the original number back IS
-  a genuine restore, because the upsert can put the old number back exactly.
-  Record that exact existing value before you touch it, and restore it before
-  you write the report.
-- If **no** period already has a paid-hours value, **skip this test** and
-  record it in the report as `SKIPPED — no period already has paid hours;
-  entering one cannot be undone`. That is a perfectly good outcome, same as
-  any other section you never reach.
+- If a period already has a value, record it exactly before you touch it and
+  put that number back before you write the report.
+- Any paid-period figure YOU create must be cleared with **Reset to unpaid**
+  before the run ends, and listed under "Data created tonight" either way.
 
-This is different from §5's rule below, and deliberately so: §5's field can be
-cleared back to Pending/empty by the app, so §5 still requires a real revert.
-This field cannot be cleared by anything — not the bot, not a real user — so
-the only safe move is to not create the unrevertable state in the first place.
+§5's reconciliation rule below is unchanged and stricter, for a different
+reason: those lines have no one-button reset, so each one you touch has to be
+hand-reverted to its recorded prior value.
+
+**The awaiting-pay hero's own save path — nothing else covers it.** It is the
+only route from awaiting-pay into settled, and a fix in this exact path has
+twice killed the primary save, so it earns a nightly look. On a period with
+nothing saved:
+
+- Type a figure with **two decimals** (`74.25` — real flat-rate stubs routinely
+  have them) and click blank space. It must save, and the period must flip to
+  Settled. A two-decimal figure being refused, rounded, or silently dropped is a
+  bug — report the exact behaviour, whatever the field's constraints currently
+  look like.
+- Then check the two routes don't collide: with that figure already saved,
+  press **"Check my pay"**. It must neither write a second time (no duplicate
+  row, no changed value) nor sit there doing nothing. Both failures have
+  shipped.
+- Clear it with **Reset to unpaid** when you're done.
 
 **Info bubbles (ⓘ)** sit beside the collapse chevron on "Did I get paid?",
 "Spiffs & Bonuses" and "What did the work cost me?". Open each one: it must open
@@ -482,11 +521,14 @@ verify the saved hours before continuing to §6.
   row and permanently deleted a real spiff — this list has no undo and no
   audit trail). The list re-sorts (date desc, then created_at desc), so
   position shifts as rows are added and is never a safe handle. Find the spiff
-  you mean to delete by its own source, date, and amount, and confirm those
-  match before clicking Delete. The confirm dialog is generic and names no
-  row — re-verify the target a second time, right before you accept the
-  confirm. If you cannot uniquely identify the row you meant, **skip the
-  delete and report it** rather than guess.
+  you mean to delete by its own source, date, and amount.
+- **The confirm dialog is your second check — read it before accepting.** It
+  names the row: `Delete this spiff — "turbo diag spiff", $35.00, August 16,
+  2026? This can't be undone.` All three fields must match the spiff you meant.
+  A bare "Delete this spiff?", or one naming a different source, amount or date,
+  is itself a finding — **cancel and report it.** If you cannot uniquely
+  identify the row you meant, **skip the delete and report it** rather than
+  guess.
 
 ### 7. "What did the work cost me?" (CA wage math + unpaid time)
 > **Renamed and merged 2026-07-30.** Was "Pay Check-Up". The old separate
@@ -742,18 +784,26 @@ recovered. Sections appear only when they have something to say.
     ABOVE it obeys the chips ("What's costing you", "Where you're winning",
     "Where your time goes", "Best days"); everything BELOW it ignores them
     ("What makes a big day", "What a big day actually tracks with", "Big
-    jobs", "The quick stuff", Trend, Claims and recovery). The old per-section
-    "ignores the window"
-    caption is GONE — it is said once, structurally. Its absence is the fix, not
-    a regression. If a section sits on the wrong side of that divider, or the
-    heading is missing while Trend/Claims render, that IS a bug.
+    jobs", "The quick stuff", Trend, **"What you sold"**, Claims and recovery).
+    The old per-section "ignores the window" caption is GONE — it is said once,
+    structurally. Its absence is the fix, not a regression. If a section sits on
+    the wrong side of that divider, that IS a bug. The heading itself is gated
+    on Trend, Claims or "What makes a big day" having something to show, while
+    Big jobs, The quick stuff and What you sold render outside that gate — so on
+    a sparse account those three can legitimately appear with no "All time"
+    heading above them. Report a missing heading only when Trend or Claims
+    render without it.
 - **What's costing you (NEW 2026-08-04)** — the leak leaderboard, and the first
   thing on the page. Ranked rows (1, 2, 3…) of time you were on the clock for
   with no flag hour covering it, longest first, each with a proportional bar.
-  Two kinds: **rework** (paid nothing) and **overrun** (paid some of its time) —
-  rework is meant to rank as the worse kind at equal hours. **Treat that rule as
-  opportunistic, not a nightly check:** it only shows itself on an exact
-  hours-AND-uses tie between a rework row and an overrun row, which has never
+  Three kinds: **rework** (an op code that paid nothing), **unpaid_clock**
+  (ledger time with no op code on it at all — "Waiting on parts", waiting on
+  approval, shop time; see §8l) and **overrun** (a job that paid some of its
+  time). Both unpaid kinds outrank an overrun at equal hours, and **rework vs
+  unpaid_clock is deliberately unordered** — they share a rank, so either order
+  between those two is correct and neither is a finding. **Treat the ranking
+  rule as opportunistic, not a nightly check:** it only shows itself on an exact
+  hours-AND-uses tie between an unpaid row and an overrun row, which has never
   occurred on this account. Check it if that exact tie happens; do not report
   its absence as a gap. What you check every night regardless: the ranking is
   actually descending by hours and rank 1 has the longest bar. Cross-check the
@@ -831,12 +881,10 @@ recovered. Sections appear only when they have something to say.
     of showing one of those messages.
   - **Known and deliberate, do NOT report:** Big jobs' footnote — "N
     reading(s) can't be right (a few minutes against a multi-hour job) and were
-    left out" — is a real, intentional filter (not a placeholder or an
-    unexplained oddity). It drops timer readings too short to be genuine
-    measurements against a flagged multi-hour job, so a mis-tapped timer can't
-    corrupt the vs-book ratio. Seeing this footnote with a nonzero count is the
-    filter doing its job, not something to escalate — this was carried as an
-    open question for several nights before being confirmed intentional.
+    left out" — is an intentional filter, confirmed after being carried as an
+    open question for several nights. It drops timer readings too short to be
+    real measurements against a flagged multi-hour job, so a mis-tapped timer
+    can't corrupt the vs-book ratio. A nonzero count is the filter working.
 - **Trend** — last six pay periods. The current period must be dimmed and
   labelled **"in progress"**, and the sentence underneath must compare the last
   two FINISHED periods, never the running one. A caption claiming a huge drop
@@ -1311,11 +1359,10 @@ back to unset (the period returns to awaiting-pay).
   box onto the button and press Enter. It must DELETE, not re-save the figure.
   Shipping this control broke that path twice, in opposite directions.
 - Also confirm the ordinary save still works **on the "Did I get paid?" card
-  itself** — not the awaiting-pay hero above it, a different component — from
-  a period with NOTHING saved yet: type a figure and press **Enter**, and
-  separately type a figure and click blank space. Both must save on the "Did I
-  get paid?" card. A silently discarded first figure is the regression to
-  watch for here.
+  itself** — not the awaiting-pay hero above it, which is a different component
+  and is covered in §3z — from a period with NOTHING saved yet: type a figure
+  and press **Enter**, and separately type a figure and click blank space. Both
+  must save. A silently discarded first figure is the regression to watch for.
 
 ### 9. Nightly edge case (seeded rotation)
 

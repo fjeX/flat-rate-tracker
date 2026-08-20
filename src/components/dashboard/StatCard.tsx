@@ -66,7 +66,7 @@ export function StatCard({
     <div className={`stat${highlighted ? " featured" : ""}${tier ? ` eff-${tier}` : ""}`}>
       <div className="stat-label">{label}</div>
       <div className="stat-value tabular">
-        <RollingNumber value={stats.flagHours} decimals={1} /><span className="unit">h</span>
+        <RollingNumber value={fmtHours(stats.flagHours)} /><span className="unit">h</span>
       </div>
       <div
         className={`stat-delta ${tier ?? "neutral"}`}

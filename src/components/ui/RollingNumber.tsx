@@ -5,10 +5,26 @@ import { useEffect, useState } from "react";
 const DIGITS = "0123456789".split("");
 
 /**
- * Renders a number (or an already-formatted string like "01:23:45") and, when
- * the value CHANGES while mounted, rolls each digit vertically like a
- * mechanical odometer. First render is always static — the roll only fires
- * on subsequent updates.
+ * Renders an already-formatted string like "5.4" or "01:23:45" and, when the
+ * value CHANGES while mounted, rolls each digit vertically like a mechanical
+ * odometer. First render is always static — the roll only fires on subsequent
+ * updates.
+ *
+ * It renders text; it does NOT decide what the text says. That used to be a
+ * `number | string` prop with a `decimals` option running a bare
+ * `value.toFixed(decimals)`, and it was the app's fourth private copy of a
+ * hours-rounding rule. `toFixed` TRUNCATES an x.x5 value — float64 stores 5.35
+ * a hair below 5.35 — while lib/format.ts's fmtHours rounds half-up, so a
+ * stored 5.35 printed "5.3" in the dashboard's headline tile and "5.4" in the
+ * RO row directly beneath it, on the same screen (`dashboard-flag-hours-
+ * rounding`). The sr-only readout carried the wrong figure too.
+ *
+ * Rounding half-up in here would have closed half the gap and left the other
+ * half: fmtHours also floors a sub-resolution nonzero to "<0.1" rather than a
+ * flat "0.0", which is the entire reason lib/format.ts exists. Hours semantics
+ * belong to the hours formatter, not to a UI primitive — so `value` is a
+ * string, and a caller with a raw number has to name the formatter it wants.
+ * A fifth caller now gets a type error instead of a silent truncation.
  *
  * Mono + tabular-nums per house rule; respects prefers-reduced-motion by
  * snapping instantly (also backstopped by the global reduced-motion CSS
@@ -16,19 +32,16 @@ const DIGITS = "0123456789".split("");
  */
 export function RollingNumber({
   value,
-  decimals = 0,
   className,
   children,
 }: {
-  /** A number to format with `decimals`, or a pre-formatted string (e.g. "01:23:45"). */
-  value: number | string;
-  decimals?: number;
+  /** Pre-formatted text, e.g. fmtHours(n) or "01:23:45". Digits roll; the rest doesn't. */
+  value: string;
   className?: string;
   /** Trailing content rendered after the digits (e.g. a unit label) — never rolls. */
   children?: React.ReactNode;
 }) {
-  const text = typeof value === "number" ? value.toFixed(decimals) : value;
-  const chars = text.split("");
+  const chars = value.split("");
 
   const [ready, setReady] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -89,7 +102,7 @@ export function RollingNumber({
           );
         })}
       </span>
-      <span className="sr-only">{text}</span>
+      <span className="sr-only">{value}</span>
       {children}
     </span>
   );

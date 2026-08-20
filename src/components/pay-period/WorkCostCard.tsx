@@ -19,7 +19,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { InfoBubble } from "@/components/ui/InfoBubble";
 import { fmtHours } from "@/lib/stats";
-import { fmtHours2 } from "@/lib/format";
+import { fmtHours2, HOURS_DISPLAY_STEP } from "@/lib/format";
 import { fmtMoney } from "@/lib/earnings";
 import { formatDateShort } from "@/lib/periods";
 import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
@@ -102,6 +102,35 @@ export function WorkCostCard({
   const comparison = floorComparison(result.hourly, referenceRate);
   const missingCount = result.missingClockDays.length;
   const hasUnpaid = unpaid.totalHours > 0 || unpaid.lines.length > 0;
+
+  // `denomHours` and `countedFlagHours` are independent float reductions over
+  // numeric(5,2) columns, so an exactly-even period does not land on exactly
+  // zero: 8.1 + 8.2 + 8.3 is 24.599999999999998, and against 24.6 flagged a
+  // bare `gap < 0` is TRUE by 3.55e-15. That printed the full "you're ahead"
+  // branch for a period that is dead even.
+  //
+  // Half a display step is the threshold because it is the rounding boundary
+  // of the figure right beside the label: below it, the two sides are the same
+  // number at every resolution this card prints. The VALUE is deliberately
+  // left alone — fmtHours still says "<0.1" for a real sub-resolution figure,
+  // and a true zero still says "0.0".
+  const aheadOnHours = gap < -HOURS_DISPLAY_STEP / 2;
+
+  // Whether the gap is measured against a COMPLETE set of hours at the shop.
+  //
+  // This is the honest predicate for the "Ahead" claim, and it is wage-check's
+  // own: `effectiveHourly` returns no_clock when `denomHours <= 0` and
+  // incomplete_clock when `missingClockDays` is non-empty, which is exactly
+  // "the denominator does not cover the period". Those two are the states this
+  // reads for. `no_rates` deliberately is NOT excluded — it means the hours are
+  // complete and only the dollars are unknown, and this claim is about hours.
+  //
+  // Without this, 363.7 flagged hours against a zero denominator rendered as
+  // "Ahead 363.7h — you're ahead, not behind" directly beneath the card's own
+  // warning that no day in the period has hours on it. A tech with no clock
+  // data is not a tech who is ahead; the number describes the calculation, not
+  // the record (memory/feedback_undefined_is_not_absent.md).
+  const hoursAreComplete = missingCount === 0 && result.denomSource !== null;
 
   return (
     <section className="card padded space-y-3">
@@ -338,21 +367,56 @@ export function WorkCostCard({
             {/* A negative gap is GOOD news — flag hours outran the clock — but
                 a bare "−48.3h" under a headline asking what the work COST you
                 reads as a debt. So the direction lives in the label, and the
-                number stays unsigned in both directions: no "−", no "+". */}
+                number stays unsigned in both directions: no "−", no "+".
+
+                "Ahead" is a CLAIM, so it only appears when the hours behind it
+                are complete. When they aren't, the label goes neutral rather
+                than asserting either direction: "Difference" says what the
+                number is (flagged minus hours at the shop) and nothing about
+                whether it is good or bad news. A neutral label under missing
+                data is worth more than a confident wrong one. */}
             <Cell
-              label={gap < 0 ? "Ahead" : "Gap"}
+              label={
+                aheadOnHours ? (hoursAreComplete ? "Ahead" : "Difference") : "Gap"
+              }
               value={`${fmtHours(Math.abs(gap))}h`}
             />
           </div>
 
           {/* One line saying which way that points, because "Ahead" alone still
               leaves a tech doing the subtraction in their head. Negative branch
-              only — the positive gap is what the rest of the card explains. */}
-          {gap < 0 && (
+              only — the positive gap is what the rest of the card explains.
+
+              The "nothing to explain" half is conditional on there being
+              nothing recorded. Unpaid time routinely runs ALONGSIDE flagged
+              work on the same day (wage-check's own overTracked case), so a
+              tech over 100% efficiency can have both a negative gap and real
+              unpaid hours — and this sentence used to deny them three lines
+              above the drill-down listing them. */}
+          {aheadOnHours && hoursAreComplete && (
             <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
               You flagged {fmtHours(Math.abs(gap))}h more than you were at the
-              shop this period — you&apos;re ahead, not behind. There&apos;s no
-              unpaid gap to explain.
+              shop this period — you&apos;re ahead, not behind.{" "}
+              {hasUnpaid
+                ? "That doesn't cancel the unpaid time below — those hours ran alongside work you flagged."
+                : "There's no unpaid gap to explain."}
+            </p>
+          )}
+
+          {/* Same number, no claim attached. The days with no hours on them are
+              named again here because this is the line sitting under the
+              figure, and a tech reading the tiles is not necessarily reading
+              the block at the top of the card. */}
+          {aheadOnHours && !hoursAreComplete && (
+            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+              {missingCount > 0
+                ? missingCount === 1
+                  ? "1 day here has flagged work but no hours on it"
+                  : `${missingCount} days here have flagged work but no hours on them`
+                : "No hours at the shop are on record for this period"}
+              , so this is flagged time against an incomplete set of shop hours.
+              It isn&apos;t a gap, and it isn&apos;t a lead — add the hours and
+              it will mean something.
             </p>
           )}
 
