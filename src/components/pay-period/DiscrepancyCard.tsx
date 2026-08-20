@@ -156,8 +156,28 @@ export function DiscrepancyCard({
             <input
               ref={inputRef}
               type="number"
+              // `min={0}` STAYS here, unlike the hero's. There it was removed
+              // because constraint validation gates the submit button and does
+              // NOT gate blur, so the floor answered "-5" with a browser tooltip
+              // on one route and complete silence on the other. This field has
+              // no constraint-validated route at all — no enclosing <form>, no
+              // submit button, and Enter is handled by onKeyDown below, which
+              // preventDefault()s and blurs straight into commit(). Nothing
+              // native can block a write here, so the floor splits nothing; all
+              // it still does is stop the spinner stepping below zero.
+              // parseHours() remains the thing that actually rejects a negative.
+              //
+              // `step="any"`, NOT 0.1 — matching the hero, which writes this
+              // exact column. A stub figure routinely carries two decimals
+              // (74.25, 8.75), and under step={0.1} every one of those is
+              // `stepMismatch: true`. That never killed a save here the way it
+              // killed the hero's button, because blur has no validation gate.
+              // What it did do is hand the spinner arrows an allowed value step
+              // of 0.1: one nudge on a typed 74.25 silently rewrote it to 74.3,
+              // and the tech's own paystub figure went out to the DB wrong. With
+              // no allowed value step there is nothing to snap to.
               min={0}
-              step={0.1}
+              step="any"
               value={paidText}
               onChange={(e) => setPaidText(e.target.value)}
               onBlur={(e) => {
