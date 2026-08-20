@@ -428,6 +428,31 @@ export type LeakBoard = {
 };
 
 /**
+ * The tiebreak, when two leaks cost the same hours over the same number of rows.
+ *
+ * An overrun at least PAID some of its time; rework and unpaid clock paid none
+ * of it, so at equal hours the unpaid kind is the worse finding and ranks
+ * above. That rule is documented (bot/INSTRUCTIONS.md §7e) and was, until this
+ * map existed, true only by accident: the comparator stopped at hours-then-uses
+ * and the rest came from Array.prototype.sort's stability plus the order the
+ * loop above happens to push in — which pushes the OVERRUN first, i.e. exactly
+ * backwards. It never showed up because an exact hours-and-uses tie has never
+ * occurred in real data. Latent, not harmless: sort stability is the wrong
+ * thing to encode a product rule in.
+ *
+ * rework and unpaid_clock share a rank on purpose. Both paid nothing and no
+ * rule says which of the two is worse, so inventing an order between them here
+ * would be a preference dressed up as arithmetic. Keyed on the kind rather than
+ * "is this an overrun" so a fourth kind has to state its rank instead of
+ * defaulting into one — the same reason LeakSection colours by kind.
+ */
+const LEAK_KIND_RANK: Record<LeakKind, number> = {
+  rework: 0,
+  unpaid_clock: 0,
+  overrun: 1,
+};
+
+/**
  * Every source of unpaid time this page can measure, ranked worst first.
  *
  * THE TOTAL IS A REAL SUM, and that is the whole reason this function exists
@@ -564,7 +589,12 @@ export function leakBoard(
     });
   }
 
-  leaks.sort((a, b) => b.hours - a.hours || b.uses - a.uses);
+  leaks.sort(
+    (a, b) =>
+      b.hours - a.hours ||
+      b.uses - a.uses ||
+      LEAK_KIND_RANK[a.kind] - LEAK_KIND_RANK[b.kind],
+  );
   return {
     leaks,
     totalHours: leaks.reduce((sum, leak) => sum + leak.hours, 0),

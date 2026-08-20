@@ -19,6 +19,7 @@
 // requires: every segment carries a visible number, and the band table below
 // repeats all of it as text.
 import { Card } from "@/components/ui/Card";
+import { fmtHours } from "@/lib/format";
 import {
   driverStrength,
   HEAVY_FLAG_HOURS,
@@ -39,8 +40,15 @@ const STRENGTH_COPY: Record<string, string> = {
   none: "Doesn't move your day",
 };
 
-/** One decimal, and never "-0.0". */
-function one(n: number): string {
+/**
+ * One decimal for a COUNT of lines — deliberately not fmtHours.
+ *
+ * Hours in this file go through fmtHours, which rounds half-up and prints
+ * "<0.1" rather than a flat "0.0" for a genuinely nonzero value. A line count
+ * wants neither: "<0.1 big jobs a day" reads as a measurement of one job
+ * instead of an average over days. Keep the two formatters apart.
+ */
+function oneCount(n: number): string {
   const r = n.toFixed(1);
   return r === "-0.0" ? "0.0" : r;
 }
@@ -63,7 +71,7 @@ function BandBar({ band, max }: { band: MixBand; max: number }) {
           segments read as one quantity split rather than two bars touching. */}
       <div className="flex h-5 flex-1 items-stretch" style={{ gap: 2 }}>
         <div
-          title={`${one(heavy)}h from jobs ${HEAVY_FLAG_HOURS}h and up`}
+          title={`${fmtHours(heavy)}h from jobs ${HEAVY_FLAG_HOURS}h and up`}
           style={{
             width: `${pct(heavy)}%`,
             background: "var(--brand)",
@@ -72,7 +80,7 @@ function BandBar({ band, max }: { band: MixBand; max: number }) {
           }}
         />
         <div
-          title={`${one(rest)}h from everything else`}
+          title={`${fmtHours(rest)}h from everything else`}
           style={{
             width: `${pct(rest)}%`,
             background: "var(--bg-4)",
@@ -86,7 +94,7 @@ function BandBar({ band, max }: { band: MixBand; max: number }) {
         className="mono shrink-0 text-right text-sm font-semibold tabular-nums"
         style={{ width: 52, color: "var(--fg-1)" }}
       >
-        {one(band.avgFlagHours)}h
+        {fmtHours(band.avgFlagHours)}h
       </div>
     </div>
   );
@@ -183,26 +191,28 @@ export function MixSection({
         <p className="text-sm" style={{ color: "var(--fg-1)" }}>
           Your biggest quarter of days pays{" "}
           <strong className="mono tabular-nums" style={{ color: "var(--fg-0)" }}>
-            {one(summary.bestFlagHours)}h
+            {fmtHours(summary.bestFlagHours)}h
           </strong>
           . Your quietest pays{" "}
           <strong className="mono tabular-nums" style={{ color: "var(--fg-0)" }}>
-            {one(summary.worstFlagHours)}h
+            {fmtHours(summary.worstFlagHours)}h
           </strong>
           .{" "}
           {summary.quickJobsDontMove ? (
             <>
               The difference isn&rsquo;t how many jobs you turn — it&rsquo;s how
               many <strong style={{ color: "var(--fg-0)" }}>big</strong> ones. Big
-              jobs go from {one(summary.worstHeavyLines)} a day to{" "}
-              {one(summary.bestHeavyLines)}, while quick jobs barely move (
-              {one(summary.worstQuickLines)} → {one(summary.bestQuickLines)}).
+              jobs go from {oneCount(summary.worstHeavyLines)} a day to{" "}
+              {oneCount(summary.bestHeavyLines)}, while quick jobs barely move (
+              {oneCount(summary.worstQuickLines)} →{" "}
+              {oneCount(summary.bestQuickLines)}).
             </>
           ) : (
             <>
-              Big jobs go from {one(summary.worstHeavyLines)} a day to{" "}
-              {one(summary.bestHeavyLines)}, quick jobs from{" "}
-              {one(summary.worstQuickLines)} to {one(summary.bestQuickLines)}.
+              Big jobs go from {oneCount(summary.worstHeavyLines)} a day to{" "}
+              {oneCount(summary.bestHeavyLines)}, quick jobs from{" "}
+              {oneCount(summary.worstQuickLines)} to{" "}
+              {oneCount(summary.bestQuickLines)}.
             </>
           )}
         </p>

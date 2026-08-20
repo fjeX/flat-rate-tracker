@@ -22,16 +22,30 @@
 // bug — the defect was never in a calculation. It was two correct values
 // rendered into one sentence. Only the rendered output can prove they are no
 // longer in it.
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { PeriodHero } from "./PeriodHero";
 import type { ProjectionLabel } from "@/lib/period-mode";
 
-// The hero module imports a server action for the awaiting-pay variant. Nothing
-// under test calls it; this keeps jsdom from evaluating server-only code.
+// The awaiting-pay hero writes through this server action. The mock records the
+// exact call ORDER — which is the whole point for the second suite below, where
+// the defect is "how many writes", not "what value" — and keeps jsdom from
+// evaluating server-only code for the first.
+const calls: string[] = [];
+/** What the next save answers with. `null` = success. */
+let nextError: string | null = null;
+
+const setPaidPeriodHoursAction = vi.fn(
+  async (periodKey: string, hours: number) => {
+    calls.push(`upsert:${periodKey}:${hours}`);
+    return nextError === null ? {} : { error: nextError };
+  },
+);
+
 vi.mock("@/app/actions/paid-periods", () => ({
-  setPaidPeriodHoursAction: vi.fn(),
+  setPaidPeriodHoursAction: (...a: [string, number]) =>
+    setPaidPeriodHoursAction(...a),
 }));
 
 /** The forecast state that produced the contradiction: early, wildly ahead. */
@@ -144,5 +158,222 @@ describe("InProgressHero — the control: a real 0% still shows", () => {
 
     expect(support().textContent).toMatch(EFFICIENCY_FIGURE);
     expect(screen.getByText(/62% efficiency/)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression cover for `hero-paid-hours-no-blur-save`.
+//
+// THE BUG: the hero's "Paid flag hours" input had onChange and nothing else.
+// The typed figure lived in React state and was committed ONLY by the form's
+// submit — the "Check my pay" button, or Enter. Type a figure, click blank
+// space, and the number sits there on screen looking saved while nothing was
+// written. The sibling field in DiscrepancyCard, which writes this same column
+// and looks the same, has always committed on blur. Two identical-looking
+// affordances, two different meanings for "click away".
+//
+// THE HAZARD THE FIX INTRODUCES, and the reason these tests exist at all:
+// clicking "Check my pay" blurs the input on the way to the button, so a naive
+// onBlur makes the primary path write TWICE. A fix of exactly this shape has
+// twice killed the common path in this repo, so the cases below vary the
+// PRECONDITION (nothing written yet vs. a figure already written) and not just
+// the interaction.
+//
+// WHY THIS DRIVES THE COMPONENT AND NOT THE ACTION: lib/db/paid-periods and the
+// server action are covered and correct — no wrong value is ever computed here.
+// The defect is whether a write is issued at all, and how many. Only the
+// rendered, focus-managed component can prove that.
+describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly once", () => {
+  const PERIOD = "2026-08-P1";
+  const onSaved = vi.fn();
+
+  beforeEach(() => {
+    calls.length = 0;
+    nextError = null;
+    onSaved.mockClear();
+    setPaidPeriodHoursAction.mockClear();
+  });
+
+  function setup() {
+    render(
+      <>
+        <PeriodHero.AwaitingPay
+          periodKey={PERIOD}
+          flagHours={80}
+          roCount={12}
+          onSaved={onSaved}
+        />
+        {/* A real focusable "somewhere else", so a blur can carry a
+            relatedTarget that is NOT the submit button. */}
+        <button type="button">elsewhere</button>
+      </>,
+    );
+  }
+
+  const field = () => screen.getByRole("spinbutton") as HTMLInputElement;
+  const checkBtn = () =>
+    screen.getByRole("button", { name: /Check my pay/ }) as HTMLButtonElement;
+  const form = () => {
+    const el = field().closest("form");
+    if (!el) throw new Error("hero input is not in a form");
+    return el;
+  };
+
+  const edit = (value: string) =>
+    fireEvent.change(field(), { target: { value } });
+
+  /** What a browser does when you click a button while the field has focus:
+   *  blur the field (relatedTarget set — or null in Safari and Firefox/macOS),
+   *  then deliver the click, whose default action submits the form. */
+  async function clickCheck(relatedTarget: HTMLElement | null) {
+    await act(async () => {
+      fireEvent.blur(field(), { relatedTarget });
+      fireEvent.submit(form());
+    });
+  }
+
+  // --- the bug itself -----------------------------------------------------
+  it("saves when the field loses focus to blank space", async () => {
+    setup();
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves when focus moves to another control entirely", async () => {
+    setup();
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field(), {
+        relatedTarget: screen.getByRole("button", { name: "elsewhere" }),
+      });
+    });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+  });
+
+  // --- the common path, which the fix must not double-fire or break -------
+  it("clicking 'Check my pay' writes ONCE, not once per blur and once per submit", async () => {
+    setup();
+    edit("74.2");
+    await clickCheck(checkBtn());
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    expect(setPaidPeriodHoursAction).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  // Safari and Firefox/macOS do not focus a clicked button, so relatedTarget is
+  // null and a relatedTarget-based guard would let both writes through. The
+  // dedupe is on the VALUE precisely so this browser difference cannot matter.
+  it("clicking 'Check my pay' still writes ONCE when the blur carries no relatedTarget", async () => {
+    setup();
+    edit("74.2");
+    await clickCheck(null);
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+  });
+
+  it("Enter — a submit with no blur at all — still writes once", async () => {
+    setup();
+    edit("74.2");
+    await act(async () => {
+      fireEvent.submit(form());
+    });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  // --- preconditions: a figure ALREADY written in this mount --------------
+  // The hero only renders while paid_period_hours has no row (lib/period-mode),
+  // so "already written" can only mean written since this mount — the window
+  // between the save and router.refresh() swapping in the Settled hero.
+  it("blurring an unchanged figure a second time does not write again", async () => {
+    setup();
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("correcting the figure after a save writes the new one", async () => {
+    setup();
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    edit("80.5");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`, `upsert:${PERIOD}:80.5`]);
+  });
+
+  // --- nothing to write ---------------------------------------------------
+  it("blurring an empty field writes nothing and says nothing", async () => {
+    setup();
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+
+    expect(calls).toEqual([]);
+    // Clicking away from a blank box is not a failed attempt at anything.
+    expect(screen.queryByText(/Enter the flag hours/)).toBeNull();
+  });
+
+  it("blurring an unparseable field writes nothing and does not throw", async () => {
+    setup();
+    edit("not a number");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+
+    expect(calls).toEqual([]);
+  });
+
+  // The control for the two negative assertions above: the SAME message and the
+  // same empty field, reached by an explicit press, must still appear — so
+  // "queryByText(...) is null" above is proving suppression, not a dead
+  // selector.
+  it("control: pressing 'Check my pay' on an empty field DOES ask for the figure", async () => {
+    setup();
+    await act(async () => {
+      fireEvent.submit(form());
+    });
+
+    expect(calls).toEqual([]);
+    expect(screen.getByText(/Enter the flag hours/)).toBeTruthy();
+  });
+
+  // --- a failed write must not dedupe the retry away ----------------------
+  it("after a rejected save, retrying the same figure writes again", async () => {
+    setup();
+    nextError = "Paid hours can't be more than 200.";
+    edit("999");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    expect(screen.getByText("Paid hours can't be more than 200.")).toBeTruthy();
+    expect(onSaved).not.toHaveBeenCalled();
+
+    nextError = null;
+    await act(async () => {
+      fireEvent.submit(form());
+    });
+
+    expect(calls).toEqual([`upsert:${PERIOD}:999`, `upsert:${PERIOD}:999`]);
+    expect(onSaved).toHaveBeenCalledTimes(1);
   });
 });

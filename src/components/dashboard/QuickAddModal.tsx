@@ -420,7 +420,7 @@ export function QuickAddModal({
                 >
                   <span className="font-mono text-[var(--brand)]">{oc.code}</span>
                   <span className="text-[var(--fg-3)]">
-                    {oc.subOpCodes.length > 0 ? "→" : `${oc.flagHours}h`}
+                    {oc.subOpCodes.length > 0 ? "→" : `${fmtHours(oc.flagHours)}h`}
                   </span>
                 </button>
               ))}
@@ -486,7 +486,7 @@ export function QuickAddModal({
                           )}
                         </span>
                         <span className="flex-shrink-0 font-mono text-xs text-[var(--fg-2)]">
-                          {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
+                          {oc.subOpCodes.length > 0 ? "select →" : `${fmtHours(oc.flagHours)}h`}
                         </span>
                       </button>
                     </li>

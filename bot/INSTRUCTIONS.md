@@ -93,6 +93,22 @@ dollars are hidden BY DESIGN (not a bug). Go to Settings and if no pay rates
 exist, set them once: CP $32/hr, warranty $28/hr, internal $25/hr. From then
 on, exercise labor types and verify dollar amounts everywhere they appear.
 
+### 1c. RO Scan Templates (Settings — undocumented surface, new)
+On the Settings page, under "Logging," the **"RO Scan Templates"** card
+renders unconditionally — check it every night, not just when something else
+sends you there.
+- With zero templates: a "No templates yet" note plus a numbered **3-step
+  how-to** (Add Template → draw boxes around each field → scan from Log RO).
+  All three steps must be present and readable.
+- **Add Template** opens the template editor. You don't need to complete a
+  full template every night — confirm the editor opens and can be cancelled
+  without creating a blank one.
+- If templates already exist, each row must offer edit and delete. Deleting a
+  template must ask "Delete this template? The scanner will no longer use it."
+  before removing it — a delete with no confirmation is a bug.
+- This card is the setup path for §2a's scanner. If §2a's scan behaves oddly,
+  check here first for a malformed template before reporting it as a scan bug.
+
 ### 2. Log ROs (2–5 of them)
 - Log between 2 and 5 repair orders. Vary them each night:
   - Total hours per RO anywhere from **4 to 25** (vary: some small, some monsters)
@@ -122,6 +138,31 @@ on, exercise labor types and verify dollar amounts everywhere they appear.
 - Edit one of tonight's ROs (change hours or add a line) and verify the edit stuck.
 - Delete one RO you created **tonight only** and verify it's gone. Never delete
   entries from previous nights — they are accumulated test data.
+  - **Identify the row before you touch it — this list re-sorts (date desc,
+    then created_at desc), so a row's on-screen position shifts as you add
+    entries and is never a safe handle.** Find the RO you mean to delete by
+    its own RO number, not by where it sits in the list, and confirm that
+    number is the one you intend before clicking Delete. The confirm dialog is
+    generic and names no RO — re-verify the target row a second time, right
+    before you accept the confirm. RO deletion is the highest-stakes delete on
+    the site (those hours feed pay and efficiency), so if you cannot uniquely
+    identify the row you meant, **skip the delete and report it** rather than
+    guess.
+
+### 2a. Scan RO ticket card (undocumented surface, new)
+At the top of the full Log RO form — new ROs only, it's gone once you're
+editing an existing one — sits a **"Scan RO ticket"** banner: "Auto-fills RO#,
+vehicle and op codes" with a camera button.
+- Tap it. It must open a real file picker / camera capture, not a dead button.
+- The **ⓘ "First-time setup help"** toggle (sits just left of the "Scan RO"
+  button) must open and close an info dropdown explaining how scanning works.
+- Scan (or upload) any photo, including a non-RO image. The bot cannot judge
+  OCR *accuracy* here — you're not grading whether it read the ticket
+  correctly — but it must not crash, hang, or silently do nothing. A result
+  banner (success, partial, or "not detected") is expected either way.
+- If a photo is captured and photo evidence is enabled on this account, a
+  green "Photo attached — saved with this RO" chip should appear with a
+  working remove (✕) control.
 
 ### 2b. Comebacks / unpaid rework (new 2026-07-27)
 A comeback is work you redo for free, so it **flags zero hours**. Log at least
@@ -173,6 +214,13 @@ one most nights.
 ### 2c. "Worked — unpaid" empty days (new 2026-07-27)
 If the dashboard shows the "scheduled day looks empty" card, it now offers a
 **third** button, "Worked — unpaid", alongside "Day off" and "Worked, zero flag".
+- **This section may be legitimately unexercisable on this account, and that's
+  not a gap worth reporting.** The bot account resolves its own amber days
+  every night — you log real ROs against today, so by the next night that day
+  already has clocked hours and was never left empty for this card to catch.
+  If you never see the "scheduled day looks empty" card, note it as
+  `SKIPPED — no empty day on this account` and move on instead of flagging it
+  as untested.
 - Click it: an hours field, a "Where the time went" reason dropdown (comeback /
   waiting on parts / waiting on approval / shop time), and an optional note.
 - Saving with hours **0 or blank must be refused** with a visible error.
@@ -429,6 +477,16 @@ verify the saved hours before continuing to §6.
   **without a reload**, within a couple of seconds.
 - If a delete ever fails you must now SEE it — an alert with the reason. A
   delete that silently leaves the row is a bug worth reporting either way.
+- **Identify the row before you touch it** (fingerprint
+  `bot-spiff-deleted-in-error`, 2026-08-19: a positional selector hit the wrong
+  row and permanently deleted a real spiff — this list has no undo and no
+  audit trail). The list re-sorts (date desc, then created_at desc), so
+  position shifts as rows are added and is never a safe handle. Find the spiff
+  you mean to delete by its own source, date, and amount, and confirm those
+  match before clicking Delete. The confirm dialog is generic and names no
+  row — re-verify the target a second time, right before you accept the
+  confirm. If you cannot uniquely identify the row you meant, **skip the
+  delete and report it** rather than guess.
 
 ### 7. "What did the work cost me?" (CA wage math + unpaid time)
 > **Renamed and merged 2026-07-30.** Was "Pay Check-Up". The old separate
@@ -683,7 +741,9 @@ recovered. Sections appear only when they have something to say.
     and an **"All time"** heading captioned "Ignores the window above". Everything
     ABOVE it obeys the chips ("What's costing you", "Where you're winning",
     "Where your time goes", "Best days"); everything BELOW it ignores them
-    (Trend, Claims and recovery). The old per-section "ignores the window"
+    ("What makes a big day", "What a big day actually tracks with", "Big
+    jobs", "The quick stuff", Trend, Claims and recovery). The old per-section
+    "ignores the window"
     caption is GONE — it is said once, structurally. Its absence is the fix, not
     a regression. If a section sits on the wrong side of that divider, or the
     heading is missing while Trend/Claims render, that IS a bug.
@@ -691,9 +751,13 @@ recovered. Sections appear only when they have something to say.
   thing on the page. Ranked rows (1, 2, 3…) of time you were on the clock for
   with no flag hour covering it, longest first, each with a proportional bar.
   Two kinds: **rework** (paid nothing) and **overrun** (paid some of its time) —
-  rework must always rank as the worse kind at equal hours. Check the ranking is
-  actually descending by hours and that rank 1 has the longest bar. Cross-check
-  the total against the unpaid-rework figures on Pay Period; two surfaces
+  rework is meant to rank as the worse kind at equal hours. **Treat that rule as
+  opportunistic, not a nightly check:** it only shows itself on an exact
+  hours-AND-uses tie between a rework row and an overrun row, which has never
+  occurred on this account. Check it if that exact tie happens; do not report
+  its absence as a gap. What you check every night regardless: the ranking is
+  actually descending by hours and rank 1 has the longest bar. Cross-check the
+  total against the unpaid-rework figures on Pay Period; two surfaces
   disagreeing about the same hours is the bug class this page keeps hitting.
 - **Where you're winning (NEW 2026-08-04)** — up to **3** codes beating book,
   with job count and `×` book. Deliberately smaller than the leak board. Four or
@@ -737,6 +801,42 @@ recovered. Sections appear only when they have something to say.
 - **Best days** — seven weekday tiles with a By day / By efficiency sort toggle.
   Tiles count only days the app knows the length of, so the day count under each
   is real. Check a weekday's figure is not wildly out of line with the dashboard.
+- **"What makes a big day" / "What a big day actually tracks with"**
+  (undocumented until now — two cards, below the divider, all-time only). With
+  too little history each shows its own "Needs N days…" message instead of a
+  chart — that's correct, not a bug.
+  - **What makes a big day** — your days sorted by flag hours and cut into
+    quarters, biggest quarter at top, each a two-color bar (heavy jobs vs.
+    everything else) plus a one-line finding above it ("Your biggest quarter of
+    days pays Xh… your quietest pays Yh…"). Check the bars are actually ordered
+    biggest-to-smallest and the finding sentence's numbers match the top and
+    bottom bars.
+  - **What a big day actually tracks with** — ranks what correlates with day
+    length (big-job count, quick-job count, etc.) by an r-value from −1 to 1,
+    with the strongest driver highlighted and labeled ("Moves your day a lot" /
+    "somewhat" / "Barely" / "Doesn't"). Check the highlighted row is genuinely
+    the one with the largest `|r|`.
+- **"Big jobs" / "The quick stuff"** (undocumented until now — two cards, below
+  the divider, all-time only, `JobTimeSections.tsx`).
+  - **Big jobs** — every code flagging 2h+, with a coverage bar ("N/M timed")
+    and a table of measured jobs (flag / actual / vs book). Check the coverage
+    fraction matches the table, and that a code with zero timed jobs shows the
+    "next time you log one" message instead of an empty table.
+  - **The quick stuff** — the app's own worked-out times for everything under
+    2h, inferred from day lengths rather than measured (no per-job timer data
+    exists for these by design). If there's not enough history to solve for it,
+    it says exactly why (not enough days, not enough distinct codes, days too
+    uniform to separate codes, etc.) — any of those refusal messages is correct
+    output, not a bug. Only report it if the section is silently blank instead
+    of showing one of those messages.
+  - **Known and deliberate, do NOT report:** Big jobs' footnote — "N
+    reading(s) can't be right (a few minutes against a multi-hour job) and were
+    left out" — is a real, intentional filter (not a placeholder or an
+    unexplained oddity). It drops timer readings too short to be genuine
+    measurements against a flagged multi-hour job, so a mis-tapped timer can't
+    corrupt the vs-book ratio. Seeing this footnote with a nonzero count is the
+    filter doing its job, not something to escalate — this was carried as an
+    open question for several nights before being confirmed intentional.
 - **Trend** — last six pay periods. The current period must be dimmed and
   labelled **"in progress"**, and the sentence underneath must compare the last
   two FINISHED periods, never the running one. A caption claiming a huge drop
@@ -1210,10 +1310,12 @@ back to unset (the period returns to awaiting-pay).
 - **Test it with the KEYBOARD as well as the mouse** — Tab from the paid-hours
   box onto the button and press Enter. It must DELETE, not re-save the figure.
   Shipping this control broke that path twice, in opposite directions.
-- Also confirm the ordinary save still works from a period with NOTHING saved
-  yet: type a figure and press **Enter**, and separately type a figure and click
-  blank space. Both must save. A silently discarded first figure is the
-  regression to watch for here.
+- Also confirm the ordinary save still works **on the "Did I get paid?" card
+  itself** — not the awaiting-pay hero above it, a different component — from
+  a period with NOTHING saved yet: type a figure and press **Enter**, and
+  separately type a figure and click blank space. Both must save on the "Did I
+  get paid?" card. A silently discarded first figure is the regression to
+  watch for here.
 
 ### 9. Nightly edge case (seeded rotation)
 

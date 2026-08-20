@@ -708,6 +708,34 @@ describe("leakBoard", () => {
     expect(board.leaks.map((l) => l.code)).toEqual(["BIG", "SMALL"]);
     expect(board.totalHours).toBeCloseTo(11, 5);
   });
+
+  it("ranks rework above overrun when the hours AND the uses tie exactly", () => {
+    // A tie this exact has never occurred in real data, which is precisely why
+    // it needs a test: for as long as the comparator was hours-then-uses, the
+    // answer came from Array.prototype.sort's stability and the order the two
+    // entries happen to be pushed in — overrun first. That rendered the code's
+    // overrun ABOVE its rework, the opposite of the documented rule, and no
+    // dataset in the account was ever going to reveal it.
+    //
+    // One code, one timed line 6h over book (6h, 1 use) and one comeback worth
+    // exactly 6h (6h, 1 use). Every field the comparator reads is identical.
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", custom: true, customCode: "TIE", flagHours: 10, actualHours: 16 }),
+          line({ id: "b", custom: true, customCode: "TIE", flagHours: 0, actualHours: 6, isComeback: true }),
+        ]),
+      ],
+      [],
+    );
+    const board = leakBoard(rows, []);
+    expect(board.leaks).toHaveLength(2);
+    // The precondition — if these drift apart the test stops testing the tie
+    // and starts passing for the ordinary hours reason.
+    expect(board.leaks[0].hours).toBeCloseTo(board.leaks[1].hours, 5);
+    expect(board.leaks[0].uses).toBe(board.leaks[1].uses);
+    expect(board.leaks.map((l) => l.kind)).toEqual(["rework", "overrun"]);
+  });
 });
 
 // ── The ledger half of the leak board ────────────────────────────────────────

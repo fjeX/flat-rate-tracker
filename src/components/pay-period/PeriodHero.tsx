@@ -11,7 +11,7 @@
 // hero being one more stat tile: it carries an input, and it is the only route
 // from awaiting_pay into settled. Hiding that behind a card further down the
 // page is what made the old layout feel like a pile of parts.
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { ArrowRight } from "lucide-react";
 import { fmtHours, fmtPct } from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
@@ -149,25 +149,58 @@ function AwaitingPayHero({
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
 
+  // The figure this hero has already written, or has in the air right now.
+  // A mode is only `awaiting_pay` while paid_period_hours has NO row for the
+  // period (see lib/period-mode), so this starts null by construction — there
+  // is no initial value to seed it with.
+  //
+  // It is what stops the two routes to the same value from both writing it.
+  // Focus bookkeeping can't do that job here: `relatedTarget` is null for a
+  // clicked button in Safari and Firefox/macOS, and `onMouseDown` preventDefault
+  // (DiscrepancyCard's second guard) suppresses the focus move but NOT the click
+  // that follows it — so on a submit button, unlike a reset button, neither
+  // trick actually collapses blur+click into one write. Comparing the VALUE does,
+  // in every browser and every input modality.
+  const savedRef = useRef<number | null>(null);
+
   const parsed = parseHours(text);
 
-  function submit() {
+  // `explicit` is true when the tech asked for this — the "Check my pay" button
+  // or Enter — and false when the field merely lost focus. The difference is
+  // only whether an empty/unparseable field is worth an error message: clicking
+  // away from a blank box is not a failed attempt at anything.
+  function commit(explicit: boolean) {
     if (parsed === null) {
-      setError("Enter the flag hours from your stub, e.g. 74.2");
+      if (explicit) setError("Enter the flag hours from your stub, e.g. 74.2");
       return;
     }
+    // `parsed` is non-null HERE — the early return above guarantees it — so
+    // this can never be the `null === null` comparison that swallowed the first
+    // figure a tech typed into DiscrepancyCard. Ordering is the guard.
+    if (parsed === savedRef.current) return;
+    const value = parsed;
+    const previous = savedRef.current;
+    // Claimed SYNCHRONOUSLY, before the transition starts: clicking "Check my
+    // pay" fires the input's blur first and the form's submit second, and this
+    // assignment is what makes that second call a no-op. State would be too
+    // late — both handlers run against the same render.
+    savedRef.current = value;
     setError(null);
     startSaving(async () => {
       try {
         // Validation answers with { error } — a thrown one would be redacted in
         // production. Only DB failures reach the catch.
-        const res = await setPaidPeriodHoursAction(periodKey, parsed);
+        const res = await setPaidPeriodHoursAction(periodKey, value);
         if (res.error) {
+          // Nothing landed, so un-claim it — otherwise the retry the error
+          // message is asking for would dedupe against a write that failed.
+          savedRef.current = previous;
           setError(res.error);
           return;
         }
         onSaved();
       } catch (e) {
+        savedRef.current = previous;
         setError(e instanceof Error ? e.message : "Failed to save.");
       }
     });
@@ -189,7 +222,7 @@ function AwaitingPayHero({
         className="period-hero-action"
         onSubmit={(e) => {
           e.preventDefault();
-          submit();
+          commit(true);
         }}
       >
         <div className="field">
@@ -205,6 +238,17 @@ function AwaitingPayHero({
             inputMode="decimal"
             value={text}
             onChange={(e) => setText(e.target.value)}
+            // Same "type it, click away, it's saved" contract as the paid-hours
+            // field in DiscrepancyCard, which writes this exact column. Two
+            // fields that look the same and take the same figure must not
+            // disagree about what clicking away means.
+            //
+            // No relatedTarget guard, and deliberately so: this form's only
+            // other focusable element is the submit button, and blurring INTO
+            // it means the same write, not a different one (DiscrepancyCard
+            // needs its guard because the neighbour there is a DELETE). The
+            // value check in commit() collapses the pair into one write.
+            onBlur={() => commit(false)}
             placeholder="e.g. 74.2"
           />
         </div>

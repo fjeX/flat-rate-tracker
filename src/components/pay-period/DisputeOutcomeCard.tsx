@@ -259,11 +259,18 @@ export function DisputeOutcomeCard({
   const claimTotal = shortedHours + (claimPending ? pendingHours : 0);
 
   const lifetime = lifetimeRecovery(allDisputes);
+  // "A closed claim round on THIS period." Written once and read three ways
+  // below — the latest round, the sum over every round, and how many rounds
+  // that sum covers. A second copy of the predicate is exactly how the sum and
+  // the round under it stopped describing the same thing.
+  const isClosedHere = (d: Dispute) =>
+    d.periodKey === periodKey && isClosed(d.status);
   // The closed claim for this period, if the live one is already gone. Lets a
-  // finished period still show its outcome.
-  const closedForPeriod = allDisputes.find(
-    (d) => d.periodKey === periodKey && isClosed(d.status),
-  );
+  // finished period still show its outcome. Deliberately still a find over the
+  // prop rather than the head of the filtered array below: indexing a locally
+  // built array makes the React Compiler treat this useMemo dep as mutable and
+  // bail out of optimizing the whole component.
+  const closedForPeriod = allDisputes.find(isClosedHere);
   // Drives the OUTCOME section only. It used to gate the offer too, which meant
   // one closed claim hid the offer for the rest of the period's life — money
   // found after the claim went out stayed unclaimed with no way to ask for it.
@@ -281,9 +288,13 @@ export function DisputeOutcomeCard({
   // Hours already back from closed claims on THIS period. The re-offer used to
   // state the shortfall and nothing else, so a period that had recovered 34.0h
   // against a 31.4h short read as though nothing had ever been paid.
-  const recoveredHere = allDisputes
-    .filter((d) => d.periodKey === periodKey && isClosed(d.status))
-    .reduce((sum, d) => sum + d.recoveredHours, 0);
+  const closedHere = allDisputes.filter(isClosedHere);
+  const recoveredHere = closedHere.reduce((sum, d) => sum + d.recoveredHours, 0);
+  // How many rounds that sum covers. The copy said "on a closed claim" whatever
+  // the count was, so a period claimed twice showed 71.1h beside a claim card
+  // reading 19.7h — the sum of every round next to the latest round, with
+  // nothing in the words to say they were different scopes.
+  const recoveredRounds = closedHere.length;
 
   // Nothing to claim, nothing ever claimed — the card has nothing to say.
   if (
@@ -450,7 +461,14 @@ export function DisputeOutcomeCard({
                       <span className="font-medium text-[var(--fg-1)]">
                         {fmtHours(recoveredHere)}h already recovered
                       </span>{" "}
-                      on a closed claim
+                      {/* The figure is a sum over every closed round on this
+                          period, so the words have to say so. "on a closed
+                          claim" read as the one claim shown below it, which
+                          reports a single round — 71.1h beside a card saying
+                          19.7h looked like an arithmetic bug and wasn't. */}
+                      {recoveredRounds === 1
+                        ? "on that closed claim"
+                        : `across ${recoveredRounds} closed claims`}
                     </>
                   )}
                   . You can raise a second-round claim for what&apos;s left.

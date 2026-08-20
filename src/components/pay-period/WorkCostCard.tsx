@@ -335,11 +335,26 @@ export function WorkCostCard({
               label="Flagged"
               value={`${fmtHours(result.countedFlagHours)}h`}
             />
+            {/* A negative gap is GOOD news — flag hours outran the clock — but
+                a bare "−48.3h" under a headline asking what the work COST you
+                reads as a debt. So the direction lives in the label, and the
+                number stays unsigned in both directions: no "−", no "+". */}
             <Cell
-              label="Gap"
-              value={`${gap >= 0 ? "" : "−"}${fmtHours(Math.abs(gap))}h`}
+              label={gap < 0 ? "Ahead" : "Gap"}
+              value={`${fmtHours(Math.abs(gap))}h`}
             />
           </div>
+
+          {/* One line saying which way that points, because "Ahead" alone still
+              leaves a tech doing the subtraction in their head. Negative branch
+              only — the positive gap is what the rest of the card explains. */}
+          {gap < 0 && (
+            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+              You flagged {fmtHours(Math.abs(gap))}h more than you were at the
+              shop this period — you&apos;re ahead, not behind. There&apos;s no
+              unpaid gap to explain.
+            </p>
+          )}
 
           {/* An in-progress shift is excluded from both sides of the average, so
               say so. Without this the gap looks wrong all day and only settles

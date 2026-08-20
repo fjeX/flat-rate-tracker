@@ -143,7 +143,7 @@ export function SpiffsCard({
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <DeleteButton
-                    bonusId={b.id}
+                    bonus={b}
                     onDeleted={() => {
                       router.refresh();
                       // Same stale-tree hazard as adding one — see RefreshFlusher
@@ -211,18 +211,32 @@ export function SpiffsCard({
 }
 
 function DeleteButton({
-  bonusId,
+  bonus,
   onDeleted,
 }: {
-  bonusId: string;
+  bonus: Bonus;
   onDeleted: () => void;
 }) {
   const [pending, start] = useTransition();
   function handle() {
-    if (!window.confirm("Delete this spiff? This can't be undone.")) return;
+    // Name the row. A confirm that says "this spiff" protects nobody: on
+    // 2026-08-19 an automated run clicked a positional selector, answered this
+    // dialog, and hard-deleted a real $35 spiff that no backup could return.
+    // Same three fields the list row shows — source, amount, date — so the
+    // sentence describes something the reader can see on screen.
+    const source = bonus.source?.trim();
+    const bits = [
+      source ? `"${source}"` : null,
+      Number.isFinite(bonus.amount) ? fmtMoney(bonus.amount) : null,
+      // formatDateLong assumes "YYYY-MM-DD"; anything else would print
+      // "undefined undefined, NaN", so drop the clause instead.
+      /^\d{4}-\d{2}-\d{2}$/.test(bonus.date) ? formatDateLong(bonus.date) : null,
+    ].filter(Boolean);
+    const what = bits.length > 0 ? `this spiff — ${bits.join(", ")}` : "this spiff";
+    if (!window.confirm(`Delete ${what}? This can't be undone.`)) return;
     start(async () => {
       try {
-        await deleteBonusAction(bonusId);
+        await deleteBonusAction(bonus.id);
         onDeleted();
       } catch (err) {
         // Deleting money is destructive and irreversible: a failure that only

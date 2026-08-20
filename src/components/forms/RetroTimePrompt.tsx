@@ -15,6 +15,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { retroBuckets, type RetroCandidate } from "@/lib/retro-capture";
+import { fmtHours } from "@/lib/format";
 
 export function RetroTimePrompt({
   open,
@@ -76,7 +77,7 @@ export function RetroTimePrompt({
                   className="mono shrink-0 text-xs tabular-nums"
                   style={{ color: "var(--fg-3)" }}
                 >
-                  flags {c.flagHours.toFixed(1)}h
+                  flags {fmtHours(c.flagHours)}h
                 </span>
               </div>
 

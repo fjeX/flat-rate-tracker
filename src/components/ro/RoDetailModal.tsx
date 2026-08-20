@@ -169,7 +169,7 @@ export function RoDetailModal({
         {/* Spiffs/bonuses attached to this RO (read-only). */}
         <LinkedSpiffs entryId={entry.id} />
 
-        <Footer entryId={entry.id} onClose={onClose} onDeleted={onDeleted} />
+        <Footer entry={entry} onClose={onClose} onDeleted={onDeleted} />
       </div>
     </Modal>
   );
@@ -580,7 +580,7 @@ function AddOpCodePicker({
                       <span className="ml-2 text-xs text-[var(--fg-2)]">{sub.description}</span>
                     )}
                   </span>
-                  <span className="text-xs text-[var(--fg-2)]">{sub.flagHours}h</span>
+                  <span className="text-xs text-[var(--fg-2)]">{fmtHours(sub.flagHours)}h</span>
                 </button>
               </li>
             ))}
@@ -631,7 +631,7 @@ function AddOpCodePicker({
                       <span className="ml-2 text-xs text-[var(--fg-3)]">{oc.description}</span>
                     </span>
                     <span className="text-xs text-[var(--fg-2)]">
-                      {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
+                      {oc.subOpCodes.length > 0 ? "select →" : `${fmtHours(oc.flagHours)}h`}
                     </span>
                   </button>
                 </li>
@@ -652,11 +652,11 @@ function AddOpCodePicker({
 // ------------------------------------------------------------------------
 
 function Footer({
-  entryId,
+  entry,
   onClose,
   onDeleted,
 }: {
-  entryId: string;
+  entry: Entry;
   onClose: () => void;
   onDeleted?: (entryId: string) => void;
 }) {
@@ -665,15 +665,36 @@ function Footer({
   const [error, setError] = useState<string | null>(null);
 
   function handleDelete() {
-    if (!window.confirm("Delete this RO? This can't be undone.")) return;
+    // Name the RO. This is the most expensive delete in the app — the lines
+    // going away are flag hours, which move pay and efficiency — and "Delete
+    // this RO?" describes every RO equally, so it can't catch a click on the
+    // wrong row (or an automated one, as on 2026-08-19).
+    //
+    // The date is in here on purpose: the shop recycles 5-digit RO numbers, so
+    // the number alone does not identify a ticket.
+    const ro = entry.roNumber?.trim();
+    const vehicle = [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const bits = [
+      vehicle || null,
+      Number.isFinite(entry.flagHours) ? `${fmtHours(entry.flagHours)}h flagged` : null,
+      // formatDateLong assumes "YYYY-MM-DD"; drop the clause rather than print
+      // "undefined undefined, NaN".
+      /^\d{4}-\d{2}-\d{2}$/.test(entry.date) ? formatDateLong(entry.date) : null,
+    ].filter(Boolean);
+    const head = ro ? `RO #${ro}` : "this RO";
+    const what = bits.length > 0 ? `${head} — ${bits.join(", ")}` : head;
+    if (!window.confirm(`Delete ${what}? This can't be undone.`)) return;
     setError(null);
     startDelete(async () => {
       try {
-        await deleteEntryAction(entryId);
+        await deleteEntryAction(entry.id);
         onClose();
         // Let the parent reconcile its own list state if it wants to; otherwise
         // fall back to a plain server refresh.
-        if (onDeleted) onDeleted(entryId);
+        if (onDeleted) onDeleted(entry.id);
         else router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to delete.");
@@ -694,7 +715,7 @@ function Footer({
         <div className="flex items-center gap-2">
           <Button onClick={onClose}>Close</Button>
           <Link
-            href={`/log?edit=${entryId}`}
+            href={`/log?edit=${entry.id}`}
             className="btn btn-primary"
           >
             <Pencil className="h-4 w-4" />

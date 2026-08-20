@@ -185,7 +185,7 @@ export function OpCodeLines({
                           )}
                         </span>
                         <span style={{ fontSize: 12, color: "var(--fg-3)", fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
-                          {oc.subOpCodes.length > 0 ? "select →" : `${oc.flagHours}h`}
+                          {oc.subOpCodes.length > 0 ? "select →" : `${fmtHours(oc.flagHours)}h`}
                         </span>
                       </button>
                     ))
@@ -395,7 +395,7 @@ export function OpCodeLines({
                 >
                   <span className="c">{oc.code}</span>
                   <span className="h">
-                    {oc.subOpCodes.length > 0 ? "→" : `${oc.flagHours}h`}
+                    {oc.subOpCodes.length > 0 ? "→" : `${fmtHours(oc.flagHours)}h`}
                   </span>
                 </button>
               ))}
