@@ -163,6 +163,14 @@ function AwaitingPayHero({
   // in every browser and every input modality.
   const savedRef = useRef<number | null>(null);
 
+  // What has actually LANDED. `savedRef` is a claim — it goes up before the
+  // write is issued, precisely so the blur and the click that follows it can't
+  // both write. That makes it the wrong thing to ask "is this figure recorded?",
+  // because on the ordinary click path the answer is already "yes" a line before
+  // the write leaves the browser. Keeping the two apart is what lets an explicit
+  // press be answered without ever answering it early.
+  const writtenRef = useRef<number | null>(null);
+
   const parsed = parseHours(text);
 
   // `explicit` is true when the tech asked for this — the "Check my pay" button
@@ -177,7 +185,22 @@ function AwaitingPayHero({
     // `parsed` is non-null HERE — the early return above guarantees it — so
     // this can never be the `null === null` comparison that swallowed the first
     // figure a tech typed into DiscrepancyCard. Ordering is the guard.
-    if (parsed === savedRef.current) return;
+    if (parsed === savedRef.current) {
+      // The figure is already claimed, so it must not be WRITTEN again. But an
+      // explicit press — the button, or Enter — can never be a silent no-op:
+      // this hero lives entirely inside the window between the save and the
+      // refresh that replaces it, so "already saved" is the state the primary
+      // call to action is pressed in most often, and returning here left it
+      // dead on screen with no write, no message and no disabled state.
+      //
+      // Answered only once the write has LANDED. During the in-flight window
+      // the button is disabled and reads "Checking…", which is the honest
+      // answer, and firing onSaved() there would advance the page for a write
+      // that may still fail — and would fire twice on every ordinary click,
+      // since the blur claims the value one line before the submit sees it.
+      if (explicit && writtenRef.current === parsed) onSaved();
+      return;
+    }
     const value = parsed;
     const previous = savedRef.current;
     // Claimed SYNCHRONOUSLY, before the transition starts: clicking "Check my
@@ -187,21 +210,52 @@ function AwaitingPayHero({
     savedRef.current = value;
     setError(null);
     startSaving(async () => {
+      let res: { error?: string };
       try {
         // Validation answers with { error } — a thrown one would be redacted in
         // production. Only DB failures reach the catch.
-        const res = await setPaidPeriodHoursAction(periodKey, value);
-        if (res.error) {
-          // Nothing landed, so un-claim it — otherwise the retry the error
-          // message is asking for would dedupe against a write that failed.
-          savedRef.current = previous;
-          setError(res.error);
-          return;
-        }
+        res = await setPaidPeriodHoursAction(periodKey, value);
+      } catch (e) {
+        fail(e instanceof Error ? e.message : "Failed to save.");
+        return;
+      }
+      if (res.error) {
+        fail(res.error);
+        return;
+      }
+
+      // STALE SUCCESS. A newer figure has been claimed since this call left, so
+      // this one no longer describes what is on screen. The newer save owns
+      // both `writtenRef` and the refresh.
+      if (savedRef.current !== value) return;
+      writtenRef.current = value;
+
+      // onSaved() IS OUTSIDE THE TRY, and that is the whole point of the shape
+      // above. It is router.refresh() — a repaint of the page, not part of the
+      // write. Inside the try, a refresh that threw un-claimed a value that is
+      // sitting in the database and printed "Failed to save" over it, which
+      // sends the tech to re-enter a figure that is already recorded and lets
+      // the next blur write a duplicate. A failed refresh is a stale screen,
+      // and the claim above is what keeps it from also becoming a second row.
+      try {
         onSaved();
       } catch (e) {
+        console.error("[PeriodHero] paid hours saved, refresh failed:", e);
+      }
+
+      function fail(message: string) {
+        // Only un-claim what this call actually claimed. `previous` is captured
+        // per call, so an OLDER save failing LATE used to restore ITS previous
+        // value straight over a newer successful claim — and the next blur then
+        // rewrote the newer figure. Reachable because the input is never
+        // disabled during a save, only the button is.
+        //
+        // The same check silences the message: a figure the tech has already
+        // typed past is not something to interrupt him about, and the newer
+        // save reports its own outcome.
+        if (savedRef.current !== value) return;
         savedRef.current = previous;
-        setError(e instanceof Error ? e.message : "Failed to save.");
+        setError(message);
       }
     });
   }
@@ -234,7 +288,22 @@ function AwaitingPayHero({
             className="input mono"
             type="number"
             min={0}
-            step={0.1}
+            // `step="any"`, NOT 0.1. A flag-hours total off a real stub is
+            // routinely two decimals — 74.25, 8.75 — and step={0.1} made every
+            // one of those `stepMismatch: true`, so the browser refused to
+            // submit the form: the button and Enter were dead for exactly the
+            // figures this field exists to take. Blur has no constraint gate,
+            // which is how the two routes came to disagree about 74.25.
+            //
+            // Widened to the precision the COLUMN holds and no further:
+            // paid_period_hours.paid_flag_hours is numeric(6,2), and
+            // `paidPeriodSchema` already bounds it at 0 … MAX_NUMERIC_6_2 with
+            // a sentence the tech can read. `min={0}` stays because it is the
+            // same floor the schema states. No `max` attribute is added on
+            // purpose — the server owns that message, and a native tooltip on
+            // the button path plus a server sentence on the blur path would
+            // rebuild the same split this replaced.
+            step="any"
             inputMode="decimal"
             value={text}
             onChange={(e) => setText(e.target.value)}

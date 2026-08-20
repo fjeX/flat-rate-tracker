@@ -128,7 +128,7 @@ export function TodayCard({
               <div>
                 <div className="stat-label">Today · Flag</div>
                 <div className="stat-value tabular">
-                  <RollingNumber value={stats.flagHours} decimals={1} /><span className="unit">h</span>
+                  <RollingNumber value={fmtHours(stats.flagHours)} /><span className="unit">h</span>
                 </div>
               </div>
               <div style={{
@@ -150,7 +150,7 @@ export function TodayCard({
           <>
             <div className="stat-label">Today · Flag</div>
             <div className="stat-value tabular">
-              <RollingNumber value={stats.flagHours} decimals={1} /><span className="unit">h</span>
+              <RollingNumber value={fmtHours(stats.flagHours)} /><span className="unit">h</span>
             </div>
           </>
         )}

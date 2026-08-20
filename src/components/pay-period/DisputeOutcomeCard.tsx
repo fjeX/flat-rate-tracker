@@ -290,11 +290,15 @@ export function DisputeOutcomeCard({
   // against a 31.4h short read as though nothing had ever been paid.
   const closedHere = allDisputes.filter(isClosedHere);
   const recoveredHere = closedHere.reduce((sum, d) => sum + d.recoveredHours, 0);
-  // How many rounds that sum covers. The copy said "on a closed claim" whatever
-  // the count was, so a period claimed twice showed 71.1h beside a claim card
-  // reading 19.7h — the sum of every round next to the latest round, with
-  // nothing in the words to say they were different scopes.
-  const recoveredRounds = closedHere.length;
+  // How many rounds that sum covers, and the number the whole re-offer sentence
+  // agrees with. The copy said "on a closed claim" whatever the count was, so a
+  // period claimed twice showed 71.1h beside a claim card reading 19.7h — the
+  // sum of every round next to the latest round, with nothing in the words to
+  // say they were different scopes. Note this counts CLOSED rounds, not rounds
+  // that recovered something: a denied round is still a closed claim, and the
+  // leading clause below renders in that state (recoveredHere === 0) while the
+  // trailing one does not.
+  const closedRounds = closedHere.length;
 
   // Nothing to claim, nothing ever claimed — the card has nothing to say.
   if (
@@ -452,8 +456,14 @@ export function DisputeOutcomeCard({
             {shortedHours > 0 ? (
               closedForPeriod ? (
                 <>
-                  Your earlier claim for {periodLabel} is closed and you&apos;re
-                  still short {fmtHours(shortedHours)}h
+                  {/* Singular and plural about the same set of claims, eleven
+                      words apart, is how this read: "Your earlier claim … is
+                      closed … 71.1h already recovered across 2 closed claims."
+                      Same count drives both halves of the sentence. */}
+                  {closedRounds === 1
+                    ? `Your earlier claim for ${periodLabel} is`
+                    : `Your earlier claims for ${periodLabel} are`}{" "}
+                  closed and you&apos;re still short {fmtHours(shortedHours)}h
                   {recoveredHere > 0 && (
                     <>
                       {" "}
@@ -466,9 +476,9 @@ export function DisputeOutcomeCard({
                           claim" read as the one claim shown below it, which
                           reports a single round — 71.1h beside a card saying
                           19.7h looked like an arithmetic bug and wasn't. */}
-                      {recoveredRounds === 1
+                      {closedRounds === 1
                         ? "on that closed claim"
-                        : `across ${recoveredRounds} closed claims`}
+                        : `across ${closedRounds} closed claims`}
                     </>
                   )}
                   . You can raise a second-round claim for what&apos;s left.

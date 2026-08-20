@@ -36,9 +36,26 @@ const calls: string[] = [];
 /** What the next save answers with. `null` = success. */
 let nextError: string | null = null;
 
+/** Result of one save, once someone decides it. */
+type SaveResult = { error?: string };
+
+// DEFERRED MODE. Two of the defects below are about ORDERING — an older save
+// landing after a newer one — and that is unreachable while every call resolves
+// immediately in the order it was made. With `deferMode` on, each call parks its
+// resolver here and the test decides who finishes, and in what order.
+let deferMode = false;
+const pending: ((r: SaveResult) => void)[] = [];
+/** Finish the Nth save (0-based, in call order) with `result`. */
+function settle(nth: number, result: SaveResult) {
+  const resolve = pending[nth];
+  if (!resolve) throw new Error(`no pending save #${nth}`);
+  resolve(result);
+}
+
 const setPaidPeriodHoursAction = vi.fn(
-  async (periodKey: string, hours: number) => {
+  async (periodKey: string, hours: number): Promise<SaveResult> => {
     calls.push(`upsert:${periodKey}:${hours}`);
+    if (deferMode) return new Promise<SaveResult>((r) => pending.push(r));
     return nextError === null ? {} : { error: nextError };
   },
 );
@@ -190,7 +207,12 @@ describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly onc
   beforeEach(() => {
     calls.length = 0;
     nextError = null;
-    onSaved.mockClear();
+    deferMode = false;
+    pending.length = 0;
+    // mockReset, not mockClear: one test below installs a THROWING
+    // implementation, and a leaked `mockImplementationOnce` would blow up an
+    // unrelated test instead of failing this one.
+    onSaved.mockReset();
     setPaidPeriodHoursAction.mockClear();
   });
 
@@ -222,13 +244,37 @@ describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly onc
   const edit = (value: string) =>
     fireEvent.change(field(), { target: { value } });
 
+  const errorLine = () => document.querySelector(".period-hero-error");
+
+  // WHY THESE TWO HELPERS DO NOT USE fireEvent.submit().
+  //
+  // `fireEvent.submit(form)` dispatches a submit event directly, which SKIPS
+  // HTML constraint validation entirely. Every submit-path test in this suite
+  // used to do that, and the consequence was that they passed identically
+  // against a component whose button path was completely dead: the input was
+  // `step={0.1}`, so any 2-decimal figure — 74.25, the shape half of a real
+  // paystub takes — was `stepMismatch: true`, and a real browser refused to
+  // submit the form at all. Eleven green tests, zero writes in production.
+  //
+  // `button.click()` and `form.requestSubmit()` are the two things a browser
+  // actually does, and both run constraint validation first. jsdom implements
+  // that faithfully: with step={0.1} neither one fires a submit event for
+  // 74.25, it fires `invalid` instead.
+
   /** What a browser does when you click a button while the field has focus:
    *  blur the field (relatedTarget set — or null in Safari and Firefox/macOS),
    *  then deliver the click, whose default action submits the form. */
   async function clickCheck(relatedTarget: HTMLElement | null) {
     await act(async () => {
       fireEvent.blur(field(), { relatedTarget });
-      fireEvent.submit(form());
+      checkBtn().click();
+    });
+  }
+
+  /** Enter in a text field: implicit submission, with no blur before it. */
+  async function pressEnter() {
+    await act(async () => {
+      form().requestSubmit();
     });
   }
 
@@ -281,9 +327,7 @@ describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly onc
   it("Enter — a submit with no blur at all — still writes once", async () => {
     setup();
     edit("74.2");
-    await act(async () => {
-      fireEvent.submit(form());
-    });
+    await pressEnter();
 
     expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
     expect(onSaved).toHaveBeenCalledTimes(1);
@@ -349,8 +393,12 @@ describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly onc
   // selector.
   it("control: pressing 'Check my pay' on an empty field DOES ask for the figure", async () => {
     setup();
+    // An empty field is `valid` (nothing is `required`), so this really does
+    // reach the submit handler — the assertion below is proving suppression,
+    // not proving that constraint validation ate the event.
+    expect(field().validity.valid).toBe(true);
     await act(async () => {
-      fireEvent.submit(form());
+      checkBtn().click();
     });
 
     expect(calls).toEqual([]);
@@ -370,10 +418,286 @@ describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly onc
 
     nextError = null;
     await act(async () => {
-      fireEvent.submit(form());
+      checkBtn().click();
     });
 
     expect(calls).toEqual([`upsert:${PERIOD}:999`, `upsert:${PERIOD}:999`]);
     expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  // --- DEFECT 4: a real paystub figure has two decimals --------------------
+  // `step={0.1}` made 74.25 `stepMismatch: true`, and a browser will not submit
+  // an invalid form: the button and Enter were dead for exactly the figures
+  // flat-rate stubs are full of (74.25, 8.75). Blur has no validation gate, so
+  // once blur-save shipped the two routes DISAGREED — click away and it saved,
+  // press the primary button and nothing happened.
+  //
+  // The ceiling stays where the DB put it: paid_period_hours.paid_flag_hours is
+  // numeric(6,2), and `paidPeriodSchema` already enforces 0 … 9999.99 with a
+  // sentence the tech can read. `step="any"` widens the input to exactly the
+  // precision that column stores. No `max` attribute is added on purpose — the
+  // server owns that message, and a browser tooltip on one route plus a server
+  // sentence on the other would rebuild the same split this test closes.
+  describe("a 2-decimal figure — the shape half of a real paystub takes", () => {
+    it("is accepted by the input's own constraint validation", () => {
+      setup();
+      edit("74.25");
+      expect(field().validity.stepMismatch).toBe(false);
+      expect(field().validity.valid).toBe(true);
+    });
+
+    // The click ALONE, with no blur in front of it. Driving this through
+    // `clickCheck` would prove nothing: the blur saves first and the assertion
+    // passes on a component whose button is still refusing to submit.
+    it("saves from the 'Check my pay' button", async () => {
+      setup();
+      edit("74.25");
+      await act(async () => {
+        checkBtn().click();
+      });
+
+      expect(calls).toEqual([`upsert:${PERIOD}:74.25`]);
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it("the ordinary blur-then-click still writes it exactly once", async () => {
+      setup();
+      edit("74.25");
+      await clickCheck(checkBtn());
+
+      expect(calls).toEqual([`upsert:${PERIOD}:74.25`]);
+      expect(setPaidPeriodHoursAction).toHaveBeenCalledTimes(1);
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves from Enter", async () => {
+      setup();
+      edit("74.25");
+      await pressEnter();
+
+      expect(calls).toEqual([`upsert:${PERIOD}:74.25`]);
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves on blur", async () => {
+      setup();
+      edit("74.25");
+      await act(async () => {
+        fireEvent.blur(field());
+      });
+
+      expect(calls).toEqual([`upsert:${PERIOD}:74.25`]);
+    });
+
+    // The full-precision case the column can hold: 8.75 is the other shape a
+    // stub takes, and it must not need a different route than 74.25.
+    it("saves a small 2-decimal figure the same way", async () => {
+      setup();
+      edit("8.75");
+      await clickCheck(checkBtn());
+
+      expect(calls).toEqual([`upsert:${PERIOD}:8.75`]);
+    });
+  });
+
+  // --- DEFECT 1: an explicit press is never a no-op ------------------------
+  // The value-dedupe that stops blur+click double-writing also caught the
+  // SECOND deliberate press of the primary button and returned in total
+  // silence: no write, no onSaved, no error, button still enabled. During the
+  // router.refresh() window — which is the entire lifetime of this hero after
+  // a save — the tech's call to action did nothing at all.
+  it("pressing 'Check my pay' after a blur-save advances the UI instead of doing nothing", async () => {
+    setup();
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      checkBtn().click();
+    });
+
+    // The redundant WRITE is still skipped — that is the part worth keeping.
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    // But the press is answered.
+    expect(onSaved).toHaveBeenCalledTimes(2);
+    expect(errorLine()).toBeNull();
+  });
+
+  it("...and it answers every press, without ever writing again", async () => {
+    setup();
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    await act(async () => {
+      checkBtn().click();
+    });
+    await act(async () => {
+      checkBtn().click();
+    });
+
+    // One press, one refresh — bounded by the tech's finger, never self-driven.
+    expect(onSaved).toHaveBeenCalledTimes(3);
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+  });
+
+  // THE GUARD ON THAT FIX. "Already claimed" and "already written" are not the
+  // same state. Answering an explicit press during the in-flight window would
+  // advance the UI for a write that has not landed and may yet fail — and on
+  // the ordinary click path the blur claims the value one line before the
+  // submit sees it, so keying on the claim alone would fire onSaved twice on
+  // every single click.
+  it("an explicit press while the write is still in the air does not advance the UI early", async () => {
+    deferMode = true;
+    setup();
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    await pressEnter();
+
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    expect(onSaved).not.toHaveBeenCalled();
+
+    await act(async () => {
+      settle(0, {});
+    });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed write leaves the button able to retry it", async () => {
+    setup();
+    nextError = "Paid hours can't be more than 9999.99.";
+    edit("74.25");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    expect(onSaved).not.toHaveBeenCalled();
+
+    // The un-claim on failure is what makes this a real retry and not an
+    // onSaved()-only no-op: the same figure must be WRITTEN again.
+    nextError = null;
+    await act(async () => {
+      checkBtn().click();
+    });
+    expect(calls).toEqual([`upsert:${PERIOD}:74.25`, `upsert:${PERIOD}:74.25`]);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  // --- DEFECT 2: a failed refresh is not a failed save ---------------------
+  // onSaved() — router.refresh() — sat INSIDE the try. A throwing refresh
+  // un-claimed the value and printed "Failed to save" for a row that is sitting
+  // in the database, and the next blur then wrote a duplicate.
+  it("a refresh that throws is not reported as a failed save", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    try {
+      onSaved.mockImplementation(() => {
+        throw new Error("refresh blew up");
+      });
+      setup();
+      edit("74.2");
+      await act(async () => {
+        fireEvent.blur(field());
+      });
+
+      expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+      // The write SUCCEEDED. Saying otherwise sends the tech to re-enter a
+      // figure that is already recorded.
+      expect(errorLine()).toBeNull();
+      expect(screen.queryByText(/refresh blew up/)).toBeNull();
+      expect(screen.queryByText(/Failed to save/)).toBeNull();
+
+      // And it is still claimed, so clicking away again does not duplicate it.
+      onSaved.mockImplementation(() => {});
+      await act(async () => {
+        fireEvent.blur(field());
+      });
+      expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  // --- DEFECT 3: a stale failure must not un-claim a newer value -----------
+  // `previous` is captured per call, so an OLDER save that fails LATER restored
+  // savedRef to ITS previous value — wiping the claim a newer, successful save
+  // had made. Reachable because the input is never disabled during a save;
+  // only the button is.
+  it("an older save failing after a newer one succeeded does not un-claim the newer value", async () => {
+    deferMode = true;
+    setup();
+
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    edit("80");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`, `upsert:${PERIOD}:80`]);
+
+    // The NEWER figure lands first, and lands cleanly.
+    await act(async () => {
+      settle(1, {});
+    });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+
+    // Then the older one fails. It describes a figure nobody is looking at any
+    // more, so it owns neither the claim nor the error line.
+    await act(async () => {
+      settle(0, { error: "stale failure" });
+    });
+    expect(screen.queryByText("stale failure")).toBeNull();
+    expect(errorLine()).toBeNull();
+
+    // The real proof: 80 is still claimed, so clicking away does not rewrite it.
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    expect(calls).toEqual([`upsert:${PERIOD}:74.2`, `upsert:${PERIOD}:80`]);
+  });
+
+  // The control for the test above: the SAME stale-ordering machinery, with the
+  // newer save FAILING, must still surface its error and still let the retry
+  // through. Without this, "no error appeared" above could be a component that
+  // simply stopped reporting failures.
+  it("control: when the NEWEST save is the one that fails, it says so and can be retried", async () => {
+    deferMode = true;
+    setup();
+
+    edit("74.2");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    edit("80");
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+
+    await act(async () => {
+      settle(0, {});
+    });
+    await act(async () => {
+      settle(1, { error: "newest failure" });
+    });
+
+    expect(screen.getByText("newest failure")).toBeTruthy();
+
+    deferMode = false;
+    nextError = null;
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+    expect(calls).toEqual([
+      `upsert:${PERIOD}:74.2`,
+      `upsert:${PERIOD}:80`,
+      `upsert:${PERIOD}:80`,
+    ]);
   });
 });

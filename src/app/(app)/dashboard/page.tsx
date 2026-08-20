@@ -327,7 +327,7 @@ export default async function DashboardPage() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="pace-values">
                   <span className="pace-now">
-                    <RollingNumber value={statsPeriod.flagHours} decimals={1} /><span className="pace-unit"> flag hrs</span>
+                    <RollingNumber value={fmtHours(statsPeriod.flagHours)} /><span className="pace-unit"> flag hrs</span>
                   </span>
                   <span className="pace-goal">Goal {goalHours}</span>
                 </div>
