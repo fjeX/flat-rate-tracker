@@ -1,6 +1,7 @@
 // Shared Supabase client type for data-layer functions.
 // Works with both the server client (createServerClient) and the browser
 // client (createBrowserClient) because both expose the same typed query API.
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -85,6 +86,81 @@ export function isJwtFutureError(err: unknown): boolean {
 // failing. Pay the half second.
 export const JWT_FUTURE_RETRY_MS = 1250;
 
+// ===========================================================================
+// The retry attempt marker, and why it exists at all.
+//
+// DO NOT DELETE THIS HEADER. Without it `retryOnce` below is INERT inside a
+// Server Component render — it re-issues the request and Next hands it back
+// the cached failure without ever going near PostgREST. Measured, not
+// theorised: 1 upstream request, PGRST303 rethrown 1258ms later.
+//
+// Why: Next replaces `globalThis.fetch` with `createDedupeFetch`
+// (next/dist/server/lib/dedupe-fetch.js), a React.cache-backed memo that lives
+// for one render. Its key is
+//
+//     [method, [...headers], mode, redirect, credentials, referrer,
+//      referrerPolicy, integrity]
+//
+// and it only dedupes GET/HEAD — i.e. exactly the reads this wrapper covers.
+// `retryOnce` re-invokes its thunk, which rebuilds a byte-identical GET on the
+// same client with the same Authorization header, so attempt 2 hashes to the
+// same key as attempt 1 and is served attempt 1's 401 out of the render-scoped
+// cache. Nothing about waiting 1250ms helps, because the token is never
+// re-presented to PostgREST.
+//
+// Things that were tried and do NOT work (each measured at 1 upstream hit):
+//   - building attempt 2 on a freshly constructed Supabase client
+//   - `cache: "no-store"` — the dedupe memo sits UPSTREAM of the fetch cache
+//
+// What works is making attempt 2 a different request. One extra header is
+// enough to change the key, and it is the same trick postgrest-js already
+// plays on its own internal retries (`X-Retry-Count`, PostgrestBuilder.ts).
+// PostgREST ignores request headers it doesn't know (they land in the
+// `request.headers` GUC and nothing reads this one), Kong forwards them, and
+// no RLS policy or auth path sees it — it is a cache-key perturbation and
+// nothing else.
+//
+// The seam is a per-request marker rather than a per-query one because
+// `retryOnce` is handed an already-built thunk: by the time it can act, the
+// PostgREST builder is sealed inside the callback. Scoping the attempt number
+// in an AsyncLocalStorage and stamping it on in the client's own fetch keeps
+// all 25 call sites untouched — and, more importantly, keeps the 26th from
+// having to remember anything.
+// ===========================================================================
+
+/** Header stamped on retry attempts. Lowercase — Headers keys are anyway. */
+export const RETRY_ATTEMPT_HEADER = "x-frt-retry-attempt";
+
+const retryAttempt = new AsyncLocalStorage<number>();
+
+// Give this to the server Supabase client as `global.fetch`. It is a pass-
+// through for every normal request; inside a `retryOnce` second attempt it
+// adds RETRY_ATTEMPT_HEADER so the request no longer collides with the failed
+// first attempt in Next's per-render dedupe cache.
+//
+// `globalThis.fetch` is read at call time on purpose: Next patches it, and
+// capturing it at module load would pin the unpatched one and quietly opt the
+// whole app out of Next's fetch instrumentation.
+//
+// Deliberately NOT wired into the browser client (lib/supabase/client.ts).
+// There is no per-render dedupe in the browser, so retryOnce already works
+// there — and api.slimelab.cc is cross-origin from tracker.slimelab.cc, so a
+// custom request header would force a CORS preflight Kong is not configured to
+// answer. Server-to-server only.
+export const retryAwareFetch: typeof fetch = (input, init) => {
+  const attempt = retryAttempt.getStore();
+  if (attempt === undefined) return globalThis.fetch(input, init);
+
+  // Start from whatever headers the caller supplied. supabase-js always calls
+  // fetch(url, { headers }), but a Request object carries its own, and reading
+  // init.headers alone there would drop Authorization.
+  const supplied =
+    init?.headers ?? (input instanceof Request ? input.headers : undefined);
+  const headers = new Headers(supplied);
+  headers.set(RETRY_ATTEMPT_HEADER, String(attempt));
+  return globalThis.fetch(input, { ...init, headers });
+};
+
 // Run a READ once, and if — and only if — it fails with PGRST303, wait and run
 // it exactly once more.
 //
@@ -93,7 +169,9 @@ export const JWT_FUTURE_RETRY_MS = 1250;
 // to know whether a rejected request reached the database, so a retry there
 // risks a double insert. That is why this is applied by hand at named read
 // functions rather than bolted into a shared query helper: a chokepoint would
-// silently cover the writes too.
+// silently cover the writes too. (The fetch seam above is not that chokepoint:
+// it never retries anything, it only labels an attempt this function already
+// decided to make.)
 //
 // `fn` is re-invoked, not a pre-built query re-awaited, so callers must build
 // their query inside the callback — a spent PostgREST builder is not a
@@ -118,6 +196,13 @@ export async function retryOnce<T>(
     // race — the token is over a second old by now — so it means something
     // genuinely wrong, and it rethrows to the error boundary. A loop here
     // would hold a server render open indefinitely on every request instead.
-    return await fn();
+    //
+    // The `.run()` is what makes this attempt reach PostgREST at all — see the
+    // header above. `+ 1` off any enclosing marker rather than a hard-coded 1
+    // so a nested retry can never re-issue its parent's exact request; at the
+    // top level that is always "1", which keeps genuinely identical concurrent
+    // retries collapsing into one upstream request the way attempt 1 does.
+    const depth = (retryAttempt.getStore() ?? 0) + 1;
+    return await retryAttempt.run(depth, fn);
   }
 }

@@ -149,7 +149,18 @@ function AwaitingPayHero({
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
 
-  // The figure this hero has already written, or has in the air right now.
+  // TWO REFS, TWO DIFFERENT QUESTIONS. Getting them confused is what left the
+  // primary call to action dead on screen (2026-08-20), so each one states the
+  // exact question it answers and nothing else touches it:
+  //
+  //   savedRef   — "what has the LATEST ISSUED call claimed?"  (issue order)
+  //   writtenRef — "what does the DATABASE now hold?"          (arrival order)
+  //
+  // They are allowed to disagree, and the disagreement is the useful signal: a
+  // claim with nothing landed under it is a figure still owed a write.
+
+  // THE CLAIM. The figure the newest call has taken responsibility for — set
+  // SYNCHRONOUSLY, before the write is issued.
   // A mode is only `awaiting_pay` while paid_period_hours has NO row for the
   // period (see lib/period-mode), so this starts null by construction — there
   // is no initial value to seed it with.
@@ -163,13 +174,34 @@ function AwaitingPayHero({
   // in every browser and every input modality.
   const savedRef = useRef<number | null>(null);
 
-  // What has actually LANDED. `savedRef` is a claim — it goes up before the
-  // write is issued, precisely so the blur and the click that follows it can't
-  // both write. That makes it the wrong thing to ask "is this figure recorded?",
-  // because on the ordinary click path the answer is already "yes" a line before
-  // the write leaves the browser. Keeping the two apart is what lets an explicit
-  // press be answered without ever answering it early.
+  // WHAT LANDED. The value of the last write that came back SUCCESSFUL, in the
+  // order the answers ARRIVED — recorded unconditionally, even when a newer
+  // figure has been claimed since it left. That is the whole correction: this
+  // ref describes the database, and the database does not care which call was
+  // issued first. Suppressing it for a "stale" success threw away the one fact
+  // the hero needs — 74.2 IS recorded — and the explicit press then had nothing
+  // to answer with.
+  //
+  // `savedRef` is the wrong thing to ask "is this figure recorded?", because on
+  // the ordinary click path the answer is already "yes" a line before the write
+  // leaves the browser. Keeping the two apart is what lets an explicit press be
+  // answered without ever answering it early.
   const writtenRef = useRef<number | null>(null);
+
+  // WHICH CALL OWNS THE SHARED UI. Bumped once per issued write, so a callback
+  // can ask "am I still the newest?" without inspecting savedRef — which the
+  // failure path MUTATES, and which therefore cannot also be the thing that
+  // identifies who is allowed to mutate it. The error line and onSaved() belong
+  // to the latest ISSUED call and to nothing else.
+  const seqRef = useRef(0);
+
+  // How many writes are in the air. An explicit press is never answered with
+  // silence, but "the answer is already on its way" is a real answer — the
+  // button is disabled and reads "Checking…" for exactly this window. Without
+  // this counter, re-issuing a claimed-but-unlanded figure would double-write on
+  // every ordinary click, since the blur claims the value one line before the
+  // submit sees it.
+  const inFlightRef = useRef(0);
 
   const parsed = parseHours(text);
 
@@ -186,20 +218,42 @@ function AwaitingPayHero({
     // this can never be the `null === null` comparison that swallowed the first
     // figure a tech typed into DiscrepancyCard. Ordering is the guard.
     if (parsed === savedRef.current) {
-      // The figure is already claimed, so it must not be WRITTEN again. But an
-      // explicit press — the button, or Enter — can never be a silent no-op:
-      // this hero lives entirely inside the window between the save and the
-      // refresh that replaces it, so "already saved" is the state the primary
-      // call to action is pressed in most often, and returning here left it
-      // dead on screen with no write, no message and no disabled state.
-      //
-      // Answered only once the write has LANDED. During the in-flight window
-      // the button is disabled and reads "Checking…", which is the honest
-      // answer, and firing onSaved() there would advance the page for a write
-      // that may still fail — and would fire twice on every ordinary click,
-      // since the blur claims the value one line before the submit sees it.
-      if (explicit && writtenRef.current === parsed) onSaved();
-      return;
+      // The error line, if one is up, was raised for a figure the tech has
+      // since typed past — it belonged to the rejected value, not to this one.
+      // This assignment used to sit BELOW this return, so correcting a rejected
+      // figure back to the one already in the database left the rejection on
+      // screen describing nothing.
+      setError(null);
+
+      // Clicking away is allowed to be a no-op. An explicit press is not: this
+      // hero lives entirely inside the window between the save and the refresh
+      // that replaces it, so "already claimed" is the state the primary call to
+      // action is pressed in most often, and returning here left it dead on
+      // screen with no write, no message and no disabled state.
+      if (!explicit) return;
+
+      // ALREADY IN THE DATABASE → answer the press with the refresh it asked
+      // for. Note this asks `writtenRef`, never `savedRef`: on the ordinary
+      // click path the value is claimed one line before the write leaves the
+      // browser, and answering the claim would fire onSaved() twice on every
+      // single click (mutation-proven).
+      if (writtenRef.current === parsed) {
+        onSaved();
+        return;
+      }
+
+      // CLAIMED, NOT LANDED, AND STILL IN THE AIR → the answer is already on
+      // its way. The button is disabled and reads "Checking…" for exactly this
+      // window; firing onSaved() here would advance the page for a write that
+      // may still fail.
+      if (inFlightRef.current > 0) return;
+
+      // CLAIMED, NOT LANDED, NOTHING IN FLIGHT. The claim is a promise nothing
+      // kept — an older call arrived last and the database holds a different
+      // figure (D5), or the call that claimed this value failed while a newer
+      // one owned the error line. Falling through re-issues the write, so an
+      // explicit press has exactly three possible answers — written, refreshed,
+      // or "Checking…" — and silence is not one of them.
     }
     const value = parsed;
     const previous = savedRef.current;
@@ -208,52 +262,78 @@ function AwaitingPayHero({
     // assignment is what makes that second call a no-op. State would be too
     // late — both handlers run against the same render.
     savedRef.current = value;
+    const seq = ++seqRef.current;
+    inFlightRef.current += 1;
     setError(null);
     startSaving(async () => {
-      let res: { error?: string };
       try {
-        // Validation answers with { error } — a thrown one would be redacted in
-        // production. Only DB failures reach the catch.
-        res = await setPaidPeriodHoursAction(periodKey, value);
-      } catch (e) {
-        fail(e instanceof Error ? e.message : "Failed to save.");
-        return;
-      }
-      if (res.error) {
-        fail(res.error);
-        return;
-      }
+        let res: { error?: string };
+        try {
+          // Validation answers with { error } — a thrown one would be redacted
+          // in production. Only DB failures reach the catch.
+          res = await setPaidPeriodHoursAction(periodKey, value);
+        } catch (e) {
+          fail(e instanceof Error ? e.message : "Failed to save.");
+          return;
+        }
+        if (res.error) {
+          fail(res.error);
+          return;
+        }
 
-      // STALE SUCCESS. A newer figure has been claimed since this call left, so
-      // this one no longer describes what is on screen. The newer save owns
-      // both `writtenRef` and the refresh.
-      if (savedRef.current !== value) return;
-      writtenRef.current = value;
+        // IT LANDED. Recorded unconditionally, before any staleness question is
+        // asked, because this ref describes the DATABASE and the database took
+        // this row whether or not a newer figure has been claimed since. The
+        // old code returned here when a newer call had been issued, and that
+        // discarded the only proof that 74.2 was recorded — after which the
+        // newer call's failure restored the claim to 74.2 and the explicit
+        // press found a claim with nothing under it, forever.
+        writtenRef.current = value;
 
-      // onSaved() IS OUTSIDE THE TRY, and that is the whole point of the shape
-      // above. It is router.refresh() — a repaint of the page, not part of the
-      // write. Inside the try, a refresh that threw un-claimed a value that is
-      // sitting in the database and printed "Failed to save" over it, which
-      // sends the tech to re-enter a figure that is already recorded and lets
-      // the next blur write a duplicate. A failed refresh is a stale screen,
-      // and the claim above is what keeps it from also becoming a second row.
-      try {
-        onSaved();
-      } catch (e) {
-        console.error("[PeriodHero] paid hours saved, refresh failed:", e);
+        // The REFRESH, though, belongs to the newest issued call only. Advancing
+        // the page from an older call repaints it as settled on a figure the
+        // tech has already typed past — and does it while the newer figure's
+        // rejection is on screen, so the page and the error line contradict
+        // each other out loud.
+        if (seq !== seqRef.current) return;
+
+        // onSaved() IS OUTSIDE THE INNER TRY, and that is the whole point of the
+        // shape above. It is router.refresh() — a repaint of the page, not part
+        // of the write. Inside the try, a refresh that threw un-claimed a value
+        // that is sitting in the database and printed "Failed to save" over it,
+        // which sends the tech to re-enter a figure that is already recorded and
+        // lets the next blur write a duplicate. A failed refresh is a stale
+        // screen, and the claim above is what keeps it from also becoming a
+        // second row.
+        try {
+          onSaved();
+        } catch (e) {
+          console.error("[PeriodHero] paid hours saved, refresh failed:", e);
+        }
+      } finally {
+        // Every exit from this callback passes through here — including the two
+        // `fail()` returns. An undercounted decrement would leave the hero
+        // believing a write is forever in the air, which is the one state that
+        // makes the press-with-nothing-landed branch above go silent again.
+        inFlightRef.current -= 1;
       }
 
       function fail(message: string) {
-        // Only un-claim what this call actually claimed. `previous` is captured
-        // per call, so an OLDER save failing LATE used to restore ITS previous
-        // value straight over a newer successful claim — and the next blur then
-        // rewrote the newer figure. Reachable because the input is never
-        // disabled during a save, only the button is.
+        // Only the newest ISSUED call owns the claim and the error line.
+        // `previous` is captured per call, so an OLDER save failing LATE used to
+        // restore ITS previous value straight over a newer successful claim —
+        // and the next blur then rewrote the newer figure. Reachable because the
+        // input is never disabled during a save, only the button is.
+        //
+        // Keyed on the sequence number rather than on `savedRef`, because
+        // `savedRef` is the thing this function MUTATES: after a stale success
+        // restored it, an older call could match it again and un-claim a figure
+        // it had no business touching.
         //
         // The same check silences the message: a figure the tech has already
         // typed past is not something to interrupt him about, and the newer
         // save reports its own outcome.
-        if (savedRef.current !== value) return;
+        if (seq !== seqRef.current) return;
         savedRef.current = previous;
         setError(message);
       }
@@ -287,7 +367,6 @@ function AwaitingPayHero({
             id="hero-paid-hours"
             className="input mono"
             type="number"
-            min={0}
             // `step="any"`, NOT 0.1. A flag-hours total off a real stub is
             // routinely two decimals — 74.25, 8.75 — and step={0.1} made every
             // one of those `stepMismatch: true`, so the browser refused to
@@ -295,14 +374,25 @@ function AwaitingPayHero({
             // figures this field exists to take. Blur has no constraint gate,
             // which is how the two routes came to disagree about 74.25.
             //
-            // Widened to the precision the COLUMN holds and no further:
-            // paid_period_hours.paid_flag_hours is numeric(6,2), and
-            // `paidPeriodSchema` already bounds it at 0 … MAX_NUMERIC_6_2 with
-            // a sentence the tech can read. `min={0}` stays because it is the
-            // same floor the schema states. No `max` attribute is added on
-            // purpose — the server owns that message, and a native tooltip on
-            // the button path plus a server sentence on the blur path would
-            // rebuild the same split this replaced.
+            // NO NATIVE BOUNDS AT ALL — no `step`, no `min`, no `max` — and that
+            // is one decision, not three. Constraint validation runs on the
+            // button and on Enter and does NOT run on blur, so every native rule
+            // added here is a rule that stops one route and lets the other one
+            // through in silence. `min={0}` was exactly that: "-5" is
+            // `rangeUnderflow`, so the button answered with a browser tooltip
+            // while clicking away answered with nothing at all. Now both routes
+            // reach the same code — parseHours() rejects it, and an explicit
+            // press says so in the app's own sentence.
+            //
+            // The real bounds live where the data does: paid_flag_hours is
+            // numeric(6,2) and `paidPeriodSchema` enforces 0 … MAX_NUMERIC_6_2
+            // with a sentence the tech can read, on whichever route he took.
+            //
+            // What `step="any"` does NOT do is police precision. 74.256 is a
+            // valid entry here and Postgres rounds it to 74.26 on the way in —
+            // the input is wider than the column, not equal to it. Narrowing it
+            // to `step="0.01"` would trade a rounded figure for a dead button on
+            // the blur path, which is the split above all over again.
             step="any"
             inputMode="decimal"
             value={text}

@@ -700,4 +700,314 @@ describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly onc
       `upsert:${PERIOD}:80`,
     ]);
   });
+
+  // --- DEFECTS 1, 2, 5 and 7: the CTA that answers nothing -----------------
+  //
+  // One bug seen from four sides. `writtenRef` was recorded only when the call
+  // that landed was still the newest one ISSUED, so a success that arrived
+  // "late" was discarded — including the one fact it carried, that its row is
+  // in the database. The failure that followed then restored the claim to
+  // exactly that value, and the component was left holding a claim with
+  // nothing under it: `savedRef` said 74.2, `writtenRef` said nothing had ever
+  // been written, and both of the button's outcomes were gated behind one of
+  // them.
+  //
+  // Observed, three presses in a row, from the tech's own console:
+  //   {"calls":["74.2","742000"],"saved":0,
+  //    "error":"Paid hours can't be more than 9999.99.","btnDisabled":false}
+  // No write, no refresh, no change of message, button enabled — parked under
+  // an error describing a figure that is not in the field, with the correct
+  // number already in the database. The only escape was typing a DIFFERENT
+  // number, which is the one thing a tech reading "can't be more than 9999.99"
+  // will not do.
+  //
+  // WHY THESE ARE ORDERING TESTS AND NOT VALUE TESTS: nothing here computes a
+  // wrong figure. Every one of these states is reachable only because the
+  // INPUT is never disabled during a save — only the button is — so the tech
+  // can put a second write in the air before the first one answers. Remove
+  // `deferMode` and every case below becomes unreachable and green for free.
+  describe("an explicit press is answered, whatever order the saves came back in", () => {
+    const TOO_BIG = "Paid hours can't be more than 9999.99.";
+
+    async function blurField() {
+      await act(async () => {
+        fireEvent.blur(field());
+      });
+    }
+
+    /** The submit button located STRUCTURALLY, not by its label. While a write
+     *  is in the air the button reads "Checking…", so the name-based locator
+     *  cannot find the very element whose disabled state is under test — and a
+     *  locator that throws is not evidence that the button was disabled. */
+    const submitBtn = () =>
+      form().querySelector("button[type=submit]") as HTMLButtonElement;
+
+    it("D1: after a stale success and a newer rejection, the button still answers", async () => {
+      deferMode = true;
+      setup();
+
+      edit("74.2");
+      await blurField();
+      // The input is live during the flight, so a second figure goes in the air
+      // behind the first — a fat-fingered one, which is how the tech got here.
+      edit("742000");
+      await blurField();
+      expect(calls).toEqual([
+        `upsert:${PERIOD}:74.2`,
+        `upsert:${PERIOD}:742000`,
+      ]);
+
+      // 74.2 LANDS. It is in the database from this line onward, and no
+      // question about which call was issued first changes that.
+      await act(async () => {
+        settle(0, {});
+      });
+      // Then the newer one is rejected and un-claims itself back to 74.2.
+      await act(async () => {
+        settle(1, { error: TOO_BIG });
+      });
+      expect(screen.getByText(TOO_BIG)).toBeTruthy();
+
+      // The tech reads the error, retypes the figure he meant, and presses the
+      // primary button.
+      deferMode = false;
+      nextError = null;
+      edit("74.2");
+      await act(async () => {
+        checkBtn().click();
+      });
+
+      // ANSWERED. The figure asked for is the figure the database holds, so the
+      // press gets the refresh it was pressed for.
+      expect(onSaved).toHaveBeenCalledTimes(1);
+      // And the rejection it advanced out from under is gone, rather than
+      // sitting over a field that no longer contains the rejected number.
+      expect(errorLine()).toBeNull();
+      // The redundant WRITE is still skipped — that part was never wrong.
+      expect(calls).toEqual([
+        `upsert:${PERIOD}:74.2`,
+        `upsert:${PERIOD}:742000`,
+      ]);
+      expect(checkBtn().disabled).toBe(false);
+    });
+
+    it("D2: the page does not advance while the newest figure's rejection is on screen", async () => {
+      deferMode = true;
+      setup();
+      edit("74.2");
+      await blurField();
+      edit("742000");
+      await blurField();
+
+      // The NEWER save is rejected first...
+      await act(async () => {
+        settle(1, { error: TOO_BIG });
+      });
+      // ...and the older one succeeds after it.
+      await act(async () => {
+        settle(0, {});
+      });
+
+      // Nothing is lost here — 74.2 really is recorded — but the screen must
+      // not say two things at once. "742000 is too big" is on the line, 742000
+      // is still in the box, and repainting the page as settled on 74.2
+      // underneath that sentence is the UI contradicting itself out loud.
+      expect(screen.getByText(TOO_BIG)).toBeTruthy();
+      expect(field().value).toBe("742000");
+      expect(onSaved).not.toHaveBeenCalled();
+    });
+
+    // Only the newest ISSUED call owns the error line — and "newest" cannot be
+    // read off `savedRef`, because `savedRef` is the thing the failure path
+    // MUTATES. Once a newer failure restores the claim to the older call's
+    // value, an older failure arriving after it matches that claim again and
+    // un-claims a figure it has no business touching, replacing a message about
+    // what IS in the box with a message about what is not.
+    it("an older failure arriving last does not take over the error line", async () => {
+      deferMode = true;
+      setup();
+      edit("74.2");
+      await blurField();
+      edit("742000");
+      await blurField();
+
+      // The newer figure is rejected first: this message describes 742000, and
+      // 742000 is what the tech is looking at.
+      await act(async () => {
+        settle(1, { error: TOO_BIG });
+      });
+      // Then the older call fails too, for its own unrelated reason.
+      await act(async () => {
+        settle(0, { error: "network hiccup" });
+      });
+
+      expect(screen.getByText(TOO_BIG)).toBeTruthy();
+      expect(screen.queryByText("network hiccup")).toBeNull();
+    });
+
+    it("D5: when an older write lands last, the next press re-issues the figure on screen", async () => {
+      deferMode = true;
+      setup();
+      edit("74.2");
+      await blurField();
+      edit("80");
+      await blurField();
+
+      // The newer figure lands first, and the hero answers for it.
+      await act(async () => {
+        settle(1, {});
+      });
+      expect(onSaved).toHaveBeenCalledTimes(1);
+      // Then the OLDER upsert arrives. Last writer wins in Postgres, so the row
+      // now holds 74.2 while the field, the claim and the page all say 80.
+      await act(async () => {
+        settle(0, {});
+      });
+
+      // The tech presses the button on the figure he can actually see.
+      deferMode = false;
+      nextError = null;
+      await act(async () => {
+        checkBtn().click();
+      });
+
+      // It is written again, so the database ends on the figure the UI is
+      // reporting rather than on whichever answer happened to arrive last.
+      expect(calls).toEqual([
+        `upsert:${PERIOD}:74.2`,
+        `upsert:${PERIOD}:80`,
+        `upsert:${PERIOD}:80`,
+      ]);
+      expect(onSaved).toHaveBeenCalledTimes(2);
+    });
+
+    // THE GUARD ON THE RE-ISSUE ABOVE. "Claimed but not landed" is also the
+    // state every ordinary click passes through — the blur claims the value one
+    // line before the submit sees it — so re-issuing on that would double-write
+    // the primary path, which is the regression this component has shipped
+    // twice. The in-flight window is answered by the disabled "Checking…"
+    // button, never by a second write.
+    it("control: a press while the write is still in the air writes nothing and advances nothing", async () => {
+      deferMode = true;
+      setup();
+      edit("74.2");
+      await blurField();
+
+      expect(submitBtn().disabled).toBe(true);
+      expect(submitBtn().textContent).toContain("Checking");
+      await act(async () => {
+        submitBtn().click();
+      });
+      await act(async () => {
+        form().requestSubmit();
+      });
+
+      expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+      expect(onSaved).not.toHaveBeenCalled();
+
+      // And it is answered the moment the write lands — once.
+      await act(async () => {
+        settle(0, {});
+      });
+      expect(onSaved).toHaveBeenCalledTimes(1);
+      expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+    });
+
+    it("D7: retyping the figure already in the database clears the stale rejection", async () => {
+      setup();
+      edit("74.2");
+      await blurField();
+      expect(calls).toEqual([`upsert:${PERIOD}:74.2`]);
+
+      nextError = TOO_BIG;
+      edit("742000");
+      await blurField();
+      expect(screen.getByText(TOO_BIG)).toBeTruthy();
+
+      // Correcting the field back. The sentence on screen now describes a
+      // number that is not in the box and cannot be re-entered from it.
+      nextError = null;
+      edit("74.2");
+      await blurField();
+
+      expect(errorLine()).toBeNull();
+      // Clearing the message is not a licence to write again.
+      expect(calls).toEqual([
+        `upsert:${PERIOD}:74.2`,
+        `upsert:${PERIOD}:742000`,
+      ]);
+    });
+  });
+
+  // --- the `min` split: one figure, two different answers ------------------
+  // `min={0}` was a rule on the BUTTON's route only. Constraint validation runs
+  // on click and on Enter and does not run on blur, so "-5" met a browser
+  // tooltip from the button and vanished in complete silence when the tech
+  // clicked away — the exact split `step="any"` was added to close, rebuilt one
+  // attribute over. parseHours() already rejects negatives, so the floor was
+  // never load-bearing; only the disagreement was.
+  describe("a figure the app cannot use gets the same answer on both routes", () => {
+    it("is not blocked by the input's own constraint validation", () => {
+      setup();
+      edit("-5");
+      expect(field().validity.rangeUnderflow).toBe(false);
+      expect(field().validity.valid).toBe(true);
+    });
+
+    it("the button path answers in the app's own sentence", async () => {
+      setup();
+      edit("-5");
+      await act(async () => {
+        checkBtn().click();
+      });
+
+      expect(calls).toEqual([]);
+      expect(screen.getByText(/Enter the flag hours/)).toBeTruthy();
+    });
+
+    it("the blur path stays quiet — clicking away is not a failed attempt", async () => {
+      setup();
+      edit("-5");
+      await act(async () => {
+        fireEvent.blur(field());
+      });
+
+      expect(calls).toEqual([]);
+      expect(errorLine()).toBeNull();
+    });
+
+    // THE CONTROL. "-5" has to behave identically to text the field could never
+    // have taken; the two answers above are only meaningful next to the same
+    // two answers here.
+    it("control: an unparseable entry takes both routes to those same two answers", async () => {
+      setup();
+      edit("not a number");
+      await act(async () => {
+        fireEvent.blur(field());
+      });
+      expect(calls).toEqual([]);
+      expect(errorLine()).toBeNull();
+
+      await act(async () => {
+        checkBtn().click();
+      });
+      expect(calls).toEqual([]);
+      expect(screen.getByText(/Enter the flag hours/)).toBeTruthy();
+    });
+
+    // The input is deliberately WIDER than the column it feeds: `step="any"`
+    // admits 74.256 and numeric(6,2) rounds it to 74.26 on the way in. Pinned
+    // because the comment on the input says so — narrowing to step="0.01"
+    // would trade a rounded figure for a button that is dead on precisely the
+    // entries blur would have saved.
+    it("accepts more precision than the column holds, and sends it as typed", async () => {
+      setup();
+      edit("74.256");
+      expect(field().validity.valid).toBe(true);
+      await clickCheck(checkBtn());
+
+      expect(calls).toEqual([`upsert:${PERIOD}:74.256`]);
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+  });
 });

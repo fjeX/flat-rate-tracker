@@ -2,7 +2,7 @@
 // unpaid-record-row-rounding, 2026-08-13): a nonzero value never prints as a
 // bare zero, and a document's rows add up to the total printed under them.
 import { describe, expect, it } from "vitest";
-import { fmtHours, fmtHours2 } from "./format";
+import { fmtHours, fmtHours2, fmtHoursGrouped } from "./format";
 
 describe("fmtHours", () => {
   it("renders whole and rounded hours to one decimal", () => {
@@ -80,5 +80,44 @@ describe("fmtHours2", () => {
       .map((h) => Number(fmtHours2(h)))
       .reduce((s, h) => s + h, 0);
     expect(fmtHours2(summedFrom2dp)).toBe(fmtHours2(total));
+  });
+});
+
+describe("fmtHoursGrouped", () => {
+  it("groups thousands, which is the only reason it exists", () => {
+    expect(fmtHoursGrouped(1234.5)).toBe("1,234.5");
+    expect(fmtHoursGrouped(12345.67)).toBe("12,345.7");
+    expect(fmtHoursGrouped(-1234.5)).toBe("-1,234.5");
+  });
+
+  it("leaves anything under four digits exactly as fmtHours renders it", () => {
+    for (const n of [0, 2, 8.05, 41.15, 999.94, -0.06]) {
+      expect(fmtHoursGrouped(n)).toBe(fmtHours(n));
+    }
+  });
+
+  // The divergence this closes. A private `toLocaleString` with
+  // maximumFractionDigits:1 agrees with fmtHours on every rounding case — it
+  // has no floor, so a real 0.04h career total printed "0.0", and -0.02 printed
+  // the even worse "-0.0".
+  it("keeps fmtHours' sub-resolution floor instead of printing a bare zero", () => {
+    expect(fmtHoursGrouped(0.04)).toBe("<0.1");
+    expect(fmtHoursGrouped(0.02)).toBe("<0.1");
+    expect(fmtHoursGrouped(-0.02)).toBe("-<0.1");
+    // …and the string it replaces, pinned so the claim is checkable here.
+    expect((0.04).toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })).toBe("0.0");
+  });
+
+  // Collected into an array rather than asserted per-iteration: 22k expect()
+  // calls take longer than the default test timeout, and one array compare
+  // reports every mismatch instead of only the first.
+  it("agrees with fmtHours on every value in numeric(5,2) range, separators aside", () => {
+    const mismatches: string[] = [];
+    for (let i = -2000; i <= 20000; i++) {
+      const n = i / 100;
+      const grouped = fmtHoursGrouped(n).replace(/,/g, "");
+      if (grouped !== fmtHours(n)) mismatches.push(`${n}: ${grouped} vs ${fmtHours(n)}`);
+    }
+    expect(mismatches).toEqual([]);
   });
 });

@@ -35,7 +35,7 @@ order: go do the next section and come back.
 Work in one continuous turn straight through to writing `bot/reports/$RUN_DATE.md`.
 
 **⏱ You are on a clock, and it is a hard kill.** The runner wraps you in
-`timeout` (75 minutes by default) and there is no grace period — when it fires,
+`timeout` (90 minutes by default) and there is no grace period — when it fires,
 everything you have tested and not yet written down is lost. On 2026-08-13 that
 is exactly what happened: this checklist grew by 35 lines the afternoon before,
 the run hit the 45-minute wall it had been comfortably inside all week, and a
@@ -46,11 +46,20 @@ So budget deliberately:
 - Work the checklist **in order** — it is ordered by value, not by convenience.
 - From the halfway mark on, prefer **finishing the report** over starting another
   section.
-- **Two tiers when you are behind.** Load-bearing — the money paths, must run:
-  §1, §2, §2b, §3, §3z–§5, §6, §7, §7e, §8, §8l. Regression-net — drop these
-  first, recording each as `SKIPPED — time`: §1c, §2a, §2c, §7d, §8b, §8d, §8f
-  and §9's seeded edge case. The regression-net tier watches surfaces that
-  shipped working; dropping one deliberately is cheap, a timeout is not.
+- **Two tiers when you are behind, and every section is in one of them.**
+  Load-bearing — the money paths and the newest code, must run: §1, §1b, §2,
+  §2b, §3, §3z–§5, §6, §7, §7b, §7c, §7e, §8, §8h, §8i, §8k, §8l, plus §10
+  whenever `bot/FOCUS.md` exists (Liem asked for that one by hand).
+  Regression-net — drop these first, recording each as `SKIPPED — time`: §1c,
+  §2a, §2c, §7d, §8b, §8c, §8d, §8e, §8f, §8g, §8j, §9. The regression-net tier
+  watches surfaces that shipped working; dropping one deliberately is cheap, a
+  timeout is not. There is no third pile: if a section is not named above,
+  treat it as load-bearing and say so in the report.
+- **A dropped section is sometimes another section's setup — say so, don't
+  guess.** §2's "today's seeded scenario" IS §9: drop §9 and just log ordinary
+  ROs. §7b needs both a comeback line (§2b, load-bearing) and a ledger row
+  (§2c, droppable) — with §2c dropped, run §7b's comeback-only checks and
+  record the ledger-dependent ones as `SKIPPED — no ledger row`.
 - A section you never reach must be listed in the report as **untested**. That is
   a perfectly good outcome and the reader can act on it. A run killed with no
   report at all is the only true failure.
@@ -125,7 +134,7 @@ sends you there.
   - Realistic RO numbers (5–6 digits), realistic vehicles — fill **year, make,
     AND model** (the vehicle section may be collapsed; expand it), plausible
     op codes and descriptions (you know cars — write like a tech)
-  - Include today's seeded scenario (see rotation below)
+  - Include today's seeded scenario (§9's rotation), unless §9 was dropped for time
 - Duplicate RO numbers (changed 2026-07-15): saving an RO number that already
   exists now shows a "RO #X already exists" dialog on EVERY path — full log
   form, dashboard Quick Add, and the timer's Log RO overlay. It's warn-not-
@@ -152,8 +161,12 @@ sends you there.
     date** (plus the vehicle, which the row also shows): the shop recycles
     5-digit RO numbers, so the number alone does not identify a ticket.
   - **The confirm dialog is your second check — read it before accepting.** It
-    names the row: `Delete RO #91630 — 2019 Ford F-250, 8.5h flagged, August 19,
-    2026? This can't be undone.` Every field must match the RO you meant. A bare
+    names the row on both surfaces that delete a real RO — the RO detail modal
+    and the "Delete RO" button on the edit form — in this shape: `Delete RO
+    #91630 — 2019 Ford F-250, 8.5h flagged, Aug 19, 2026? This can't be
+    undone.` That is an illustration; expect it to name YOUR RO. Every field
+    must match the RO you meant. Note the house style before you call anything
+    a mismatch: the month is **abbreviated** (`Aug`, never `August`). A bare
     "Delete this RO?", or a dialog naming a different RO, date or vehicle, means
     the sentence has stopped describing what you clicked — **cancel and report
     it.** RO deletion is the highest-stakes delete on the site (those hours feed
@@ -171,14 +184,21 @@ vehicle and op codes" with a camera button.
   a tap that does nothing at all is a dead button.
 - The **ⓘ "First-time setup help"** toggle (sits just left of the "Scan RO"
   button) must open and close an info dropdown explaining how scanning works.
-- Upload `docs/design-directions/shots/a-log-light-desktop.png` — a real file in
-  this repo, and deliberately not an RO. You are not grading OCR *accuracy*
-  here; it must simply not crash or silently do nothing. Four outcomes are all
-  acceptable: a success summary, a partial one, "Nothing detected", or **"Scan
-  failed — fill in manually."** A **hang is a finding, not your fault** — the
-  OCR engine is fetched from a CDN the moment you tap, so a blocked fetch sticks
-  on "Scanning…" indefinitely. Give it ~90s, record it, and move on; do not
-  retry it into your budget.
+- Upload
+  `/home/liem9319/docker/flat-rate-tracker/docs/design-directions/shots/a-log-light-desktop.png`
+  — a real file on the VM, and deliberately not an RO. **Give that absolute
+  path**, not a repo-relative one: the picker is driven by the Playwright MCP
+  server, which resolves relative paths against its own working directory
+  rather than yours. You are not grading OCR *accuracy* here; it must simply
+  not crash or silently do nothing. Four outcomes are all acceptable: a success
+  summary, a partial one, "Nothing detected", or **"Scan failed — fill in
+  manually."**
+- **A hang is NOT a finding on its own.** The OCR engine (~11MB of wasm and
+  language data) is fetched from a CDN the moment you tap, and a slow fetch also
+  pushes this run toward its memory cap. If it is still on "Scanning…" at ~90s,
+  record `SKIPPED — OCR engine did not load (CDN)`, leave the form and move on —
+  never retry it into your budget. Report it only once it has done this **three
+  nights running**; check the last two reports before you write it up.
 - If a photo is captured and photo evidence is enabled on this account, a
   green "Photo attached — saved with this RO" chip should appear with a
   working remove (✕) control.
@@ -416,17 +436,23 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
   IS the title; click it for the jump list and the custom-date actions.
 - **Two-column at ≥900px**, single column below. Check both widths.
 
-**Entering paid hours writes a `paid_periods` row on prod — and that write is
-now reversible.** The **"Reset to unpaid"** control in the "Did I get paid?"
+**Entering paid hours writes a `paid_period_hours` row on prod — and that write
+is now reversible.** The **"Reset to unpaid"** control in the "Did I get paid?"
 card deletes the row outright (§8l documents it), so the old rule here — never
 write to a period with nothing saved — is retired. It contradicted §8l, which
 requires exactly that write, and its premise stopped being true when Reset
-shipped. Writing one is safe; leaving one behind is not:
+shipped. Writing one is safe; leaving the wrong number behind is not. **Which
+cleanup you owe depends on what the period held when you got there, and the two
+are never both right:**
 
-- If a period already has a value, record it exactly before you touch it and
-  put that number back before you write the report.
-- Any paid-period figure YOU create must be cleared with **Reset to unpaid**
-  before the run ends, and listed under "Data created tonight" either way.
+- **It had NO figure and you created one** → clear it with **Reset to unpaid**
+  before the run ends.
+- **It already HAD a figure** → write that number down exactly before you touch
+  it, and RE-ENTER it when you are done. **Never press "Reset to unpaid" on one
+  of these**: it deletes a row you did not create, and the figures already on
+  prod are Liem's real stub numbers, which no backup gets back. Reset is only
+  ever for a row you made tonight.
+- Either way, list what you touched under "Data created tonight".
 
 §5's reconciliation rule below is unchanged and stricter, for a different
 reason: those lines have no one-button reset, so each one you touch has to be
@@ -434,19 +460,27 @@ hand-reverted to its recorded prior value.
 
 **The awaiting-pay hero's own save path — nothing else covers it.** It is the
 only route from awaiting-pay into settled, and a fix in this exact path has
-twice killed the primary save, so it earns a nightly look. On a period with
-nothing saved:
+twice killed the primary save, so it earns a nightly look. **It needs a period
+with nothing saved** — the hero only exists while no row does. If every closed
+period already carries a figure, record `SKIPPED — no unsaved period`; do not
+clear a real number to make room.
 
 - Type a figure with **two decimals** (`74.25` — real flat-rate stubs routinely
-  have them) and click blank space. It must save, and the period must flip to
-  Settled. A two-decimal figure being refused, rounded, or silently dropped is a
-  bug — report the exact behaviour, whatever the field's constraints currently
-  look like.
-- Then check the two routes don't collide: with that figure already saved,
-  press **"Check my pay"**. It must neither write a second time (no duplicate
-  row, no changed value) nor sit there doing nothing. Both failures have
-  shipped.
-- Clear it with **Reset to unpaid** when you're done.
+  have them) and press **"Check my pay"** *without* clicking away first. That
+  one gesture fires both routes into the same write — the field's blur, then
+  the submit — and they must collapse into **one**: exactly one row, holding
+  `74.25`, no duplicate, no changed value, no error, and no dead button sitting
+  there doing nothing. Every one of those failures has shipped before. A
+  two-decimal figure being refused, rounded, or silently dropped is a bug —
+  report the exact behaviour, whatever the field's constraints currently look
+  like.
+- The period must then flip to **Settled**, and the input and its "Check my
+  pay" button are **replaced by the settled hero** (paid vs logged). That
+  replacement IS the success condition — it is not a vanishing-button bug, so
+  don't report it and don't hunt for the button to press again. Check what
+  replaced it: the settled hero must read `74.25h` paid.
+- Then clear it with **Reset to unpaid** — this is a figure you created, so the
+  first cleanup rule above applies.
 
 **Info bubbles (ⓘ)** sit beside the collapse chevron on "Did I get paid?",
 "Spiffs & Bonuses" and "What did the work cost me?". Open each one: it must open
@@ -523,12 +557,16 @@ verify the saved hours before continuing to §6.
   position shifts as rows are added and is never a safe handle. Find the spiff
   you mean to delete by its own source, date, and amount.
 - **The confirm dialog is your second check — read it before accepting.** It
-  names the row: `Delete this spiff — "turbo diag spiff", $35.00, August 16,
-  2026? This can't be undone.` All three fields must match the spiff you meant.
-  A bare "Delete this spiff?", or one naming a different source, amount or date,
-  is itself a finding — **cancel and report it.** If you cannot uniquely
-  identify the row you meant, **skip the delete and report it** rather than
-  guess.
+  names the row, in this shape: `Delete this spiff — "example spiff", $25,
+  Aug 3, 2026? This can't be undone.` That sentence is an illustration of the
+  format — the dialog will name the spiff YOU picked, and the one you delete is
+  the one you created tonight. All three fields must match it. Know the house
+  style before you call anything a mismatch: the month is **abbreviated**
+  (`Aug`, never `August`) and money is **whole dollars**, so a $27.50 spiff
+  correctly reads `$28` here. A bare "Delete this spiff?", or one naming a
+  different source, amount or date, is itself a finding — **cancel and report
+  it.** If you cannot uniquely identify the row you meant, **skip the delete
+  and report it** rather than guess.
 
 ### 7. "What did the work cost me?" (CA wage math + unpaid time)
 > **Renamed and merged 2026-07-30.** Was "Pay Check-Up". The old separate
@@ -796,7 +834,8 @@ recovered. Sections appear only when they have something to say.
 - **What's costing you (NEW 2026-08-04)** — the leak leaderboard, and the first
   thing on the page. Ranked rows (1, 2, 3…) of time you were on the clock for
   with no flag hour covering it, longest first, each with a proportional bar.
-  Three kinds: **rework** (an op code that paid nothing), **unpaid_clock**
+  Three kinds: **rework** (work that paid nothing — a comeback op-code line, or
+  a comeback logged in the ledger), **unpaid_clock**
   (ledger time with no op code on it at all — "Waiting on parts", waiting on
   approval, shop time; see §8l) and **overrun** (a job that paid some of its
   time). Both unpaid kinds outrank an overrun at equal hours, and **rework vs

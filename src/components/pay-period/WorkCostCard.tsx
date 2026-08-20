@@ -132,6 +132,63 @@ export function WorkCostCard({
   // the record (memory/feedback_undefined_is_not_absent.md).
   const hoursAreComplete = missingCount === 0 && result.denomSource !== null;
 
+  // hoursAreComplete answers one question: does the denominator COVER the
+  // period. It does not answer the two the caption also asserted — what that
+  // denominator IS, and which days it covers.
+  //
+  // 1. denomSource "scheduled" means EVERY hour in the denominator came from
+  //    the work-schedule fallback: zero clock entries in the period.
+  //    missingClockDays is empty, so hoursAreComplete is true and the figure
+  //    is real — but it is flagged time against a substituted normal shift,
+  //    not against time observed at the shop. The tile immediately to the left
+  //    already refuses to say "At the shop" for exactly this case, and the
+  //    line above it calls the number a substituted shift.
+  //
+  //    The claim is REWORDED, not withheld. A tech who never clocks and flags
+  //    88h against a 40h schedule genuinely is ahead of their shift, and
+  //    wage-check opens by calling missing clock data the norm — dropping to a
+  //    neutral "Difference" would blank real information for the exact user
+  //    the fallback was built for. So the sentence names its own basis.
+  //
+  //    "mixed" keeps the measured wording: part of that denominator IS real
+  //    clock data, and the card already calls mixed "hours at the shop" in
+  //    both the denominator sentence and the tile label.
+  const shopTimeIsMeasured = result.denomSource !== "scheduled";
+
+  // 2. ongoingDays are excluded from BOTH sides of the comparison, so this
+  //    figure covers the days counted so far, not the period. "This period —
+  //    you're ahead, not behind" is a settled verdict on something still
+  //    moving, and it really does reverse: 40 clocked / 50 flagged reads
+  //    "Ahead 10.0h" all afternoon, then one 12h shift that flags nothing
+  //    turns it into "Gap 2.0h".
+  //
+  //    Scoped rather than withheld, for the same reason: the exclusion is
+  //    symmetric, so "ahead on the days counted" is exactly true, and the
+  //    neutral caption below would instead tell the tech to "add the hours" —
+  //    there are no hours to add, the shift is simply still running. The
+  //    disclaimer further down already names the day and says the figure will
+  //    move.
+  const periodIsSettled = result.ongoingDays.length === 0;
+
+  // Assembled here rather than inline in JSX: the four wordings differ by a
+  // few words mid-sentence, and text on either side of a JSX expression
+  // container silently loses its leading space
+  // (memory/reference_frt_jsx_whitespace.md). One string is also one thing for
+  // a test to read back out of the DOM.
+  const aheadSentence =
+    `You flagged ${fmtHours(Math.abs(gap))}h ` +
+    (shopTimeIsMeasured
+      ? "more than you were at the shop"
+      : "more than your scheduled hours") +
+    (periodIsSettled ? " this period — " : " on the days counted so far — ") +
+    (shopTimeIsMeasured
+      ? periodIsSettled
+        ? "you're ahead, not behind."
+        : "you're ahead on those days."
+      : periodIsSettled
+        ? "you're ahead of your normal shift."
+        : "you're ahead of your normal shift on those days.");
+
   return (
     <section className="card padded space-y-3">
       <div className="card-head-row">
@@ -366,8 +423,10 @@ export function WorkCostCard({
             />
             {/* A negative gap is GOOD news — flag hours outran the clock — but
                 a bare "−48.3h" under a headline asking what the work COST you
-                reads as a debt. So the direction lives in the label, and the
-                number stays unsigned in both directions: no "−", no "+".
+                reads as a debt. So the direction lives in the label wherever
+                the label can carry it, and the value drops its sign there.
+                Where the label can't — the sub-resolution band, which stays
+                "Gap" — the sign stays on the number (see the Cell below).
 
                 "Ahead" is a CLAIM, so it only appears when the hours behind it
                 are complete. When they aren't, the label goes neutral rather
@@ -379,7 +438,16 @@ export function WorkCostCard({
               label={
                 aheadOnHours ? (hoursAreComplete ? "Ahead" : "Difference") : "Gap"
               }
-              value={`${fmtHours(Math.abs(gap))}h`}
+              // The sign is dropped only where the LABEL carries the direction
+              // instead. Below half a display step the label stays "Gap", so
+              // an unsigned value there made 40.0 clocked / 40.04 flagged and
+              // 40.0 / 39.96 the same string — opposite directions, telling
+              // the reader nothing, on a card whose entire subject is which
+              // way the number points. Signed, this is HEAD~2's behaviour for
+              // that band, epsilon-sized float noise included: "−<0.1" says
+              // negligible AND which side of even it fell on, which is strictly
+              // more than "<0.1" says.
+              value={`${aheadOnHours || gap >= 0 ? "" : "−"}${fmtHours(Math.abs(gap))}h`}
             />
           </div>
 
@@ -395,8 +463,9 @@ export function WorkCostCard({
               above the drill-down listing them. */}
           {aheadOnHours && hoursAreComplete && (
             <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-              You flagged {fmtHours(Math.abs(gap))}h more than you were at the
-              shop this period — you&apos;re ahead, not behind.{" "}
+              {aheadSentence}
+              {!shopTimeIsMeasured &&
+                " No clock entries were logged, so that's against your schedule, not hours measured at the shop."}{" "}
               {hasUnpaid
                 ? "That doesn't cancel the unpaid time below — those hours ran alongside work you flagged."
                 : "There's no unpaid gap to explain."}

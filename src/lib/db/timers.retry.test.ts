@@ -17,6 +17,12 @@ import type { DbClient } from "./_client";
  * It drives the real listTimerSlots, not the retry helper — the helper already
  * has its own tests and they pass whether or not anything calls it. Only
  * exercising the read proves the wrap is actually applied here.
+ *
+ * SCOPE: the client here is a hand-written fake, so this file proves the wrap
+ * is APPLIED — nothing more. It stays green even when the retry cannot reach
+ * PostgREST, which is exactly what happened for four weeks (Next's per-render
+ * fetch dedupe served attempt 2 attempt 1's cached failure). That the retry
+ * reaches the wire is pinned separately, over real HTTP, in dedupe-retry.test.ts.
  */
 
 const PGRST303 = {

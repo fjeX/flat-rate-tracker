@@ -50,6 +50,13 @@ const AHEAD_LABEL = /Ahead/;
 const GAP_LABEL = /Gap/;
 const AHEAD_CLAIM = /you're ahead, not behind/i;
 const NOTHING_TO_EXPLAIN = /no unpaid gap to explain/i;
+// What the claim is measured AGAINST, and over WHAT STRETCH — the two things
+// round 2 asserted without checking. Both are used as negative assertions
+// below, so both are also asserted positively in a state where they must
+// match (the "hours complete" control, and the in-progress case for the
+// basis).
+const AT_THE_SHOP_BASIS = /more than you were at the shop/;
+const SETTLED_SCOPE = /at the shop this period/;
 
 const NO_UNPAID: UnpaidSummary = {
   lines: [],
@@ -206,6 +213,10 @@ describe("WorkCostCard — a negative gap with the hours complete", () => {
     expect(text).toMatch(AHEAD_LABEL);
     expect(text).toMatch(AHEAD_CLAIM);
     expect(text).toMatch(NOTHING_TO_EXPLAIN);
+    // CONTROL for the round-3 negatives: a settled period measured at the
+    // shop is exactly where both of these must match.
+    expect(text).toMatch(AT_THE_SHOP_BASIS);
+    expect(text).toMatch(SETTLED_SCOPE);
     // Whitespace check: read the sentence back out of the DOM, not the source.
     expect(text).toContain(
       "You flagged 48.3h more than you were at the shop this period",
@@ -269,6 +280,14 @@ describe("WorkCostCard — float noise", () => {
     expect(text).not.toMatch(AHEAD_LABEL);
     expect(text).not.toMatch(AHEAD_CLAIM);
     expect(text).not.toMatch(NOTHING_TO_EXPLAIN);
+
+    // The VALUE is fmtHours' business, not the epsilon's, and fmtHours' rule
+    // is that a real zero and a rounded-away nonzero must not be the same
+    // string. 3.55e-15 is nonzero and negative, so it prints "−<0.1" — the
+    // same as HEAD~2. Pinned because the alternative (unsigned) is what made
+    // −0.04 and +0.04 identical two tests down; there is no threshold that
+    // separates float noise from three real minutes without inventing one.
+    expect(text).toContain("Gap−<0.1h");
   });
 });
 
@@ -338,5 +357,219 @@ describe("WorkCostCard — the positive and zero branches are untouched", () => 
     expect(text).toContain("Gap0.0h");
     expect(text).not.toMatch(AHEAD_LABEL);
     expect(text).not.toMatch(AHEAD_CLAIM);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Round 3. The round-2 gate ("missingClockDays is empty and there is SOME
+// denominator") is a correct restatement of wage-check's own status, and it is
+// the wrong question: it says the denominator COVERS the period, and the
+// caption then says the denominator was MEASURED at the shop, over a whole
+// period. Two more things decide whether that second sentence is true.
+describe("WorkCostCard — the whole denominator came from the schedule", () => {
+  // denomSource "scheduled" = zero clock entries; every hour in the
+  // denominator is a substituted normal shift. missingClockDays is empty, so
+  // the round-2 gate passes and the card said "you were at the shop" about
+  // hours nobody observed — one line under its own "your normal scheduled
+  // shift was used for them", and beside a tile that already refuses to say
+  // "At the shop". A tech who never clocks hits this EVERY period, and
+  // wage-check opens by calling missing clock data the norm.
+  it("names the schedule as the basis instead of claiming observed shop time", () => {
+    const days = [
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+      "2026-07-16",
+      "2026-07-17",
+    ];
+    const text = renderCard(
+      result({
+        status: "ok",
+        hourly: 60.5,
+        flagPay: 2000,
+        totalPay: 2420,
+        flagHours: 88.3,
+        countedFlagHours: 88.3,
+        clockedHours: 0,
+        denomHours: 40,
+        denomSource: "scheduled",
+        workDays: days,
+        clockDays: [],
+        scheduledDays: days,
+      }),
+    );
+
+    // The figures are unchanged — this is a wording fix, not a suppression.
+    expect(text).toContain("Scheduled40.0h");
+    expect(text).toContain("Flagged88.3h");
+    expect(text).toContain("Ahead48.3h");
+    expect(text).toMatch(AHEAD_LABEL);
+
+    // …and being ahead of your scheduled shift is real information, so the
+    // claim survives — against the basis it actually has.
+    expect(text).toContain(
+      "You flagged 48.3h more than your scheduled hours this period",
+    );
+    expect(text).toContain("you're ahead of your normal shift.");
+    expect(text).toContain("No clock entries were logged");
+
+    // The one thing it must never say: that those were observed shop hours.
+    expect(text).not.toMatch(AT_THE_SHOP_BASIS);
+  });
+
+  // The BOUNDARY of that rule, and a guard against over-correcting it. "mixed"
+  // means part of the denominator is real clock data, and the card already
+  // calls mixed "hours at the shop" in the denominator sentence and in the
+  // tile label — a predicate of `denomSource === "clocked"` would put the
+  // caption at odds with the two lines around it.
+  it("keeps the measured wording when only some days came from the schedule", () => {
+    const days = [
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+      "2026-07-16",
+      "2026-07-17",
+    ];
+    const text = renderCard(
+      result({
+        status: "ok",
+        hourly: 60.5,
+        flagPay: 2000,
+        totalPay: 2420,
+        flagHours: 88.3,
+        countedFlagHours: 88.3,
+        clockedHours: 32,
+        denomHours: 40,
+        denomSource: "mixed",
+        workDays: days,
+        clockDays: days.slice(0, 4),
+        scheduledDays: [days[4]],
+      }),
+    );
+
+    expect(text).toContain("At the shop40.0h");
+    expect(text).toMatch(AT_THE_SHOP_BASIS);
+    expect(text).toMatch(SETTLED_SCOPE);
+    expect(text).not.toContain("No clock entries were logged");
+  });
+});
+
+describe("WorkCostCard — a shift still in progress", () => {
+  // ongoingDays are excluded from BOTH sides, so the comparison covers the
+  // days counted so far — not the period. The card asserted a settled
+  // period-scope verdict and then, two lines later, said the figure would
+  // move. It genuinely reverses: 40 clocked / 50 flagged is "Ahead 10.0h"
+  // until the tech clocks a 12h shift that flags nothing, and then it is
+  // "Gap 2.0h".
+  it("scopes the claim to the days counted rather than the period", () => {
+    const text = renderCard(
+      result({
+        status: "ok",
+        hourly: 30,
+        flagPay: 1150,
+        totalPay: 1200,
+        flagHours: 50,
+        countedFlagHours: 50,
+        clockedHours: 40,
+        denomHours: 40,
+        denomSource: "clocked",
+        workDays: ["2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20"],
+        clockDays: ["2026-08-17", "2026-08-18", "2026-08-19"],
+        ongoingDays: ["2026-08-20"],
+      }),
+    );
+
+    expect(text).toContain("Ahead10.0h");
+    expect(text).toContain("Aug 20 isn't counted yet");
+
+    // Still measured at the shop — the clock data is real. Only the SCOPE was
+    // wrong, so this locator must still match.
+    expect(text).toMatch(AT_THE_SHOP_BASIS);
+    expect(text).toContain(
+      "You flagged 10.0h more than you were at the shop on the days counted so far",
+    );
+
+    // The settled-period claim is what has to go.
+    expect(text).not.toMatch(SETTLED_SCOPE);
+    expect(text).not.toMatch(AHEAD_CLAIM);
+  });
+
+  // Both at once — a tech on the schedule fallback, mid-period. The two
+  // rewordings compose rather than one overwriting the other.
+  it("names the schedule AND scopes the days when both apply", () => {
+    const text = renderCard(
+      result({
+        status: "ok",
+        hourly: 60.5,
+        flagPay: 2000,
+        totalPay: 2420,
+        flagHours: 95,
+        countedFlagHours: 88.3,
+        denomHours: 40,
+        denomSource: "scheduled",
+        workDays: ["2026-07-13", "2026-07-14", "2026-07-20"],
+        scheduledDays: ["2026-07-13", "2026-07-14"],
+        ongoingDays: ["2026-07-20"],
+      }),
+    );
+
+    expect(text).toContain(
+      "You flagged 48.3h more than your scheduled hours on the days counted so far",
+    );
+    expect(text).toContain("Jul 20 isn't counted yet");
+    expect(text).not.toMatch(AT_THE_SHOP_BASIS);
+    expect(text).not.toMatch(SETTLED_SCOPE);
+  });
+});
+
+describe("WorkCostCard — a sub-resolution gap keeps its direction", () => {
+  // Below half a display step the label stays "Gap" (the epsilon that killed
+  // the float-noise false positive). Round 2 also dropped the sign there, so
+  // 40.0 clocked / 40.04 flagged and 40.0 / 39.96 rendered the SAME string —
+  // opposite directions, indistinguishable, on a card whose whole subject is
+  // which way the number points.
+  const tiny = (flagged: number) =>
+    renderCard(
+      result({
+        status: "ok",
+        hourly: 25,
+        flagPay: 1000,
+        totalPay: 1000,
+        flagHours: flagged,
+        countedFlagHours: flagged,
+        clockedHours: 40,
+        denomHours: 40,
+        denomSource: "clocked",
+        workDays: ["2026-07-13"],
+        clockDays: ["2026-07-13"],
+      }),
+    );
+
+  // The third tile, label and value together — textContent runs them straight
+  // into each other, which is the whole reason a bare /Ahead/ is the locator
+  // this file uses.
+  const gapTile = (text: string) =>
+    text.match(/(?:Gap|Ahead|Difference)−?(?:<0\.1|\d+\.\d)h/)?.[0] ??
+    "(no gap tile)";
+
+  it("keeps a negative sub-resolution gap distinguishable from a positive one", () => {
+    const under = gapTile(tiny(40.04)); // flagged 0.04h MORE than clocked
+    const over = gapTile(tiny(39.96)); // flagged 0.04h LESS than clocked
+
+    expect(over).toBe("Gap<0.1h"); // unchanged from HEAD~2
+    expect(under).toBe("Gap−<0.1h"); // the direction is back
+    expect(under).not.toBe(over);
+  });
+
+  it("keeps the sign right at the epsilon boundary", () => {
+    expect(gapTile(tiny(40.05))).toBe("Gap−<0.1h");
+  });
+
+  it("flips to 'Ahead' once the gap is big enough to print", () => {
+    // Already true at HEAD — a PIN, not a repair. It is the other side of the
+    // boundary the two tests above sit on, and it is what stops the sign fix
+    // from being applied one step too far (a signed "Ahead−0.1h" would say the
+    // direction twice, once in each half of the same tile).
+    expect(gapTile(tiny(40.06))).toBe("Ahead0.1h");
   });
 });

@@ -224,6 +224,11 @@ export function MaintenanceTimesSection({ inference }: { inference: Inference })
                       color: d.reliable ? "var(--fg-1)" : "var(--fg-3)",
                     }}
                   >
+                    {/* Minutes, not hours — an inferred per-op job time is
+                        read against a clock, and "0.8h" is worse than "~48 min"
+                        here. Not a private hours formatter (2026-08-20 sweep):
+                        the unit is different, and `reliable` already gates out
+                        the values small enough for fmtHours' floor to matter. */}
                     {d.reliable ? `~${(d.hours * 60).toFixed(0)} min` : "—"}
                   </span>
                 </div>
