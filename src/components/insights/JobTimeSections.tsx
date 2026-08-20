@@ -12,6 +12,7 @@
 // rather than as a feature and an apology for a missing feature.
 import { Card } from "@/components/ui/Card";
 import { Table, Td, Th } from "@/components/ui/Table";
+import { fmtHours } from "@/lib/format";
 import {
   formatRatio,
   ratioTier,
@@ -20,10 +21,6 @@ import {
 } from "@/lib/insights";
 import { HEAVY_FLAG_HOURS } from "@/lib/mix";
 import type { Inference } from "@/lib/time-inference";
-
-function one(n: number): string {
-  return n.toFixed(1);
-}
 
 const TIER_COLOR: Record<string, string> = {
   good: "var(--good)",
@@ -114,12 +111,12 @@ export function BigJobsSection({
                       </Td>
                       <Td align="right">
                         <span className="mono tabular-nums">
-                          {one(row.flagTotal)}h
+                          {fmtHours(row.flagTotal)}h
                         </span>
                       </Td>
                       <Td align="right">
                         <span className="mono tabular-nums">
-                          {one(row.actualTotal)}h
+                          {fmtHours(row.actualTotal)}h
                         </span>
                       </Td>
                       <Td align="right">
@@ -183,7 +180,7 @@ export function MaintenanceTimesSection({ inference }: { inference: Inference })
                   className="mono mt-0.5 text-base font-semibold tabular-nums"
                   style={{ color: "var(--fg-0)" }}
                 >
-                  {one(inference.dailyOverheadHours)}h a day
+                  {fmtHours(inference.dailyOverheadHours)}h a day
                 </div>
                 <div className="text-[11px]" style={{ color: "var(--fg-3)" }}>
                   Cleanup, waiting, dispatch limbo — time that never lands on a

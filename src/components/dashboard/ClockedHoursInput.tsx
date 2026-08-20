@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { upsertDailyClockHoursAction } from "@/app/actions/daily-clock";
 import { computeEfficiency, fmtPct } from "@/lib/stats";
+import { fmtHours } from "@/lib/format";
 
 function toText(hours: number): string {
   return hours > 0 ? String(hours) : "";
@@ -97,7 +98,7 @@ export function ClockedHoursInput({
           {efficiency !== null ? fmtPct(efficiency) : "—"}
         </div>
         <div style={{ marginTop: 4, fontSize: 12, color: "var(--fg-3)" }}>
-          {todayFlagHours.toFixed(1)}h flag
+          {fmtHours(todayFlagHours)}h flag
         </div>
       </div>
     </div>
