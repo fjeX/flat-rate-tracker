@@ -1151,6 +1151,70 @@ button between the RO information and the hours.
     with nothing marked (it explains how to fill it), so its absence is a bug and
     an empty state is not.
 
+### 8l. Withheld efficiency + ledger leaks + reset-to-unpaid (shipped 2026-08-19 — newest code, hunt it hard)
+
+Three changes went live tonight. **Read this section before reporting any
+missing efficiency figure**, or you will re-file a deliberate suppression as a
+bug — the exact mistake that kept `insights-trend-no-comparison` open for
+eleven consecutive nights.
+
+**Efficiency can now be deliberately WITHHELD, and that is correct output.**
+Efficiency is `flagged hours ÷ hours the app can measure`. A day the app cannot
+measure — unscheduled, a day off, or still in progress because it is today —
+contributes to NEITHER side. When most or all of a period's flagged hours sit
+on such days, the percentage would describe almost none of the work, so the app
+now refuses to print it and says why instead. You will see, all of them correct:
+
+- **Pay Period hero** — "No efficiency yet — all 42.0h flagged so far landed on
+  2 days with no hours to measure them against." (or "Efficiency isn't shown —
+  30.0h of the 40.0h …" when only most of it is excluded).
+- **Pay Period stat tile** — `Efficiency · sched —`, an em dash, not a number.
+- **Custom-dates / period-override modal** — the Efficiency row reads
+  "nothing to compare" with no arrow, instead of a before → after delta.
+- **Dashboard tiles** — the tile drops to `8.0h scheduled` (the hours the
+  figure would have been measured against) rather than a percentage. Note it
+  says **scheduled**, not "0.0h clocked" — that older wording was a bug.
+- **Insights trend bars** — a withheld period's bar is a short stub labelled
+  `—`, and it is excluded from the chart's axis scale.
+
+Rules for this section:
+- A withheld figure is **only** a bug if the period's flagged hours are in fact
+  measurable — i.e. every flagged hour sits on a day with clocked hours or a
+  scheduled shift. Check the "Not counted above: Xh flagged across N days"
+  caption before reporting anything; if that caption is present, the withholding
+  is explained and correct.
+- **A withheld figure and a percentage must never appear together on one
+  screen.** If the hero says "No efficiency yet" while the stat tile beside it
+  still prints `0%`, THAT is the bug — report it HIGH. Two surfaces disagreeing
+  is the real defect; a single honest refusal is not.
+- A genuinely measured **0%** must still print as `0%`. Clocked hours with no
+  flagged work is a true and useful fact. If a real 0% is being hidden, report it.
+
+**Insights "What's costing you" now includes unpaid-time LEDGER rows.**
+Previously the board ranked only by op code, so waiting-on-parts / waiting-on-
+approval / shop-time could never appear no matter how large. Rows like
+"Waiting on parts" now sit alongside op-code rows.
+- Cross-check it: the board's non-overrun total should equal the Pay Period
+  "Every unpaid record" total for the same window. A gap that exactly matches a
+  ledger row is the old bug returning — report it.
+- The subtitle now enumerates its three sources instead of claiming "every
+  source the app can measure". Do not report the narrower wording as a
+  regression; the old sentence was false.
+
+**"Reset to unpaid" — new control in the "Did I get paid?" card.**
+It appears only once a paid-period figure is saved, and it clears the period
+back to unset (the period returns to awaiting-pay).
+- Enter a paid figure, confirm the card shows it, then use **Reset to unpaid**
+  and accept the confirm. The figure must clear and the period must fall back
+  to its unpaid state without a manual reload.
+- **Test it with the KEYBOARD as well as the mouse** — Tab from the paid-hours
+  box onto the button and press Enter. It must DELETE, not re-save the figure.
+  Shipping this control broke that path twice, in opposite directions.
+- Also confirm the ordinary save still works from a period with NOTHING saved
+  yet: type a figure and press **Enter**, and separately type a figure and click
+  blank space. Both must save. A silently discarded first figure is the
+  regression to watch for here.
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:
