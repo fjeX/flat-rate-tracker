@@ -373,7 +373,11 @@ export function OpCodeLines({
                       type="button"
                       className="remove"
                       onClick={() => removeLine(line.key)}
-                      aria-label="Remove line"
+                      // Named like the two hours inputs beside it. This is the
+                      // only control in the row that used to announce the same
+                      // string on every line, so it was the only one a script
+                      // had to pick positionally — the 2026-08-19 failure mode.
+                      aria-label={code ? `Remove line ${code}` : "Remove line"}
                     >
                       <Trash2 size={14} />
                     </button>

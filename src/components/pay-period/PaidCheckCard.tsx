@@ -20,7 +20,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { InfoBubble } from "@/components/ui/InfoBubble";
-import type { Dispute, Entry, OpCode } from "@/lib/types";
+import type { Dispute, Entry, OpCode, UnpaidTime } from "@/lib/types";
 import type { Stats } from "@/lib/stats";
 import { fmtHours } from "@/lib/stats";
 import type { RateMap } from "@/lib/earnings";
@@ -40,6 +40,9 @@ export function PaidCheckCard({
   rates,
   techName,
   entryIdsWithPhotos,
+  unpaid = [],
+  periodStart,
+  periodEnd,
   disputes,
   openDispute,
   shortedHours,
@@ -58,6 +61,13 @@ export function PaidCheckCard({
   rates: RateMap;
   techName: string | null;
   entryIdsWithPhotos?: Set<string>;
+  // Pass-through to ReconciliationCard's export surface: the RAW unpaid-time
+  // ledger plus the period bounds it gets filtered by. Nothing in this
+  // component reads them. See ReconciliationCard for why the ledger is not
+  // pre-filtered here.
+  unpaid?: UnpaidTime[];
+  periodStart?: string;
+  periodEnd?: string;
   // NULL means the dispute-ledger migration hasn't been applied yet — distinct
   // from [] meaning "migrated, nothing disputed". The dispute section must stay
   // hidden on null: otherwise it offers a button whose action throws against a
@@ -186,6 +196,9 @@ export function PaidCheckCard({
             periodLabel={periodLabel}
             techName={techName}
             entryIdsWithPhotos={entryIdsWithPhotos}
+            unpaid={unpaid}
+            periodStart={periodStart}
+            periodEnd={periodEnd}
             embedded
             title="Which lines came up short?"
           />

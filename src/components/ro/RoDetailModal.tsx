@@ -419,7 +419,12 @@ function LineRow({
           type="button"
           onClick={handleDelete}
           disabled={deleting || isOnly}
-          aria-label="Remove line"
+          // Named like the actual-hours input beside it. Every line's trash can
+          // announced the identical string, so the only way to target one was
+          // by position — which is exactly how the wrong row got deleted on
+          // 2026-08-19. `code` falls back to an em dash, which names nothing,
+          // so treat that as no code at all.
+          aria-label={code && code !== "—" ? `Remove line ${code}` : "Remove line"}
           className="relative rounded-[var(--radius-sm)] p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
         >
           <Trash2 className="h-3.5 w-3.5" />

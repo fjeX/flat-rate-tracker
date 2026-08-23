@@ -48,8 +48,12 @@ So budget deliberately:
   section.
 - **Two tiers when you are behind, and every section is in one of them.**
   Load-bearing — the money paths and the newest code, must run: §1, §1b, §2,
-  §2b, §3, §3z–§5, §6, §7, §7b, §7c, §7e, §8, §8h, §8i, §8k, §8l, plus §10
-  whenever `bot/FOCUS.md` exists (Liem asked for that one by hand).
+  §2b, §2d, §3, §3z–§5, §6, §7, §7b, §7c, §7e, §8, §8h, §8i, §8k, §8l, plus §10
+  whenever `bot/FOCUS.md` exists (Liem asked for that one by hand). §2d is
+  listed load-bearing rather than regression-net on purpose: it fires
+  automatically as a side effect of §2's already-mandatory work (any heavy line
+  you save triggers it), so dropping it for time saves nothing — there is no
+  separate setup to skip.
   Regression-net — drop these first, recording each as `SKIPPED — time`: §1c,
   §2a, §2c, §7d, §8b, §8c, §8d, §8e, §8f, §8g, §8j, §9. The regression-net tier
   watches surfaces that shipped working; dropping one deliberately is cheap, a
@@ -289,6 +293,47 @@ If the dashboard shows the "scheduled day looks empty" card, it now offers a
   clocked hours, or was already resolved) changing on this save — resolving
   one empty day must not silently touch another day's contribution.
 
+### 2d. "How long did that take?" retro-time prompt (undocumented surface, new)
+Right after a successful save on the full Log RO form — **any** successful
+save, not just "Save & New": "Save RO"/"Save Changes" trigger it too, and it
+fires on both new entries and edits (`performSave()` in
+src/components/forms/useLogRoForm.ts) — a modal may appear asking about the
+heaviest line(s) on the ticket you just saved. It fires per line where
+`flagHours >= HEAVY_FLAG_HOURS` (2h, src/lib/mix.ts), `actualHours` is still
+null, and the line is not a comeback. A previous version of this checklist
+tied this to "Save & New" only — that was wrong; check it every time you save,
+regardless of which button.
+
+- Title reads **"How long did that take?"** for exactly one qualifying line,
+  or **"How long did these take?"** for more than one.
+- Note text under the title, exact wording: "Roughly is fine — close enough to
+  know whether you beat the book." followed by, singular: "This is the only
+  job on the ticket big enough to be worth asking about." — or plural: "These
+  are the only jobs on the ticket big enough to be worth asking about."
+- Each line offers a row of hour chips from `retroBuckets()`
+  (src/lib/retro-capture.ts) — the step size scales with job size, capped at
+  6 chips plus one open-ended "+" chip on top.
+  - **TRAP — do not assert this:** the top "+" chip's LABEL is the previous
+    chip's number with a "+" appended (e.g. "24h+"), but the value it STORES
+    is bumped half a step higher than that label (`dedupeTop()` in
+    retro-capture.ts — "24h+" can store 26h). The checklist must never claim
+    the saved hours equal the visible "+" label; that gap is deliberate, not
+    a bug.
+- Small print above the buttons, exact wording: "Saved as an estimate, marked
+  as one. It shapes your own insights and stays out of the shared job-time
+  averages."
+- Buttons: **"Skip"**, and **"Save time"** (reads "Saving…" while in flight).
+  "Save time" stays disabled until at least one line has a chip picked.
+- Storage: an answered line is saved via
+  `setLineActualHoursAction(lineId, hours, "estimate")`, writing
+  `actual_source = "estimate"`. Downstream, that line is excluded from shared
+  true-time pooling (`isPoolableLine`, src/lib/true-time.ts) and shows an
+  **"· includes an estimate"** suffix next to its row on the Insights "Big
+  jobs" table (src/components/insights/JobTimeSections.tsx) — confirm the
+  suffix appears there for a line you answered here.
+- Tapping "Skip" (or closing the modal) must not block navigation or leave the
+  form stuck — you should land wherever the save was headed.
+
 ### 3. Timers (up to 3 concurrent — reworked 2026-07-24)
 The Timer page runs **up to 3 job timers at once**. The header reads
 "Timers — N of 3". Each timer is bound to one RO and carries a status:
@@ -460,10 +505,22 @@ hand-reverted to its recorded prior value.
 
 **The awaiting-pay hero's own save path — nothing else covers it.** It is the
 only route from awaiting-pay into settled, and a fix in this exact path has
-twice killed the primary save, so it earns a nightly look. **It needs a period
-with nothing saved** — the hero only exists while no row does. If every closed
-period already carries a figure, record `SKIPPED — no unsaved period`; do not
-clear a real number to make room.
+twice killed the primary save, so it earns a look whenever the window is open.
+
+**This check is opportunistic, not guaranteed every night — a `SKIPPED` night
+is the expected outcome, not a gap to flag.** The hero only renders while a
+period is genuinely `awaiting_pay`: closed (`end < today`) with no
+`paid_period_hours` row yet (src/lib/period-mode.ts). On the bot account that
+window is usually already gone by the time you get here — Liem enters his real
+paid stub promptly once a period closes, so most closed periods you'll find
+already carry a figure. That does not make the window impossible, though: the
+*current* period flips into exactly this state the instant it closes, if it is
+still unpaid at that moment — so expect it back roughly monthly, around period
+rollover, the same way §2c's card resurfaces. If every closed period already
+carries a figure, record `SKIPPED — no unsaved period` and treat that as a
+clean, expected result — do not go looking for a workaround, and above all:
+never clear a real paid figure just to manufacture the window. That rule is
+unconditional and unrelated to how often the check runs.
 
 - Type a figure with **two decimals** (`74.25` — real flat-rate stubs routinely
   have them) and press **"Check my pay"** *without* clicking away first. That
@@ -525,6 +582,18 @@ Reference rail in every mode.
   #67104 was left at `paid_hours 5.00` against `flag_hours 1.30` overnight,
   inflating that account's paid-hours totals until it was hand-corrected with
   SQL — that must not happen again.)
+- **Do not reuse a line between this section and §7c's dispute-recovery Apply
+  flow in the same run.** Both write `entry_op_codes.paid_hours` through the
+  same function, `setLinePaidHours` (src/lib/db/entries.ts) — an absolute
+  `UPDATE`, not an increment — and neither section knows the other touched the
+  line. If §5's mandatory blanket revert runs on a line §7c's Apply already
+  wrote to, it stomps the recovery back to whatever §5 recorded as the "prior"
+  value, which looks exactly like the recovery vanishing with no way to
+  reapply it. It is not a lost-linkage bug (the linkage is real — see §7c) —
+  it's this section's revert overwriting a later write it didn't know about.
+  If you do end up reusing a line across both in one run, revert it to the
+  value it held **after** §7c's Apply ran, not to the value you recorded
+  before you started testing.
 - If a dispute-pack export exists for short lines, open it and confirm the
   print view renders with the short lines listed.
 - **Second-round claims** (fixed 2026-08-12, `dispute-track-offer-missing`). A
@@ -766,6 +835,16 @@ Use §5 to reconcile a line to fewer hours than it flagged.
   - Tap it. The lines' paid hours must move, the period's shortfall must drop by
     that amount, and the panel must **disappear**. Tap-and-reload must not offer
     it a second time — applying twice would pay a line twice, and that is a FAIL.
+  - **Do not reuse a line here that you're also using for §5's paid/short-paid
+    reconciliation testing in the same run** — see §5's note on this; both
+    sections write the same `paid_hours` column and §5's mandatory revert will
+    stomp whatever Apply wrote here, with no coordination between the two.
+  - **Seeing the "Apply N.Nh to N lines" panel offered again is not, by
+    itself, a bug worth escalating.** Re-tapping Apply is idempotent —
+    `setLinePaidHours` is an absolute overwrite, not an add — so before
+    reporting anything here confirm the paid hours actually moved twice
+    (double-applied), rather than just the panel reappearing because a line it
+    targets was touched again (e.g. by §5, per the note above).
   - The second-round offer, when it still appears, must now read
     **"still short N.Nh · N.Nh already recovered on a closed claim"**. A bare
     shortfall with no mention of what came back is the old wording.

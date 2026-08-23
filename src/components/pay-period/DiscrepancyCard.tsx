@@ -258,7 +258,19 @@ export function DiscrepancyCard({
           <div className={`mt-1 text-lg font-semibold ${diffColor}`}>
             {diff === null
               ? "—"
-              : `${diff > 0 ? "+" : ""}${fmtHours(diff)}h`}
+              : // Format the MAGNITUDE and carry the sign ourselves, the same
+                // way PeriodHero, PaidCheckCard and WorkCostCard all do. Handing
+                // fmtHours the raw signed value made this line disagree with the
+                // "Missing …" callout below, which passes -diff: fmtHours rounds
+                // with Math.round, which breaks exact halves toward +Infinity, so
+                // a bit-exact -70.65 printed "-70.6" here and "70.7" there — the
+                // same number, two magnitudes, stacked one above the other.
+                // Rounding |diff| once means both lines round the identical
+                // quantity and can never disagree.
+                //
+                // diff === 0 keeps the empty sign, so a true zero still prints
+                // "0.0h" and never "-0.0h" or "+0.0h".
+                `${diff > 0 ? "+" : diff < 0 ? "-" : ""}${fmtHours(Math.abs(diff))}h`}
           </div>
         </div>
       </div>

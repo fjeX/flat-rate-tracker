@@ -17,6 +17,8 @@ vi.mock("@/app/actions/entries", () => ({
   findDuplicateRos: vi.fn(async () => []),
   deleteEntryAction: vi.fn(),
   setLineActualHoursAction: vi.fn(),
+  // Edit-load resolves comebackOfEntryId to its original for the redo-of label.
+  getRoMatchById: vi.fn(async () => null),
 }));
 vi.mock("@/app/actions/op-codes", () => ({ createLibraryOpCode: vi.fn() }));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));

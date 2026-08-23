@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
+import { fmtHours2 } from "@/lib/format";
 import { saveTimerAction } from "@/app/actions/timer";
 import {
   elapsedFor,
@@ -222,16 +223,16 @@ export function TimerSaveModal({
                   <>
                     This line has no actual hours yet — it becomes{" "}
                     <strong className="text-[var(--fg-0)]">
-                      {fmtHours(workHours)}h
+                      {fmtHours2(workHours)}h
                     </strong>
                     .
                   </>
                 ) : (
                   <>
-                    <span className="font-mono">{fmtHours(existing)}h</span> +{" "}
-                    <span className="font-mono">{fmtHours(workHours)}h</span> ={" "}
+                    <span className="font-mono">{fmtHours2(existing)}h</span> +{" "}
+                    <span className="font-mono">{fmtHours2(workHours)}h</span> ={" "}
                     <strong className="font-mono text-[var(--fg-0)]">
-                      {fmtHours(newTotal)}h
+                      {fmtHours2(newTotal)}h
                     </strong>{" "}
                     on this line.
                   </>

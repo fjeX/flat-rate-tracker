@@ -165,8 +165,11 @@ export function PayPeriodView({
   bonusDefaultDate?: string;
   clocks?: DailyClock[];
   referenceRate?: number | null;
-  // Ledger rows for the selected period. Empty until the Phase 2 migration
-  // lands, which just means every unpaid-time surface reports zero.
+  // The unpaid-time ledger. NOT scoped to the selected period — the page loads
+  // ~3 years of rows and every consumer here does its own date filtering
+  // (buildUnpaidSummary takes a `range`; the dispute-pack export filters with
+  // the print route's expression). Empty until the Phase 2 migration lands,
+  // which just means every unpaid-time surface reports zero.
   unpaid?: UnpaidTime[];
   // Every dispute ever raised, plus the live claim for the viewed period.
   //
@@ -292,6 +295,13 @@ export function PayPeriodView({
         rates={rates}
         techName={techName}
         entryIdsWithPhotos={entryIdsWithPhotos}
+        // Raw ledger + bounds, not a pre-filtered array: `unpaid` here is three
+        // years of rows (the page loads it with `from: fromDate`), and the
+        // dispute-pack export has to scope it with the same expression the
+        // print route uses. See ReconciliationCard.
+        unpaid={unpaid}
+        periodStart={selected.start}
+        periodEnd={selected.end}
         disputes={disputes}
         openDispute={openDispute}
         shortedHours={reconciled.shortedHours}

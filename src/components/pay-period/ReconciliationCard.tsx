@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
+import type { Entry, EntryOpCode, OpCode, UnpaidTime } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { fmtMoney, hasAnyRate, type RateMap } from "@/lib/earnings";
 import {
@@ -18,6 +18,7 @@ import {
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { buildDisputePack, formatDisputePackText } from "@/lib/dispute-pack";
+import { buildUnpaidSummary } from "@/lib/unpaid-summary";
 import { recordExport, useExportedAt } from "@/lib/dispute-exports";
 import { setLinePaidHoursAction } from "@/app/actions/entries";
 
@@ -201,6 +202,9 @@ export function ReconciliationCard({
   periodLabel = "",
   techName = null,
   entryIdsWithPhotos,
+  unpaid = [],
+  periodStart,
+  periodEnd,
   embedded = false,
   title = "Pay Reconciliation",
 }: {
@@ -211,6 +215,16 @@ export function ReconciliationCard({
   periodLabel?: string;
   techName?: string | null;
   entryIdsWithPhotos?: Set<string>;
+  // The RAW unpaid-time ledger, NOT pre-filtered to the period — the page loads
+  // three years of rows and hands the same array to every consumer. Filtering
+  // happens below with the exact expression the print route uses, so the copied
+  // text and the printed page are built from the same input. Empty until the
+  // Phase 2 migration lands, which just means zero unpaid hours.
+  unpaid?: UnpaidTime[];
+  // Bounds for that filter. Omitted (e.g. a caller that already scoped its
+  // ledger) means no date filter is applied.
+  periodStart?: string;
+  periodEnd?: string;
   // Rendered as a drill-down INSIDE PaidCheckCard rather than as its own card
   // on the page. Drops the card chrome and restyles the toggle as a row; all
   // behaviour below is identical either way.
@@ -248,8 +262,31 @@ export function ReconciliationCard({
   // Every line still pending (null paid_hours) — the "mark all paid" targets.
   const pendingRows = rows.filter((r) => r.status === "pending");
 
-  // Export surface only appears once there's an actual dispute to raise.
-  const canExport = summary.shortLineCount > 0;
+  // Same filter as the print route (src/app/pay-period/dispute-pack/page.tsx),
+  // character for character, because the two must produce the same document.
+  const periodUnpaid =
+    periodStart !== undefined && periodEnd !== undefined
+      ? unpaid.filter((u) => u.date >= periodStart && u.date <= periodEnd)
+      : unpaid;
+  // Exactly what buildDisputePack computes for `unpaidRework`, so "does the
+  // pack have an unpaid-rework section?" is answered by the pack's own maths
+  // rather than by a second, drifting rule. Covers BOTH sources: RO-side
+  // comeback lines (which flag zero and so never reach the variance table) and
+  // ledger rows.
+  const unpaidSummary = buildUnpaidSummary({
+    entries,
+    unpaid: periodUnpaid,
+    library,
+    rates,
+  });
+  const hasUnpaidRework = unpaidSummary.lines.length > 0;
+
+  // A short line is NOT the only thing worth exporting. A period with zero
+  // shorted hours but real unpaid rework has a fully-built pack waiting for it,
+  // and this was the only route to it — so the surface stays mounted always and
+  // only the buttons go dead, rather than the whole block vanishing and taking
+  // its own discoverability with it.
+  const canExport = summary.shortLineCount > 0 || hasUnpaidRework;
 
   function markExported() {
     if (!periodKey) return;
@@ -271,6 +308,11 @@ export function ReconciliationCard({
         day: "numeric",
       }),
       entryIdsWithPhotos,
+      // Without this the clipboard copy silently dropped every ledger-sourced
+      // unpaid row while still printing entry-sourced comeback lines — a
+      // partial document that looked complete. The print route has always
+      // passed it.
+      unpaid: periodUnpaid,
     });
     try {
       await navigator.clipboard.writeText(formatDisputePackText(pack));
@@ -485,15 +527,25 @@ export function ReconciliationCard({
 
       {markError && <p className="text-xs text-[var(--bad)]">{markError}</p>}
 
-      {canExport && (
-        <div className="border-t border-[var(--line)] pt-3">
+      {/* Always mounted — see canExport above. Nothing here is hidden; when
+          there is genuinely nothing to export the buttons are disabled and the
+          copy says why, so the tech learns the feature exists on a clean period
+          instead of discovering it only on a bad one. */}
+      <div className="border-t border-[var(--line)] pt-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <div className="text-sm font-medium text-[var(--fg-1)]">
                 Export discrepancies
               </div>
               <div className="text-xs text-[var(--fg-3)]">
-                Flagged vs. paid variance report for {periodLabel || "this period"}
+                {canExport ? (
+                  <>Flagged vs. paid variance report for {periodLabel || "this period"}</>
+                ) : (
+                  <>
+                    Nothing to export for {periodLabel || "this period"} — every
+                    line was paid in full and no unpaid rework was logged.
+                  </>
+                )}
                 {exportedAt && (
                   <>
                     {" · "}
@@ -512,6 +564,12 @@ export function ReconciliationCard({
               <button
                 type="button"
                 onClick={copyDisputeText}
+                disabled={!canExport}
+                title={
+                  canExport
+                    ? undefined
+                    : "Nothing to export — no shorted lines and no unpaid rework in this period."
+                }
                 className="btn btn-sm btn-ghost min-h-11"
               >
                 {copied ? "Copied ✓" : "Copy text"}
@@ -520,6 +578,12 @@ export function ReconciliationCard({
                 <button
                   type="button"
                   onClick={openPrintView}
+                  disabled={!canExport}
+                  title={
+                    canExport
+                      ? undefined
+                      : "Nothing to export — no shorted lines and no unpaid rework in this period."
+                  }
                   className="btn btn-sm btn-primary min-h-11"
                 >
                   Print / PDF
@@ -530,8 +594,7 @@ export function ReconciliationCard({
           {copyError && (
             <p className="mt-1 text-xs text-[var(--bad)]">{copyError}</p>
           )}
-        </div>
-      )}
+      </div>
       </div>
       )}
     </Root>

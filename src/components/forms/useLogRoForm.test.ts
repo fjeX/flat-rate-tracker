@@ -31,6 +31,10 @@ vi.mock("@/app/actions/entries", () => ({
   findDuplicateRos: (...a: unknown[]) => findDuplicateRos(...(a as [])),
   deleteEntryAction: vi.fn(),
   setLineActualHoursAction: vi.fn(),
+  // Edit-load resolves comebackOfEntryId to its original for the redo-of label.
+  // Null here: no test builds a linked original, and the hook must fall back to
+  // the bare label rather than throw when the lookup finds nothing.
+  getRoMatchById: vi.fn(async () => null),
 }));
 vi.mock("@/app/actions/op-codes", () => ({ createLibraryOpCode: vi.fn() }));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));

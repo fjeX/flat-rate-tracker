@@ -22,6 +22,26 @@ import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import { reportError } from "@/lib/report-error";
 import { deleteBonusAction } from "@/app/actions/bonuses";
 
+// One sentence that names a row, shared by the confirm dialog AND the two icon
+// buttons' aria-labels. It lives in one place on purpose: on 2026-08-19 the
+// wrong $35 spiff was deleted, def8958 fixed the dialogs, and the labels a
+// script or screen reader SELECTS BY were left generic — so the two halves
+// disagreed about which row was which. They can't drift if there's one copy.
+//
+// Returns null when nothing survives validation, so callers can fall back to
+// their generic string instead of announcing "undefined".
+function describeBonus(bonus: Bonus): string | null {
+  const source = bonus.source?.trim();
+  const bits = [
+    source ? `"${source}"` : null,
+    Number.isFinite(bonus.amount) ? fmtMoney(bonus.amount) : null,
+    // formatDateLong assumes "YYYY-MM-DD"; anything else would print
+    // "undefined undefined, NaN", so drop the clause instead.
+    /^\d{4}-\d{2}-\d{2}$/.test(bonus.date) ? formatDateLong(bonus.date) : null,
+  ].filter(Boolean);
+  return bits.length > 0 ? bits.join(", ") : null;
+}
+
 export function SpiffsCard({
   bonuses,
   flagPay,
@@ -108,7 +128,9 @@ export function SpiffsCard({
       ) : (
         <>
           <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
-            {bonuses.map((b) => (
+            {bonuses.map((b) => {
+              const desc = describeBonus(b);
+              return (
               <li
                 key={b.id}
                 className="flex items-center justify-between gap-3 px-3 py-2"
@@ -137,7 +159,10 @@ export function SpiffsCard({
                   <button
                     type="button"
                     onClick={() => setEditing(b)}
-                    aria-label="Edit bonus"
+                    // Every row's pencil announced "Edit bonus" — identical
+                    // names across a list is how you end up editing row 3
+                    // while looking at row 1.
+                    aria-label={desc ? `Edit bonus — ${desc}` : "Edit bonus"}
                     className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--fg-1)] active:scale-[0.96] after:absolute after:-inset-1.5 after:content-['']"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -155,7 +180,8 @@ export function SpiffsCard({
                   />
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
 
           <div className="flex items-center justify-between border-t border-[var(--line)] pt-2 text-sm">
@@ -218,21 +244,14 @@ function DeleteButton({
   onDeleted: () => void;
 }) {
   const [pending, start] = useTransition();
+  const desc = describeBonus(bonus);
   function handle() {
     // Name the row. A confirm that says "this spiff" protects nobody: on
     // 2026-08-19 an automated run clicked a positional selector, answered this
     // dialog, and hard-deleted a real $35 spiff that no backup could return.
     // Same three fields the list row shows — source, amount, date — so the
     // sentence describes something the reader can see on screen.
-    const source = bonus.source?.trim();
-    const bits = [
-      source ? `"${source}"` : null,
-      Number.isFinite(bonus.amount) ? fmtMoney(bonus.amount) : null,
-      // formatDateLong assumes "YYYY-MM-DD"; anything else would print
-      // "undefined undefined, NaN", so drop the clause instead.
-      /^\d{4}-\d{2}-\d{2}$/.test(bonus.date) ? formatDateLong(bonus.date) : null,
-    ].filter(Boolean);
-    const what = bits.length > 0 ? `this spiff — ${bits.join(", ")}` : "this spiff";
+    const what = desc ? `this spiff — ${desc}` : "this spiff";
     if (!window.confirm(`Delete ${what}? This can't be undone.`)) return;
     start(async () => {
       try {
@@ -254,7 +273,9 @@ function DeleteButton({
       type="button"
       onClick={handle}
       disabled={pending}
-      aria-label="Delete bonus"
+      // The dialog is the last line of defence; this label is the targeting.
+      // Both name the same row from the same helper so they can't disagree.
+      aria-label={desc ? `Delete bonus — ${desc}` : "Delete bonus"}
       className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 after:absolute after:-inset-1.5 after:content-['']"
     >
       <Trash2 className="h-3.5 w-3.5" />

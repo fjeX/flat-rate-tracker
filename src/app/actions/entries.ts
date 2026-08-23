@@ -89,6 +89,40 @@ export async function findDuplicateRos(roNumber: string): Promise<RoMatch[]> {
   }));
 }
 
+// Resolve a SINGLE entry id to the slim summary the comeback "redo of" chip
+// renders. findDuplicateRos above answers the same shape but searches BY RO
+// NUMBER, which edit-load can't use — reopening a saved comeback has only the
+// stored comeback_of_entry_id and no number to search with.
+//
+// Returns null rather than throwing when the row is gone. A deleted original is
+// an ordinary state here (the link is a soft reference, not an FK the UI can
+// rely on), and the caller's correct response is to render the plain "Linked to
+// an earlier RO" fallback — not to surface an error over a missing label.
+//
+// Scoped like every other action in this file: `createClient()` is bound to the
+// caller's auth cookie, so RLS on `entries` limits the read to the signed-in
+// user's own rows. An id belonging to someone else simply comes back null.
+//
+// roNumber rides along on top of RoMatch because the chip's label leads with
+// "RO #…" and RoMatch itself carries no number.
+export async function getRoMatchById(
+  entryId: string,
+): Promise<(RoMatch & { roNumber: string }) | null> {
+  const id = validate(entryIdSchema, entryId);
+  const supabase = await createClient();
+  const entry = await db.getEntry(supabase, id);
+  if (!entry) return null;
+  return {
+    id: entry.id,
+    date: entry.date,
+    roNumber: entry.roNumber ?? "",
+    vehicleSummary: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(" "),
+  };
+}
+
 export async function saveEntry(
   input: NewEntry,
   entryId?: string,

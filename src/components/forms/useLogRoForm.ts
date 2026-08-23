@@ -27,6 +27,7 @@ import {
   saveEntry,
   deleteEntryAction,
   findDuplicateRos,
+  getRoMatchById,
   setLineActualHoursAction,
 } from "@/app/actions/entries";
 import { retroCandidates, type RetroCandidate } from "@/lib/retro-capture";
@@ -183,11 +184,62 @@ export function useLogRoForm({
   const [originalRoSearch, setOriginalRoSearch] = useState("");
   const [originalRoMatches, setOriginalRoMatches] = useState<RoMatch[] | null>(null);
   const [isFindingOriginal, setIsFindingOriginal] = useState(false);
-  // The picked original, for display. Null in edit mode even when
-  // comebackOfEntryId is set — we have the id but not the summary, and
-  // re-fetching it just to render a label isn't worth a round trip. The UI
-  // says "linked to an earlier RO" in that case rather than inventing detail.
+  // The picked original, for display. Starts null even in edit mode — the saved
+  // entry carries only comebackOfEntryId, not the original's date or vehicle —
+  // and the effect below back-fills it with one lookup on mount. That round trip
+  // used to be judged not worth a label; it is now, because degrading a chip the
+  // tech deliberately set ("RO #71264 · Aug 21, 2026 · 2015 Subaru Outback") down
+  // to a bare "Linked to an earlier RO" the moment they reopen the RO reads as
+  // lost data even though nothing was lost. Display-only: see the effect.
   const [selectedOriginal, setSelectedOriginal] = useState<RoMatch | null>(null);
+
+  // Back-fill the redo-of chip's label on edit-load.
+  //
+  // DISPLAY-ONLY, DELIBERATELY. It touches setSelectedOriginal and
+  // setOriginalRoSearch and NOTHING else. It must never call
+  // setComebackOfEntryId (already correctly seeded above from existingEntry),
+  // nor chooseOriginalRo / clearOriginalRo / toggleLineComeback /
+  // changeComebackKind — those are the state-clearing paths behind the
+  // comeback-redoof-reset-on-toggle data-loss bug (2026-08-12), where a nulled
+  // link rode the next save into comeback_of_entry_id. The save payload in
+  // performSave reads comebackOfEntryId only; neither state below reaches it.
+  //
+  // Keyed on the id, so it runs once per RO rather than per render. A failed or
+  // missing lookup (the original was deleted) leaves selectedOriginal null and
+  // the UI falls back to "Linked to an earlier RO" — the id is never cleared,
+  // because turning a missing label into a missing link is the data loss above.
+  const originalId = existingEntry?.comebackOfEntryId ?? null;
+  useEffect(() => {
+    if (!originalId) return;
+    // Guards a late response from writing over a newer one (or over an
+    // unmounted component) if the edited RO changes mid-flight.
+    let alive = true;
+    getRoMatchById(originalId)
+      .then((match) => {
+        if (!alive || !match) return;
+        // The chip's label is built as "RO #" + the number, so a row without one
+        // would render a naked "RO # · …". RO number is required by
+        // newEntrySchema, so this is a belt-and-braces guard for imported or
+        // legacy rows: fall back to the plain "Linked to an earlier RO" rather
+        // than show a malformed label.
+        if (!match.roNumber.trim()) return;
+        setSelectedOriginal({
+          id: match.id,
+          date: match.date,
+          vehicleSummary: match.vehicleSummary,
+        });
+        // The chip prints "RO #" + this, because RoMatch carries no RO number —
+        // in the pick flow it is whatever the tech typed into the search box.
+        setOriginalRoSearch(match.roNumber);
+      })
+      .catch(() => {
+        // Silent on purpose: the fallback label is already correct, and an error
+        // banner over a cosmetic lookup would be louder than the problem.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [originalId]);
 
   const [search, setSearch] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);

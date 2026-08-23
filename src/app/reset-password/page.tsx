@@ -186,6 +186,37 @@ function ResetPasswordInner() {
     };
   }, [code, linkError, hashTick]);
 
+  // Identity anchor for password managers (and the browser's "password forms
+  // should have a username field" advisory). This component never receives the
+  // email — identity arrives only through the recovery-token exchange above —
+  // so it has to be asked for, once, after that exchange has already succeeded.
+  //
+  // STRICTLY ADDITIVE, and deliberately so: this runs only in the "ready"
+  // phase, nothing awaits it, and no phase, error, or submit path reads it. If
+  // it fails, is slow, or the page unmounts first, `username` simply stays null
+  // and the form renders exactly as it does today — a NULL RESULT MUST RENDER
+  // NO FIELD AT ALL, because an empty username anchor invites a password
+  // manager to save the new credential against a blank identity, which is worse
+  // than having no anchor.
+  const [username, setUsername] = useState<string | null>(null);
+  useEffect(() => {
+    if (phase !== "ready") return;
+    let cancelled = false;
+    const supabase = createClient();
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setUsername(data.user?.email ?? null);
+      })
+      .catch(() => {
+        // Cosmetic enhancement on a security-critical path: swallow and skip.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -253,6 +284,29 @@ function ResetPasswordInner() {
               {error}
             </div>
           )}
+          {/*
+            The wrapper is UNCONDITIONAL and the input inside it is not, so this
+            slot exists in both states and the two password labels below always
+            hold the same child index. Flipping the input itself on and off would
+            insert an element ahead of them, shifting them by one — React
+            reconciles these children by position, so the labels would remount
+            and steal focus from someone mid-typing at the exact moment
+            getUser() resolves. `sr-only` is position:absolute and the div is
+            empty when username is null, so it contributes nothing to layout.
+          */}
+          <div className="sr-only">
+            {username && (
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value={username}
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+            )}
+          </div>
           <label className="block">
             <span className="text-sm text-[var(--fg-2)]">New password</span>
             <input

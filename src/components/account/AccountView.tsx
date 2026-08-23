@@ -243,6 +243,28 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
         <h2 className="section-title">Password</h2>
         <div className="card padded-lg">
           <form onSubmit={handlePasswordSubmit}>
+            {/*
+              Identity anchor for password managers and the browser's own
+              accessibility check ("password forms should have a username
+              field"). Without it a saved credential has nothing to attach to,
+              so changing the password here can orphan the vault entry.
+
+              Visually hidden rather than `hidden`/display:none: some password
+              managers skip fields that are not laid out. It is readOnly (no
+              onChange needed — readOnly + value is the correct controlled
+              pairing) and taken out of the tab order and the a11y tree, since
+              the same address is already shown in the Email section above.
+            */}
+            <input
+              className="sr-only"
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={initialEmail}
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+            />
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {hasPassword && (
                 <div>
