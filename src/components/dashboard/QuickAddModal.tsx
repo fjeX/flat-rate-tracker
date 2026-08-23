@@ -597,7 +597,10 @@ export function QuickAddModal({
                         <button
                           type="button"
                           onClick={() => removeLine(line.key)}
-                          aria-label="Remove line"
+                          // Name the row, like the hours input above already
+                          // does. A constant label on every row of a .map is
+                          // how the wrong spiff got deleted on 2026-08-19.
+                          aria-label={code ? `Remove line ${code}` : "Remove line"}
                           className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
                         >
                           <Trash2 className="h-3.5 w-3.5" />

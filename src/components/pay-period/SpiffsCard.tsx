@@ -35,9 +35,13 @@ function describeBonus(bonus: Bonus): string | null {
   const bits = [
     source ? `"${source}"` : null,
     Number.isFinite(bonus.amount) ? fmtMoney(bonus.amount) : null,
-    // formatDateLong assumes "YYYY-MM-DD"; anything else would print
-    // "undefined undefined, NaN", so drop the clause instead.
-    /^\d{4}-\d{2}-\d{2}$/.test(bonus.date) ? formatDateLong(bonus.date) : null,
+    // formatDateLong indexes MONTHS_SHORT[m - 1] with no bounds check, so a
+    // month outside 1-12 prints the literal "undefined" (e.g. "2026-13-45"
+    // gives "undefined 45, 2026"). Shape alone isn't enough — range-check the
+    // month and day so the clause is dropped rather than announced broken.
+    /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(bonus.date)
+      ? formatDateLong(bonus.date)
+      : null,
   ].filter(Boolean);
   return bits.length > 0 ? bits.join(", ") : null;
 }

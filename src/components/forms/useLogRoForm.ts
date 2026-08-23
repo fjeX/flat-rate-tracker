@@ -180,6 +180,16 @@ export function useLogRoForm({
   const [comebackOfEntryId, setComebackOfEntryId] = useState<string | null>(
     existingEntry?.comebackOfEntryId ?? null,
   );
+  // A mirror of comebackOfEntryId that an async callback can read WITHOUT
+  // capturing it. The mount lookup below resolves long after its effect body
+  // closed over state, so reading `comebackOfEntryId` there would read the
+  // value as of effect-run time — precisely the stale value the guard exists to
+  // reject. The ref is re-pointed on every commit, so `.current` at resolve
+  // time is whatever the user most recently chose or cleared.
+  const comebackOfEntryIdRef = useRef(comebackOfEntryId);
+  useEffect(() => {
+    comebackOfEntryIdRef.current = comebackOfEntryId;
+  }, [comebackOfEntryId]);
   // "Redo of…" original-RO lookup, reusing the duplicate-RO search.
   const [originalRoSearch, setOriginalRoSearch] = useState("");
   const [originalRoMatches, setOriginalRoMatches] = useState<RoMatch[] | null>(null);
@@ -211,12 +221,27 @@ export function useLogRoForm({
   const originalId = existingEntry?.comebackOfEntryId ?? null;
   useEffect(() => {
     if (!originalId) return;
-    // Guards a late response from writing over a newer one (or over an
-    // unmounted component) if the edited RO changes mid-flight.
+    // `alive` covers exactly one case and no more: the component unmounted
+    // before the lookup came back. It does NOT protect against the user, and an
+    // earlier version of this comment claimed it did — originalId is derived
+    // from the existingEntry PROP, which never changes for the life of the
+    // page, so this cleanup only ever fires on unmount.
+    //
+    // The user is the real race. Between the fetch starting and resolving, they
+    // can hit X and pick a DIFFERENT original (chooseOriginalRo) or clear the
+    // link (clearOriginalRo). Both move comebackOfEntryId; neither cancels this
+    // request. Without the ref check below, the late response would repaint the
+    // chip with the OLD RO's number, date and vehicle while comebackOfEntryId
+    // holds the NEW one — a label confidently naming the wrong RO on a
+    // comeback. So: only write if the id we looked up is STILL the linked id at
+    // resolve time. If it isn't, the user has already said otherwise and their
+    // choice wins; we drop the response on the floor and touch nothing.
     let alive = true;
     getRoMatchById(originalId)
       .then((match) => {
         if (!alive || !match) return;
+        // Read through the ref, not the closure — see comebackOfEntryIdRef.
+        if (comebackOfEntryIdRef.current !== originalId) return;
         // The chip's label is built as "RO #" + the number, so a row without one
         // would render a naked "RO # · …". RO number is required by
         // newEntrySchema, so this is a belt-and-braces guard for imported or

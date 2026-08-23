@@ -515,8 +515,9 @@ window is usually already gone by the time you get here — Liem enters his real
 paid stub promptly once a period closes, so most closed periods you'll find
 already carry a figure. That does not make the window impossible, though: the
 *current* period flips into exactly this state the instant it closes, if it is
-still unpaid at that moment — so expect it back roughly monthly, around period
-rollover, the same way §2c's card resurfaces. If every closed period already
+still unpaid at that moment — so expect it back roughly twice a month (pay
+periods here are semi-monthly, not monthly — see src/lib/periods.ts), around
+period rollover, the same way §2c's card resurfaces. If every closed period already
 carries a figure, record `SKIPPED — no unsaved period` and treat that as a
 clean, expected result — do not go looking for a workaround, and above all:
 never clear a real paid figure just to manufacture the window. That rule is
@@ -832,19 +833,27 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     **"N.Nh came back and isn't on your lines yet"** with a preview of the RO
     lines and their paid → paid-after figures, and a button reading
     **"Apply N.Nh to N lines"**.
-  - Tap it. The lines' paid hours must move, the period's shortfall must drop by
-    that amount, and the panel must **disappear**. Tap-and-reload must not offer
-    it a second time — applying twice would pay a line twice, and that is a FAIL.
+  - Tap it. The lines' paid hours must move, and the period's shortfall must
+    drop by that amount. **Before and after the tap, record each targeted
+    line's `paid_hours` value.** The panel disappearing is the normal result,
+    not the thing under test — the number is.
+  - **The panel being offered again on its own is not a bug worth
+    escalating.** Re-tapping Apply is idempotent — `setLinePaidHours`
+    (src/lib/db/entries.ts) is an absolute overwrite, not an add, and
+    `pendingRecoveryApplication` (src/lib/disputes.ts) skips any line whose
+    live `paid_hours` already sits above its frozen claim-time value — so the
+    panel can resurface for reasons that touch nothing (a reload, a line
+    re-entering "short" some other way) without any hours moving.
+  - **What IS a FAIL: a targeted line's `paid_hours` increasing by the
+    recovery amount more than once**, i.e. ending up above claim-time paid +
+    recovered. Judge this from the before/after numbers you recorded, never
+    from whether the panel was visible. If you do re-tap Apply on a line
+    already at or above that ceiling and the number does not move again,
+    that's the idempotency guard working, not a bug.
   - **Do not reuse a line here that you're also using for §5's paid/short-paid
     reconciliation testing in the same run** — see §5's note on this; both
     sections write the same `paid_hours` column and §5's mandatory revert will
     stomp whatever Apply wrote here, with no coordination between the two.
-  - **Seeing the "Apply N.Nh to N lines" panel offered again is not, by
-    itself, a bug worth escalating.** Re-tapping Apply is idempotent —
-    `setLinePaidHours` is an absolute overwrite, not an add — so before
-    reporting anything here confirm the paid hours actually moved twice
-    (double-applied), rather than just the panel reappearing because a line it
-    targets was touched again (e.g. by §5, per the note above).
   - The second-round offer, when it still appears, must now read
     **"still short N.Nh · N.Nh already recovered on a closed claim"**. A bare
     shortfall with no mention of what came back is the old wording.

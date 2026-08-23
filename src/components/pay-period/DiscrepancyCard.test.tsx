@@ -544,3 +544,70 @@ describe("the `min={0}` floor — kept here, and doing exactly one thing", () =>
     expect(setPaidPeriodHoursAction).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression cover for `paycheckup-difference-rounding-split` (escalated twice,
+// 2026-08-21 and 2026-08-22).
+//
+// THE BUG: the Difference tile rendered the RAW SIGNED diff while the "Missing
+// N hours." callout below it renders -diff. fmtHours rounds with Math.round,
+// which breaks an exact half toward +Infinity — so Math.round(-706.5) is -706
+// but Math.round(706.5) is 707. At 144.9 logged against 74.25 paid, diff is a
+// bit-exact -70.65 and the card printed "-70.6h" directly above "Missing 70.7
+// hours." — the same number, two magnitudes, stacked.
+//
+// These assert the two lines AGREE, not the specific strings, so the test still
+// means something if the display resolution is ever changed deliberately.
+describe("the Difference tile and the Missing callout state one magnitude", () => {
+  /** Pull the magnitude out of each line, ignoring sign and wording. */
+  function renderedMagnitudes(flagHours: number, paid: number) {
+    cleanup();
+    render(
+      <DiscrepancyCard
+        periodKey={PERIOD}
+        stats={{ ...STATS, flagHours }}
+        initialPaid={paid}
+      />,
+    );
+    // The tile is the value node right after its own "Difference" label —
+    // several other figures on this card render the same shape.
+    const tile =
+      screen.getByText("Difference").nextElementSibling?.textContent ?? "";
+    const callout = screen.getByText(/^Missing /).textContent ?? "";
+    return {
+      tile: tile.replace(/^[+-]/, "").replace(/h$/, ""),
+      callout: (callout.match(/Missing ([^ ]+) hours/) ?? [])[1] ?? "",
+    };
+  }
+
+  // The exact pair from the 2026-08-22 incident row.
+  it("agrees on the reported 144.9 / 74.25 case", () => {
+    const { tile, callout } = renderedMagnitudes(144.9, 74.25);
+    expect(tile).toBe(callout);
+    expect(tile).toBe("70.7");
+  });
+
+  // The 2026-08-21 row, and a third the bot reported as NOT reproducing —
+  // per source it splits too, so it belongs here.
+  it.each([
+    [120.6, 64.25],
+    [148.5, 74.25],
+  ])("agrees on %s logged / %s paid", (flagHours, paid) => {
+    const { tile, callout } = renderedMagnitudes(flagHours, paid);
+    expect(tile).toBe(callout);
+  });
+
+  // Every exact x.x5 tie is a candidate; these are the ones Math.round splits.
+  it("agrees across a sweep of exact tenths ties", () => {
+    for (let i = 1; i <= 400; i++) {
+      const shortfall = i * 0.1 + 0.05; // 0.15, 0.25, … always a half at 1dp
+      const paid = 20;
+      const { tile, callout } = renderedMagnitudes(paid + shortfall, paid);
+      expect({ shortfall, tile, callout }).toEqual({
+        shortfall,
+        tile: callout,
+        callout,
+      });
+    }
+  });
+});

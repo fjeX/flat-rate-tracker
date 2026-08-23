@@ -520,7 +520,12 @@ function OpCodeFormBody({
                 <button
                   type="button"
                   onClick={() => removeSubCode(sub.draftKey)}
-                  aria-label="Remove sub op code"
+                  // Falls back while the code field is still empty mid-typing.
+                  aria-label={
+                    sub.code.trim()
+                      ? `Remove sub op code ${sub.code.trim()}`
+                      : "Remove sub op code"
+                  }
                   className="mt-1.5 flex items-center justify-center rounded-full p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
