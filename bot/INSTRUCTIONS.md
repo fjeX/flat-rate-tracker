@@ -133,6 +133,14 @@ sends you there.
 ### 2. Log ROs (2–5 of them)
 - Log between 2 and 5 repair orders. Vary them each night:
   - Total hours per RO anywhere from **4 to 25** (vary: some small, some monsters)
+  - **Before widening this range, re-check §2d's cross-check.** Above
+    flagHours ≈ 26.7h, `retroBuckets()`'s step caps at 4h
+    (`retroStep`, src/lib/retro-capture.ts) while `isMeasuredLine`'s floor
+    keeps climbing at 15% of flagHours (`minPlausibleActual`,
+    src/lib/insights.ts) — 4 / 0.15 ≈ 26.7. Past that line even the smallest
+    retro-time chip can no longer clear the floor, so a missing
+    "· includes an estimate" suffix on a very large job is not automatically
+    a bug; check the line's flagHours against ~26.7h before reporting it.
   - At least one **multi-line RO** (2–4 op-code lines with different hours)
   - Mix labor types where the form offers them (CP / warranty / internal / etc.)
   - Realistic RO numbers (5–6 digits), realistic vehicles — fill **year, make,
@@ -330,7 +338,9 @@ regardless of which button.
   true-time pooling (`isPoolableLine`, src/lib/true-time.ts) and shows an
   **"· includes an estimate"** suffix next to its row on the Insights "Big
   jobs" table (src/components/insights/JobTimeSections.tsx) — confirm the
-  suffix appears there for a line you answered here.
+  suffix appears there for a line you answered here. **Above flagHours ≈
+  26.7h, a missing suffix is expected, not a bug** — see the note at §2's
+  hours range for why.
 - Tapping "Skip" (or closing the modal) must not block navigation or leave the
   form stuck — you should land wherever the save was headed.
 

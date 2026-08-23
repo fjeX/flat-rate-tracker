@@ -302,6 +302,14 @@ export function PayPeriodView({
         unpaid={unpaid}
         periodStart={selected.start}
         periodEnd={selected.end}
+        // The server-derived, timezone-corrected date — threaded down to the
+        // dispute-pack copy button so the clipboard document is stamped with
+        // the SAME "Generated:" date the print/PDF route stamps. The browser's
+        // own clock is not an acceptable substitute: a tech whose device
+        // timezone differs from their saved frt_timezone, or who clicks near
+        // local midnight, would otherwise hand a service manager two copies of
+        // one pack dated a day apart.
+        today={today}
         disputes={disputes}
         openDispute={openDispute}
         shortedHours={reconciled.shortedHours}

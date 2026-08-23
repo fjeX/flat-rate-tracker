@@ -15,6 +15,7 @@ import {
   type PayStatus,
   type ReconcileSort,
 } from "@/lib/reconcile";
+import { formatDateLong } from "@/lib/periods";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { buildDisputePack, formatDisputePackText } from "@/lib/dispute-pack";
@@ -205,6 +206,7 @@ export function ReconciliationCard({
   unpaid = [],
   periodStart,
   periodEnd,
+  today,
   embedded = false,
   title = "Pay Reconciliation",
 }: {
@@ -225,6 +227,12 @@ export function ReconciliationCard({
   // ledger) means no date filter is applied.
   periodStart?: string;
   periodEnd?: string;
+  // Server-derived "today" (YYYY-MM-DD), timezone-corrected from the tech's
+  // saved `frt_timezone` cookie by the page. REQUIRED, not optional: it is the
+  // "Generated:" date stamped on the copied dispute pack, and the print route
+  // stamps the same value. Anything that made this fall back to the browser
+  // clock would put two different dates on one document — see copyDisputeText.
+  today: string;
   // Rendered as a drill-down INSIDE PaidCheckCard rather than as its own card
   // on the page. Drops the card chrome and restyles the toggle as a row; all
   // behaviour below is identical either way.
@@ -302,12 +310,24 @@ export function ReconciliationCard({
       library,
       rates,
       techName,
-      generatedDate: new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      }),
+      // The SAME expression the print route uses (src/app/pay-period/
+      // dispute-pack/page.tsx), on the SAME server-derived `today`. It used to
+      // be `new Date().toLocaleDateString("en-US", …)` — the browser's clock
+      // and timezone at click time — so a tech whose device timezone differed
+      // from their saved frt_timezone, or who clicked near local midnight, got
+      // a copied pack dated a day apart from the printed one. Two versions of
+      // a pay dispute carrying different dates is how a claim gets waved away.
+      generatedDate: formatDateLong(today),
       entryIdsWithPhotos,
+      // Passed for symmetry with the print route. Inert today: `includePending`
+      // is left at its default false here (nothing in this UI offers the
+      // toggle, and the only in-app print link never sets ?pending=1), and
+      // buildDisputePack reads periodEnd/today ONLY to compute `periodEnded`
+      // for `wantPending = includePending && periodEnded` — which is false
+      // either way. Passing them means a future pending toggle inherits the
+      // period-must-be-over gate instead of silently skipping it.
+      periodEnd,
+      today,
       // Without this the clipboard copy silently dropped every ledger-sourced
       // unpaid row while still printing entry-sourced comeback lines — a
       // partial document that looked complete. The print route has always

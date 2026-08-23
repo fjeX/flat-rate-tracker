@@ -43,6 +43,7 @@ export function PaidCheckCard({
   unpaid = [],
   periodStart,
   periodEnd,
+  today,
   disputes,
   openDispute,
   shortedHours,
@@ -68,6 +69,10 @@ export function PaidCheckCard({
   unpaid?: UnpaidTime[];
   periodStart?: string;
   periodEnd?: string;
+  // Server-derived "today" (YYYY-MM-DD), pass-through only. Nothing here reads
+  // it; ReconciliationCard stamps the dispute pack with it so the copied text
+  // and the printed PDF carry the same "Generated:" date.
+  today: string;
   // NULL means the dispute-ledger migration hasn't been applied yet — distinct
   // from [] meaning "migrated, nothing disputed". The dispute section must stay
   // hidden on null: otherwise it offers a button whose action throws against a
@@ -199,6 +204,7 @@ export function PaidCheckCard({
             unpaid={unpaid}
             periodStart={periodStart}
             periodEnd={periodEnd}
+            today={today}
             embedded
             title="Which lines came up short?"
           />

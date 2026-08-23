@@ -15,7 +15,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useLogRoForm } from "./useLogRoForm";
 import { hhmmInTz } from "@/lib/periods";
-import type { RoMatch } from "@/lib/types";
+import type { Entry, RoMatch } from "@/lib/types";
+
+/** What getRoMatchById returns: a RoMatch plus the original's RO number. */
+type OriginalMatch = RoMatch & { roNumber: string };
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -26,15 +29,25 @@ vi.mock("next/navigation", () => ({
 // and the point here is form state, not the persist.
 const saveEntry = vi.fn(async () => ({ id: "entry-1", opCodes: [] }));
 const findDuplicateRos = vi.fn(async (): Promise<RoMatch[]> => []);
+// Edit-load resolves comebackOfEntryId to its original for the redo-of label.
+// A module-level vi.fn like the two above (rather than an inline `async () =>
+// null` in the factory) so each test can decide what the lookup finds — or
+// WHEN it finds it, which is the only way to reproduce the in-flight race the
+// ref guard exists for. Default is null, restored in beforeEach, which is the
+// fallback path the pre-existing tests all run through.
+const getRoMatchById = vi.fn(
+  async (id: string): Promise<OriginalMatch | null> => {
+    void id;
+    return null;
+  },
+);
 vi.mock("@/app/actions/entries", () => ({
   saveEntry: (...a: unknown[]) => saveEntry(...(a as [])),
   findDuplicateRos: (...a: unknown[]) => findDuplicateRos(...(a as [])),
   deleteEntryAction: vi.fn(),
   setLineActualHoursAction: vi.fn(),
-  // Edit-load resolves comebackOfEntryId to its original for the redo-of label.
-  // Null here: no test builds a linked original, and the hook must fall back to
-  // the bare label rather than throw when the lookup finds nothing.
-  getRoMatchById: vi.fn(async () => null),
+  getRoMatchById: (...a: unknown[]) =>
+    getRoMatchById(...(a as [id: string])),
 }));
 vi.mock("@/app/actions/op-codes", () => ({ createLibraryOpCode: vi.fn() }));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));
@@ -75,6 +88,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   findDuplicateRos.mockResolvedValue([]);
   saveEntry.mockResolvedValue({ id: "entry-1", opCodes: [] });
+  // Back to "the lookup finds nothing" — the fallback-label path every test
+  // above this line runs through.
+  getRoMatchById.mockResolvedValue(null);
   // No localStorage reset here on purpose: this jsdom setup doesn't expose one,
   // and `useStored` already treats "no storage" as "no saved default", which is
   // the state these tests want anyway.
@@ -228,5 +244,217 @@ describe("duplicate-RO prompt", () => {
     expect(result.current.dupMatches).toBeNull();
     expect(saveEntry).toHaveBeenCalledTimes(1);
     expect(result.current.abandonedRoNumber).toBeNull();
+  });
+});
+
+// The redo-of chip's label on edit-load. A saved comeback carries only
+// `comebackOfEntryId` — not the original's RO number, date or vehicle — so the
+// hook spends one lookup on mount to turn "Linked to an earlier RO" back into
+// "RO #71264 · Aug 21, 2026 · 2015 Subaru Outback". Every test above this line
+// mocks that lookup to null, which means until this block existed the suite
+// only ever exercised the FALLBACK. Nothing proved the rich label appears at
+// all, and nothing proved the two ways it can go wrong stay wrong-proof:
+// a late response repainting over the user's own pick, and a failed lookup
+// taking the LINK down with the label.
+describe("redo-of chip back-fill on edit-load", () => {
+  const ORIGINAL_ID = "orig-71264";
+
+  /** The original, as getRoMatchById returns it. */
+  const fetched: OriginalMatch = {
+    id: ORIGINAL_ID,
+    date: "2026-08-21",
+    roNumber: "71264",
+    vehicleSummary: "2015 Subaru Outback",
+  };
+
+  /** A saved comeback RO pointing at ORIGINAL_ID, as edit mode loads it. */
+  function comebackEntry(): Entry {
+    return {
+      id: "entry-comeback",
+      userId: "user-1",
+      createdAt: "2026-08-22T15:00:00.000Z",
+      updatedAt: "2026-08-22T15:00:00.000Z",
+      date: "2026-08-22",
+      roNumber: "71980",
+      vehicle: { year: "2015", make: "Subaru", model: "Outback", vin: "", mileage: "" },
+      // A marked line is what makes the entry-level comeback metadata
+      // meaningful — performSave nulls comebackOfEntryId out of the payload
+      // when no line is a comeback, so without this the payload assertions
+      // below would pass for the wrong reason.
+      opCodes: [
+        {
+          id: "line-1",
+          opCodeId: null,
+          custom: true,
+          customCode: "RECHK",
+          customDescription: "Recheck noise",
+          flagHours: 0,
+          actualHours: null,
+          notes: "",
+          position: 0,
+          subOpCodeId: null,
+          laborType: null,
+          isComeback: true,
+        },
+      ],
+      flagHours: 0,
+      notes: "",
+      comebackOfEntryId: ORIGINAL_ID,
+      comebackKind: "comeback_own",
+    };
+  }
+
+  /** The comebackOfEntryId that performSave would actually persist. */
+  async function savedComebackOfEntryId(
+    result: { current: ReturnType<typeof useLogRoForm> },
+  ) {
+    await act(async () => {
+      result.current.handleSave();
+    });
+    expect(saveEntry).toHaveBeenCalledTimes(1);
+    const [input] = saveEntry.mock.calls[0] as unknown as [
+      { comebackOfEntryId: string | null },
+    ];
+    return input.comebackOfEntryId;
+  }
+
+  it("seeds the chip with the original's RO number, date and vehicle", async () => {
+    getRoMatchById.mockResolvedValue(fetched);
+    const { result } = setup({ existingEntry: comebackEntry() });
+
+    // Control: before the lookup resolves the chip has only the bare fallback,
+    // so the assertions below can't pass on a value that was there all along.
+    expect(result.current.selectedOriginal).toBeNull();
+
+    await act(async () => {});
+
+    expect(getRoMatchById).toHaveBeenCalledWith(ORIGINAL_ID);
+    expect(result.current.selectedOriginal).toEqual({
+      id: ORIGINAL_ID,
+      date: "2026-08-21",
+      vehicleSummary: "2015 Subaru Outback",
+    });
+    // ComebackSection prints "RO #" + this, because RoMatch carries no number.
+    expect(result.current.originalRoSearch).toBe("71264");
+    // ...and the link itself is untouched. The effect is display-only.
+    expect(result.current.comebackOfEntryId).toBe(ORIGINAL_ID);
+    expect(await savedComebackOfEntryId(result)).toBe(ORIGINAL_ID);
+  });
+
+  it("drops a late response when the tech has already picked a different original", async () => {
+    // A lookup this test finishes by hand, so the user's choice lands while it
+    // is still in flight — the only window in which the bug is reachable.
+    let release: ((match: OriginalMatch) => void) | null = null;
+    getRoMatchById.mockImplementation(
+      () =>
+        new Promise<OriginalMatch | null>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const { result } = setup({ existingEntry: comebackEntry() });
+
+    // The tech hits X and picks a different RO before the label comes back.
+    const theirPick: RoMatch = {
+      id: "orig-99999",
+      date: "2026-07-02",
+      vehicleSummary: "2019 Honda Civic",
+    };
+    act(() => result.current.chooseOriginalRo(theirPick));
+    expect(result.current.comebackOfEntryId).toBe("orig-99999");
+
+    // NOW the original lookup answers, naming the RO they just abandoned.
+    await act(async () => {
+      release?.(fetched);
+    });
+
+    // Their pick stands. Without the ref check the chip would read
+    // "RO #71264 · Aug 21, 2026 · 2015 Subaru Outback" over a
+    // comebackOfEntryId of orig-99999 — a label confidently naming the wrong
+    // RO on a comeback, which is the one place that has to be exact.
+    expect(result.current.selectedOriginal).toEqual(theirPick);
+    expect(result.current.comebackOfEntryId).toBe("orig-99999");
+    // chooseOriginalRo never touches the search box, so a stale write here is
+    // its own tell: "71264" could only have come from the late response.
+    expect(result.current.originalRoSearch).toBe("");
+    expect(await savedComebackOfEntryId(result)).toBe("orig-99999");
+  });
+
+  it("drops a late response when the tech has cleared the link outright", async () => {
+    let release: ((match: OriginalMatch) => void) | null = null;
+    getRoMatchById.mockImplementation(
+      () =>
+        new Promise<OriginalMatch | null>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const { result } = setup({ existingEntry: comebackEntry() });
+
+    act(() => result.current.clearOriginalRo());
+    expect(result.current.comebackOfEntryId).toBeNull();
+
+    await act(async () => {
+      release?.(fetched);
+    });
+
+    // Unlinking has to stay unlinked. The pre-fix `alive` flag only covered
+    // unmount, so this response would have resurrected the chip on a comeback
+    // the tech had just told us wasn't a redo of anything.
+    expect(result.current.selectedOriginal).toBeNull();
+    expect(result.current.originalRoSearch).toBe("");
+    expect(result.current.comebackOfEntryId).toBeNull();
+    expect(await savedComebackOfEntryId(result)).toBeNull();
+  });
+
+  it("keeps the link when the original was deleted and the lookup finds nothing", async () => {
+    getRoMatchById.mockResolvedValue(null);
+    const { result } = setup({ existingEntry: comebackEntry() });
+
+    await act(async () => {});
+
+    // A dangling link degrades to the bare label and stops there. Turning a
+    // missing LABEL into a missing LINK is the 2026-08-12 data-loss bug, where
+    // a nulled comebackOfEntryId rode the next save into the column.
+    expect(result.current.selectedOriginal).toBeNull();
+    expect(result.current.comebackOfEntryId).toBe(ORIGINAL_ID);
+    expect(await savedComebackOfEntryId(result)).toBe(ORIGINAL_ID);
+  });
+
+  it("keeps the link when the lookup throws", async () => {
+    getRoMatchById.mockRejectedValue(new Error("network"));
+    const { result } = setup({ existingEntry: comebackEntry() });
+
+    await act(async () => {});
+
+    // Same contract as the null case, via the catch. Silent by design: an
+    // error banner over a cosmetic lookup is louder than the problem.
+    expect(result.current.selectedOriginal).toBeNull();
+    expect(result.current.comebackOfEntryId).toBe(ORIGINAL_ID);
+    expect(await savedComebackOfEntryId(result)).toBe(ORIGINAL_ID);
+  });
+
+  it("falls back to the bare label rather than render a naked RO number", async () => {
+    // Legacy/imported rows can have a blank RO number even though
+    // newEntrySchema requires one. The chip is built as "RO #" + the number,
+    // so a blank one would render "RO # · Aug 21, 2026 · …".
+    getRoMatchById.mockResolvedValue({ ...fetched, roNumber: "   " });
+    const { result } = setup({ existingEntry: comebackEntry() });
+
+    await act(async () => {});
+
+    expect(result.current.selectedOriginal).toBeNull();
+    expect(result.current.originalRoSearch).toBe("");
+    expect(result.current.comebackOfEntryId).toBe(ORIGINAL_ID);
+  });
+
+  it("never looks anything up for an RO with no redo-of link", async () => {
+    const entry = comebackEntry();
+    entry.comebackOfEntryId = null;
+    const { result } = setup({ existingEntry: entry });
+
+    await act(async () => {});
+
+    expect(getRoMatchById).not.toHaveBeenCalled();
+    expect(result.current.selectedOriginal).toBeNull();
+    expect(result.current.comebackOfEntryId).toBeNull();
   });
 });
