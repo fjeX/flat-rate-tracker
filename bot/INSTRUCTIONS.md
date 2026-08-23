@@ -904,7 +904,15 @@ Use §5 to reconcile a line to fewer hours than it flagged.
   - Leave dollars **blank** on one run — dollars are still optional and must
     record as unknown, never as $0.
   - Re-open a claim you already closed with **0 recovered hours**: it must come
-    back showing 0, not the claimed amount.
+    back showing 0, not the claimed amount. **The control is "Correct outcome"**
+    and it appears on a CLOSED card only (new 2026-08-23,
+    `dispute-closed-claim-no-reopen`) — before that, a closed claim rendered no
+    re-open affordance at all, so this check was unrunnable and the seeded-0
+    logic was live but unreachable. If a closed card shows no "Correct outcome"
+    button, that is a regression, not a missing feature.
+  - A **withdrawn** claim also offers "Correct outcome", and correcting it
+    currently converts it to *resolved* — that is known and is a pending product
+    decision, not a bug to file.
 - Recovered hours are deliberately **not capped** at the claimed amount. Entering
   MORE than claimed is legal (goodwill hours) and must save, not error.
 - **Double-tap protection:** with a live claim open, there must be no second
@@ -1152,6 +1160,16 @@ The dashboard has three new cards; sanity-check each:
   every 100), a new numbered snapshot sheet must appear — check /snapshots
   lists it and its stats look sane (RO count = the threshold, dates plausible).
   Snapshots from previous nights must never change — they are frozen records.
+  - **Overall efficiency on a snapshot sheet may legitimately be WITHHELD** (new
+    2026-08-23, `snapshot-efficiency-frozen-ungated`). It now routes through the
+    same excluded-days gating as every other efficiency surface, so where the
+    flagged hours fell on days with nothing to measure them against, the sheet
+    prints a sentence explaining that instead of a percentage. **A withheld
+    figure here is CORRECT and must not be filed as a missing number.** What
+    WOULD be a bug: a bare percentage printed on a sheet whose hours were mostly
+    or wholly unmeasurable, or wording implying the period is still running
+    ("yet", "so far") — these are frozen historical records, so the copy is past
+    tense by design.
   **Two exceptions added 2026-08-03 — do NOT escalate either as a bug:**
   - A snapshot is now only frozen once the ROs behind it have sat still for an
     **hour**. So crossing a threshold tonight will NOT mint the sheet during
