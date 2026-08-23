@@ -24,7 +24,7 @@
 // `closedRounds` count, and the sentence has to close cleanly with no orphaned
 // middot when the second half disappears.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { DisputeOutcomeCard } from "./DisputeOutcomeCard";
 import type { Dispute } from "@/lib/types";
@@ -186,5 +186,67 @@ describe("DisputeOutcomeCard second-round offer sentence", () => {
     // Control for the loop above: the same style of check on a pair that IS
     // glued in the real string, proving `not.toContain` here can fail at all.
     expect(sentence).toContain("12.5h ·");
+  });
+});
+
+// A claim closed as Denied used to be permanently uncorrectable: the form was
+// gated on `!isClosed`, and so was the entire button row that could open it, so
+// once closed no control existed that could set `recording`. Shops answer in
+// stages and techs mis-tap, and the money record was then wrong forever.
+describe("DisputeOutcomeCard correcting a closed claim", () => {
+  function renderClosed(recovered: number) {
+    return render(
+      <DisputeOutcomeCard
+        periodKey={PERIOD_KEY}
+        periodLabel={PERIOD_LABEL}
+        openDispute={null}
+        allDisputes={[closedRound("d1", recovered)]}
+        entries={[]}
+        library={[]}
+        shortedHours={12.5}
+        pendingCount={0}
+        pendingHours={0}
+        periodEnded
+      />,
+    );
+  }
+
+  it("offers a correction control on a closed claim, not the first-time one", () => {
+    renderClosed(0);
+    expect(
+      screen.getByRole("button", { name: "Correct outcome" }),
+    ).toBeTruthy();
+    // The first-time idiom and the lifecycle taps belong to a LIVE claim only —
+    // a closed claim is off the queue and must not offer to advance or drop.
+    expect(screen.queryByRole("button", { name: "Record outcome" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Drop it" })).toBeNull();
+  });
+
+  it("seeds a DENIED claim's form with 0, not with the ask", () => {
+    // The whole point. `closedRound` claimed 30h and recovered 0h. OutcomeForm
+    // seeds off `resolvedAt !== null` rather than truthiness precisely so that
+    // recovered 0 — a real answer, "they denied it" — survives the round trip.
+    // `recoveredHours || claimedHours` would put 30 back in this box and one tap
+    // on Save would rewrite a denial as a full payout.
+    renderClosed(0);
+    fireEvent.click(screen.getByRole("button", { name: "Correct outcome" }));
+
+    const hours = screen.getByLabelText("Recovered hours") as HTMLInputElement;
+    expect(hours.value).toBe("0");
+    // recoveredDollars is null on this fixture: "we don't know what that was
+    // worth" must come back blank, never as $0.
+    const dollars = screen.getByLabelText(
+      "Recovered dollars",
+    ) as HTMLInputElement;
+    expect(dollars.value).toBe("");
+  });
+
+  it("seeds a partly-paid claim with what was actually recovered", () => {
+    // Control for the case above: proves the 0 is read from recoveredHours and
+    // is not just an empty/falsy box rendering as "0" by accident.
+    renderClosed(19.7);
+    fireEvent.click(screen.getByRole("button", { name: "Correct outcome" }));
+    const hours = screen.getByLabelText("Recovered hours") as HTMLInputElement;
+    expect(hours.value).toBe("19.7");
   });
 });

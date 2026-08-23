@@ -248,7 +248,18 @@ export function DisputeOutcomeCard({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
+  // null = not recording. Otherwise it records WHICH kind of recording session
+  // is open, because the two unmount on different signals:
+  //   reopen:false — a live claim being closed out. Unmounts when the dispute
+  //     reads as closed (the original, data-driven rule; see OutcomeForm.save).
+  //   reopen:true  — an already-closed claim being corrected. "Closed" is the
+  //     starting state here, so that rule would unmount the form instantly.
+  //     `at` freezes the dispute's updatedAt when the form opened; updateDispute
+  //     always re-stamps updated_at, so the form drops the moment — and only the
+  //     moment — the corrected row actually comes back from the server.
+  const [recording, setRecording] = useState<
+    { reopen: false } | { reopen: true; at: string } | null
+  >(null);
   // Opt-in, never the default: see the doc comment on openDisputeAction.
   const [claimPending, setClaimPending] = useState(false);
   const [applied, setApplied] = useState<number | null>(null);
@@ -615,51 +626,71 @@ export function DisputeOutcomeCard({
 
           {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
 
-          {/* `&& !isClosed` is what actually closes the form: once the refresh
-              lands and the dispute reads as resolved, this unmounts it. See the
-              comment in OutcomeForm.save() for why it isn't closed imperatively. */}
-          {recording && !isClosed(dispute.status) ? (
-            <OutcomeForm dispute={dispute} onDone={() => setRecording(false)} />
+          {/* The form is never closed imperatively — see the comment in
+              OutcomeForm.save(). It unmounts when the SERVER says the write
+              landed, and which server fact that is depends on the session:
+              a live claim going closed, or a corrected claim's updatedAt
+              moving off the value it had when the form opened. */}
+          {recording !== null &&
+          (recording.reopen
+            ? dispute.updatedAt === recording.at
+            : !isClosed(dispute.status)) ? (
+            <OutcomeForm dispute={dispute} onDone={() => setRecording(null)} />
+          ) : isClosed(dispute.status) ? (
+            /* A closed claim is not finished business: shops answer in stages,
+               and a mis-tap can close a claim at the wrong figure. The row is
+               deliberately just this one control — no "Record outcome" (that is
+               the first-time idiom), no advance, no "Drop it" on a claim that is
+               already off the queue. OutcomeForm seeds from what was stored. */
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setRecording({ reopen: true, at: dispute.updatedAt })
+                }
+                className="btn btn-sm btn-ghost min-h-11"
+              >
+                Correct outcome
+              </button>
+            </div>
           ) : (
-            !isClosed(dispute.status) && (
-              <div className="flex flex-wrap items-center gap-2">
-                {next === "submitted" && (
-                  <button
-                    type="button"
-                    onClick={() => advance("submitted")}
-                    disabled={isPending}
-                    className="btn btn-sm btn-primary min-h-11"
-                  >
-                    I handed it in
-                  </button>
-                )}
-                {next === "answered" && (
-                  <button
-                    type="button"
-                    onClick={() => advance("answered")}
-                    disabled={isPending}
-                    className="btn btn-sm btn-primary min-h-11"
-                  >
-                    They responded
-                  </button>
-                )}
+            <div className="flex flex-wrap items-center gap-2">
+              {next === "submitted" && (
                 <button
                   type="button"
-                  onClick={() => setRecording(true)}
-                  className="btn btn-sm btn-ghost min-h-11"
-                >
-                  Record outcome
-                </button>
-                <button
-                  type="button"
-                  onClick={() => advance("withdrawn")}
+                  onClick={() => advance("submitted")}
                   disabled={isPending}
-                  className="btn btn-sm btn-ghost min-h-11"
+                  className="btn btn-sm btn-primary min-h-11"
                 >
-                  Drop it
+                  I handed it in
                 </button>
-              </div>
-            )
+              )}
+              {next === "answered" && (
+                <button
+                  type="button"
+                  onClick={() => advance("answered")}
+                  disabled={isPending}
+                  className="btn btn-sm btn-primary min-h-11"
+                >
+                  They responded
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setRecording({ reopen: false })}
+                className="btn btn-sm btn-ghost min-h-11"
+              >
+                Record outcome
+              </button>
+              <button
+                type="button"
+                onClick={() => advance("withdrawn")}
+                disabled={isPending}
+                className="btn btn-sm btn-ghost min-h-11"
+              >
+                Drop it
+              </button>
+            </div>
           )}
         </div>
       )}

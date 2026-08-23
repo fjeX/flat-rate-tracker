@@ -41,9 +41,23 @@ export type SnapshotScheduleData = {
 export function snapshotEfficiency(
   firstN: Entry[],
   scheduleData: SnapshotScheduleData,
-): Pick<SnapshotStats, "overallEfficiency" | "efficiencySource"> {
+): Pick<
+  SnapshotStats,
+  "overallEfficiency" | "efficiencySource" | "unpairedFlagHours" | "unpairedDays"
+> {
+  // Every branch returns all four keys with an EXPLICIT value — number or
+  // null, never undefined. Two reasons: an undefined value is dropped by JSON
+  // serialization on the way into the jsonb column, which would leave the key
+  // absent and make the backfill guard in db/gamification re-patch the same row
+  // on every dashboard load; and absent/null/0 are three different facts here
+  // (see SnapshotStats), so "not measured" has to be written down, not omitted.
   if (!scheduleData || firstN.length === 0) {
-    return { overallEfficiency: null, efficiencySource: null };
+    return {
+      overallEfficiency: null,
+      efficiencySource: null,
+      unpairedFlagHours: null,
+      unpairedDays: null,
+    };
   }
   const dates = firstN.map((e) => e.date).sort();
   const s = aggregateStatsWithSchedule(
@@ -56,6 +70,11 @@ export function snapshotEfficiency(
     overallEfficiency:
       s.efficiency === null ? null : Math.round(s.efficiency * 10) / 10,
     efficiencySource: s.denomSource,
+    // Carried, not discarded: the percentage above is meaningless without
+    // them, and this is the only surface where that number is permanent.
+    // Rounded like totalFlagHours so float dust never reads as excluded work.
+    unpairedFlagHours: Math.round(s.unpairedFlagHours * 100) / 100,
+    unpairedDays: s.unpairedDays,
   };
 }
 
@@ -195,14 +214,10 @@ export function buildSnapshotStats(
 
   const sortedDates = [...dates].sort();
 
-  const { overallEfficiency, efficiencySource } = snapshotEfficiency(
-    firstN,
-    scheduleData,
-  );
+  const efficiency = snapshotEfficiency(firstN, scheduleData);
 
   return {
-    overallEfficiency,
-    efficiencySource,
+    ...efficiency,
     roCount: firstN.length,
     totalFlagHours: Math.round(totalFlagHours * 100) / 100,
     avgVsBook:

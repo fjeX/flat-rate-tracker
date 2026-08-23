@@ -414,19 +414,46 @@ async function generateMissingSnapshots(
 // Efficiency backfill — snapshots frozen before the schedule feature
 // ------------------------------------------------------------------------
 
+/** The keys `snapshotEfficiency` owns. A stats blob missing ANY of them is a
+ * candidate for the patch below.
+ *
+ * It is keyed on the unpaired pair, not just overallEfficiency, because rows
+ * written by the first version of this backfill already have
+ * `overallEfficiency` — a guard that only asked about that key considered
+ * every one of them done forever, and they are exactly the rows carrying a
+ * percentage with no record of what it excluded. */
+const EFFICIENCY_KEYS = [
+  "overallEfficiency",
+  "efficiencySource",
+  "unpairedFlagHours",
+  "unpairedDays",
+] as const;
+
 /** Snapshots frozen before schedule-aware efficiency existed have no
- * overallEfficiency key at all. Once a schedule exists, patch those rows a
- * single time: recompute over the same first-N entries and merge ONLY the two
- * efficiency fields into the stored stats — everything else stays frozen.
- * After the patch the key exists (possibly null), so this never re-runs. */
+ * overallEfficiency key at all; snapshots patched by the first version of this
+ * backfill have it but no record of the hours that percentage could not see.
+ * Once a schedule exists, patch both a single time: recompute over the same
+ * first-N entries and merge ONLY the efficiency fields into the stored stats —
+ * everything else stays frozen.
+ *
+ * WHY IT SETTLES: `snapshotEfficiency` returns all four keys with an explicit
+ * value on every branch — a number or a JSON null, never undefined — so a
+ * patched row comes back from the DB with all four keys present and fails the
+ * `in` test below on the next call. (An undefined value WOULD be dropped by
+ * JSON serialization on the way into jsonb, leaving the key absent and turning
+ * this into a write on every dashboard load; that is what the explicit nulls
+ * in snapshotEfficiency are for.) A row that cannot be patched — no schedule
+ * configured — is left untouched and costs one cheap schedule read per call,
+ * unchanged from before. */
 async function backfillSnapshotEfficiency(
   supabase: DbClient,
   snapshots: PortfolioSnapshot[],
   today: string,
 ): Promise<PortfolioSnapshot[]> {
-  const missing = snapshots.filter(
-    (s) => !("overallEfficiency" in (s.stats as unknown as Record<string, unknown>)),
-  );
+  const missing = snapshots.filter((s) => {
+    const stats = s.stats as unknown as Record<string, unknown>;
+    return EFFICIENCY_KEYS.some((k) => !(k in stats));
+  });
   if (missing.length === 0) return snapshots;
 
   // No schedule yet — nothing meaningful to compute; try again once one exists.
@@ -453,7 +480,14 @@ async function backfillSnapshotEfficiency(
 
   for (const snap of missing) {
     const eff = snapshotEfficiency(all.slice(0, snap.roThreshold), scheduleData);
-    const stats = { ...(snap.stats as unknown as Record<string, unknown>), ...eff };
+    // Belt and braces on the settling rule above: the Pick<> that types `eff`
+    // makes every key optional, so tsc would not catch a future branch that
+    // omits one — and an omitted key is a key that never persists, i.e. a
+    // patch that re-runs forever. Pin all four to an explicit value here.
+    const stats = {
+      ...(snap.stats as unknown as Record<string, unknown>),
+      ...Object.fromEntries(EFFICIENCY_KEYS.map((k) => [k, eff[k] ?? null])),
+    };
     const { error } = await supabase
       .from("portfolio_snapshots")
       .update({ stats: stats as unknown as Json })

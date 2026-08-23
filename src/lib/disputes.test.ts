@@ -627,6 +627,103 @@ describe("pendingRecoveryApplication", () => {
     expect(pendingRecoveryApplication(d, after, []).rows).toEqual([]);
   });
 
+  // The accretion bug: clearing a line back to Pending after a recovery was
+  // applied used to RE-ARM the offer, because the only guard compared upward
+  // (paidNow > paidAtClaim). Four consecutive taps walked a cleared line
+  // 0 -> 4 -> 8 -> 12 -> 16 with hours the tech never typed.
+  it("does not re-arm when a line is cleared back to Pending after the recovery was applied", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 4,
+      lines: [
+        line({
+          entryId: "e1",
+          flaggedHours: 16,
+          paidHours: 12,
+          claimedHours: 4,
+          recoveredHours: 4,
+        }),
+      ],
+    });
+    // Applied once (12 -> 16), then the tech cleared the line back to Pending.
+    const cleared = [ro([roLine({ flagHours: 16, paidHours: null })])];
+    expect(pendingRecoveryApplication(d, cleared, []).rows).toEqual([]);
+
+    // Every rung the old four-tap ladder climbed to is refused too, so even a
+    // hand-typed value in the middle of it cannot restart the walk.
+    for (const paid of [4, 8, 16]) {
+      const at = [ro([roLine({ flagHours: 16, paidHours: paid })])];
+      expect(pendingRecoveryApplication(d, at, []).rows).toEqual([]);
+    }
+
+    // The one value that IS still offered is the claim-time baseline itself —
+    // a line reading exactly what the claim froze has not had this money
+    // applied, and that is the whole point of the feature.
+    const baseline = [ro([roLine({ flagHours: 16, paidHours: 12 })])];
+    expect(pendingRecoveryApplication(d, baseline, []).rows[0].paidAfter).toBeCloseTo(16, 5);
+  });
+
+  // Proves the fix does not lean on the old ceiling, which only landed on the
+  // true entitlement when paidAtClaim happened to be a multiple of the recovery.
+  // 13 + 4 = 17; the old guard stopped a cleared line at 16.
+  it("refuses a cleared line even when claim-time paid is not a multiple of the recovery", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 4,
+      lines: [
+        line({
+          entryId: "e1",
+          flaggedHours: 17,
+          paidHours: 13,
+          claimedHours: 4,
+          recoveredHours: 4,
+        }),
+      ],
+    });
+    for (const paid of [null, 4, 8, 12, 16]) {
+      const at = [ro([roLine({ flagHours: 17, paidHours: paid })])];
+      expect(pendingRecoveryApplication(d, at, []).rows).toEqual([]);
+    }
+    // Still on its claim-time baseline: genuinely unapplied, still offered.
+    const untouched = [ro([roLine({ flagHours: 17, paidHours: 13 })])];
+    const plan = pendingRecoveryApplication(d, untouched, []);
+    expect(plan.rows).toHaveLength(1);
+    expect(plan.rows[0].paidAfter).toBeCloseTo(17, 5);
+  });
+
+  it("still offers a recovery that has never been applied to a pending line", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 1.5,
+      lines: [
+        line({ entryId: "e1", paidHours: null, claimedHours: 1.5, recoveredHours: 1.5 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine({ paidHours: null })])], []);
+    expect(plan.rows).toHaveLength(1);
+    expect(plan.rows[0].paidNow).toBe(null);
+    expect(plan.rows[0].paidAfter).toBeCloseTo(1.5, 5);
+
+    // ...and once applied, it is not offered again.
+    const after = [ro([roLine({ paidHours: 1.5 })])];
+    expect(pendingRecoveryApplication(d, after, []).rows).toEqual([]);
+  });
+
+  // Pending at claim time, later reconciled at zero: nothing has been paid on
+  // this line under either reading, so the recovery is still owed.
+  it("still offers when a line pending at claim time was later reconciled at zero", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 1.5,
+      lines: [
+        line({ entryId: "e1", paidHours: null, claimedHours: 1.5, recoveredHours: 1.5 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine({ paidHours: 0 })])], []);
+    expect(plan.rows).toHaveLength(1);
+    expect(plan.rows[0].paidAfter).toBeCloseTo(1.5, 5);
+  });
+
   it("treats a settlement covering the whole ask as every line getting its claim", () => {
     const d = dispute({
       status: "resolved",

@@ -251,13 +251,13 @@ export function TimerPip({
 
   const containerStyle: React.CSSProperties = {
     ...(pos
-      ? { position: "fixed" as const, left: pos.x, top: pos.y, zIndex: 9999 }
+      ? { position: "fixed" as const, left: pos.x, top: pos.y, zIndex: 45 }
       : {
           position: "fixed" as const,
           bottom: 24,
           left: "50%",
           transform: "translateX(-50%)",
-          zIndex: 9999,
+          zIndex: 45,
         }),
     ...(expanded ? { width: size?.w ?? DEFAULT_W, height: size?.h ?? undefined } : {}),
   };

@@ -428,13 +428,39 @@ export function pendingRecoveryApplication(
     // purpose (flagged 5, paid 2, shop returns 1), so a short line would be
     // offered again every render and the second tap would write 4.
     //
-    // dl.paidHours is frozen at claim time. If the live line has moved up since
-    // then, this money is already on the books — by this tap, or by the tech
-    // typing it into Reconciliation afterwards. Skipping a hand-entered
-    // adjustment is the safe direction to be wrong in: the worst case is a
-    // number the tech already recorded themselves.
-    const paidAtClaim = dl.paidHours ?? 0;
-    if (paidNow !== null && paidNow > paidAtClaim + RECOVERY_EPS) continue;
+    // The offer is armed by ONE condition: the live line still reads exactly
+    // what the claim froze. dl.paidHours is the claim-time snapshot; if the live
+    // value has moved AT ALL — in either direction — this claim no longer
+    // describes the line in front of us and the app has no honest basis for
+    // adding hours to it.
+    //
+    //  - moved UP: the money is already on the books, by an earlier tap of this
+    //    same button or by the tech typing it into Reconciliation afterwards.
+    //  - moved DOWN, including cleared back to Pending (paid_hours -> null):
+    //    the tech deliberately un-reconciled the line. The old guard only
+    //    compared upward (`paidNow > paidAtClaim`), so a cleared line looked
+    //    like "never applied" and the offer RE-ARMED. Each subsequent tap then
+    //    wrote (whatever is there now) + recoveredHours, walking a line the tech
+    //    cleared to 0 up through 4 -> 8 -> 12 -> 16 with hours nobody typed.
+    //    The old ceiling that eventually stopped it was arithmetic coincidence,
+    //    not a design: it halted at the first multiple of `hours` to clear
+    //    paidAtClaim, which lands on the true entitlement only when paidAtClaim
+    //    is an exact multiple of `hours`.
+    //
+    // Skipping is always the safe direction to be wrong in: the worst case is a
+    // number the tech records themselves in Reconciliation. Writing is not —
+    // the worst case there is hours the tech never earned, in the one ledger
+    // that is supposed to prove what they were paid.
+    //
+    // KNOWN LIMIT: when the claim froze zero paid hours (null or 0) and the live
+    // line still reads zero paid hours, "never applied" and "applied, then
+    // cleared back to zero" are the same two numbers and the data cannot tell
+    // them apart — there is no applied-at marker on dispute_lines and adding one
+    // is a schema change. That state re-offers, which is correct for a
+    // genuinely-unapplied claim and at worst ONE re-application for the other.
+    // It cannot accrete: the first write moves the live value off zero and every
+    // render after that sees the mismatch and skips.
+    if (!sameAsClaimTime(paidNow, dl.paidHours)) continue;
 
     taken.add(live.line.id);
     rows.push({
@@ -457,6 +483,23 @@ export function pendingRecoveryApplication(
     unmappedHours: unmapped > RECOVERY_EPS ? unmapped : 0,
     needsLineBreakdown: false,
   };
+}
+
+/**
+ * Does the live line still read exactly what the claim froze?
+ *
+ * null degrades to 0 FOR THIS COMPARISON ONLY. Everywhere else in the app
+ * "pending, never reconciled" and "reconciled at zero" are deliberately
+ * different facts, but the only question here is "has this money landed on the
+ * line yet?", and both answer no. A line that was pending at claim time and has
+ * since been reconciled at zero has had nothing applied to it, so it must still
+ * be offered. Numbers compare within RECOVERY_EPS because shops round hours.
+ */
+function sameAsClaimTime(
+  paidNow: number | null,
+  paidAtClaim: number | null,
+): boolean {
+  return Math.abs((paidNow ?? 0) - (paidAtClaim ?? 0)) <= RECOVERY_EPS;
 }
 
 /**

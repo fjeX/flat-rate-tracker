@@ -407,7 +407,10 @@ start and save in the same breath records ~0 and proves nothing.
   mismatch to report.
 - Check that a 4th timer cannot be started: with 3 running, the add button
   reads "All timers in use" and is disabled.
-- Attaching the **same RO to two timers** must be refused with a clear message.
+- Attaching the **same RO to a second timer** must prompt a line picker
+  ("RO #71264 — Which line?") that offers only the lines not already on a
+  timer — the busy line must not appear. Refusing the RO outright, or a
+  picker that still shows the busy line, is a bug.
 - Only test the multi-timer mechanics if there are enough ROs; don't create
   extra ROs just to fill slots.
 - The live display ticks from a Web Worker. In a real, foregrounded browser it
@@ -429,6 +432,12 @@ these as you go — both of these were real, and both came from your own reports
   `#418` / "server rendered text didn't match" is a bug. It used to fire on
   roughly HALF of navigations, so several clean pages do not mean it is gone —
   judge it across the whole walk, not one load.
+- A `frt-logo.png was preloaded ... but not used within a few seconds`
+  console warning is KNOWN-BENIGN — a test-navigation artifact with no
+  functional impact, tracked as fingerprint `logo-preload-warning` and settled
+  2026-07-27. Do not report it. Note the dispute-pack print route renders no
+  logo at all, so a warning seen "on the dispute pack" came from the page the
+  harness was on before it. Report other console errors as normal.
 - **It must cover nothing.** On any page, scroll to the very bottom. The panel
   should sit in reserved space *below* the last content, not on top of it —
   the footer row and the last calendar row on /schedule are where it used to
@@ -668,6 +677,16 @@ verify the saved hours before continuing to §6.
 - Add one spiff via the quick-add flow (plausible: "alignment spiff $25",
   "tire spiff $10", etc.). Link it to one of tonight's ROs if the UI allows.
 - Verify it shows on the pay period's Spiffs card and on the RO's detail view.
+- **Before reporting a field-count mismatch between the Pay Period card's Add
+  form and Quick Add's Spiff tab: scroll the modal panel to the bottom first.**
+  Both surfaces render the identical `BonusForm` component inside the same
+  scrollable dialog (`max-h-[90vh] overflow-y-auto`) — Category and "Attach to
+  an RO" are always present in both, just sometimes below the fold. If you
+  still see a field present in one and absent in the other AFTER scrolling both
+  panels fully, capture a full accessibility snapshot (not a screenshot) of
+  each panel and quote the two node trees side by side in the report — a claim
+  without both trees attached will not be treated as new evidence for
+  fingerprint `spiff-form-capability-split` (disproved 08-21, 08-22, 08-23).
 - **Delete a spiff and watch the row go** (fixed 2026-08-12). Adding one has
   always repainted; deleting one did not, so a successful delete could sit on
   screen for up to 40s and read as "delete failed". The row must disappear
@@ -1515,6 +1534,13 @@ now refuses to print it and says why instead. You will see, all of them correct:
 - **Dashboard tiles** — the tile drops to `8.0h scheduled` (the hours the
   figure would have been measured against) rather than a percentage. Note it
   says **scheduled**, not "0.0h clocked" — that older wording was a bug.
+  This only applies when a real scheduled or clocked denominator was withheld.
+  If `denomSource` is null AND `denomHours` is 0 AND there is no "Not counted
+  above" caption — nothing flagged, nothing clocked, nothing scheduled yet, e.g.
+  the week just started on an in-progress unscheduled day — then `0.0h clocked`
+  is CORRECT and matches the no-schedule fallback locked in by
+  `StatCard.test.tsx` ("still says clocked when there is no schedule"). Do not
+  file this.
 - **Insights trend bars** — a withheld period's bar is a short stub labelled
   `—`, and it is excluded from the chart's axis scale.
 

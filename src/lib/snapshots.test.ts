@@ -119,6 +119,14 @@ describe("buildSnapshotStats", () => {
     const stats = buildSnapshotStats(entries, LIB, []);
     expect(stats.overallEfficiency).toBeNull();
     expect(stats.efficiencySource).toBeNull();
+    // NULL, not absent and not 0. Absent means "frozen before the field
+    // existed" and 0 means "measured, nothing excluded" — neither is true of a
+    // snapshot with no schedule behind it. The key has to be written for the
+    // gamification backfill to consider this row done.
+    expect(stats).toHaveProperty("unpairedFlagHours");
+    expect(stats).toHaveProperty("unpairedDays");
+    expect(stats.unpairedFlagHours).toBeNull();
+    expect(stats.unpairedDays).toBeNull();
   });
 
   it("freezes schedule-aware overall efficiency over the snapshot range", () => {
@@ -154,6 +162,51 @@ describe("buildSnapshotStats", () => {
     });
     expect(stats.overallEfficiency).toBe(75);
     expect(stats.efficiencySource).toBe("scheduled");
+    // A real measurement of zero: every flagged hour in the range reached the
+    // numerator. Distinct from the null above, and the reason the sheet may
+    // print this 75% without a caveat.
+    expect(stats.unpairedFlagHours).toBe(0);
+    expect(stats.unpairedDays).toBe(0);
+  });
+
+  it("freezes the hours the efficiency could NOT see, not just the percentage", () => {
+    // Sat 06-13 is not on the Mon–Fri schedule, so its 6h are flagged work on
+    // a day with no measurable length: they reach neither side of the ratio.
+    // The snapshot must carry that fact, because the sheet is permanent and
+    // "12%" on its own would read as a catastrophic month rather than a range
+    // the app could only partly measure.
+    const SHIFT_8 = { start: "08:00", end: "17:00", breakMin: 60 };
+    const entries = [
+      mk("2026-06-08", [line({ flagHours: 1 })]),
+      mk("2026-06-13", [line({ flagHours: 6 })]),
+    ];
+    const stats = buildSnapshotStats(entries, LIB, [], {
+      clocks: [],
+      ctx: {
+        schedules: [
+          {
+            id: "s1",
+            effectiveFrom: "2026-06-01",
+            rotationWeeks: 1,
+            anchorMonday: "2026-06-01",
+            weeks: [
+              {
+                mon: SHIFT_8, tue: SHIFT_8, wed: SHIFT_8, thu: SHIFT_8,
+                fri: SHIFT_8, sat: null, sun: null,
+              },
+            ],
+            createdAt: "2026-06-01T00:00:00Z",
+          },
+        ],
+        daysOff: [],
+        confirmedZeroDays: [],
+        today: "2026-07-15",
+      },
+    });
+    expect(stats.unpairedFlagHours).toBe(6);
+    expect(stats.unpairedDays).toBe(1);
+    // 1h counted over one 8h scheduled day.
+    expect(stats.overallEfficiency).toBe(12.5);
   });
 });
 

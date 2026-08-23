@@ -439,6 +439,22 @@ export type SnapshotStats = {
   // Absent on snapshots frozen before the schedule feature existed.
   overallEfficiency?: number | null;
   efficiencySource?: DenomSource | null;
+  // The share of the frozen range the percentage above CANNOT see: flagged
+  // hours that landed on days with no measurable length, and how many such
+  // days there were. Without these, a snapshot prints a hollowed percentage
+  // onto a shareable Work Record — the `zero-efficiency-hero-copy` defect,
+  // except permanent (see lib/efficiency-display).
+  //
+  // Three states, all distinct and all meaningful:
+  //   absent    — frozen (or restored from a bundle) before these existed;
+  //               nothing is known about excluded hours. The backfill in
+  //               db/gamification keys on exactly this.
+  //   null      — measured and unmeasurable: no schedule behind this snapshot,
+  //               so there is no notion of an excluded day. Same reason
+  //               overallEfficiency is null on those rows.
+  //   0         — a real measurement: every flagged hour in the range counted.
+  unpairedFlagHours?: number | null;
+  unpairedDays?: number | null;
 };
 
 export type PortfolioSnapshot = {

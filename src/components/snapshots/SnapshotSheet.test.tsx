@@ -15,12 +15,15 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import React from "react";
-import type { PortfolioSnapshot } from "@/lib/types";
+import type { PortfolioSnapshot, SnapshotStats } from "@/lib/types";
 import { SnapshotSheet } from "./SnapshotSheet";
 
 afterEach(cleanup);
 
-function snapshot(totalFlagHours: number): PortfolioSnapshot {
+function snapshot(
+  totalFlagHours: number,
+  extraStats: Partial<SnapshotStats> = {},
+): PortfolioSnapshot {
   return {
     id: "s1",
     seq: 1,
@@ -35,8 +38,16 @@ function snapshot(totalFlagHours: number): PortfolioSnapshot {
       firstDate: "2026-01-02",
       lastDate: "2026-08-19",
       workDays: 5,
+      ...extraStats,
     },
   };
+}
+
+/** The specs paragraph, whitespace-normalized. */
+function specs(): string {
+  return (
+    document.querySelector(".gami-sheet-specs")?.textContent?.replace(/\s+/g, " ") ?? ""
+  );
 }
 
 /** The "Hours flagged" cell's value, as rendered. */
@@ -79,5 +90,114 @@ describe("SnapshotSheet renders hours through the shared formatter", () => {
       render(<SnapshotSheet snapshot={snapshot(total)} />);
       expect(hoursCell()).toBe(expected);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Efficiency gating — the sheet used to print `Math.round(overallEfficiency)%`
+// raw, the ONLY one of the app's efficiency surfaces that never routed through
+// efficiencyDisplay, and the only one whose figure is permanent: it is stored
+// in portfolio_snapshots.stats, carried verbatim through the backup bundle,
+// and handed to a service manager. A hollowed percentage is most dangerous
+// exactly here, because it looks plausible and cannot be re-derived from the
+// sheet.
+// ---------------------------------------------------------------------------
+describe("SnapshotSheet gates the frozen efficiency figure", () => {
+  it("prints the percentage when nothing was excluded", () => {
+    render(
+      <SnapshotSheet
+        snapshot={snapshot(40, {
+          overallEfficiency: 112.4,
+          efficiencySource: "scheduled",
+          unpairedFlagHours: 0,
+          unpairedDays: 0,
+        })}
+      />,
+    );
+    expect(specs()).toContain("Overall efficiency: 112% (vs scheduled hours)");
+  });
+
+  it("withholds the figure when every flagged hour was unmeasurable", () => {
+    render(
+      <SnapshotSheet
+        snapshot={snapshot(42, {
+          overallEfficiency: 0,
+          efficiencySource: "scheduled",
+          unpairedFlagHours: 42,
+          unpairedDays: 2,
+        })}
+      />,
+    );
+    const text = specs();
+    expect(text).toContain("Overall efficiency: not measurable");
+    expect(text).toContain("42.0h, all of the flagged hours in this range");
+    expect(text).toContain("fell on 2 days with no hours to measure them against");
+    expect(text).not.toContain("0%");
+    // Frozen record, not a period still running: nothing here resolves later,
+    // so the live surfaces' "yet"/"so far" wording would be a lie.
+    expect(text).not.toMatch(/yet|so far/);
+  });
+
+  it("withholds the figure when most of the range was unmeasurable", () => {
+    render(
+      <SnapshotSheet
+        snapshot={snapshot(40, {
+          overallEfficiency: 30,
+          efficiencySource: "clocked",
+          unpairedFlagHours: 32,
+          unpairedDays: 1,
+        })}
+      />,
+    );
+    const text = specs();
+    expect(text).toContain("Overall efficiency: not shown");
+    expect(text).toContain("32.0h of the 40.0h flagged in this range fell on a day");
+    expect(text).toContain("would leave out most of the work");
+    expect(text).not.toContain("30%");
+    expect(text).not.toMatch(/yet|so far/);
+  });
+
+  it("prints the percentage when a minority of the range was unmeasurable", () => {
+    render(
+      <SnapshotSheet
+        snapshot={snapshot(40, {
+          overallEfficiency: 90,
+          efficiencySource: "clocked",
+          unpairedFlagHours: 4,
+          unpairedDays: 1,
+        })}
+      />,
+    );
+    expect(specs()).toContain("Overall efficiency: 90% (vs clocked hours)");
+  });
+
+  it("says nothing at all when the snapshot has no efficiency", () => {
+    render(
+      <SnapshotSheet
+        snapshot={snapshot(40, {
+          overallEfficiency: null,
+          efficiencySource: null,
+          unpairedFlagHours: null,
+          unpairedDays: null,
+        })}
+      />,
+    );
+    expect(specs()).not.toContain("Overall efficiency");
+  });
+
+  it("renders a blob from an older build that carries NEITHER unpaired key", () => {
+    // Round trip: a backup restored from a build before these fields existed
+    // has the percentage and no record of what it excluded. Absent is not 0 —
+    // but there is nothing to gate on, so the sheet must keep printing what it
+    // printed before rather than blanking a figure or crashing. The
+    // gamification backfill is what turns this row into a gated one.
+    const snap = snapshot(40, {
+      overallEfficiency: 88,
+      efficiencySource: "clocked",
+    });
+    expect("unpairedFlagHours" in snap.stats).toBe(false);
+    expect("unpairedDays" in snap.stats).toBe(false);
+    render(<SnapshotSheet snapshot={snap} />);
+    expect(specs()).toContain("Overall efficiency: 88% (vs clocked hours)");
   });
 });
