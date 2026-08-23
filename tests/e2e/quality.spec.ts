@@ -129,6 +129,18 @@ for (const route of ROUTES) {
           if (r.width === 0 || r.height === 0) continue; // hidden
           const cs = getComputedStyle(el);
           if (cs.visibility === "hidden") continue;
+          // Screen-reader-only anchors (the `sr-only` clip pattern) are laid
+          // out at 1x1 rather than display:none, on purpose — a password
+          // manager skips a username field that isn't laid out. So they slip
+          // both escape hatches above and get measured as a 1x1 tap target.
+          // They aren't one: out of the a11y tree AND out of the tab order
+          // means nothing can reach it, by touch or otherwise.
+          // Deliberately AND, not OR — a [role="button"] carrying tabIndex=-1
+          // and a click handler IS a real touch target, and an OR here would
+          // quietly exempt it.
+          if (el.getAttribute("aria-hidden") === "true" && el.tabIndex < 0) {
+            continue;
+          }
           // inline text links inside prose are exempt (WCAG inline exception)
           if (el.tagName === "A" && cs.display === "inline") continue;
           // account for invisible ::after tap-area expanders (.hit-expand pattern)
