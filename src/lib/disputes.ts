@@ -34,6 +34,19 @@ import { lineCode } from "./line-label";
 // shops round flag hours, so a 0.05h (3 min) gap isn't a real shortfall.
 export const RECOVERY_EPS = 0.05;
 
+// Float-comparison epsilon for "is this literally the same number?". NOT a
+// rounding tolerance and never interchangeable with RECOVERY_EPS: every hours
+// column involved is numeric(5,2) (see the dispute_ledger migration), so two
+// values that differ at all differ by at least 0.01. This exists only to absorb
+// IEEE-754 representation noise, which is ~1e-16 at these magnitudes.
+//
+// Using RECOVERY_EPS for this job is what kept the accretion bug alive after the
+// first fix: a per-line recovery smaller than 0.05h (a 2-minute correction is a
+// real thing) did not move the live value far enough to trip a 0.05 mismatch, so
+// the offer re-armed and the same hours were written up to
+// floor(RECOVERY_EPS / hours) + 1 times.
+const SAME_VALUE_EPS = 1e-9;
+
 /** Terminal states — a dispute in one of these is closed and off the queue. */
 export function isClosed(status: DisputeStatus): boolean {
   return status === "resolved" || status === "withdrawn";
@@ -452,14 +465,20 @@ export function pendingRecoveryApplication(
     // the worst case there is hours the tech never earned, in the one ledger
     // that is supposed to prove what they were paid.
     //
-    // KNOWN LIMIT: when the claim froze zero paid hours (null or 0) and the live
-    // line still reads zero paid hours, "never applied" and "applied, then
-    // cleared back to zero" are the same two numbers and the data cannot tell
-    // them apart — there is no applied-at marker on dispute_lines and adding one
-    // is a schema change. That state re-offers, which is correct for a
-    // genuinely-unapplied claim and at worst ONE re-application for the other.
-    // It cannot accrete: the first write moves the live value off zero and every
-    // render after that sees the mismatch and skips.
+    // KNOWN LIMIT: whenever the live line reads exactly the claim-time value,
+    // "never applied" and "applied, then hand-edited back to that value" are the
+    // same two numbers and the data cannot tell them apart — there is no
+    // applied-at marker on dispute_lines and adding one is a schema change. The
+    // common shape is zero/zero (claim froze null-or-0, line still null-or-0).
+    // That state re-offers, which is correct for a genuinely-unapplied claim and
+    // at worst ONE re-application for the other.
+    //
+    // It cannot accrete, and now that the guard is a true equality test the
+    // bound holds for every recovery size: `hours` is numeric(5,2) and > 0 here,
+    // so it is at least 0.01, and the write moves the live value by exactly that
+    // much. 0.01 > SAME_VALUE_EPS, so the very next render sees a mismatch and
+    // skips. Re-arming again takes a deliberate manual edit of the line back to
+    // the frozen value, and each such edit buys exactly one more offer.
     if (!sameAsClaimTime(paidNow, dl.paidHours)) continue;
 
     taken.add(live.line.id);
@@ -493,13 +512,19 @@ export function pendingRecoveryApplication(
  * different facts, but the only question here is "has this money landed on the
  * line yet?", and both answer no. A line that was pending at claim time and has
  * since been reconciled at zero has had nothing applied to it, so it must still
- * be offered. Numbers compare within RECOVERY_EPS because shops round hours.
+ * be offered.
+ *
+ * This is a genuine EQUALITY test, deliberately not a tolerance. Both sides are
+ * numeric(5,2), so "unmoved" means unmoved to the cent-equivalent; anything the
+ * shop's rounding does to an hours figure changes it by at least 0.01 and is a
+ * move. Comparing with RECOVERY_EPS (0.05) instead made any recovery of 0.05h or
+ * less invisible to its own guard — see SAME_VALUE_EPS.
  */
 function sameAsClaimTime(
   paidNow: number | null,
   paidAtClaim: number | null,
 ): boolean {
-  return Math.abs((paidNow ?? 0) - (paidAtClaim ?? 0)) <= RECOVERY_EPS;
+  return Math.abs((paidNow ?? 0) - (paidAtClaim ?? 0)) <= SAME_VALUE_EPS;
 }
 
 /**

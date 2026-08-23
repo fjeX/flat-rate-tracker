@@ -809,4 +809,190 @@ describe("pendingRecoveryApplication", () => {
     ];
     expect(pendingRecoveryApplication(d, entries, []).rows[0].lineId).toBe("l2");
   });
+
+  // -------------------------------------------------------------------------
+  // Accretion, second round: RECOVERY_EPS was doing two jobs at once
+  // -------------------------------------------------------------------------
+  //
+  // The first fix armed the offer on `|paidNow - paidAtClaim| <= RECOVERY_EPS`,
+  // i.e. it used a 0.05h ROUNDING TOLERANCE as an "has this line moved?" test.
+  // Any per-line recovery of 0.05h or less does not move the live value far
+  // enough to trip that tolerance, so the offer re-armed and the same hours were
+  // written floor(RECOVERY_EPS / hours) + 1 times. These tests tap the button
+  // repeatedly and count the writes.
+
+  /**
+   * Tap Apply until the app stops offering. Mirrors the real write path: each
+   * tap sets the live line to the row's paidAfter, rounded the way
+   * numeric(5,2) rounds it. Returns every value written, in order.
+   */
+  function tapUntilQuiet(
+    d: Dispute,
+    startPaid: number | null,
+    flag: number,
+    maxTaps = 25,
+  ): number[] {
+    const writes: number[] = [];
+    let paid = startPaid;
+    for (let i = 0; i < maxTaps; i += 1) {
+      const plan = pendingRecoveryApplication(
+        d,
+        [ro([roLine({ flagHours: flag, paidHours: paid })])],
+        [],
+      );
+      if (plan.rows.length === 0) break;
+      paid = Math.round(plan.rows[0].paidAfter * 100) / 100;
+      writes.push(paid);
+    }
+    return writes;
+  }
+
+  function tinyRecovery(hours: number): Dispute {
+    return dispute({
+      status: "resolved",
+      recoveredHours: hours,
+      lines: [
+        line({
+          entryId: "e1",
+          flaggedHours: 2,
+          paidHours: 0,
+          claimedHours: hours,
+          recoveredHours: hours,
+        }),
+      ],
+    });
+  }
+
+  // The confirmed repro: a 2-minute correction, frozen paid 0, live paid 0.
+  // Under the tolerance guard this wrote 0.03 and then 0.06 — the recovery
+  // applied twice. Zero/zero is genuinely ambiguous, so ONE offer is correct;
+  // a second write is not.
+  it("applies a sub-tolerance 0.03h recovery at most once", () => {
+    expect(tapUntilQuiet(tinyRecovery(0.03), 0, 2)).toEqual([0.03]);
+  });
+
+  // Smaller recovery, more re-applications under the old guard: 0.01h re-armed
+  // all the way up to 0.06. Nothing about the bug was bounded to one re-offer.
+  it("applies a 0.01h recovery at most once — the old guard wrote it six times", () => {
+    expect(tapUntilQuiet(tinyRecovery(0.01), 0, 2)).toEqual([0.01]);
+  });
+
+  // Exactly on the old tolerance boundary and just under it. 0.05 is the worst
+  // case for a `<=` comparison and 0.04 for the first re-arm after it.
+  it("applies a recovery sitting exactly on RECOVERY_EPS at most once", () => {
+    expect(RECOVERY_EPS).toBe(0.05); // the boundary these two cases probe
+    expect(tapUntilQuiet(tinyRecovery(0.05), 0, 2)).toEqual([0.05]);
+  });
+
+  it("applies a recovery just under RECOVERY_EPS at most once", () => {
+    expect(tapUntilQuiet(tinyRecovery(0.04), 0, 2)).toEqual([0.04]);
+  });
+
+  // The original 12/4 ladder, driven through the same tap loop rather than
+  // asserted rung by rung: one write, landing on the true entitlement.
+  it("walks the 12 + 4 ladder exactly one rung", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 4,
+      lines: [
+        line({
+          entryId: "e1",
+          flaggedHours: 16,
+          paidHours: 12,
+          claimedHours: 4,
+          recoveredHours: 4,
+        }),
+      ],
+    });
+    expect(tapUntilQuiet(d, 12, 16)).toEqual([16]);
+  });
+
+  // The non-multiple case: 13 + 4 = 17. The pre-fix ceiling was arithmetic
+  // coincidence and stopped a cleared line at 16, short of the entitlement.
+  it("walks the 13 + 4 ladder exactly one rung, to 17 and not 16", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 4,
+      lines: [
+        line({
+          entryId: "e1",
+          flaggedHours: 17,
+          paidHours: 13,
+          claimedHours: 4,
+          recoveredHours: 4,
+        }),
+      ],
+    });
+    expect(tapUntilQuiet(d, 13, 17)).toEqual([17]);
+  });
+
+  // The feature must survive the fix: a claim that has never been applied to an
+  // untouched line is still offered, at every claim-time shape.
+  it("still offers a never-applied recovery on an untouched line", () => {
+    for (const frozen of [null, 0, 1, 13.25]) {
+      const d = dispute({
+        status: "resolved",
+        recoveredHours: 1.5,
+        lines: [
+          line({
+            entryId: "e1",
+            flaggedHours: 20,
+            paidHours: frozen,
+            claimedHours: 1.5,
+            recoveredHours: 1.5,
+          }),
+        ],
+      });
+      const plan = pendingRecoveryApplication(
+        d,
+        [ro([roLine({ flagHours: 20, paidHours: frozen })])],
+        [],
+      );
+      expect(plan.rows).toHaveLength(1);
+      expect(plan.rows[0].paidAfter).toBeCloseTo((frozen ?? 0) + 1.5, 5);
+    }
+  });
+
+  // A live line one cent-equivalent off the frozen value has MOVED. Under the
+  // 0.05 tolerance both of these read as "unmoved" and re-armed.
+  it("treats a 0.01h move off the claim-time value as moved, in both directions", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.5,
+      lines: [
+        line({ entryId: "e1", flaggedHours: 2, paidHours: 1, recoveredHours: 0.5 }),
+      ],
+    });
+    for (const paid of [1.01, 0.99, 1.04, 0.96]) {
+      const at = [ro([roLine({ flagHours: 2, paidHours: paid })])];
+      expect(pendingRecoveryApplication(d, at, []).rows).toEqual([]);
+    }
+  });
+
+  // The residual, stated exactly and shown to be bounded. Zero/zero is the one
+  // state the data genuinely cannot read, so it re-offers — but only once per
+  // deliberate clear, never as a run-away ladder.
+  it("re-offers a cleared zero/zero line exactly once per clear, never twice", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 1.5,
+      lines: [
+        line({
+          entryId: "e1",
+          flaggedHours: 2,
+          paidHours: null,
+          claimedHours: 1.5,
+          recoveredHours: 1.5,
+        }),
+      ],
+    });
+    // First round: pending at claim time, pending now — one write, then quiet.
+    expect(tapUntilQuiet(d, null, 2)).toEqual([1.5]);
+    // The tech clears the line back to Pending by hand. That is a deliberate
+    // act and it buys exactly ONE more offer, not an unbounded ladder.
+    expect(tapUntilQuiet(d, null, 2)).toEqual([1.5]);
+    // Reconciled at zero reads the same as pending for this question, and is
+    // likewise bounded to a single write.
+    expect(tapUntilQuiet(d, 0, 2)).toEqual([1.5]);
+  });
 });
