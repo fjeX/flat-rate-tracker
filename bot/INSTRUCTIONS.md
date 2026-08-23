@@ -249,6 +249,21 @@ one most nights.
     **existing** RO opened via `/log?edit=<id>`, losing the link and then saving
     wrote NULL over `comeback_of_entry_id`. So do this on a SAVED comeback RO,
     save again, reopen it, and confirm the link is still stored.
+- **Reopening a saved comeback now shows the ORIGINAL's details, not a bare
+  sentence** (fixed 2026-08-22, `comeback-redoof-saved-label`). Until now,
+  picking a redo-of RO showed the rich chip
+  (`RO #71264 · Aug 21, 2026 · 2015 Subaru Outback`) but reopening that same RO
+  via `/log?edit=<id>` degraded to just "Linked to an earlier RO" — the id was
+  stored fine, the form simply never looked it up. On edit-load it now resolves
+  the link and shows the same rich chip. **"Linked to an earlier RO" on a saved
+  comeback whose original still exists is now a regression** — report it.
+  - Two cases where the bare fallback is still CORRECT and not a bug: the
+    original RO was deleted (a dangling link), or the lookup failed. In both the
+    link itself must survive — reopen and save, and `comeback_of_entry_id` must
+    still be set.
+  - If you pick a different original while the page is still loading, the chip
+    must end up showing the one YOU picked. The older lookup landing late and
+    repainting the chip with the previous RO is a bug (it was one, briefly).
 - Fill the line's **actual** hours (a comeback still costs you time — that's the
   whole point) and save. In history the RO must show **0.0h flag**.
 - Also exercise the toggle from **dashboard Quick Add** — it has the toggle and
@@ -377,7 +392,19 @@ start and save in the same breath records ~0 and proves nothing.
   cards show Working simultaneously, that IS a bug.
 - **Saves are additive.** Saving a timer to a line that already has actual
   hours must ADD to it, not replace it — the save modal shows the running total
-  ("1.5h + 0.03h = 1.53h"). A replaced value is a bug.
+  ("1.50h + 0.03h = 1.53h"). A replaced value is a bug.
+- **That receipt is at TWO decimals as of 2026-08-22, and it must add up
+  exactly** (`timer-save-receipt-precision`). It used to render each of the
+  three figures at one decimal, so it printed sums the database never held —
+  "2.9h + 0.3h = 3.2h" for a line stored as 3.15. Hours are stored at two
+  decimals, which is why the receipt now shows two. **Do the arithmetic on the
+  sentence: left + middle must equal right, digit for digit.** A receipt that
+  does not add up is a bug even though nothing is wrong with the saved value.
+  The single-line variant reads "it becomes 0.25h" when the line had no actual
+  hours yet — also two decimals.
+- Glance figures elsewhere on /timer stay at ONE decimal on purpose. Only the
+  save-modal receipt is two — a one-decimal figure somewhere else is not a
+  mismatch to report.
 - Check that a 4th timer cannot be started: with 3 running, the add button
   reads "All timers in use" and is disabled.
 - Attaching the **same RO to two timers** must be refused with a clear message.
@@ -607,6 +634,23 @@ Reference rail in every mode.
   before you started testing.
 - If a dispute-pack export exists for short lines, open it and confirm the
   print view renders with the short lines listed.
+- **The "Export discrepancies" block is now ALWAYS on the page** (fixed
+  2026-08-22, `disputepack-hidden-without-variance`). It used to be removed from
+  the DOM entirely whenever Shorted hrs was 0.0h — which hid the pack from a
+  period carrying real unpaid rework, and that block is the only way into the
+  pack anywhere in the app. So:
+  - Buttons **enabled** when the period has a short line **OR** any unpaid
+    rework/ledger hours.
+  - Buttons **present but disabled** only when it has neither, with the subhead
+    saying so. A disabled pair on a period with nothing to dispute is correct
+    and is NOT a finding.
+  - The block being **absent from the DOM** is now itself a bug — report it.
+- **Copy text and Print / PDF must produce the SAME document.** They were built
+  from different inputs until 2026-08-22: Copy silently omitted ledger-sourced
+  unpaid time that Print included, and the two stamped different "Generated:"
+  dates (browser clock vs the server's timezone). If you can, do both on one
+  period and compare — same unpaid-rework section, same Generated date. A
+  divergence between them is a real finding.
 - **Second-round claims** (fixed 2026-08-12, `dispute-track-offer-missing`). A
   period whose earlier claim is **closed** (resolved/withdrawn) but which is
   **still short** must offer "Track this dispute" again, worded as a
@@ -636,6 +680,18 @@ verify the saved hours before continuing to §6.
   audit trail). The list re-sorts (date desc, then created_at desc), so
   position shifts as rows are added and is never a safe handle. Find the spiff
   you mean to delete by its own source, date, and amount.
+- **The buttons now name their row, so use that as your handle** (fixed
+  2026-08-22, `spiff-delete-button-aria-label`). Every spiff's edit and delete
+  button used to carry the identical accessible name — "Edit bonus" / "Delete
+  bonus" on every row — which is exactly what made a positional selector the
+  only option in the first place. They now read
+  `Delete bonus — "example spiff", $25, Aug 3, 2026`, same three fields and same
+  house style as the confirm dialog (abbreviated month, whole dollars). Select
+  by that accessible name rather than by position. A bare "Delete bonus" with no
+  row detail is a regression — report it.
+- Two spiffs with the SAME source, amount and date still produce identical
+  labels. That is known and accepted, not a finding — if you hit it, fall back
+  to identifying the row by its surrounding text and say so in the report.
 - **The confirm dialog is your second check — read it before accepting.** It
   names the row, in this shape: `Delete this spiff — "example spiff", $25,
   Aug 3, 2026? This can't be undone.` That sentence is an illustration of the
