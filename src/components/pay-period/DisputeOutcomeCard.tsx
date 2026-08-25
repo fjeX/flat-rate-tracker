@@ -445,9 +445,8 @@ export function DisputeOutcomeCard({
         <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
           {fmtHours(recovery.unmappedHours)}h came back on the closed claim, but
           it isn&apos;t recorded against individual lines — so FRT can&apos;t
-          tell which ROs to mark paid. Record what each line got back below, or
-          enter the paid hours yourself in &ldquo;Which lines came up
-          short?&rdquo;.
+          tell which ROs to mark paid. Open &ldquo;Which lines came up
+          short?&rdquo; and enter the paid hours on each line yourself.
         </p>
       )}
 

@@ -10,6 +10,7 @@ import {
   bucketFor,
   flushAccumulators,
   HOLD_KIND,
+  isLedgerableHold,
   MAX_TIMER_SLOTS,
   msToHours,
   nextFreeSlot,
@@ -354,11 +355,30 @@ export async function saveTimerAction(
   // lost — a lumped row would make the dispute-pack line meaningless.
   let ledgerWritten = true;
   const waits = [
-    { key: "holdParts" as const, hours: waitPartsHours },
-    { key: "holdApproval" as const, hours: waitApprovalHours },
+    {
+      key: "holdParts" as const,
+      hours: waitPartsHours,
+      rawMs: banked.holdPartsAccumulated,
+    },
+    {
+      key: "holdApproval" as const,
+      hours: waitApprovalHours,
+      rawMs: banked.holdApprovalAccumulated,
+    },
   ];
   for (const w of waits) {
-    if (w.hours <= 0) continue;
+    // Gate on RAW ms, not on `hours`. `hours` is already rounded to hundredths
+    // by msToHours, so a 20-second hold arrives here as 0.01 and clears a
+    // `<= 0` test that plainly meant "no time was banked" — writing a permanent
+    // row the save modal itself renders as "0m" onto the dispute pack. Each
+    // entry carries its OWN rawMs because this loop is generic over both hold
+    // kinds; testing one shared field here would break the other reason.
+    //
+    // No separate `hours <= 0` test: rawMs is non-negative (elapsedFor clamps
+    // it) and rawMs >= 30_000 forces hours >= 0.01, so the old check is
+    // strictly implied. Two thresholds that could drift apart is the bug we
+    // just fixed, not a defence against it.
+    if (!isLedgerableHold(w.rawMs)) continue;
     const ok = await db.createUnpaidTimeSafe(supabase, {
       date: ledgerDate,
       hours: w.hours,

@@ -173,6 +173,28 @@ export function formatDuration(ms: number): string {
   return `${h}h ${m}m`;
 }
 
+/**
+ * Minimum RAW elapsed ms a hold must reach before it earns an unpaid_time row.
+ *
+ * 30s — not 60s — because that is exactly where formatDuration flips from "0m"
+ * to "1m" (`Math.round(ms / 60_000)` crosses at 30_000). Gating the ledger on
+ * the same boundary the save modal displays makes the two agree exactly: there
+ * is no band where a hold reads as "1m" but writes no row, and none where a row
+ * is written for a hold the modal itself calls "0m". A 60s gate would silently
+ * drop a genuine 45-second hold the modal presented as real time.
+ *
+ * Test this against RAW MS, never against msToHours output. msToHours rounds to
+ * hundredths of an hour, so a 20-second hold becomes 0.01 and sails through any
+ * `<= 0` gate — which is how permanent "Waiting on parts 0m" rows reached the
+ * dispute pack and the Insights leak board (zero-minute-hold-ledger-row).
+ */
+export const MIN_LEDGERED_HOLD_MS = 30_000;
+
+/** Whether a hold's raw banked ms is long enough to earn a ledger row. */
+export function isLedgerableHold(ms: number): boolean {
+  return ms >= MIN_LEDGERED_HOLD_MS;
+}
+
 /** Lowest slot number not already taken, or null when all 3 are in use. */
 export function nextFreeSlot(slots: TimerSlot[]): number | null {
   const taken = new Set(slots.map((s) => s.slot));

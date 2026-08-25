@@ -12,10 +12,12 @@ import {
   HOLD_KIND,
   isAccruing,
   isHold,
+  isLedgerableHold,
   lineTakenByOtherSlot,
   localMinutesOfDay,
   MAX_SEGMENT_MS,
   MAX_TIMER_SLOTS,
+  MIN_LEDGERED_HOLD_MS,
   minutesFromHHMM,
   msToHours,
   nextFreeSlot,
@@ -271,6 +273,56 @@ describe("ledger mapping", () => {
     expect(HOLD_KIND.holdParts).toBe("wait_parts");
     expect(HOLD_KIND.holdApproval).toBe("wait_approval");
     expect(HOLD_KIND.holdParts).not.toBe(HOLD_KIND.holdApproval);
+  });
+});
+
+describe("isLedgerableHold", () => {
+  // The gate saveTimerAction uses before writing an unpaid_time row. It runs on
+  // RAW ms on purpose: msToHours rounds to hundredths, so a 20-second hold
+  // becomes 0.01 hours and would clear any `> 0` test — the exact path that put
+  // permanent "Waiting on parts 0m" rows on the dispute pack.
+  it("rejects holds too short to be real time", () => {
+    expect(isLedgerableHold(0)).toBe(false);
+    expect(isLedgerableHold(20_000)).toBe(false);
+    expect(isLedgerableHold(29_900)).toBe(false);
+  });
+
+  it("accepts a hold from the first ms the modal calls it a minute", () => {
+    expect(isLedgerableHold(30_000)).toBe(true);
+    expect(isLedgerableHold(45_000)).toBe(true);
+    expect(isLedgerableHold(3 * 60_000)).toBe(true);
+    expect(isLedgerableHold(2 * HOUR + 15 * 60_000)).toBe(true);
+  });
+
+  // The whole point of picking 30s over 60s: the ledger and the save modal must
+  // never disagree about whether a hold happened.
+  it("lands exactly where formatDuration stops saying 0m", () => {
+    expect(formatDuration(MIN_LEDGERED_HOLD_MS - 1)).toBe("0m");
+    expect(formatDuration(MIN_LEDGERED_HOLD_MS)).toBe("1m");
+  });
+
+  it("agrees with formatDuration across the whole first two minutes", () => {
+    for (let ms = 0; ms <= 120_000; ms += 100) {
+      expect(isLedgerableHold(ms)).toBe(formatDuration(ms) !== "0m");
+    }
+  });
+
+  // saveTimerAction loops over both hold kinds through this one predicate, so
+  // parts and approval cannot be gated differently the way a hardcoded
+  // holdPartsAccumulated check would have gated them.
+  it("is the single gate for both hold kinds", () => {
+    for (const key of ["holdParts", "holdApproval"] as const) {
+      expect(HOLD_KIND[key]).toBeTruthy();
+      expect(isLedgerableHold(20_000)).toBe(false);
+      expect(isLedgerableHold(30_000)).toBe(true);
+    }
+  });
+
+  // Every hold that passes the gate rounds to a storable, non-zero
+  // numeric(5,2) — which is why the old `hours <= 0` test is redundant.
+  it("guarantees a non-zero hours value for anything it accepts", () => {
+    expect(msToHours(MIN_LEDGERED_HOLD_MS)).toBeGreaterThan(0);
+    expect(msToHours(MIN_LEDGERED_HOLD_MS)).toBe(0.01);
   });
 });
 

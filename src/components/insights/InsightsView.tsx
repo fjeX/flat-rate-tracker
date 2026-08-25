@@ -1006,6 +1006,13 @@ function RecoverySection({
           </div>
         </div>
 
+        {lifetime.hourRecoveryRate !== null && lifetime.hourRecoveryRate > 1 && (
+          <p className="text-xs text-[var(--fg-3)]">
+            Hours recovered is over 100% because a shop paid goodwill hours above
+            what you claimed. The number is right.
+          </p>
+        )}
+
         {insights.map((i) => (
           <p key={i.id} className="text-xs text-[var(--fg-2)]">
             <span className="font-medium text-[var(--fg-1)]">{i.betterLabel}</span>{" "}

@@ -409,8 +409,19 @@ start and save in the same breath records ~0 and proves nothing.
   reads "All timers in use" and is disabled.
 - Attaching the **same RO to a second timer** must prompt a line picker
   ("RO #71264 — Which line?") that offers only the lines not already on a
-  timer — the busy line must not appear. Refusing the RO outright, or a
-  picker that still shows the busy line, is a bug.
+  timer — the busy line must not appear. Three outright refusals (no
+  picker at all) are CORRECT, not bugs — `attachBlockReason` in
+  src/components/timer/TimerSlots.tsx:96-107 (mirrored in
+  GuestTimerSlots.tsx, and re-enforced server-side in
+  src/app/actions/timer.ts) blocks the attach in exactly these cases:
+  1. the RO has a timer running with no line assigned yet: "On a timer
+     that has no line set yet — set that one's line first."
+  2. every line is taken and the RO has only one line: "Its only line is
+     already on a timer."
+  3. every line is taken and the RO has multiple lines: "Every line is
+     already on a timer."
+  A refusal for any OTHER reason, or a picker that still shows the busy
+  line, is a bug.
 - Only test the multi-timer mechanics if there are enough ROs; don't create
   extra ROs just to fill slots.
 - The live display ticks from a Web Worker. In a real, foregrounded browser it
@@ -1639,6 +1650,15 @@ You are an LLM driving a browser; sometimes *you* fumble. Protocol:
 4. If you're not sure whether behavior is a bug or intended, put it under
    **Questions / possible issues** — never inflate uncertainty into "broken."
 5. Never "fix" anything. You observe and report only.
+6. **A documented-expected `SKIPPED` result is not a finding.** Any section
+   that is explicitly marked opportunistic / not-guaranteed-every-night
+   (e.g. §2c, §3z) and comes back `SKIPPED` for the reason its own note
+   describes is the expected outcome, not a gap to surface. Log it once,
+   under **What I did** (e.g. "§3z: SKIPPED — no unsaved period"), and do
+   not repeat it under **Questions / possible issues** or **Suggested
+   tweaks** — an opportunistic section being unexercisable tonight is
+   neither a question nor a tweak. This applies to any future section
+   marked opportunistic the same way, not just these two.
 
 ## Write the report
 
