@@ -387,6 +387,22 @@ start and save in the same breath records ~0 and proves nothing.
   the status is Parts / Approval / Pause.** A frozen readout while on hold is
   correct behavior, not a bug. Waiting time counts on its own line underneath
   ("Waiting on parts 3m").
+- **Holds under 30 seconds write NO unpaid_time row, as of 2026-08-24**
+  (`zero-minute-hold-ledger-row`). This is deliberate. `msToHours` rounds to
+  hundredths of an hour, so a 20-second hold used to round up to 0.01h and mint
+  a permanent ledger row that the save modal itself described as "0m" — a ghost
+  minute on the dispute pack, which is a money document. The gate now tests raw
+  ms against 30s, chosen because that is exactly where the modal's own display
+  flips "0m" to "1m".
+  - So: a brief hold showing **"0m"** and producing **no** row in "Every unpaid
+    record" is CORRECT. Do not file it. To exercise the ledger deliberately,
+    hold for **at least a full minute**.
+  - The modal's "Waiting time is logged as unpaid time against this RO"
+    sentence is gated on the same 30s rule. A sub-30s hold shows its duration
+    but NOT that sentence — also correct.
+  - What WOULD be a bug: a hold well over a minute that writes no row, a row
+    whose hours contradict the displayed duration, or that sentence appearing
+    on a hold that then writes nothing.
 - **Only one timer may be "Working" at a time.** Setting a second one to
   Working must flip the first to **Paused** (not to a hold reason). If two
   cards show Working simultaneously, that IS a bug.
@@ -931,6 +947,17 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     decision, not a bug to file.
 - Recovered hours are deliberately **not capped** at the claimed amount. Entering
   MORE than claimed is legal (goodwill hours) and must save, not error.
+  - **Downstream of that, Insights can show "Hours recovered" ABOVE 100% — e.g.
+    103% — and that is CORRECT output, not a maths error**
+    (`insights-recovered-over-100-copy`, closed 2026-08-24 as a non-bug). The
+    rate is lifetime `recovered / claimed` with no clamp anywhere, exactly
+    because clamping would make the ledger lie about money a shop actually paid.
+    Multiple claim rounds on one period CANNOT inflate it — a second round
+    claims only the remaining shortfall, so the denominator grows at least as
+    fast as the numerator. Since 2026-08-24 the tile carries its own one-line
+    explanation whenever it exceeds 100%. Do not re-file this as an arithmetic
+    problem; if the explanatory line is MISSING while the figure is over 100%,
+    that is the only reportable defect here.
 - **Double-tap protection:** with a live claim open, there must be no second
   "Track this dispute" offer for the same period.
 - **Recovered hours must land back on the lines** (new 2026-08-13,
