@@ -13,6 +13,7 @@ import {
   elapsedFor,
   formatDuration,
   formatElapsed,
+  isLedgerableHold,
   msToHours,
   type TimerSlot,
 } from "@/lib/timer";
@@ -145,7 +146,12 @@ export function TimerSaveModal({
               </span>
             </div>
           )}
-          {elapsed.hold > 0 && (
+          {/* Only promise a ledger row when one will actually be written.
+           * The save action drops holds under MIN_LEDGERED_HOLD_MS, so a
+           * 20-second hold shows its time above but earns no row — saying it
+           * was logged would be a lie on the way to a money document. */}
+          {(isLedgerableHold(elapsed.holdParts) ||
+            isLedgerableHold(elapsed.holdApproval)) && (
             <p className="mt-2 text-xs text-[var(--fg-3)]">
               Waiting time is logged as unpaid time against this RO. It never
               touches your flag hours.

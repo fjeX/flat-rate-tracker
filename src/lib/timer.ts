@@ -178,10 +178,16 @@ export function formatDuration(ms: number): string {
  *
  * 30s — not 60s — because that is exactly where formatDuration flips from "0m"
  * to "1m" (`Math.round(ms / 60_000)` crosses at 30_000). Gating the ledger on
- * the same boundary the save modal displays makes the two agree exactly: there
- * is no band where a hold reads as "1m" but writes no row, and none where a row
- * is written for a hold the modal itself calls "0m". A 60s gate would silently
+ * the same boundary the save modal displays makes the two agree: no band where
+ * a hold reads as "1m" but writes no row, and none where a row is written for a
+ * hold the modal called "0m" AT THE SAME ELAPSED MS. A 60s gate would silently
  * drop a genuine 45-second hold the modal presented as real time.
+ *
+ * The agreement is on the value, not across time: the modal freezes `elapsed`
+ * when it opens, while the save action recomputes at save. Leave the modal open
+ * during a live hold and the server can legitimately bank 32s for a hold the
+ * frozen display still calls "0m". The row is honest there — the stale readout
+ * is the defect — but do not read this constant as a guarantee about the screen.
  *
  * Test this against RAW MS, never against msToHours output. msToHours rounds to
  * hundredths of an hour, so a 20-second hold becomes 0.01 and sails through any

@@ -420,6 +420,11 @@ start and save in the same breath records ~0 and proves nothing.
      already on a timer."
   3. every line is taken and the RO has multiple lines: "Every line is
      already on a timer."
+  4. server-only, and you will not normally reach it: submitting a line
+     that got taken after the picker rendered — "That line of RO #71264
+     is already on a timer." The picker filters this case out, so seeing
+     it means two sessions raced. Report it as a race, not as a broken
+     picker.
   A refusal for any OTHER reason, or a picker that still shows the busy
   line, is a bug.
 - Only test the multi-timer mechanics if there are enough ROs; don't create
