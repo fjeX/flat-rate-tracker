@@ -267,14 +267,15 @@ describe("TrendSection — the change caption", () => {
 // clause from lib/stats, and the in-progress wording is WorkCostCard's.
 describe("TrendSection — why those hours were not counted", () => {
   const STILL_RUNNING = /still in progress/;
-  const GO_FIX_IT = /Clock them or add them to your schedule/;
+  // The no_schedule sentence — the only one that may claim the tech has no
+  // schedule. It used to be printed for day_off and unscheduled days too.
+  const GO_FIX_IT = /no clocked hours and no work schedule/;
 
-  function withReason(
-    kind: "in_progress" | "no_schedule",
-    flagHours: number,
-    days: number,
-  ) {
+  type Reason = "in_progress" | "day_off" | "unscheduled" | "no_schedule";
+
+  function withReason(kind: Reason, flagHours: number, days: number) {
     const empty = { flagHours: 0, days: 0 };
+    const tally = { flagHours, days };
     return point({
       key: "2026-08-B",
       label: "Aug 16–31",
@@ -286,13 +287,56 @@ describe("TrendSection — why those hours were not counted", () => {
       unpairedFlagHours: flagHours,
       unpairedDays: days,
       unpairedByReason: {
-        in_progress: kind === "in_progress" ? { flagHours, days } : { ...empty },
-        day_off: { ...empty },
-        unscheduled: { ...empty },
-        no_schedule: kind === "no_schedule" ? { flagHours, days } : { ...empty },
+        in_progress: kind === "in_progress" ? tally : { ...empty },
+        day_off: kind === "day_off" ? tally : { ...empty },
+        unscheduled: kind === "unscheduled" ? tally : { ...empty },
+        no_schedule: kind === "no_schedule" ? tally : { ...empty },
       },
     });
   }
+
+  function textFor(kind: Reason, flagHours = 6, days = 1): string {
+    render(
+      <TrendSection points={[JUL_A, withReason(kind, flagHours, days)]} today={TODAY} />,
+    );
+    return document.body.textContent ?? "";
+  }
+
+  // THE EXECUTED REPRO, /insights half: a day that IS on the schedule, marked
+  // off, worked anyway.
+  it("day off: names the day off, never 'no schedule'", () => {
+    const text = textFor("day_off", 6.5, 1);
+    expect(text).toMatch(/marked off on your schedule/);
+    expect(text).toMatch(/clear the day off/);
+    expect(text).not.toMatch(GO_FIX_IT);
+    expect(text).not.toMatch(STILL_RUNNING);
+  });
+
+  it("unscheduled: says the schedule has no shift on that day", () => {
+    const text = textFor("unscheduled", 5, 1);
+    expect(text).toMatch(/puts no shift on that day/);
+    expect(text).toMatch(/add a shift for that day/);
+    expect(text).not.toMatch(GO_FIX_IT);
+  });
+
+  it("no schedule: the one case that says you have no schedule", () => {
+    const text = textFor("no_schedule", 4, 2);
+    expect(text).toMatch(GO_FIX_IT);
+    expect(text).toMatch(/add them to your schedule/);
+    expect(text).not.toMatch(/marked off|puts no shift/);
+  });
+
+  // DEFECT 2, the other half. A trend point's `flagHours` is the PAIRED total
+  // only — these hours were never in any figure on this page — so the
+  // pay-period sentence would be a false claim here.
+  it("never claims these hours are in a flagged total on this page", () => {
+    for (const kind of ["in_progress", "day_off", "unscheduled", "no_schedule"] as const) {
+      document.body.innerHTML = "";
+      const text = textFor(kind);
+      expect(text).toMatch(/in neither side of the percentage/);
+      expect(text).not.toMatch(/flagged total/);
+    }
+  });
 
   it("says the shift is still in progress, not that it needs scheduling", () => {
     render(

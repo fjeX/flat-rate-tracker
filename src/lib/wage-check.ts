@@ -116,17 +116,20 @@ export type EffectiveHourly = {
   clockedHours: number; // hours from real clock entries ONLY
   // The denominator actually used: clocked hours, plus scheduled shift hours
   // for completed days with no clock entry that pairDay would count — days
-  // with flagged work, and days the tech confirmed as a real zero. Equals
-  // clockedHours when no schedule context is supplied.
+  // whose summed flag hours are positive, and days the tech confirmed as a
+  // real zero. Equals clockedHours when no schedule context is supplied.
   denomHours: number;
   // Where denomHours came from, for honest labelling. null when there is no
   // denominator at all.
   denomSource: "clocked" | "scheduled" | "mixed" | null;
-  workDays: string[]; // distinct dates that had flagged work (an RO)
+  // Distinct dates carrying an RO, whatever it flagged. NOT the denominator's
+  // day set — a date whose ROs sum to zero flag hours is here and is excluded
+  // from the fill, matching pairDay's `flag > 0`.
+  workDays: string[];
   clockDays: string[]; // distinct dates with clocked hours > 0
-  // Days filled in from the schedule rather than a clock entry — days with
-  // flagged work, plus confirmed real-zero days (which have no RO on them by
-  // definition and so are never "work days").
+  // Days filled in from the schedule rather than a clock entry — days whose
+  // summed flag hours are positive, plus confirmed real-zero days (which have
+  // no RO on them by definition and so are never "work days").
   scheduledDays: string[];
   // Work days at or after "today" with no clock entry — the shift is still
   // running, so they're excluded from BOTH sides of the average rather than
@@ -134,9 +137,10 @@ export type EffectiveHourly = {
   // that has no hours for them yet would inflate the rate all day and settle
   // only after the tech clocks out.
   ongoingDays: string[];
-  // Work days with NEITHER a clock entry nor a schedule to fall back on — the
-  // genuinely unknown set. A scheduled day is not missing: the schedule IS the
-  // answer, which is the whole reason the shift-override exists.
+  // Days with FLAGGED WORK (summed flag hours > 0) and NEITHER a clock entry
+  // nor a schedule to fall back on — the genuinely unknown set. A scheduled
+  // day is not missing: the schedule IS the answer, which is the whole reason
+  // the shift-override exists.
   missingClockDays: string[];
   status: WageCheckStatus;
 };
@@ -191,7 +195,34 @@ export function effectiveHourly(
   const bonusTotal = sumBonuses(includedBonuses);
   const totalPay = flagPay === null ? null : flagPay + bonusTotal;
 
+  // Every date carrying an RO. Kept for display continuity ("work days"), but
+  // deliberately NOT the set the denominator is built from — see flaggedDays.
   const workDays = distinctDates(includedEntries.map((e) => e.date));
+
+  // Flag hours SUMMED PER DATE, then the dates whose sum is positive. This —
+  // not `workDays` — is `pairDay`'s `flag > 0` (lib/stats.ts): pairDay tests one
+  // number per day, so a day holding both a 0-flag RO and a 6-flag RO is a
+  // flagged day, and a day whose ROs all flag zero is not.
+  //
+  // The two sets are NOT the same, and using workDays for the denominator was a
+  // second copy of the escalation `payperiod-scheduled-hours-two-figures` under
+  // a different trigger. flagHours is `.min(0)` in validation/core.ts and the
+  // entry schema requires a line but not a positive one, so a zero-flag RO is a
+  // first-class, reachable record — an unpaid comeback logged on a day the tech
+  // forgot to clock is exactly it. That day was in workDays, so the whole
+  // scheduled shift landed in denomHours here, while pairDay called it
+  // `unresolved` and excluded it. Three such days ran 32h against the
+  // efficiency tile's 8h — "At the shop 32.0h" beside "Clocked hrs 8.0h" on one
+  // screen — and the direction DEFLATES the rate, i.e. it manufactures a false
+  // below-your-reference-rate alarm out of a day nobody was paid for.
+  const flagByDay = new Map<string, number>();
+  for (const e of includedEntries) {
+    flagByDay.set(e.date, (flagByDay.get(e.date) ?? 0) + e.flagHours);
+  }
+  const flaggedDays = distinctDates(
+    [...flagByDay.entries()].filter(([, h]) => h > 0).map(([d]) => d),
+  );
+
   const clockDays = distinctDates(
     includedClocks.filter((c) => c.hours > 0).map((c) => c.date),
   );
@@ -215,7 +246,7 @@ export function effectiveHourly(
     // entries is filled once — pairDay counts it once too (the `flag > 0` arm
     // wins, with the identical scheduled hours).
     const fillCandidates = distinctDates([
-      ...workDays,
+      ...flaggedDays,
       ...schedule.confirmedZeroDays.filter((d) =>
         inRange(d, range.start, range.end),
       ),
@@ -255,7 +286,13 @@ export function effectiveHourly(
 
   // Only days with neither a clock entry nor a schedule are genuinely unknown —
   // and an in-progress day is never one of them.
-  const missingClockDays = workDays.filter(
+  //
+  // Over flaggedDays, not workDays, for the same reason the fill is: a day whose
+  // ROs all flag zero and that has no clock and no schedule is pairDay's
+  // `none` with `flag === 0` — it contributes nothing to either side and raises
+  // nothing. Listing it here would have blanked the rate entirely ("N days have
+  // flagged work but no hours on them") for days that have no flagged work.
+  const missingClockDays = flaggedDays.filter(
     (d) => !clockDaySet.has(d) && !scheduledDaySet.has(d) && !isOngoing(d),
   );
 

@@ -66,7 +66,14 @@ export function RoTimeCard({ initialTrack }: { initialTrack: boolean }) {
           checked={track}
           onChange={toggle}
           disabled={isPending}
-          label="Record a time on each RO"
+          // MUST match the visible <h2> above, word for word. This is the
+          // switch's only accessible name, and a name that doesn't contain the
+          // label a user can see is a WCAG 2.5.3 (Label in Name) failure —
+          // speech input users say what they read, and "click Time of day on
+          // each RO" matched nothing while this said "Record a time on each
+          // RO". Static, not state-dependent: role="switch" + aria-checked
+          // already announce on/off.
+          label="Time of day on each RO"
         />
       </div>
     </section>

@@ -172,10 +172,17 @@ export function opCodeOrigin(row: { key: string }): OpCodeOrigin {
 }
 
 /** The tag text for each origin. Kept beside the predicate so the three tables
- *  that print it cannot word it three ways. */
+ *  that print it cannot word it three ways.
+ *
+ *  "custom", NOT "one-time": the tag renders beside a USE COUNT on every table
+ *  that prints it — "ALIGN ONE-TIME · 40 logged", and MIN_DAYS_PER_CODE means a
+ *  row in that table was used on at least five separate days. The distinction
+ *  this tag carries is provenance (typed onto a ticket vs picked from your
+ *  library), and it must not smuggle in a frequency claim the number beside it
+ *  contradicts. */
 export const OP_CODE_ORIGIN_LABEL: Record<OpCodeOrigin, string> = {
   library: "library",
-  custom: "one-time",
+  custom: "custom",
 };
 
 /**
@@ -778,14 +785,14 @@ export type PeriodTrendPoint = {
    * caption under the chart can tell "you never clocked that Saturday" from
    * "that shift is still running", which are opposite instructions.
    *
-   * Only two of the four buckets can ever be filled here, and that is not a
+   * Three of the four buckets can be filled here, and the missing one is not a
    * shortcut: this function is handed the finished denominator map, not the
-   * schedule, so the one distinction it can make honestly is the in-progress
-   * one — a day is absent from `denomByDay` only if it had no clock entry
-   * (clocked hours always produce a denominator), so `date >= today` and absent
-   * is exactly stats' `isInProgressDay`. Everything else lands in
-   * `no_schedule`, which prints the same "clock it or schedule it" sentence the
-   * whole caption used to print unconditionally.
+   * schedule, so it cannot tell a day marked off from a day the pattern never
+   * covered — both land in `unscheduled`, whose sentence ("your schedule puts
+   * no shift on that day") is true of either. A day is absent from `denomByDay`
+   * only if it had no clock entry (clocked hours always produce a denominator),
+   * so `date >= today` and absent is exactly stats' `isInProgressDay` —
+   * provided `hasSchedule` says there is a schedule to still be inside of.
    */
   unpairedByReason: UnpairedByReason;
 };
@@ -845,9 +852,26 @@ export function periodTrend(
      * behaviour this function had before. Pass it.
      */
     today?: string;
+    /**
+     * Does the tech have a work schedule at all?
+     *
+     * Required to tell "still running" from "never measurable": with no
+     * schedule, `pairDay` calls a today-dated unclocked day `no_schedule`, and
+     * without this flag this function called the same day `in_progress` — the
+     * two surfaces printing opposite instructions for one day, which is the
+     * defect this whole breakdown exists to prevent. Defaults to false so a
+     * caller that does not know cannot claim a shift is running.
+     */
+    hasSchedule?: boolean;
   },
 ): PeriodTrendPoint[] {
-  const { splitDay, periodOverrides = {}, limit = 6, today } = opts;
+  const {
+    splitDay,
+    periodOverrides = {},
+    limit = 6,
+    today,
+    hasSchedule = false,
+  } = opts;
   const byKey = new Map<string, PeriodTrendPoint>();
 
   const touch = (date: string): PeriodTrendPoint => {
@@ -901,9 +925,17 @@ export function periodTrend(
     // isInProgressDay with clocked hours of zero. Same predicate, same answer
     // as the pay-period caption and WorkCostCard's "still in progress" note.
     const reason: keyof UnpairedByReason =
-      today !== undefined && isInProgressDay(entry.date, today, 0)
+      today !== undefined && isInProgressDay(entry.date, today, 0, hasSchedule)
         ? "in_progress"
-        : "no_schedule";
+        : hasSchedule
+          ? // A schedule exists and this day still produced no denominator, so
+            // the schedule puts no shift on it — either it never did, or a
+            // days_off entry removed it. This function is handed the finished
+            // denominator map and not the schedule, so it cannot tell those two
+            // apart; "no shift on that day" is true of both, and it is not the
+            // "you have no schedule" sentence, which would be flatly false here.
+            "unscheduled"
+          : "no_schedule";
     point.unpairedByReason[reason].flagHours += entry.flagHours;
     if (!unpairedDates.has(entry.date)) {
       unpairedDates.add(entry.date);

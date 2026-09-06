@@ -751,3 +751,57 @@ describe("WorkCostCard — every unpaid record, money column", () => {
     expect(drill).not.toMatch(/\$167(?!\.)/);
   });
 });
+
+// ── The explainer has to describe the arithmetic the card performs ───────────
+//
+// The InfoBubble said "your total pay for the period — flag pay plus spiffs —
+// divided by the hours you were actually at the shop". The numerator became
+// `countedPay` (escalation `costcard-total-pay-mismatch`); the visible caption
+// under the headline was corrected and this paragraph was not, so the card
+// explained one division and printed another. Copy that describes a
+// computation is part of the computation's contract, and nothing was pinning
+// it — the bubble is closed by default, so no rendered-card test ever reached
+// it.
+describe("WorkCostCard — the explainer matches the maths", () => {
+  function openBubble(): string {
+    const { container, getByLabelText } = render(
+      <WorkCostCard
+        result={result()}
+        referenceRate={null}
+        unpaid={NO_UNPAID}
+        defaultOpen
+      />,
+    );
+    fireEvent.click(getByLabelText('What is "What did the work cost me?"?'));
+    return container.textContent ?? "";
+  }
+
+  it("describes the numerator as the pay on the days counted, not the whole period", () => {
+    const text = openBubble();
+    // Positive control first: the paragraph is reachable at all.
+    expect(text).toMatch(/Effective hourly/);
+    expect(text).toMatch(
+      /Your pay on the days counted — flag pay plus spiffs — divided by the hours you were at the shop on those same days/,
+    );
+    // The falsified sentence, gone. Asserted as the exact old wording rather
+    // than a loose /total pay/, which still legitimately appears in the
+    // headline caption below the rate.
+    expect(text).not.toMatch(/Your total pay for the period/);
+  });
+
+  it("says an in-progress shift is excluded from both sides", () => {
+    const text = openBubble();
+    expect(text).toMatch(/A shift still in progress is left out of/);
+    expect(text).toMatch(/not in the denominator/);
+  });
+
+  // The schedule fill counts days with FLAGGED WORK (pairDay's `flag > 0`),
+  // plus confirmed real zeros. A day whose ROs all flagged zero is neither, and
+  // the explainer used to imply otherwise by saying only "a day with flagged
+  // work on it was obviously a day you worked".
+  it("says a day whose ROs all flagged zero is not filled from the schedule", () => {
+    const text = openBubble();
+    expect(text).toMatch(/all flagged zero hours is not one of those days/);
+    expect(text).toMatch(/A day you marked as a real zero counts its whole shift too/);
+  });
+});

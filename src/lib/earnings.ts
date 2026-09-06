@@ -12,6 +12,7 @@
 //    callers decide whether to show "—" or roll it into a sum as 0. This is what
 //    lets the whole feature degrade to hours-only when no rates are set.
 import type { Entry, EntryOpCode, LaborRate, LaborType } from "./types";
+import { roundAtScale } from "./format";
 
 export const LABOR_TYPES: readonly LaborType[] = [
   "customer_pay",
@@ -160,12 +161,17 @@ export function warrantyLoss(entries: Entry[], rates: RateMap): number | null {
 // The whole-dollar rule is deliberate and stays. What did NOT stay is feeding
 // it a raw float: every dollar figure in this file is an unrounded reduce over
 // products (rate × hours), so a true $3,455.50 arrives as 3455.4999999999995
-// and printed "$3,455" — a dollar short, downward, silently. Snapping to cents
-// first removes the binary dust without touching the digit behaviour: a genuine
-// half-dollar rounds up, everything else prints exactly as it did.
+// and printed "$3,455" — a dollar short, downward, silently.
+//
+// The rounding absorbs that dust and nothing else. It is deliberately NOT a
+// snap to cents first: 0.50h at $28.99 is exactly $14.495, whose nearest dollar
+// is $14, but snapped to $14.50 it rounds on up to $15 — 7,721 such cases in a
+// grid of 0.01–4.00h × $20–$60, every one of them a dollar high. A sub-cent
+// tail is the normal shape of a figure here, not dust to be flattened.
+// See lib/format roundAtScale for the tolerance and the measurements.
 // (escalation shortfall-one-decimal-float, 2026-09-06)
 export function fmtMoney(n: number): string {
-  return (Math.round(n * 100) / 100).toLocaleString("en-US", {
+  return roundAtScale(n, 1).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,

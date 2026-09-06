@@ -20,7 +20,7 @@ import {
 import { lineCode, lineDescription } from "./line-label";
 import { payStatus } from "./reconcile";
 import { buildUnpaidSummary, type UnpaidSummary } from "./unpaid-summary";
-import { fmtHours2, fmtMoney2 } from "./format";
+import { fmtHours2, fmtMoney2, roundToCents } from "./format";
 
 // One disputed line, flattened with enough context to render a report row
 // without re-deriving anything.
@@ -118,7 +118,13 @@ export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
       // still unpaid, so the outstanding amount is the full flag.
       const deltaHours = line.flagHours - (paid ?? 0);
       const rate = resolveLineRate(line, rates);
-      const deltaDollars = rate === null ? null : deltaHours * rate;
+      // Rounded to the cent HERE, as the value — not later, as a format. The
+      // product of two 2dp figures carries four decimals, so a row snapped only
+      // at print time sits under a total summed from the raw products and the
+      // column does not add up. See roundToCents in lib/format. This is also
+      // the figure that reaches the DB as `claimed_dollars numeric(10,2)`, so
+      // rounding here matches what Postgres stores rather than fighting it.
+      const deltaDollars = rate === null ? null : roundToCents(deltaHours * rate);
 
       lines.push({
         entryId: entry.id,
@@ -136,8 +142,12 @@ export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
   }
 
   const totalShortHours = lines.reduce((s, l) => s + l.deltaHours, 0);
+  // Sum of the ROUNDED rows, not a rounding of the raw sum. Each row is an
+  // exact multiple of a cent, so their true sum is too, and the final
+  // roundToCents only clears the float dust of the addition itself — it can
+  // never disagree with the printed rows.
   const totalShortDollars = rated
-    ? lines.reduce((s, l) => s + (l.deltaDollars ?? 0), 0)
+    ? roundToCents(lines.reduce((s, l) => s + (l.deltaDollars ?? 0), 0))
     : null;
 
   // Distinct disputed ROs, and how many have a photo record on file.
@@ -182,8 +192,13 @@ const fmtH = fmtHours2;
 // Two decimals for the same reason, and it took a second escalation to notice
 // that the hours fix in 2026-08-13 had left the dollar column beside it still
 // printing whole dollars. Four rows at $44.80/$41.60/$44.80/$35.20 printed
-// 45/42/45/35 — $167 — under a total of $166. Money is stored to the cent, so
-// at the cent the page adds up. (disputepack-money-column-rounding)
+// 45/42/45/35 — $167 — under a total of $166. (disputepack-money-column-rounding)
+//
+// The formatter is only half of it, and NOT the half that makes the page add
+// up. Unlike hours, dollars are not a stored 2dp column — deltaDollars is a
+// 2dp × 2dp product, four decimals wide — so rows snapped at print time still
+// sit under a raw-sum total. The reconciliation is done above, in the builder,
+// which rounds each row to the cent as a value and totals the rounded rows.
 const fmtD = fmtMoney2;
 
 export function formatDisputePackText(pack: DisputePack): string {

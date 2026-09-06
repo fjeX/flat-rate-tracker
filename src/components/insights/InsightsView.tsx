@@ -9,6 +9,7 @@ import {
   MaintenanceTimesSection,
 } from "@/components/insights/JobTimeSections";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { OriginTag } from "@/components/insights/OriginTag";
 import { Table, Td, Th } from "@/components/ui/Table";
 import {
   fmtHours,
@@ -48,9 +49,7 @@ import {
   gainBoard,
   leakBoard,
   opCodePerformance,
-  opCodeOrigin,
   opCodeState,
-  OP_CODE_ORIGIN_LABEL,
   periodTrend,
   ratioOrder,
   ratioTier,
@@ -94,8 +93,8 @@ const CHIPS: { kind: FilterKind; label: string }[] = [
   { kind: "all", label: "All" },
 ];
 
-type SortCol = "code" | "uses" | "flag" | "actual" | "ratio";
-type SortDir = "asc" | "desc";
+export type SortCol = "code" | "uses" | "flag" | "actual" | "ratio";
+export type SortDir = "asc" | "desc";
 type WeekdaySort = "day" | "efficiency";
 
 function pct(n: number): string {
@@ -128,7 +127,10 @@ function getRange(
   }
 }
 
-function sortOpCodes(
+// Exported for its own test: the tie-breakers below are the part that silently
+// ordered rows by numbers nobody can see, and a comparator is only provable by
+// calling it.
+export function sortOpCodes(
   rows: OpCodePerformance[],
   col: SortCol,
   dir: SortDir,
@@ -156,31 +158,21 @@ function sortOpCodes(
     // a null ratio and real hours, and pinning it down here is the bug.
     const av = value(a);
     const bv = value(b);
-    if (av === null && bv === null) return b.uses - a.uses;
+    // TIE-BREAKERS ORDER BY WHAT IS ON SCREEN, and they follow `sign`.
+    // `b.uses - a.uses` did neither: an unpaid row PRINTS `unpaidUses`, so two
+    // rows both showing "2 uses" were ordered by the invisible raw 8-vs-3, and
+    // always descending — flip the arrow and the tied block stayed put, which
+    // reads as a sort that half worked. Equal displayed values now return 0 and
+    // Array#sort's stability keeps the incoming order.
+    const tie = () => sign * (displayedUses(a) - displayedUses(b));
+    if (av === null && bv === null) return tie();
     if (av === null) return 1;
     if (bv === null) return -1;
     // Infinity - Infinity is NaN, which a comparator reads as "equal" and leaves
     // the unpaid block in arbitrary order. Rank those by hours bled instead.
-    if (av === bv) return b.unpaidHours - a.unpaidHours || b.uses - a.uses;
-    return sign * (av - bv) || b.uses - a.uses;
+    if (av === bv) return b.unpaidHours - a.unpaidHours || tie();
+    return sign * (av - bv) || tie();
   });
-}
-
-/**
- * "library" / "one-time", the quietest thing that can tell two identically
- * coded rows apart.
- *
- * Nothing on these rows is clickable and no figure is at risk — this is a
- * readability fix, so it is a small dim tag, not a callout. The distinction
- * itself comes from lib/insights (the group key already carries it); this only
- * decides what it looks like here.
- */
-function OriginTag({ row }: { row: { key: string } }) {
-  return (
-    <span className="ml-1.5 align-middle text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
-      {OP_CODE_ORIGIN_LABEL[opCodeOrigin(row)]}
-    </span>
-  );
 }
 
 function SortHead({
@@ -854,7 +846,7 @@ export function TrendSection({
             </span>{" "}
             flagged across {note.days} {note.days === 1 ? "day" : "days"}{" "}
             {note.labels.length === 1 ? `in ${note.labels[0]}` : "in these periods"}{" "}
-            {unpairedNoteClause(note)}
+            {unpairedNoteClause(note, "trend")}
           </p>
         ))}
       </Card>
@@ -1103,6 +1095,7 @@ export function InsightsView({
   weekStartDay,
   disputes,
   unpaid,
+  hasSchedule = false,
 }: {
   entries: Entry[];
   denomByDay: Record<string, DayDenom>;
@@ -1117,6 +1110,13 @@ export function InsightsView({
   // The unpaid-time ledger, unscoped. Null pre-migration, same contract; the
   // leak board then shows only its op-code half, which is what it always was.
   unpaid: UnpaidTime[] | null;
+  /**
+   * Does the tech have a work schedule at all? Only the trend caption reads it,
+   * and only to avoid claiming a shift is "still in progress" for someone who
+   * has no shifts. Defaults to false — the conservative answer, and the one
+   * this page effectively assumed before the flag existed.
+   */
+  hasSchedule?: boolean;
 }) {
   const [filter, setFilter] = useState<FilterKind>("all");
   const [sortCol, setSortCol] = useState<SortCol>("ratio");
@@ -1234,8 +1234,17 @@ export function InsightsView({
     // `today` is not optional in practice: without it periodTrend cannot tell a
     // day that is still running from one that was never measurable, and the
     // caption under the chart goes back to giving one answer for both.
-    () => periodTrend(entries, denomByDay, { splitDay, periodOverrides, today }),
-    [entries, denomByDay, splitDay, periodOverrides, today],
+    () =>
+      periodTrend(entries, denomByDay, {
+        splitDay,
+        periodOverrides,
+        today,
+        // Without this a tech with NO schedule is told a today-dated entry is
+        // "still in progress" here while /pay-period calls the same day
+        // unmeasurable. See isInProgressDay's fourth argument.
+        hasSchedule,
+      }),
+    [entries, denomByDay, splitDay, periodOverrides, today, hasSchedule],
   );
 
   // Deliberately NOT built from `trend`, which carries PAIRED flag hours (its

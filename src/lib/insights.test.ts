@@ -12,13 +12,14 @@ import {
   leakBoard,
   opCodePerformance,
   opCodeState,
+  OP_CODE_ORIGIN_LABEL,
   periodTrend,
   ratioOrder,
   ratioTier,
   weekdayEfficiency,
 } from "./insights";
 import { buildUnpaidSummary } from "./unpaid-summary";
-import type { DayDenom } from "./stats";
+import { dailyDenominators, type DayDenom } from "./stats";
 import type {
   DailyClock,
   Entry,
@@ -547,17 +548,47 @@ describe("periodTrend", () => {
         entry([line({ flagHours: 4 })], { id: "now", date: "2026-07-08" }),
       ],
       denom({}),
-      { splitDay: 15, today: "2026-07-08" },
+      { splitDay: 15, today: "2026-07-08", hasSchedule: true },
     );
     expect(points[0].unpairedFlagHours).toBe(10);
     expect(points[0].unpairedByReason.in_progress).toEqual({
       flagHours: 4,
       days: 1,
     });
-    expect(points[0].unpairedByReason.no_schedule).toEqual({
+    // A tech WITH a schedule whose Saturday produced no denominator: the
+    // schedule puts no shift on it (never did, or a day off removed it). Not
+    // `no_schedule`, whose caption says "you have no work schedule" — flatly
+    // false for this tech, and the class of lie this breakdown exists to stop.
+    expect(points[0].unpairedByReason.unscheduled).toEqual({
       flagHours: 6,
       days: 1,
     });
+    expect(points[0].unpairedByReason.no_schedule.flagHours).toBe(0);
+  });
+
+  // DEFECT 3: isInProgressDay was called here WITHOUT wage-check's
+  // `schedule !== null` term, which pairDay only gets away with because its
+  // `!schedule` early return runs first. A tech with no schedule at all read
+  // "that shift is still in progress" on /insights for a today-dated entry
+  // while pairDay called the same day no_schedule.
+  it("never calls a day in progress for a tech with no schedule", () => {
+    const today = "2026-07-08";
+    const entries = [entry([line({ flagHours: 4 })], { id: "now", date: today })];
+    const points = periodTrend(entries, denom({}), {
+      splitDay: 15,
+      today,
+      hasSchedule: false,
+    });
+    expect(points[0].unpairedByReason.in_progress.flagHours).toBe(0);
+    expect(points[0].unpairedByReason.no_schedule).toEqual({
+      flagHours: 4,
+      days: 1,
+    });
+    // pairDay's answer for the same day, through the map this function is fed:
+    // schedule === null means no denominator and reason `no_schedule`.
+    expect(
+      dailyDenominators(entries, [], { start: today, end: today }, today, null),
+    ).toEqual({});
   });
 
   it("calls nothing in progress when it was not told what day it is", () => {
@@ -1236,5 +1267,22 @@ describe("bigJobCoverage", () => {
   it("is zero, not NaN, with no big jobs at all", () => {
     const cov = bigJobCoverage([entry([line({ opCodeId: "oc1", flagHours: 0.4 })])]);
     expect(cov.pct).toBe(0);
+  });
+});
+
+// ── DEFECT 4: the origin label ─────────────────────────────────────────────
+//
+// "one-time" means "not from the library", but it renders beside a use count —
+// "ALIGN ONE-TIME · 40 logged" in JobTimeSections, where MIN_DAYS_PER_CODE
+// guarantees at least five distinct days per row, and "ALIGN ONE-TIME … 8 uses"
+// in the op-code list. A provenance tag must not make a frequency claim the
+// number beside it contradicts.
+describe("OP_CODE_ORIGIN_LABEL", () => {
+  it("names provenance without claiming how often the code was used", () => {
+    expect(OP_CODE_ORIGIN_LABEL.custom).toBe("custom");
+    expect(OP_CODE_ORIGIN_LABEL.library).toBe("library");
+    for (const label of Object.values(OP_CODE_ORIGIN_LABEL)) {
+      expect(label).not.toMatch(/one-time|once|single/i);
+    }
   });
 });

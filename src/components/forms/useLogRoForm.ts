@@ -325,6 +325,19 @@ export function useLogRoForm({
   // throws, the tech still keeps their ticket.
   const [retroCandidatesList, setRetroCandidatesList] = useState<RetroCandidate[]>([]);
   const retroAfterSave = useRef<(() => void) | undefined>(undefined);
+  // One-shot latch for the retro cycle: `false` while a prompt is open and its
+  // navigation still owed, `true` once someone has claimed it. It starts `true`
+  // because no cycle is open at mount — a stray finishRetro() with no prompt on
+  // screen must not navigate.
+  //
+  // Why it exists: Skip is deliberately never disabled (RetroTimePrompt.tsx), and
+  // Escape / backdrop / ✕ were never gated either, so the tech can dismiss the
+  // prompt while "Save time"'s estimate writes are still in flight. That gives
+  // TWO finishRetro() calls for one save. The first consumes retroAfterSave and
+  // runs it (on Save & New: resetForm()); the second finds `after` undefined and
+  // falls through to router.push(redirectTo) — a fresh form yanked to /dashboard
+  // a beat later. The latch makes the second call a no-op.
+  const retroFinishedRef = useRef(true);
   const [isChecking, setIsChecking] = useState(false);
   const pendingAfterSave = useRef<(() => void) | undefined>(undefined);
   // Synchronous guard against overlapping persists (see performSave).
@@ -755,6 +768,12 @@ export function useLogRoForm({
           if (candidates.length > 0) {
             tap();
             retroAfterSave.current = afterSave;
+            // The retro cycle BEGINS here — this is the only place the prompt is
+            // ever opened, so it is the only correct place to re-arm the latch.
+            // Arm it before the state update, not in finishRetro's callers, or
+            // the second RO of a page session would find the latch still closed
+            // and get no navigation at all.
+            retroFinishedRef.current = false;
             setRetroCandidatesList(candidates);
             return;
           }
@@ -835,6 +854,11 @@ export function useLogRoForm({
   // prompt FIRST — a write that fails must not strand the tech in a modal with
   // their RO already saved behind it.
   function finishRetro() {
+    // Exactly one finish per retro cycle. Every dismissal route (Skip, Escape,
+    // backdrop mousedown, the ✕) lands on Modal's onClose -> onSkip -> skipRetro,
+    // and submitRetro finishes here too, so all five funnel through this latch.
+    if (retroFinishedRef.current) return;
+    retroFinishedRef.current = true;
     const after = retroAfterSave.current;
     retroAfterSave.current = undefined;
     setRetroCandidatesList([]);
@@ -860,6 +884,16 @@ export function useLogRoForm({
       // action's { error } return is ignored here for the same reason — this is
       // the one call site that genuinely does not want to hear about it.
     }
+    // Unconditional on purpose, and now idempotent. If the tech dismissed the
+    // prompt while these writes were in flight, their dismissal already finished
+    // the cycle and this call does nothing.
+    //
+    // The writes themselves are NOT cancelled, and that is deliberate: they were
+    // dispatched the moment "Save time" was tapped, there is no abort path
+    // through a server action, and the tech DID choose those chips. They land as
+    // actualSource "estimate", which keeps them out of the shared True Time pool
+    // (lib/true-time.ts) either way. The dismissal is about where the tech goes
+    // next, not about un-sending a request that is already on the wire.
     finishRetro();
   }
 

@@ -15,36 +15,13 @@ import { Table, Td, Th } from "@/components/ui/Table";
 import { fmtHours } from "@/lib/format";
 import {
   formatRatio,
-  opCodeOrigin,
-  OP_CODE_ORIGIN_LABEL,
   ratioTier,
   type BigJobCoverage,
   type BigJobRow,
 } from "@/lib/insights";
+import { OriginTag } from "@/components/insights/OriginTag";
 import { HEAVY_FLAG_HOURS } from "@/lib/mix";
 import type { Inference } from "@/lib/time-inference";
-
-/**
- * "library" / "one-time" — the only reliable way to tell two rows apart when
- * they carry the same code text.
- *
- * `op_codes.code` has no unique constraint and a one-time line's code is free
- * text, so a library ALIGN and a typed ALIGN print identically here. The
- * grouping never merged them; the table just could not show which was which,
- * and the description that used to be the hint is optional and often blank.
- * Kept dim and small: nothing on this row is clickable and no figure is wrong,
- * so this is legibility, not a warning.
- */
-function OriginTag({ row }: { row: { key: string } }) {
-  return (
-    <span
-      className="ml-1.5 align-middle text-[10px] uppercase tracking-wide"
-      style={{ color: "var(--fg-3)" }}
-    >
-      {OP_CODE_ORIGIN_LABEL[opCodeOrigin(row)]}
-    </span>
-  );
-}
 
 const TIER_COLOR: Record<string, string> = {
   good: "var(--good)",

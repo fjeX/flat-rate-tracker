@@ -8,7 +8,11 @@ import {
   fmtHours,
   fmtPct,
   isInProgressDay,
+  emptyUnpairedByReason,
+  unpairedNoteClause,
+  unpairedNotes,
   type ScheduleContext,
+  type UnpairedByReason,
 } from "./stats";
 // Read-only here, and deliberately: the in-progress wording this fix reuses is
 // driven by effectiveHourly's `ongoingDays` on WorkCostCard, so the two
@@ -595,9 +599,23 @@ describe("aggregateStatsWithSchedule", () => {
       wage.ongoingDays.length,
     );
     // And the predicate itself, for the same inputs.
-    expect(isInProgressDay(today, today, 0)).toBe(true);
-    expect(isInProgressDay(today, today, 8)).toBe(false);
-    expect(isInProgressDay("2026-07-06", today, 0)).toBe(false);
+    expect(isInProgressDay(today, today, 0, true)).toBe(true);
+    expect(isInProgressDay(today, today, 8, true)).toBe(false);
+    expect(isInProgressDay("2026-07-06", today, 0, true)).toBe(false);
+  });
+
+  // DEFECT 3: the predicate was missing wage-check's `schedule !== null` term.
+  // Harmless at pairDay's call site (the `!schedule` early return runs first)
+  // and wrong at periodTrend's, which calls it unguarded — see the /insights
+  // half of this in insights.test.ts.
+  it("is never in progress for a tech with no work schedule at all", () => {
+    expect(isInProgressDay(today, today, 0, false)).toBe(false);
+    // And that is pairDay's answer for the same day: with schedule === null it
+    // returns no_schedule before it ever reaches the in-progress test, which is
+    // why dailyDenominators gives the day no denominator either.
+    expect(
+      dailyDenominators([makeEntry(today, 6)], [], range, today, null),
+    ).toEqual({});
   });
 
   // ── the two derivations must not drift ───────────────────────────────────
@@ -656,5 +674,105 @@ describe("aggregateStatsWithSchedule", () => {
       expect(stats.denomHours).toBe(8);
       expect(denomTotal(entries, [])).toBe(8);
     });
+  });
+});
+
+// ── DEFECT 1 & 2: the caption sentences ────────────────────────────────────
+//
+// The tally was split four ways and then folded back into two — day_off and
+// unscheduled were re-merged into no_schedule, so a day that IS on the tech's
+// schedule, marked off, printed "no clocked hours and no schedule … add them to
+// your schedule". Four causes, four corrections, four sentences.
+describe("unpairedNotes / unpairedNoteClause", () => {
+  function by(over: Partial<UnpairedByReason>): UnpairedByReason {
+    return { ...emptyUnpairedByReason(), ...over };
+  }
+  const period = (b: UnpairedByReason) =>
+    unpairedNotes(b, { flagHours: 0, days: 0 })
+      .map((n) => `${n.flagHours}h/${n.days}d ${unpairedNoteClause(n, "period")}`)
+      .join(" || ");
+  const trend = (b: UnpairedByReason) =>
+    unpairedNotes(b, { flagHours: 0, days: 0 })
+      .map((n) => unpairedNoteClause(n, "trend"))
+      .join(" || ");
+
+  it("keeps four reasons as four notes, not two", () => {
+    const notes = unpairedNotes(
+      by({
+        in_progress: { flagHours: 1, days: 1 },
+        day_off: { flagHours: 2, days: 1 },
+        unscheduled: { flagHours: 3, days: 1 },
+        no_schedule: { flagHours: 4, days: 1 },
+      }),
+      { flagHours: 10, days: 4 },
+    );
+    expect(notes.map((n) => n.kind)).toEqual([
+      "in_progress",
+      "day_off",
+      "unscheduled",
+      "no_schedule",
+    ]);
+    expect(notes.map((n) => n.flagHours)).toEqual([1, 2, 3, 4]);
+  });
+
+  // THE EXECUTED REPRO. Schedule exists, Wed 2026-09-02 marked off, the tech
+  // came in anyway and flagged 6.5h.
+  it("day off: says the day is marked off, never 'no schedule'", () => {
+    const text = period(by({ day_off: { flagHours: 6.5, days: 1 } }));
+    expect(text).toMatch(/marked off on your schedule/);
+    expect(text).toMatch(/clear the day off/);
+    // The sentence this escalation was filed for.
+    expect(text).not.toMatch(/no work schedule/);
+    expect(text).not.toMatch(/add (it|them) to your schedule/);
+    expect(text).not.toMatch(/still in progress/);
+  });
+
+  it("unscheduled: says the schedule has no shift that day", () => {
+    const text = period(by({ unscheduled: { flagHours: 5, days: 1 } }));
+    expect(text).toMatch(/puts no shift on that day/);
+    expect(text).toMatch(/add a shift for that day/);
+    expect(text).not.toMatch(/no work schedule/);
+    expect(text).not.toMatch(/marked off/);
+  });
+
+  it("no schedule: the only case that says you have no schedule", () => {
+    const text = period(by({ no_schedule: { flagHours: 4, days: 2 } }));
+    expect(text).toMatch(/no clocked hours and no work schedule/);
+    expect(text).toMatch(/add them to your schedule/);
+    expect(text).not.toMatch(/marked off|puts no shift/);
+  });
+
+  it("in progress: wait, do not fix", () => {
+    const text = period(by({ in_progress: { flagHours: 6, days: 1 } }));
+    expect(text).toMatch(/still in progress/);
+    expect(text).toMatch(/counts once you clock out/);
+    expect(text).not.toMatch(/add (it|them) to your schedule|Clock it,|Clock them,/);
+  });
+
+  // DEFECT 2. "in your flagged total" is TRUE on /pay-period (ScheduleStats'
+  // flagHours is the raw total and unpairedFlagHours is a subset of it) and
+  // FALSE on the trend (PeriodTrendPoint.flagHours is the paired total only).
+  it("says where the hours are, and says it differently per surface", () => {
+    const b = by({ day_off: { flagHours: 6.5, days: 1 } });
+    expect(period(b)).toMatch(/in your flagged total above, but in neither side/);
+    expect(trend(b)).toMatch(/in neither side of the percentage/);
+    expect(trend(b)).not.toMatch(/flagged total/);
+  });
+
+  it("still prints one note when it is handed no breakdown at all", () => {
+    const notes = unpairedNotes(undefined, { flagHours: 9, days: 2 });
+    expect(notes).toEqual([{ kind: "no_schedule", flagHours: 9, days: 2 }]);
+    expect(unpairedNoteClause(notes[0], "period")).toMatch(
+      /add them to your schedule/,
+    );
+  });
+
+  it("falls back rather than vanishing when the breakdown is all zero", () => {
+    expect(
+      unpairedNotes(emptyUnpairedByReason(), { flagHours: 9, days: 2 }),
+    ).toEqual([{ kind: "no_schedule", flagHours: 9, days: 2 }]);
+    expect(
+      unpairedNotes(emptyUnpairedByReason(), { flagHours: 0, days: 0 }),
+    ).toEqual([]);
   });
 });

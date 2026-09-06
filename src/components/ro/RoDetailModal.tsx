@@ -46,6 +46,20 @@ export function RoDetailModal({
 }) {
   const router = useRouter();
   const libraryById = useMemo(() => new Map(library.map((oc) => [oc.id, oc])), [library]);
+  // Op codes that appear on MORE THAN ONE line of this RO. A line's op code is
+  // not an identifier — two ALIGN lines on one ticket is ordinary — so any
+  // control named after the code alone would announce twice, identically. Only
+  // these codes need a position to break the tie; see LineRow.
+  const duplicateCodes = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const line of entry.opCodes) {
+      const c = displayCode(line, libraryById);
+      counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    return new Set(
+      [...counts.entries()].filter(([, n]) => n > 1).map(([c]) => c),
+    );
+  }, [entry.opCodes, libraryById]);
   const totalActual = entry.opCodes.reduce(
     (s, oc) => s + (oc.actualHours ?? 0),
     0,
@@ -99,11 +113,16 @@ export function RoDetailModal({
             <div />
           </div>
           <ul>
-            {entry.opCodes.map((line) => (
+            {/* The index here IS the on-screen order — this map is the only
+                thing that renders the list — so a "line N" in an accessible
+                name is a number a sighted user can count down to. */}
+            {entry.opCodes.map((line, i) => (
               <LineRow
                 key={line.id}
                 line={line}
                 libraryById={libraryById}
+                lineNumber={i + 1}
+                duplicateCodes={duplicateCodes}
                 isOnly={entry.opCodes.length === 1}
                 onDeleted={() => router.refresh()}
                 earnings={showMoney ? lineEarnings(line, rates) : null}
@@ -235,15 +254,36 @@ function VehicleLine({
 
 // ------------------------------------------------------------------------
 
+// The em dash the UI shows when a line has no usable code. It names nothing, so
+// every accessible name treats it as "no code at all".
+const NO_CODE = "—";
+
+/**
+ * The op code string a line displays. Shared by the modal (to find codes used
+ * by more than one line) and by LineRow (to render it), so the two can never
+ * disagree about what a row is called.
+ */
+function displayCode(line: EntryOpCode, libraryById: Map<string, OpCode>): string {
+  if (line.custom) return (line.customCode ?? "").trim() || NO_CODE;
+  const ref = line.opCodeId ? libraryById.get(line.opCodeId) : undefined;
+  return ref?.code ?? NO_CODE;
+}
+
 function LineRow({
   line,
   libraryById,
+  lineNumber,
+  duplicateCodes,
   isOnly,
   onDeleted,
   earnings,
 }: {
   line: EntryOpCode;
   libraryById: Map<string, OpCode>;
+  /** 1-based position in the rendered list, used only to break name ties. */
+  lineNumber: number;
+  /** Codes this RO shows on more than one line. */
+  duplicateCodes: Set<string>;
   isOnly: boolean;
   onDeleted: () => void;
   earnings: number | null; // null when rates are off or this line's type is unpriced
@@ -278,9 +318,46 @@ function LineRow({
   }
 
   const ref = line.opCodeId ? libraryById.get(line.opCodeId) : undefined;
-  const code = line.custom
-    ? (line.customCode ?? "").trim() || "—"
-    : (ref?.code ?? "—");
+  const code = displayCode(line, libraryById);
+
+  // ---- Accessible names for this row's controls ------------------------
+  //
+  // This row has no aria-labelledby relationship to anything, so the upsell
+  // toggle, the actual-hours input and the trash button each have to name
+  // themselves. `code` is the OP CODE — every line using it shows the same
+  // string — so it is not on its own an identifier: an RO with two ALIGN
+  // lines used to render two byte-identical names, which is precisely the
+  // collision this is here to prevent. `line.id` is a UUID and is useless to
+  // read aloud, so the tiebreaker is the row's 1-based position.
+  //
+  // Qualified only when the code is ACTUALLY duplicated on this RO, not
+  // always. Always numbering would put "line 1" into every name on the
+  // overwhelmingly common single-line RO, where there is no ambiguity to
+  // resolve and the number is pure noise; a name only needs to be unique
+  // among the names present. The cost is that adding a second ALIGN line
+  // renames the first ALIGN control — but the un-qualified name is wrong the
+  // instant that second line exists, so that rename is the fix landing, and
+  // it lands during the full re-render the router.refresh() already causes.
+  const hasCode = code !== NO_CODE;
+  const needsPosition = duplicateCodes.has(code);
+  // "ALIGN" | "ALIGN on line 2" | "line 2" | null (nothing distinguishes it,
+  // because nothing needs to).
+  const lineName = hasCode
+    ? needsPosition
+      ? `${code} on line ${lineNumber}`
+      : code
+    : needsPosition
+      ? `line ${lineNumber}`
+      : null;
+  // "line ALIGN" | "line 2, ALIGN" | "line 2" | "line"
+  const removeTarget = hasCode
+    ? needsPosition
+      ? `line ${lineNumber}, ${code}`
+      : `line ${code}`
+    : needsPosition
+      ? `line ${lineNumber}`
+      : "line";
+
   const subRef = line.subOpCodeId && ref
     ? ref.subOpCodes.find((s) => s.id === line.subOpCodeId)
     : undefined;
@@ -358,16 +435,14 @@ function LineRow({
               onClick={toggleUpsell}
               disabled={markingUpsell}
               aria-pressed={upsell}
-              // Named like the Remove-line button beside it (line ~427): every
-              // line's upsell toggle announced the identical string "Upsell",
-              // and with no row-level labelledby relationship, each control
-              // must self-identify. `code` falls back to an em dash, which
-              // names nothing, so treat that as no code at all.
+              // Named like the Remove-line button beside it: every line's
+              // upsell toggle announced the identical string "Upsell". See the
+              // lineName block above for how a row identifies itself.
               aria-label={
-                code && code !== "—"
+                lineName
                   ? upsell
-                    ? `Unmark ${code} as upsell`
-                    : `Mark ${code} as upsell`
+                    ? `Unmark ${lineName} as upsell`
+                    : `Mark ${lineName} as upsell`
                   : upsell
                     ? "Unmark as upsell"
                     : "Mark as upsell"
@@ -423,7 +498,10 @@ function LineRow({
             }}
             placeholder="—"
             disabled={saving || deleting}
-            aria-label={`Actual hours for ${code}`}
+            // Same collision as the two buttons — and the old string put the
+            // bare em dash into the name ("Actual hours for —") on a codeless
+            // line, which announces as nothing useful.
+            aria-label={lineName ? `Actual hours for ${lineName}` : "Actual hours"}
             aria-invalid={Boolean(error)}
             aria-describedby={error ? `line-error-${line.id}` : undefined}
             className="opc-hours-input on-inset"
@@ -436,9 +514,9 @@ function LineRow({
           // Named like the actual-hours input beside it. Every line's trash can
           // announced the identical string, so the only way to target one was
           // by position — which is exactly how the wrong row got deleted on
-          // 2026-08-19. `code` falls back to an em dash, which names nothing,
-          // so treat that as no code at all.
-          aria-label={code && code !== "—" ? `Remove line ${code}` : "Remove line"}
+          // 2026-08-19. Naming it after the op code alone did NOT fix that:
+          // two lines sharing a code still announced identically.
+          aria-label={`Remove ${removeTarget}`}
           className="relative rounded-[var(--radius-sm)] p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
         >
           <Trash2 className="h-3.5 w-3.5" />

@@ -11,9 +11,12 @@
 // the unit suite and the visual gate all pass, because the bug is a field
 // missing from a list. The reset test below is the shape that does catch it,
 // and it's the reason to keep this file growing as fields are added.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, renderHook } from "@testing-library/react";
-import { useLogRoForm } from "./useLogRoForm";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, fireEvent, render, renderHook } from "@testing-library/react";
+import React from "react";
+import { useLogRoForm, type UseLogRoForm } from "./useLogRoForm";
+import { RetroTimePrompt } from "./RetroTimePrompt";
+import type { RetroCandidate } from "@/lib/retro-capture";
 import { hhmmInTz } from "@/lib/periods";
 import type { Entry, RoMatch } from "@/lib/types";
 
@@ -45,14 +48,37 @@ vi.mock("@/app/actions/entries", () => ({
   saveEntry: (...a: unknown[]) => saveEntry(...(a as [])),
   findDuplicateRos: (...a: unknown[]) => findDuplicateRos(...(a as [])),
   deleteEntryAction: vi.fn(),
-  setLineActualHoursAction: vi.fn(),
+  setLineActualHoursAction: (...a: unknown[]) =>
+    setLineActualHoursAction(...(a as [string, number, string])),
   getRoMatchById: (...a: unknown[]) =>
     getRoMatchById(...(a as [id: string])),
 }));
 vi.mock("@/app/actions/op-codes", () => ({ createLibraryOpCode: vi.fn() }));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));
-// Retro capture reads a persisted Entry shape we deliberately don't build here.
-vi.mock("@/lib/retro-capture", () => ({ retroCandidates: () => [] }));
+// The retro estimate write. A module-level vi.fn (not an inline one in the
+// factory) because the double-finishRetro race can ONLY be reproduced by holding
+// this promise open across a Skip.
+const setLineActualHoursAction = vi.fn(
+  async (lineId: string, hours: number, source: string) => {
+    void lineId;
+    void hours;
+    void source;
+  },
+);
+// Retro capture reads a persisted Entry shape we deliberately don't build here,
+// so retroCandidates is stubbed — but MUTABLY, because the retro tests at the
+// bottom need the prompt to actually open. The default stays [], which is the
+// path every pre-existing test in this file runs through. retroBuckets is
+// stubbed too because the last test renders the real prompt.
+const retroStub: { candidates: RetroCandidate[] } = { candidates: [] };
+vi.mock("@/lib/retro-capture", () => ({
+  retroCandidates: () => retroStub.candidates,
+  retroBuckets: (flagHours: number) => [
+    { label: fmtBucket(flagHours), hours: flagHours },
+    { label: fmtBucket(flagHours + 1), hours: flagHours + 1 },
+  ],
+}));
+const fmtBucket = (h: number) => h + "h";
 vi.mock("@/lib/haptics", () => ({ tap: vi.fn() }));
 
 const TZ = "UTC";
@@ -88,6 +114,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   findDuplicateRos.mockResolvedValue([]);
   saveEntry.mockResolvedValue({ id: "entry-1", opCodes: [] });
+  setLineActualHoursAction.mockResolvedValue(undefined);
+  // Off by default — only the retro describe at the bottom opens the prompt.
+  retroStub.candidates = [];
   // Back to "the lookup finds nothing" — the fallback-label path every test
   // above this line runs through.
   getRoMatchById.mockResolvedValue(null);
@@ -569,5 +598,189 @@ describe("actualSource round-trip on edit-save", () => {
     const [line] = await savedLines(result);
     expect(line.actualSource).toBeNull();
     expect(line.actualHours).toBeNull();
+  });
+});
+
+// --- retro prompt: exactly one finish per cycle -------------------------------
+//
+// The race these cover, in order:
+//   1. "Save time" -> submitRetro awaits the estimate writes.
+//   2. Skip (never disabled, by design) -> finishRetro #1 consumes
+//      retroAfterSave and runs it.
+//   3. The writes resolve -> submitRetro calls finishRetro #2, which used to
+//      find `after` undefined and router.push("/dashboard") — yanking the tech
+//      off the fresh Save & New form a beat after handing it to them.
+//
+// Escape / backdrop / the X all reach the same skipRetro, so the last test
+// drives the REAL prompt through Modal's Escape handler rather than trusting
+// that they do.
+
+const CANDIDATES: RetroCandidate[] = [
+  { lineId: "line-a", code: "WATERPUMP", description: "Water pump", flagHours: 3 },
+];
+
+/** Leaves the estimate write pending; call the returned fn to let it resolve. */
+function holdTheWrite() {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  setLineActualHoursAction.mockImplementation(async () => {
+    await gate;
+  });
+  return () => release();
+}
+
+/** Fill in enough to save, then save with `after` as the deferred navigation. */
+async function saveIntoRetro(
+  api: () => UseLogRoForm,
+  after?: () => void,
+  ro = "55187",
+) {
+  act(() => {
+    api().setRoNumber(ro);
+    api().addCustomLine({ code: "WP", description: "Water pump", flagHours: 3 });
+  });
+  await act(async () => {
+    api().handleSave(after);
+  });
+}
+
+describe("retro prompt — finishRetro is one-shot per cycle", () => {
+  beforeEach(() => {
+    retroStub.candidates = CANDIDATES;
+  });
+  afterEach(() => {
+    retroStub.candidates = [];
+  });
+
+  it("does not navigate when Skip beats the in-flight estimate write", async () => {
+    const release = holdTheWrite();
+    const { result } = setup();
+    const after = vi.fn();
+
+    await saveIntoRetro(() => result.current, after);
+    // Control: the prompt is actually open and the navigation is deferred.
+    expect(result.current.retroCandidates).toHaveLength(1);
+    expect(after).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+
+    // 1. "Save time" — the write is now hanging on `gate`.
+    let submitted!: Promise<void>;
+    act(() => {
+      submitted = result.current.submitRetro({ "line-a": 3 });
+    });
+    expect(setLineActualHoursAction).toHaveBeenCalledWith("line-a", 3, "estimate");
+
+    // 2. Skip, while it is still in flight. This is finishRetro #1.
+    act(() => {
+      result.current.skipRetro();
+    });
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(result.current.retroCandidates).toHaveLength(0);
+    expect(push).not.toHaveBeenCalled();
+
+    // 3. The writes land. finishRetro #2 must be a no-op.
+    await act(async () => {
+      release();
+      await submitted;
+    });
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+    // The dispatched write is deliberately NOT cancelled — see submitRetro.
+    expect(setLineActualHoursAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("still navigates on a genuinely NEW retro cycle (the latch re-arms)", async () => {
+    const release = holdTheWrite();
+    const { result } = setup();
+    const after = vi.fn();
+
+    // --- Cycle 1: race it, exactly as above.
+    await saveIntoRetro(() => result.current, after);
+    let submitted!: Promise<void>;
+    act(() => {
+      submitted = result.current.submitRetro({ "line-a": 3 });
+    });
+    act(() => {
+      result.current.skipRetro();
+    });
+    await act(async () => {
+      release();
+      await submitted;
+    });
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+
+    // --- Cycle 2: the next RO in the same page session, no afterSave, so the
+    // finish IS supposed to navigate. A latch that never re-armed would leave
+    // the tech sitting on a closed prompt going nowhere.
+    setLineActualHoursAction.mockResolvedValue(undefined);
+    await saveIntoRetro(() => result.current, undefined, "55188");
+    expect(result.current.retroCandidates).toHaveLength(1);
+
+    act(() => {
+      result.current.skipRetro();
+    });
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("Escape out of the real prompt takes the same guarded path", async () => {
+    const release = holdTheWrite();
+    const after = vi.fn();
+    const api: { current: UseLogRoForm | null } = { current: null };
+
+    // The hook and the real RetroTimePrompt wired together the way LogRoForm
+    // wires them — so Escape reaches Modal's keydown handler -> onClose ->
+    // onSkip -> skipRetro, and no link in that chain is assumed.
+    function Harness() {
+      const form = useLogRoForm({
+        initialOpCodes: [],
+        trackRoTime: true,
+        timeZone: TZ,
+        defaultLoggedTime: "09:15",
+      });
+      api.current = form;
+      return React.createElement(RetroTimePrompt, {
+        open: form.retroCandidates.length > 0,
+        candidates: form.retroCandidates,
+        onSubmit: form.submitRetro,
+        onSkip: form.skipRetro,
+      });
+    }
+    render(React.createElement(Harness));
+    const get = () => api.current as UseLogRoForm;
+
+    await saveIntoRetro(get, after);
+    expect(document.querySelector(".modal-panel")).toBeTruthy();
+
+    // Answer a chip, then tap "Save time" — the write hangs.
+    const chip = document.querySelector("button.filter-chip") as HTMLButtonElement;
+    act(() => {
+      chip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const saveBtn = Array.from(document.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Save time",
+    ) as HTMLButtonElement;
+    act(() => {
+      saveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(setLineActualHoursAction).toHaveBeenCalledTimes(1);
+
+    // Escape while it is in flight.
+    act(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".modal-panel")).toBeNull();
+
+    await act(async () => {
+      release();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
   });
 });

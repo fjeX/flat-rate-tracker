@@ -23,16 +23,16 @@ describe("fmtHours", () => {
     expect(fmtHours(0.044)).toBe("<0.1");
   });
 
-  it("snaps to the stored resolution before rounding for display", () => {
-    // Changed 2026-09-06 by the shortfall-one-decimal-float fix, and worth
-    // being explicit about: fmtHours now rounds to 2dp first, so 0.049 lands on
-    // 0.05 and prints "0.1" where it used to print "<0.1". Hours are
-    // numeric(5,2), so 0.049 is not a value the data can hold — it is float
-    // dust around 0.05, and 0.05 is the boundary case the floor was never
-    // meant to catch. The floor itself is unchanged for anything that really
-    // is below the resolution.
-    expect(fmtHours(0.049)).toBe("0.1");
-    expect(fmtHours(0.045)).toBe("0.1");
+  it("floors everything genuinely nearer 0.0 than 0.1", () => {
+    // Reverted 2026-09-06, second pass. The first shortfall-one-decimal-float
+    // fix snapped to 2dp before rounding, which pulled 0.045–0.049 up onto 0.05
+    // and printed "0.1". The justification was that hours are numeric(5,2) so
+    // 0.049 "cannot be a real value" — but most numbers reaching fmtHours are
+    // NOT the stored column. They are quotients (requiredPerDay, chart
+    // averages), where 0.049 is a perfectly real value nearer to 0.0 than to
+    // 0.1. Rounding is now done once, on the value given.
+    expect(fmtHours(0.049)).toBe("<0.1");
+    expect(fmtHours(0.045)).toBe("<0.1");
   });
 
   it("keeps the sign on a negative that rounds away", () => {
@@ -46,11 +46,15 @@ describe("fmtHours", () => {
     expect(fmtHours(-0.06)).toBe("-0.1");
   });
 
-  it("floors -0.05, because JS rounds a negative half toward zero", () => {
-    // Math.round(-0.5) is -0, not -1, so the negative boundary lands one step
-    // lower than the positive one. Worth pinning: the old formatter printed a
-    // flat "0.0" here and lost the sign along with the magnitude.
-    expect(fmtHours(-0.05)).toBe("-<0.1");
+  it("puts -0.05 exactly where it puts 0.05", () => {
+    // This used to floor to "-<0.1" while 0.05 printed "0.1", because
+    // Math.round(-0.5) is -0, not -1 — the negative boundary landed one step
+    // lower than the positive one. On DiscrepancyCard, where variances go both
+    // ways, that made a five-hundredths shortfall look smaller than a
+    // five-hundredths overpayment. fmtHours now rounds half AWAY from zero, so
+    // the two boundaries are mirror images.
+    expect(fmtHours(-0.05)).toBe("-0.1");
+    expect(fmtHours(0.05)).toBe("0.1");
   });
 });
 
@@ -214,5 +218,99 @@ describe("fmtHoursGrouped", () => {
       if (grouped !== fmtHours(n)) mismatches.push(`${n}: ${grouped} vs ${fmtHours(n)}`);
     }
     expect(mismatches).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rounding behaviour — escalations shortfall-one-decimal-float and
+// disputepack-money-column-rounding (2026-09-06), and the defects introduced by
+// the first attempt at fixing them.
+//
+// The first fix snapped every value to 2dp before rounding for display. That
+// works only if the value IS a stored 2dp column. Most values reaching fmtHours
+// are quotients — requiredPerDay, chart averages — and the double round promoted
+// everything in [x.x45, x.x50) up a full tenth. These tests pin both halves: the
+// dust must go, and a genuine quotient must not move.
+// ---------------------------------------------------------------------------
+describe("rounding: dust vs. genuine value", () => {
+  it("still fixes the original float-dust reproducer", () => {
+    // 82.1 - 70.25 is 11.849999999999994 in binary, exactly 11.85 in decimal.
+    expect(82.1 - 70.25).not.toBe(11.85);
+    expect(fmtHours(82.1 - 70.25)).toBe("11.9");
+    expect(fmtHours2(82.1 - 70.25)).toBe("11.85");
+  });
+
+  it("rounds non-2dp quotients to the TRUE nearest tenth, not a snapped one", () => {
+    // 74.24 / 9 = 8.2488… — nearest tenth 8.2. Snapping to 8.25 first gave 8.3.
+    expect(fmtHours(74.24 / 9)).toBe("8.2");
+    expect(fmtHours(37.449)).toBe("37.4");
+    expect(fmtHours(8.246)).toBe("8.2");
+    expect(fmtHours(0.0449)).toBe("<0.1");
+    // …and the values that genuinely ARE at the boundary still round up.
+    expect(fmtHours(330.75)).toBe("330.8");
+    expect(fmtHours(11.85)).toBe("11.9");
+  });
+
+  it("matches the true nearest tenth across a grid of quotients", () => {
+    const wrong: string[] = [];
+    for (let num = 1; num <= 1500; num++) {
+      for (let den = 1; den <= 24; den++) {
+        // Exact nearest tenth via integers: round(num*10/den), half up.
+        const a = num * 10;
+        const q = Math.floor(a / den);
+        const want = (2 * (a - q * den) >= den ? q + 1 : q) / 10;
+        const got = fmtHours(num / den);
+        // The sub-resolution floor is deliberate and orthogonal: a value that
+        // rounds to 0.0 prints "<0.1" instead. Everything else must land on the
+        // true nearest tenth.
+        const expected = want === 0 ? "<0.1" : want.toFixed(1);
+        if (got !== expected) wrong.push(`${num}/${den}: ${got} vs ${expected}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("survives dust accumulated over a long sum of stored 2dp values", () => {
+    // 4000 stored hours whose exact total is 20000.05 — a tenth boundary. The
+    // dust in a sum this long is far larger than a fixed 1e-9 epsilon, which is
+    // why the tolerance is relative.
+    let f = 0;
+    for (let i = 0; i < 4000; i++) f += 5.0;
+    f += 0.05;
+    expect(fmtHours(f)).toBe("20000.1");
+    expect(fmtHours2(f)).toBe("20000.05");
+  });
+
+  it("treats a negative exactly as large as its positive twin", () => {
+    expect(fmtHours(-11.85)).toBe("-11.9");
+    expect(fmtHours(11.85)).toBe("11.9");
+    // ±0.05 is the display-resolution boundary itself. Math.round(-0.5) is -0,
+    // so a naive round called 0.05 "0.1" and -0.05 sub-resolution.
+    expect(fmtHours(0.05)).toBe("0.1");
+    expect(fmtHours(-0.05)).toBe("-0.1");
+    // Just inside the boundary, both directions agree that it is too small.
+    expect(fmtHours(0.049)).toBe("<0.1");
+    expect(fmtHours(-0.049)).toBe("-<0.1");
+    expect(fmtHours(0.046)).toBe("<0.1");
+    expect(fmtHours(-0.046)).toBe("-<0.1");
+  });
+
+  it("never prints a negative zero", () => {
+    const bad: string[] = [];
+    for (const n of [0, -0, 1e-12, -1e-12, -0.0001, -0.004, -0.049, 0.049]) {
+      for (const [name, s] of [
+        ["fmtHours", fmtHours(n)],
+        ["fmtHours2", fmtHours2(n)],
+        ["fmtMoney2", fmtMoney2(n)],
+        ["fmtHoursGrouped", fmtHoursGrouped(n)],
+      ] as const) {
+        if (/^-0(\.0+)?$/.test(s) || s === "-$0.00") bad.push(`${name}(${n}) = ${s}`);
+      }
+    }
+    expect(bad).toEqual([]);
+    expect(fmtHours(0)).toBe("0.0");
+    expect(fmtHours(-0)).toBe("0.0");
+    expect(fmtHours2(-1e-12)).toBe("0.00");
+    expect(fmtMoney2(-1e-12)).toBe("$0.00");
   });
 });

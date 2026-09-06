@@ -284,6 +284,22 @@ export type TimerSaveResult = {
   totalHours: number;
   waitPartsHours: number;
   waitApprovalHours: number;
+  /**
+   * Whether an unpaid_time row was actually written for that hold.
+   *
+   * The rounded `hours` above cannot answer this: msToHours rounds to
+   * hundredths, so 0.01h spans 18s–54s and MIN_LEDGERED_HOLD_MS (30s) sits
+   * inside that band. A caller reading only the hours has to either claim a row
+   * that may not exist or stay silent about one that does — and a genuine 40s
+   * hold banked after the save modal froze its display then reached the ledger
+   * with nobody told. Only this function knows, because it is where the gate is
+   * applied; returning the answer costs a boolean.
+   *
+   * False also when the row was gated OUT and when the write itself failed:
+   * both mean no row exists, which is what a consumer needs to know.
+   */
+  waitPartsLedgered: boolean;
+  waitApprovalLedgered: boolean;
   /** False when the unpaid ledger couldn't be written (pre-migration VM). The
    * working hours still saved — they're the load-bearing half. */
   ledgerWritten: boolean;
@@ -354,6 +370,10 @@ export async function saveTimerAction(
   // Each hold reason writes its own row so the ledger can say WHY the time was
   // lost — a lumped row would make the dispute-pack line meaningless.
   let ledgerWritten = true;
+  const ledgered: Record<"holdParts" | "holdApproval", boolean> = {
+    holdParts: false,
+    holdApproval: false,
+  };
   const waits = [
     {
       key: "holdParts" as const,
@@ -387,6 +407,7 @@ export async function saveTimerAction(
       source: "timer",
     });
     if (!ok) ledgerWritten = false;
+    ledgered[w.key] = ok;
   }
 
   await db.deleteTimerSlot(supabase, slot.id);
@@ -398,6 +419,8 @@ export async function saveTimerAction(
     totalHours,
     waitPartsHours,
     waitApprovalHours,
+    waitPartsLedgered: ledgered.holdParts,
+    waitApprovalLedgered: ledgered.holdApproval,
     ledgerWritten,
   };
 }

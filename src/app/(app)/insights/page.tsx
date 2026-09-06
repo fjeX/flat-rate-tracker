@@ -98,6 +98,7 @@ export default async function InsightsPage() {
           weekStartDay={weekStartDay}
           disputes={disputes}
           unpaid={unpaid}
+          hasSchedule={!!schedules && schedules.length > 0}
         />
       </div>
     </main>

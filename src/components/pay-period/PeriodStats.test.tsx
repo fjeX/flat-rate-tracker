@@ -184,7 +184,74 @@ describe("PeriodStats — why those hours were not counted", () => {
   // ONE locator per sentence, reused by the positive and negative assertions on
   // both sides, so a broken locator fails loudly instead of passing for free.
   const STILL_RUNNING = /still in progress/;
-  const GO_FIX_IT = /Clock them or add them to your schedule/;
+  // The no_schedule sentence — the ONLY one allowed to say the tech has no
+  // schedule. It used to be printed for all three unmeasurable reasons.
+  const GO_FIX_IT = /no clocked hours and no work schedule/;
+
+  function withReason(
+    reason: "in_progress" | "day_off" | "unscheduled" | "no_schedule",
+    flagHours: number,
+    days: number,
+  ) {
+    const empty = { flagHours: 0, days: 0 };
+    return {
+      ...IN_PROGRESS,
+      unpairedFlagHours: flagHours,
+      unpairedDays: days,
+      unpairedByReason: {
+        in_progress: { ...empty },
+        day_off: { ...empty },
+        unscheduled: { ...empty },
+        no_schedule: { ...empty },
+        [reason]: { flagHours, days },
+      },
+    };
+  }
+
+  function textFor(stats: ReturnType<typeof withReason>): string {
+    render(<PeriodStats stats={stats} hideFlagHours />);
+    return document.body.textContent ?? "";
+  }
+
+  // THE EXECUTED REPRO: schedule exists, Wed 2026-09-02 marked off, tech came
+  // in anyway and flagged 6.5h. The caption told him to add the day to a
+  // schedule it was already on.
+  it("day off: names the day off and says how to correct it", () => {
+    const text = textFor(withReason("day_off", 6.5, 1));
+    expect(text).toMatch(/6\.5h/);
+    expect(text).toMatch(/marked off on your schedule/);
+    expect(text).toMatch(/clear the day off/);
+    expect(text).not.toMatch(GO_FIX_IT);
+    expect(text).not.toMatch(/add it to your schedule/);
+    expect(text).not.toMatch(STILL_RUNNING);
+  });
+
+  it("unscheduled: says the schedule has no shift on that day", () => {
+    const text = textFor(withReason("unscheduled", 5, 1));
+    expect(text).toMatch(/puts no shift on that day/);
+    expect(text).toMatch(/add a shift for that day/);
+    expect(text).not.toMatch(GO_FIX_IT);
+    expect(text).not.toMatch(/marked off/);
+  });
+
+  it("no schedule: the one case that says you have no schedule", () => {
+    const text = textFor(withReason("no_schedule", 4, 2));
+    expect(text).toMatch(GO_FIX_IT);
+    expect(text).toMatch(/add them to your schedule/);
+    expect(text).not.toMatch(/marked off|puts no shift/);
+  });
+
+  // DEFECT 2. PeriodHero's "all excluded" line names the missing hours and
+  // deliberately does NOT say where they went — it points at this caption for
+  // that. The shared clause had dropped the phrase.
+  it("says these hours ARE in the flagged total above", () => {
+    for (const reason of ["in_progress", "day_off", "unscheduled", "no_schedule"] as const) {
+      document.body.innerHTML = "";
+      expect(textFor(withReason(reason, 6, 1))).toMatch(
+        /in your flagged total above, but in neither side of the percentage/,
+      );
+    }
+  });
 
   it("says the shift is still in progress, not that it needs scheduling", () => {
     render(<PeriodStats stats={IN_PROGRESS} hideFlagHours />);
@@ -200,7 +267,7 @@ describe("PeriodStats — why those hours were not counted", () => {
     render(<PeriodStats stats={UNSCHEDULED} hideFlagHours />);
 
     const text = document.body.textContent ?? "";
-    expect(text).toMatch(GO_FIX_IT);
+    expect(text).toMatch(/Clock it, or add a shift for that day/);
     expect(text).not.toMatch(STILL_RUNNING);
   });
 
@@ -224,7 +291,7 @@ describe("PeriodStats — why those hours were not counted", () => {
 
     const text = document.body.textContent ?? "";
     expect(text).toMatch(STILL_RUNNING);
-    expect(text).toMatch(GO_FIX_IT);
+    expect(text).toMatch(/puts no shift on that day/);
     // Each sentence carries its OWN hours, not the period total.
     expect(text).toMatch(/6\.0h/);
     expect(text).toMatch(/5\.0h/);

@@ -267,71 +267,160 @@ export function isInProgressDay(
   date: string,
   today: string,
   clockedHours: number,
+  /**
+   * Does the tech have a work schedule at all? wage-check's `isOngoing` opens
+   * with `schedule !== null` and this predicate used to omit it, which was
+   * harmless at `pairDay`'s call site (the `!schedule` early return runs first)
+   * and wrong at `periodTrend`'s, which calls it with no such guard: a tech
+   * with no schedule got "that shift is still in progress" on /insights for a
+   * today-dated entry while `pairDay` called the same day `no_schedule`. NOT
+   * optional and NOT defaulted — a default is how the term went missing on one
+   * of two call sites in the first place.
+   */
+  hasSchedule: boolean,
 ): boolean {
-  return clockedHours <= 0 && date >= today;
+  return hasSchedule && clockedHours <= 0 && date >= today;
 }
 
 /**
  * One caption's worth of unpaired hours: the tally plus the sentence to print.
  *
- * Collapses the four reasons into the two the reader can act on differently —
- * wait (in progress) or fix (everything else). Both surfaces that print this go
- * through here, so the pay-period page and /insights cannot describe the same
- * excluded day in two different ways again.
+ * ONE NOTE PER REASON — the note's kind IS the reason, so nothing is folded.
+ * An earlier pass split the tally four ways and then re-merged three of the
+ * buckets into a single "unmeasured" note, which put the no_schedule sentence
+ * ("…no schedule … add them to your schedule") under a day that was on the
+ * schedule and marked off. The counts were right and the instruction was still
+ * wrong, which is the same defect this whole field exists to fix.
+ *
+ * Both surfaces that print this go through here, so the pay-period page and
+ * /insights cannot describe the same excluded day in two different ways again.
  *
  * `total` is the fallback for a caller that has the old flat pair and no
  * breakdown (a snapshot, a stats object built before this field existed). It
  * keeps the pre-existing single sentence rather than dropping the caption.
  */
-export type UnpairedNoteKind = "in_progress" | "unmeasured";
+export type UnpairedNoteKind = UnpairedReason;
 export type UnpairedNote = {
   kind: UnpairedNoteKind;
   flagHours: number;
   days: number;
 };
 
+/** Fixed print order: the one that resolves itself first, then the three the
+ *  tech has to act on, cheapest correction first. */
+const NOTE_ORDER: readonly UnpairedReason[] = [
+  "in_progress",
+  "day_off",
+  "unscheduled",
+  "no_schedule",
+];
+
 export function unpairedNotes(
   by: UnpairedByReason | null | undefined,
   total: UnpairedTally,
 ): UnpairedNote[] {
+  // The pre-breakdown caption said "no clocked hours and no schedule", which IS
+  // the no_schedule sentence — so the fallback is that reason, not a fifth kind
+  // meaning "we didn't look".
   const flat: UnpairedNote[] =
     total.flagHours > 0
-      ? [{ kind: "unmeasured", flagHours: total.flagHours, days: total.days }]
+      ? [{ kind: "no_schedule", flagHours: total.flagHours, days: total.days }]
       : [];
   if (!by) return flat;
 
-  const inProgress = by.in_progress;
-  const unmeasured: UnpairedTally = {
-    flagHours: by.day_off.flagHours + by.unscheduled.flagHours + by.no_schedule.flagHours,
-    days: by.day_off.days + by.unscheduled.days + by.no_schedule.days,
-  };
-  const notes: UnpairedNote[] = [];
-  if (inProgress.flagHours > 0) {
-    notes.push({ kind: "in_progress", ...inProgress });
-  }
-  if (unmeasured.flagHours > 0) {
-    notes.push({ kind: "unmeasured", ...unmeasured });
-  }
+  const notes: UnpairedNote[] = NOTE_ORDER.filter(
+    (reason) => by[reason].flagHours > 0,
+  ).map((reason) => ({ kind: reason, ...by[reason] }));
+
   // A breakdown that explains none of the hours it was handed is worse than no
   // breakdown: the caption would vanish and the excluded hours would go unsaid.
   return notes.length > 0 ? notes : flat;
 }
 
 /**
+ * Which surface is printing the caption. NOT a styling flag — the two surfaces
+ * disagree on a FACT.
+ *
+ * `ScheduleStats.flagHours` is the raw period total and `unpairedFlagHours` is
+ * a subset of it, so on /pay-period these hours ARE in the headline figure
+ * above the caption. `PeriodTrendPoint.flagHours` is the PAIRED total only —
+ * the trend's pairing loop adds an unpaired day's hours to `unpairedFlagHours`
+ * and never to `flagHours` — so on /insights they are not in any figure on
+ * screen. One sentence for both would be false on one of them; two hand-written
+ * captions is the duplication that caused this escalation. Hence one clause
+ * builder with one interchangeable sentence in the middle.
+ */
+export type UnpairedSurface = "period" | "trend";
+
+const PLACEMENT: Record<UnpairedSurface, string> = {
+  period:
+    "They're in your flagged total above, but in neither side of the percentage.",
+  trend: "They're in neither side of the percentage.",
+};
+
+/**
+ * Cause and correction for each reason, singular and plural.
+ *
+ * One row per reason and no row shared between two of them: folding day_off and
+ * unscheduled back into no_schedule is exactly what made this caption tell a
+ * tech with a schedule to "add them to your schedule" for a day that was
+ * already on it, marked off. The corrections are three different actions.
+ *
+ * The in_progress cause is WorkCostCard's, unchanged: that card has printed
+ * "that shift is still in progress" off wage-check's `ongoingDays` all along,
+ * and one situation gets one sentence.
+ */
+type ClausePair = { one: string; many: string };
+const CAUSE: Record<UnpairedReason, ClausePair> = {
+  in_progress: {
+    one: "— that shift is still in progress, so there are no hours to divide it by yet.",
+    many: "— those shifts are still in progress, so there are no hours to divide them by yet.",
+  },
+  day_off: {
+    one: "— that day is marked off on your schedule, so it has no shift length to divide by.",
+    many: "— those days are marked off on your schedule, so they have no shift length to divide by.",
+  },
+  unscheduled: {
+    one: "— your schedule puts no shift on that day, so the app can't tell how long it was.",
+    many: "— your schedule puts no shift on those days, so the app can't tell how long they were.",
+  },
+  no_schedule: {
+    one: "with no clocked hours and no work schedule — the app can't tell how long that day was.",
+    many: "with no clocked hours and no work schedule — the app can't tell how long those days were.",
+  },
+};
+
+const ACTION: Record<UnpairedReason, ClausePair> = {
+  // The only reason that needs no action: waiting IS the correct behaviour.
+  in_progress: {
+    one: "It counts once you clock out.",
+    many: "They count once you clock out.",
+  },
+  day_off: {
+    one: "Clock it, or clear the day off, to include it.",
+    many: "Clock them, or clear those days off, to include them.",
+  },
+  unscheduled: {
+    one: "Clock it, or add a shift for that day, to include it.",
+    many: "Clock them, or add shifts for those days, to include them.",
+  },
+  no_schedule: {
+    one: "Clock it or add it to your schedule to include it.",
+    many: "Clock them or add them to your schedule to include them.",
+  },
+};
+
+/**
  * The clause that follows "…flagged across N days" in both captions.
  *
- * The in-progress wording is WorkCostCard's, deliberately: that card has been
- * printing "isn't counted yet … that shift is still in progress" off
- * wage-check's `ongoingDays` all along. Two sentences for one situation is how
- * this page got into trouble; this is the same sentence.
+ * cause → where the hours actually are (per surface) → what to do about it.
  */
-export function unpairedNoteClause(note: UnpairedNote): string {
-  if (note.kind === "in_progress") {
-    return note.days === 1
-      ? "— that shift is still in progress, so there are no hours to divide it by yet. It counts once you clock out."
-      : "— those shifts are still in progress, so there are no hours to divide them by yet. They count once you clock out.";
-  }
-  return "with no clocked hours and no schedule — the app can't tell how long those days were, so they're in neither side of the percentage. Clock them or add them to your schedule to include them.";
+export function unpairedNoteClause(
+  note: UnpairedNote,
+  surface: UnpairedSurface,
+): string {
+  const n: keyof ClausePair = note.days === 1 ? "one" : "many";
+  return `${CAUSE[note.kind][n]} ${PLACEMENT[surface]} ${ACTION[note.kind][n]}`;
 }
 
 // Dashboard walks are a month-ish; snapshot generation spans a whole career.
@@ -388,7 +477,7 @@ function pairDay(
   // in-progress test means the day has no clock entry, which is exactly
   // wage-check's `isOngoing` (see isInProgressDay).
   if (!schedule) return { kind: "none", reason: "no_schedule" };
-  if (isInProgressDay(date, today, clocked)) {
+  if (isInProgressDay(date, today, clocked, true)) {
     return { kind: "none", reason: "in_progress" };
   }
   if (off.has(date)) return { kind: "none", reason: "day_off" };

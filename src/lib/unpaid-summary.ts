@@ -24,6 +24,7 @@
 import type { Entry, OpCode, UnpaidTime, UnpaidTimeKind } from "./types";
 import { hasAnyRate, resolveLineRate, type RateMap } from "./earnings";
 import { lineCode, lineDescription } from "./line-label";
+import { roundToCents } from "./format";
 
 export type UnpaidLineSource = "ro" | "ledger";
 
@@ -111,7 +112,11 @@ export function buildUnpaidSummary(
         entryId: entry.id,
         code: lineCode(line, libraryById),
         description: lineDescription(line, libraryById),
-        dollars: rate === null ? null : rate * hours,
+        // Rounded to the cent as the VALUE so the audit card's rows add up to
+        // its total — rate × hours is a 2dp × 2dp product carrying four
+        // decimals, and rounding it only at print time leaves the column
+        // contradicting its own footer. See roundToCents in lib/format.
+        dollars: rate === null ? null : roundToCents(rate * hours),
       });
     }
   }
@@ -171,7 +176,9 @@ export function buildUnpaidSummary(
     shopHours,
     totalHours: comebackHours + waitingHours + shopHours,
     byKind,
-    totalDollars: rated ? pricedDollars : null,
+    // A sum of already-rounded rows; the final roundToCents clears only the
+    // float dust of the addition, so this always equals what the rows print.
+    totalDollars: rated ? roundToCents(pricedDollars) : null,
     unpricedHours,
     hasRates: rated,
   };

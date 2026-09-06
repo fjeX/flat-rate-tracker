@@ -15,7 +15,11 @@ import {
 } from "@/app/actions/timer";
 import { saveEntry } from "@/app/actions/entries";
 import { isAccruing, MAX_TIMER_SLOTS, type TimerSlot } from "@/lib/timer";
-import { TimerSaveModal } from "./TimerSaveModal";
+import {
+  TimerSaveModal,
+  TimerSaveReceipt,
+  type TimerSaveReceiptData,
+} from "./TimerSaveModal";
 import { TimerSlotCard, lineLabelFor, vehicleLabel } from "./TimerSlotCard";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { Badge } from "@/components/ui/Badge";
@@ -55,6 +59,13 @@ export function TimerSlots({
   const [pickRoOpen, setPickRoOpen] = useState(false);
   const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
   const [saveSlotId, setSaveSlotId] = useState<string | null>(null);
+  // The post-save receipt lives HERE, not in TimerSaveModal, because saving
+  // deletes the slot: the revalidated server props drop it, `saveSlot` goes
+  // null, and the modal unmounts with whatever it was trying to tell the tech.
+  // This component is what the revalidate re-renders rather than replaces, so
+  // state parked here outlives the save that produced it and the receipt is
+  // dismissed by hand.
+  const [receipt, setReceipt] = useState<TimerSaveReceiptData | null>(null);
   const [linePickSlotId, setLinePickSlotId] = useState<string | null>(null);
   // Set when attaching a SECOND timer to an RO that already has one running:
   // that case has to choose its line before the timer starts.
@@ -333,7 +344,20 @@ export function TimerSlots({
           library={library}
           capAt={caps[saveSlot.id] ?? null}
           onClose={() => setSaveSlotId(null)}
+          onSaved={(r) => {
+            setSaveSlotId(null);
+            setReceipt(r);
+            // Owned here so the refresh that unmounts the modal can't race a
+            // state update inside it.
+            router.refresh();
+          }}
         />
+      )}
+
+      {/* What the server actually wrote. Not nested in the block above: that
+          one is gone by the time this matters. */}
+      {receipt && (
+        <TimerSaveReceipt receipt={receipt} onClose={() => setReceipt(null)} />
       )}
 
       {/* RO detail */}

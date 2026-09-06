@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -24,23 +23,29 @@ import { tap } from "@/lib/haptics";
 // replacing silently discarded the earlier half), and any waiting time is
 // banked to the unpaid-time ledger under the reason it was waited for.
 
-/**
- * Wait hours below which a RETURNED figure cannot prove a ledger row exists.
- *
- * msToHours rounds to hundredths of an hour, so 0.01h covers everything from
- * 18s to 54s — and MIN_LEDGERED_HOLD_MS (30s, the gate saveTimerAction applies
- * to raw ms) sits inside that band. 0.02h is at least 54s, which is
- * unambiguously past the gate. Anything under it stays unclaimed: telling
- * someone their waiting time was "logged as unpaid time" when no row was
- * written is a lie on the way to a money document, and that is the exact
- * failure this modal already guards against on the pre-save side.
- */
-const CERTAIN_LEDGERED_HOURS = 0.02;
+export type ShownFigures = {
+  /** Worked hours the modal froze and the tech approved. */
+  workHours: number;
+  /** The line total the modal projected from its (possibly stale) copy. */
+  newTotal: number;
+  /** Whether the modal promised a ledger row for that hold before saving. */
+  partsPromised: boolean;
+  approvalPromised: boolean;
+};
 
 export type SaveDivergence = {
-  /** The server wrote a different worked/total figure than the modal showed. */
-  hours: boolean;
-  /** A ledger row certainly exists, but the modal never promised one. */
+  /** The server banked different WORKED hours than the frozen projection —
+   * the clock genuinely kept running while the modal was open. */
+  addedHours: boolean;
+  /** Worked hours agree, but the line's running total doesn't: the client's
+   * copy of `actualHours` was stale. Kept separate from `addedHours` because
+   * the CAUSE is different, and the old lumped flag printed "the clock kept
+   * running" over a divergence that happened in the baseline — a false reason
+   * on a money document, next to two identical numbers. */
+  baselineTotal: boolean;
+  /** A ledger row exists for that hold and the modal never promised one. */
+  undisclosedParts: boolean;
+  undisclosedApproval: boolean;
   undisclosedWait: boolean;
   any: boolean;
 };
@@ -54,25 +59,150 @@ export type SaveDivergence = {
  * persisted accumulators at submit time and deliberately ignores the client's
  * numbers. So the reviewed figure and the written figure can legitimately
  * differ (observed: modal 0.31h, row 0.32h), and nothing used to tell the tech
- * which one landed on the RO. This is what decides whether the post-save step
- * has anything new to say.
+ * which one landed on the RO. This is what decides whether the post-save
+ * receipt has anything new to say, and WHICH true sentence it says.
+ *
+ * The wait disclosures read the server's `...Ledgered` booleans rather than
+ * comparing rounded hours to a threshold: 0.01h spans 18s–54s and the 30s gate
+ * sits inside it, so hours alone can neither prove nor disprove a row. The
+ * server applies the gate and now reports its own verdict.
  *
  * Exported so the divergence rule is testable without driving the whole modal.
  */
 export function saveDivergence(
   res: Pick<
     TimerSaveResult,
-    "workHours" | "totalHours" | "waitPartsHours" | "waitApprovalHours"
+    | "workHours"
+    | "totalHours"
+    | "waitPartsLedgered"
+    | "waitApprovalLedgered"
   >,
-  shown: { workHours: number; newTotal: number; ledgerPromised: boolean },
+  shown: ShownFigures,
 ): SaveDivergence {
-  const hours =
-    res.workHours !== shown.workHours || res.totalHours !== shown.newTotal;
-  const undisclosedWait =
-    !shown.ledgerPromised &&
-    (res.waitPartsHours >= CERTAIN_LEDGERED_HOURS ||
-      res.waitApprovalHours >= CERTAIN_LEDGERED_HOURS);
-  return { hours, undisclosedWait, any: hours || undisclosedWait };
+  const addedHours = res.workHours !== shown.workHours;
+  const baselineTotal = !addedHours && res.totalHours !== shown.newTotal;
+  const undisclosedParts = !shown.partsPromised && res.waitPartsLedgered;
+  const undisclosedApproval =
+    !shown.approvalPromised && res.waitApprovalLedgered;
+  const undisclosedWait = undisclosedParts || undisclosedApproval;
+  return {
+    addedHours,
+    baselineTotal,
+    undisclosedParts,
+    undisclosedApproval,
+    undisclosedWait,
+    any: addedHours || baselineTotal || undisclosedWait,
+  };
+}
+
+/**
+ * Everything the post-save receipt needs, captured at save time.
+ *
+ * It travels to a component OUTSIDE the timer list because the save that
+ * produces it deletes the slot: see TimerSaveReceipt.
+ */
+export type TimerSaveReceiptData = {
+  roNumber: string;
+  result: TimerSaveResult;
+  shown: ShownFigures;
+};
+
+/**
+ * The post-save receipt — what the server actually wrote.
+ *
+ * Deliberately NOT rendered by TimerSaveModal, even though that is where its
+ * data is produced. saveTimerAction deletes the timer slot and revalidates
+ * /timer, and TimerSlots mounts the modal only while the slot is still in its
+ * server props (`slots.find(...)`). So the modal — and any state it held —
+ * unmounts the instant the receipt becomes relevant: the confirmation was torn
+ * down by the very save it was confirming, and the tech never learned that the
+ * row said 0.32h. Owned by the parent, whose lifetime the revalidate does not
+ * touch, this survives until it is dismissed by hand.
+ */
+export function TimerSaveReceipt({
+  receipt,
+  onClose,
+}: {
+  receipt: TimerSaveReceiptData;
+  onClose: () => void;
+}) {
+  const { result: saved, shown, roNumber } = receipt;
+  const divergence = saveDivergence(saved, shown);
+  // Name a hold only when the server says a row was written for it.
+  const undisclosed = [
+    divergence.undisclosedParts
+      ? `${fmtHours2(saved.waitPartsHours)}h waiting on parts`
+      : null,
+    divergence.undisclosedApproval
+      ? `${fmtHours2(saved.waitApprovalHours)}h waiting on approval`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={saved.ledgerWritten ? "Saved" : "Saved with a warning"}
+    >
+      <div className="space-y-4">
+        {!saved.ledgerWritten && (
+          <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
+            Saved the worked hours, but the waiting time couldn&apos;t be
+            recorded — the unpaid-time table isn&apos;t set up yet.
+          </p>
+        )}
+        {/* What the SERVER wrote — not the frozen projection the modal showed.
+         * These are the values saveTimerAction returned, recomputed from
+         * persisted accumulators at submit time. */}
+        <div className="card-inset" style={{ padding: 12 }}>
+          <p className="text-sm text-[var(--fg-1)]">
+            Saved{" "}
+            <strong className="font-mono text-[var(--fg-0)]">
+              {fmtHours2(saved.workHours)}h
+            </strong>{" "}
+            to RO #{roNumber} — that line now totals{" "}
+            <strong className="font-mono text-[var(--fg-0)]">
+              {fmtHours2(saved.totalHours)}h
+            </strong>
+            .
+          </p>
+          {/* Two different causes, two different sentences. Printing the
+           * clock-kept-running line over a stale-baseline divergence restated
+           * the frozen figure — which equals the headline — and blamed
+           * something that didn't happen. */}
+          {divergence.addedHours && (
+            <p className="mt-2 text-xs text-[var(--fg-3)]">
+              That isn&apos;t the {fmtHours2(shown.workHours)}h this window
+              showed — the clock kept running while it was open, and the timer
+              banks what actually elapsed. The figure above is what&apos;s on
+              the RO.
+            </p>
+          )}
+          {divergence.baselineTotal && (
+            <p className="mt-2 text-xs text-[var(--fg-3)]">
+              The {fmtHours2(saved.workHours)}h added is exactly what this
+              window showed, but the line already had time on it that this
+              window didn&apos;t know about. The total above is what&apos;s on
+              the RO.
+            </p>
+          )}
+          {undisclosed && (
+            <p className="mt-2 text-xs text-[var(--warn)]">
+              {undisclosed} was also banked and logged as unpaid time against
+              this RO. It never touches your flag hours.
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end">
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
 }
 
 function lineLabel(
@@ -95,14 +225,22 @@ export function TimerSaveModal({
   library,
   capAt,
   onClose,
+  onSaved,
 }: {
   slot: TimerSlot;
   entry: Entry;
   library: OpCode[];
   capAt: number | null;
   onClose: () => void;
+  /**
+   * The save landed. `receipt` is non-null only when the server wrote
+   * something this screen didn't already say — the parent renders it, because
+   * this component is about to be unmounted by the revalidate (see
+   * TimerSaveReceipt). The parent also owns the refresh, so no state update
+   * outlives this modal.
+   */
+  onSaved: (receipt: TimerSaveReceiptData | null) => void;
 }) {
-  const router = useRouter();
   const libraryById = useMemo(
     () => new Map(library.map((oc) => [oc.id, oc])),
     [library],
@@ -112,7 +250,7 @@ export function TimerSaveModal({
   // it is unreviewable. The server recomputes from persisted state on save, so
   // the few seconds spent in this modal aren't lost — they just aren't shown
   // HERE. They are shown afterwards: when the saved figure differs from this
-  // frozen projection, the post-save step restates what actually landed on the
+  // frozen projection, TimerSaveReceipt restates what actually landed on the
   // RO (see saveDivergence). The freeze stays; the silence about it doesn't.
   const [elapsed] = useState(() => elapsedFor(slot, Date.now(), capAt));
 
@@ -121,15 +259,22 @@ export function TimerSaveModal({
     return valid ? slot.lineId : (entry.opCodes[0]?.id ?? null);
   });
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<TimerSaveResult | null>(null);
   const [pending, startPending] = useTransition();
 
   const workHours = msToHours(elapsed.work);
   const selected = entry.opCodes.find((l) => l.id === selectedId) ?? null;
   const existing = selected?.actualHours ?? null;
   const newTotal = Math.round(((existing ?? 0) + workHours) * 100) / 100;
-  const ledgerPromised =
-    isLedgerableHold(elapsed.holdParts) || isLedgerableHold(elapsed.holdApproval);
+  // Per hold reason, not lumped: promising a row for the parts hold must not
+  // silence a disclosure about an approval hold that only crossed the 30s gate
+  // after this display froze.
+  const shown: ShownFigures = {
+    workHours,
+    newTotal,
+    partsPromised: isLedgerableHold(elapsed.holdParts),
+    approvalPromised: isLedgerableHold(elapsed.holdApproval),
+  };
+  const ledgerPromised = shown.partsPromised || shown.approvalPromised;
 
   function handleSave() {
     if (!selected) {
@@ -141,99 +286,23 @@ export function TimerSaveModal({
       try {
         const res = await saveTimerAction(slot.id, selected.id);
         tap();
-        // Three reasons to stop instead of closing straight out:
+        // Three reasons the tech still needs a receipt:
         //   - the unpaid ledger didn't write (the worked hours still did),
         //   - the server banked a different figure than the frozen projection,
         //   - waiting time earned a ledger row this modal never promised.
         // Otherwise the screen already said the truth, and an extra tap on
         // every close-out is friction for nothing.
-        const divergence = saveDivergence(res, {
-          workHours,
-          newTotal,
-          ledgerPromised,
-        });
-        if (!res.ledgerWritten || divergence.any) {
-          setSaved(res);
-          router.refresh();
-          return;
-        }
-        onClose();
-        router.refresh();
+        const divergence = saveDivergence(res, shown);
+        const needsReceipt = !res.ledgerWritten || divergence.any;
+        onSaved(
+          needsReceipt
+            ? { roNumber: entry.roNumber, result: res, shown }
+            : null,
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save.");
       }
     });
-  }
-
-  if (saved) {
-    const divergence = saveDivergence(saved, {
-      workHours,
-      newTotal,
-      ledgerPromised,
-    });
-    // Only name a hold whose returned hours PROVE a row was written; see
-    // CERTAIN_LEDGERED_HOURS.
-    const undisclosed = [
-      saved.waitPartsHours >= CERTAIN_LEDGERED_HOURS
-        ? `${fmtHours2(saved.waitPartsHours)}h waiting on parts`
-        : null,
-      saved.waitApprovalHours >= CERTAIN_LEDGERED_HOURS
-        ? `${fmtHours2(saved.waitApprovalHours)}h waiting on approval`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" and ");
-    return (
-      <Modal
-        open
-        onClose={onClose}
-        title={saved.ledgerWritten ? "Saved" : "Saved with a warning"}
-      >
-        <div className="space-y-4">
-          {!saved.ledgerWritten && (
-            <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
-              Saved the worked hours, but the waiting time couldn&apos;t be
-              recorded — the unpaid-time table isn&apos;t set up yet.
-            </p>
-          )}
-          {/* What the SERVER wrote — not the frozen projection above. These are
-           * the values saveTimerAction returned, recomputed from persisted
-           * accumulators at submit time. */}
-          <div className="card-inset" style={{ padding: 12 }}>
-            <p className="text-sm text-[var(--fg-1)]">
-              Saved{" "}
-              <strong className="font-mono text-[var(--fg-0)]">
-                {fmtHours2(saved.workHours)}h
-              </strong>{" "}
-              to this line — it now totals{" "}
-              <strong className="font-mono text-[var(--fg-0)]">
-                {fmtHours2(saved.totalHours)}h
-              </strong>
-              .
-            </p>
-            {divergence.hours && (
-              <p className="mt-2 text-xs text-[var(--fg-3)]">
-                That isn&apos;t the {fmtHours2(workHours)}h this window showed —
-                the clock kept running while it was open, and the timer banks
-                what actually elapsed. The figure above is what&apos;s on the
-                RO.
-              </p>
-            )}
-            {divergence.undisclosedWait && undisclosed && (
-              <p className="mt-2 text-xs text-[var(--warn)]">
-                {undisclosed} was also banked and logged as unpaid time against
-                this RO. It never touches your flag hours.
-              </p>
-            )}
-          </div>
-          <div className="flex justify-end">
-            <Button variant="primary" onClick={onClose}>
-              Done
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    );
   }
 
   return (

@@ -184,7 +184,7 @@ export function PeriodStats({
               shipped this caption reading "1 daywith no clocked hours".
               InsightsView's copy of this caption uses explicit separators for
               the same reason — match it, don't rely on the source newline. */}
-          {unpairedNoteClause(note)}
+          {unpairedNoteClause(note, "period")}
         </p>
       ))}
       {unflaggedTime !== null && (

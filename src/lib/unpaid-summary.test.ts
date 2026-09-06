@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildUnpaidSummary } from "./unpaid-summary";
+import { fmtMoney2 } from "./format";
 import type { Entry, EntryOpCode, OpCode, UnpaidTime } from "./types";
 
 function line(over: Partial<EntryOpCode> = {}): EntryOpCode {
@@ -335,5 +336,96 @@ describe("buildUnpaidSummary", () => {
       unpaid: [ledger({ date: "2026-07-09", hours: 1 })],
     });
     expect(s.lines.map((l) => l.date)).toEqual(["2026-07-09", "2026-07-01"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Same defect as the dispute pack's dollar column, on the WorkCostCard audit
+// rows: `dollars` is rate × actualHours, four decimals wide, and the card prints
+// each row at 2dp beneath a total summed from the raw products. The rows have to
+// BE cent values, and the total has to be their sum.
+// ---------------------------------------------------------------------------
+describe("unpaid summary: the money column adds up", () => {
+  const parseMoney = (s: string) => Number(s.replace(/[$,]/g, ""));
+
+  function summaryFor(rate: number, hours: number[]) {
+    const entries = hours.map((h, i) =>
+      entry({
+        id: `e${i}`,
+        roNumber: String(3000 + i),
+        date: "2026-07-01",
+        comebackKind: "comeback_own",
+        opCodes: [
+          line({ id: `l${i}`, flagHours: 0, actualHours: h, isComeback: true }),
+        ],
+      }),
+    );
+    return buildUnpaidSummary({
+      entries,
+      rates: { customer_pay: rate },
+    });
+  }
+
+  it("prints a total equal to the sum of the printed rows, over many rate/hour sets", () => {
+    const rates = [32.5, 21.41, 59.77, 28.99, 32, 45.13, 18.07, 99.99, 26.66, 37.5];
+    const hourSets = [
+      [1.15, 0.75, 1.35, 2.25, 0.45],
+      [1.4, 1.3, 1.4, 1.1],
+      [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85],
+      [0.25, 0.25, 0.25, 0.25, 0.25, 0.25],
+      [7.77, 0.03, 2.5],
+    ];
+    const mismatches: string[] = [];
+    for (const rate of rates) {
+      for (const hours of hourSets) {
+        const u = summaryFor(rate, hours);
+        const rowSum = u.lines.reduce(
+          (s, l) => s + parseMoney(fmtMoney2(l.dollars as number)),
+          0,
+        );
+        if (fmtMoney2(rowSum) !== fmtMoney2(u.totalDollars as number)) {
+          mismatches.push(
+            `$${rate} × [${hours}]: rows ${fmtMoney2(rowSum)} vs total ${fmtMoney2(u.totalDollars as number)}`,
+          );
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("holds over a randomised sweep", () => {
+    let seed = 906;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const mismatches: string[] = [];
+    for (let t = 0; t < 400; t++) {
+      const rate = Math.round(1500 + rnd() * 8500) / 100;
+      const n = 2 + Math.floor(rnd() * 12);
+      const hours = Array.from({ length: n }, () => Math.round(1 + rnd() * 600) / 100);
+      const u = summaryFor(rate, hours);
+      const rowSum = u.lines.reduce(
+        (s, l) => s + parseMoney(fmtMoney2(l.dollars as number)),
+        0,
+      );
+      if (fmtMoney2(rowSum) !== fmtMoney2(u.totalDollars as number)) {
+        mismatches.push(`$${rate} × [${hours}]`);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("the $32.50 counterexample", () => {
+    const u = summaryFor(32.5, [1.15, 0.75, 1.35, 2.25, 0.45]);
+    // lines sort newest-first on date; all share a date, so order is stable.
+    expect(u.lines.map((l) => fmtMoney2(l.dollars as number)).sort()).toEqual(
+      ["$14.63", "$24.38", "$37.38", "$43.88", "$73.13"],
+    );
+    expect(fmtMoney2(u.totalDollars as number)).toBe("$193.40");
+    expect(u.totalDollars).toBe(193.4);
+  });
+
+  it("leaves the hours totals alone", () => {
+    const u = summaryFor(32.5, [1.15, 0.75, 1.35, 2.25, 0.45]);
+    expect(u.totalHours).toBeCloseTo(5.95, 10);
+    expect(u.comebackHours).toBeCloseTo(5.95, 10);
   });
 });

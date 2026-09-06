@@ -115,7 +115,12 @@ describe("two rows, one code", () => {
 
     // Once in the phone list and once in the table, for each row.
     expect(screen.getAllByText("library")).toHaveLength(2);
-    expect(screen.getAllByText("one-time")).toHaveLength(2);
+    // "custom", not "one-time". The tag says PROVENANCE and renders beside a
+    // use count — "ALIGN ONE-TIME · 40 logged" contradicted itself, and in
+    // JobTimeSections MIN_DAYS_PER_CODE guarantees at least five distinct days
+    // on every row that prints it.
+    expect(screen.getAllByText("custom")).toHaveLength(2);
+    expect(screen.queryAllByText("one-time")).toHaveLength(0);
   });
 
   it("does not lean on the description, which is usually empty", () => {
@@ -126,6 +131,6 @@ describe("two rows, one code", () => {
     // Two rows carrying one code text are still two distinguishable rows.
     expect(screen.getAllByText("ALIGN").length).toBeGreaterThan(0);
     expect(screen.getAllByText("library").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("one-time").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("custom").length).toBeGreaterThan(0);
   });
 });

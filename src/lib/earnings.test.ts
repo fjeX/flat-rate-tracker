@@ -202,3 +202,50 @@ describe("fmtMoney2 re-export", () => {
     expect(fmtMoney(44.8)).toBe("$45");
   });
 });
+
+// ---------------------------------------------------------------------------
+// fmtMoney rounding — escalation shortfall-one-decimal-float (2026-09-06) and
+// the regression its first fix introduced.
+// ---------------------------------------------------------------------------
+describe("fmtMoney rounding", () => {
+  it("clears binary dust so a true half-dollar is not printed a dollar short", () => {
+    // The reported case: a period total whose exact value is $3,455.50.
+    expect(3455.4999999999995).not.toBe(3455.5);
+    expect(fmtMoney(3455.4999999999995)).toBe("$3,456");
+    expect(fmtMoney(3455.5)).toBe("$3,456");
+  });
+
+  it("does NOT promote a genuine sub-cent tail — rate x hours is four decimals wide", () => {
+    // 0.50h at $28.99 is exactly $14.495. Nearest dollar is $14. Snapping to
+    // cents first made it $14.50, which then rounded to $15 — a dollar high.
+    expect(0.5 * 28.99).toBe(14.495);
+    expect(fmtMoney(0.5 * 28.99)).toBe("$14");
+    expect(fmtMoney(14.495)).toBe("$14");
+    expect(fmtMoney(-14.495)).toBe("-$14");
+  });
+
+  it("matches the true nearest dollar across a grid of hours x rates", () => {
+    // Parsed back to a number rather than compared as a string: Intl is slow
+    // enough that 30k formats in the expectation blows the test timeout, and
+    // the grouping is not what this test is about.
+    const parse = (s: string) => Number(s.replace(/[$,]/g, ""));
+    const wrong: string[] = [];
+    for (let h = 1; h <= 400; h++) {
+      for (let rc = 2000; rc <= 6000; rc += 53) {
+        // Exact product in units of 1e-4 dollars, so the expectation is integer math.
+        const p = h * rc;
+        const want = Math.floor(p / 10000) + ((p % 10000) * 2 >= 10000 ? 1 : 0);
+        const got = parse(fmtMoney((h / 100) * (rc / 100)));
+        if (got !== want) wrong.push(`${h / 100}h @ ${rc / 100}: ${got} vs ${want}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("prints whole dollars and never a negative zero", () => {
+    expect(fmtMoney(412)).toBe("$412");
+    expect(fmtMoney(0)).toBe("$0");
+    expect(fmtMoney(-0.004)).toBe("$0");
+    expect(fmtMoney(-1e-12)).toBe("$0");
+  });
+});

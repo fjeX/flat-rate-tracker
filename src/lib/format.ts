@@ -16,8 +16,16 @@
 //   fmtHours  — 1dp, for the app UI. Glanceable. Never prints a bare zero for
 //               a nonzero value; sub-resolution renders as "<0.1".
 //   fmtHours2 — 2dp, exact, for documents. Rows add up to their totals on the
-//               page, because every figure is shown at the resolution it is
-//               stored at. Use this anywhere a reader may check the arithmetic.
+//               page, because hours ARE stored at 2dp, so nothing is rounded
+//               away. Use this anywhere a reader may check the arithmetic.
+//
+// That last claim is true of hours and FALSE of money, which is the trap this
+// file fell into once already. Hours are a stored numeric(5,2) column; dollars
+// are hours × rate, four decimals wide and stored nowhere. A money column adds
+// up only if the VALUES are rounded to the cent and the total is the sum of the
+// rounded rows — see roundToCents, and its two callers in lib/dispute-pack and
+// lib/unpaid-summary. fmtMoney2 shows an already-exact figure; it cannot create
+// one.
 //
 // fmtHoursGrouped is fmtHours plus thousands separators, for four-digit
 // lifetime totals. It is a wrapper, not a third rule — see its own note.
@@ -37,21 +45,76 @@
 export const HOURS_DISPLAY_STEP = 0.1;
 
 /**
- * Snap a float accumulation back to the resolution the data is actually stored
- * at (2dp — hours are `numeric(5,2)`, money is cents) before it is rounded for
- * display.
+ * Round `n` to `1 / scale` of a unit (scale 10 = tenths, 100 = cents, 1 = whole
+ * dollars), half **away from zero**, with a relative tolerance that absorbs
+ * binary dust without moving a genuine value.
  *
  * Escalation `shortfall-one-decimal-float` (2026-09-06): every figure here
  * arrives as an unrounded `reduce` over floats, so `82.1 - 70.25` is
  * `11.849999999999994`, not `11.85`. Rounded straight to one decimal that lands
  * *below* the x.x5 boundary and prints `11.8` — the number is off by a tenth in
  * the shop's favour on a document whose whole job is to argue about tenths.
- * Snapping to 2dp first removes the binary dust and only the dust: at the
- * stored resolution `11.85` is a genuine half and rounds up, while a true
- * `330.75` still rounds to `330.8` exactly as before.
+ *
+ * Two things this is NOT, both of them tried and both wrong:
+ *
+ *  - **Snapping to 2dp first** (`Math.round(n*100)/100`, shipped and reverted
+ *    2026-09-06). It fixes the dust case by making every value a stored-
+ *    resolution value — but most values reaching {@link fmtHours} are quotients,
+ *    not stored columns (`requiredPerDay`, the averages and history charts), and
+ *    a double round promotes everything in `[x.x45, x.x50)` up a full tenth.
+ *    Measured against the true nearest tenth: wrong on 9,772 of 200,000 random
+ *    3dp inputs, and on 2,440 of 120,000 quotients `num/den`. `74.24 / 9` is
+ *    `8.2488…` and printed `8.3`.
+ *  - **An absolute epsilon** (`n*scale + sign(n)*1e-9`). Correct on every one of
+ *    those grids, but the dust it has to absorb grows with magnitude while the
+ *    tolerance does not. Over 3,000 accumulations of 200–20,000 stored 2dp
+ *    values whose exact sum lands on a tenth boundary, it printed the wrong
+ *    tenth 1,183 times. The relative form below: 0.
+ *
+ * So the tolerance is relative — 1e-9 of the value, floored at 1e-9 absolute so
+ * small numbers still get one. Float dust is ~1e-16 relative and grows with the
+ * length of the accumulation; a genuine value would have to sit within one part
+ * in a billion of the boundary to be moved, which at the tenth scale is 1e-10 of
+ * an hour. `330.75` still rounds to `330.8`, `8.2488…` still to `8.2`.
+ *
+ * Half away from zero (rather than `Math.round`'s half *up*) is the second
+ * reason this is a helper and not an inline expression: `Math.round(-0.5)` is
+ * `-0`, so `fmtHours(-0.05)` used to disagree in magnitude with `fmtHours(0.05)`.
+ * A variance of exactly minus five hundredths of an hour is the same size as
+ * plus five hundredths, and on a dispute pack it has to print that way.
  */
-function toStoredPrecision(n: number): number {
-  return Math.round(n * 100) / 100;
+export function roundAtScale(n: number, scale: number): number {
+  const x = n * scale;
+  const mag = Math.abs(x);
+  const rounded = Math.round(mag + Math.max(mag, 1) * 1e-9);
+  // Normalise -0 at the source: a tiny negative rounds to zero magnitude, and
+  // `-1 * 0` is -0, which Intl renders "-$0" and toFixed renders "-0.0". Doing
+  // it here rather than in each formatter means no caller can forget.
+  if (rounded === 0) return 0;
+  return (Math.sign(x) * rounded) / scale;
+}
+
+/**
+ * Round a dollar figure to the cent, the resolution money is actually stored at
+ * (`claimed_dollars` is `numeric(10,2)`; Postgres rounds it there whether we do
+ * or not).
+ *
+ * **This is not a formatting concern and it does not belong in a formatter.**
+ * Dollars in this app are not a stored column — they are `hours × rate`, a
+ * 2dp × 2dp product carrying four decimals. Rounding each row to cents *for
+ * display* while totalling the raw four-decimal products means the printed rows
+ * genuinely do not add to the printed total: at $32.50, rows of
+ * 1.15/0.75/1.35/2.25/0.45h print $37.38 + $24.38 + $43.88 + $73.13 + $14.63 =
+ * $193.40 under a total of $193.38. No formatter can fix that, because both
+ * figures are correctly formatted.
+ *
+ * The fix is to round each row to the cent *as the value*, then sum the rounded
+ * rows — which is what `lib/dispute-pack` and `lib/unpaid-summary` now do. The
+ * column adds up by construction rather than by luck.
+ */
+export function roundToCents(n: number): number {
+  const v = roundAtScale(n, 100);
+  return v === 0 ? 0 : v; // normalise -0
 }
 
 /**
@@ -60,10 +123,17 @@ function toStoredPrecision(n: number): number {
  * A nonzero value too small to show at this resolution renders as "<0.1"
  * (or "-<0.1"), never "0.0" — a real zero and a rounded-away 0.02 must not be
  * the same string. A true zero still prints "0.0".
+ *
+ * Most values arriving here are NOT stored 2dp columns — they are quotients
+ * (`requiredPerDay`, chart averages) — so this rounds the value it is given
+ * rather than pre-snapping it to a resolution it never had. See
+ * {@link roundAtScale}.
  */
 export function fmtHours(n: number): string {
-  const rounded = Math.round(toStoredPrecision(n) * 10) / 10;
+  const rounded = roundAtScale(n, 10);
   if (rounded === 0 && n !== 0) return n > 0 ? "<0.1" : "-<0.1";
+  // `rounded` is only ever -0 when n is, and n === 0 is handled above, so
+  // toFixed never sees a -0 that would print "-0.0".
   return rounded.toFixed(1);
 }
 
@@ -76,10 +146,9 @@ export function fmtHours(n: number): string {
  * total. No floor is needed because nothing is rounded away.
  */
 export function fmtHours2(n: number): string {
-  const snapped = toStoredPrecision(n);
-  // Normalise -0 so a line that nets to zero never prints "-0.00". Snapping
-  // can produce -0 from a tiny negative, so this has to come after it.
-  const v = snapped === 0 ? 0 : snapped;
+  // Normalise -0 so a line that nets to zero never prints "-0.00". Rounding can
+  // produce -0 from a tiny negative, so this has to come after it.
+  const v = roundToCents(n);
   return v.toFixed(2);
 }
 
@@ -98,10 +167,17 @@ export function fmtHours2(n: number): string {
  * call on a period total or a spiff, where cents are noise and nobody is adding
  * the column up. Use this one only where a reader checks the arithmetic — the
  * dispute pack and the unpaid-rework audit rows.
+ *
+ * **This formatter is not what makes the column add up, and cannot be.** Unlike
+ * hours, dollars are not stored at 2dp — they are `hours × rate`, four decimals
+ * wide. A page whose rows are snapped to cents at print time while its total is
+ * the raw sum contradicts itself no matter how either figure is formatted; see
+ * {@link roundToCents}, which the two builders apply to the *values* so the
+ * total is a sum of the same cent figures the rows print. All this does is show
+ * a figure that is already exact to the cent.
  */
 export function fmtMoney2(n: number): string {
-  const snapped = toStoredPrecision(n);
-  const v = snapped === 0 ? 0 : snapped;
+  const v = roundToCents(n);
   return v.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",

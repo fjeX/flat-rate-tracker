@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Regression cover for `timer-receipt-clock-keeps-running`.
+// Unit cover for `timer-receipt-clock-keeps-running`.
 //
 // The modal freezes `elapsed` when it opens — on purpose, because a total that
 // ticks while you're reading it is unreviewable. But saveTimerAction recomputes
@@ -11,10 +11,15 @@
 // ever told the tech which one landed.
 //
 // THE FIX IS NOT TO UNFREEZE THE DISPLAY. It's to restate, after the save, the
-// figures saveTimerAction RETURNED. So every test here mocks the action to
-// return values that DIFFER from the frozen projection — a test where the two
-// agree proves nothing, because the old code would pass it by rendering the
-// client's own number.
+// figures saveTimerAction RETURNED. So the tests here use values that DIFFER
+// from the frozen projection — a test where the two agree proves nothing.
+//
+// WHAT THIS FILE CANNOT PROVE: that the receipt ever reaches a human. It
+// renders components directly with fixed props, and the original defect was
+// that TimerSlots UNMOUNTS the save modal the moment the save deletes the
+// slot. That belongs in TimerSlots.test.tsx, which drives the real mount path.
+// Keep it there: a direct render of the receipt passes whether or not anybody
+// can ever see it.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
@@ -31,7 +36,12 @@ vi.mock("@/app/actions/timer", () => ({
   saveTimerAction: (...args: unknown[]) => saveTimerAction(...args),
 }));
 
-import { TimerSaveModal, saveDivergence } from "./TimerSaveModal";
+import {
+  TimerSaveModal,
+  TimerSaveReceipt,
+  saveDivergence,
+  type ShownFigures,
+} from "./TimerSaveModal";
 
 afterEach(() => {
   cleanup();
@@ -94,19 +104,31 @@ const SLOT: TimerSlot = {
   holdApprovalAccumulated: 0,
 };
 
-function result(over: Partial<Record<string, unknown>> = {}) {
+function result(over: Record<string, unknown> = {}) {
   return {
     workHours: 0.32,
     previousHours: null,
     totalHours: 0.32,
     waitPartsHours: 0,
     waitApprovalHours: 0,
+    waitPartsLedgered: false,
+    waitApprovalLedgered: false,
     ledgerWritten: true,
     ...over,
   };
 }
 
-function renderModal(slot: TimerSlot = SLOT, onClose = vi.fn()) {
+/** What the modal froze and the tech approved. */
+const SHOWN: ShownFigures = {
+  workHours: 0.31,
+  newTotal: 0.31,
+  partsPromised: false,
+  approvalPromised: false,
+};
+
+function renderModal(slot: TimerSlot = SLOT) {
+  const onSaved = vi.fn();
+  const onClose = vi.fn();
   render(
     <TimerSaveModal
       slot={slot}
@@ -114,123 +136,170 @@ function renderModal(slot: TimerSlot = SLOT, onClose = vi.fn()) {
       library={LIBRARY}
       capAt={null}
       onClose={onClose}
+      onSaved={onSaved}
     />,
   );
-  return onClose;
+  return { onSaved, onClose };
 }
 
 async function save() {
   fireEvent.click(screen.getByRole("button", { name: /save & close timer/i }));
 }
 
-describe("TimerSaveModal — post-save confirmation", () => {
+describe("TimerSaveModal — what it hands back", () => {
   it("shows the pre-save projection from the frozen snapshot", () => {
     renderModal();
     // The freeze is deliberate and stays: 0.31h is what's reviewed.
     expect(screen.getByText(/0\.31h/)).toBeTruthy();
   });
 
-  it("restates the SERVER's figure, not the frozen projection, when they differ", async () => {
+  it("hands the parent a receipt carrying the SERVER's figures", async () => {
     saveTimerAction.mockResolvedValue(result());
-    const onClose = renderModal();
+    const { onSaved } = renderModal();
     await save();
 
-    // The confirmation must appear rather than closing out silently.
-    await waitFor(() => expect(screen.getByText(/^Saved$/)).toBeTruthy());
-    expect(onClose).not.toHaveBeenCalled();
-
-    // The saved figure is the server's 0.32h — twice (added, and new total).
-    expect(screen.getAllByText("0.32h").length).toBeGreaterThanOrEqual(2);
-    // And the frozen 0.31h survives only as the explicitly-labelled contrast,
-    // never as the headline "saved" figure.
-    expect(screen.getByText(/isn't the 0\.31h this window showed/)).toBeTruthy();
-    // The pre-save projection panel is gone — 0.31h appears only in that
-    // contrast sentence, never as a figure claiming to be what was saved.
-    expect(screen.queryByText("0.31h")).toBeNull();
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const receipt = onSaved.mock.calls[0][0];
+    expect(receipt).not.toBeNull();
+    expect(receipt.result.workHours).toBe(0.32);
+    expect(receipt.roNumber).toBe("88421");
+    // The frozen projection travels too, but only as the labelled contrast.
+    expect(receipt.shown.workHours).toBe(0.31);
   });
 
-  it("closes straight out when the server figure matches what was shown", async () => {
+  it("hands back null when the server figure matches what was shown", async () => {
     saveTimerAction.mockResolvedValue(
       result({ workHours: 0.31, totalHours: 0.31 }),
     );
-    const onClose = renderModal();
+    const { onSaved } = renderModal();
     await save();
 
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(screen.queryByText(/this window showed/)).toBeNull();
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(null));
   });
 
-  it("discloses waiting time the modal never promised a ledger row for", async () => {
+  it("hands back a receipt when the ledger write failed", async () => {
     saveTimerAction.mockResolvedValue(
-      result({ workHours: 0.31, totalHours: 0.31, waitPartsHours: 0.05 }),
+      result({ workHours: 0.31, totalHours: 0.31, ledgerWritten: false }),
     );
-    const onClose = renderModal();
+    const { onSaved } = renderModal();
     await save();
 
-    await waitFor(() =>
-      expect(screen.getByText(/0\.05h waiting on parts/)).toBeTruthy(),
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(onSaved.mock.calls[0][0]).not.toBeNull();
+  });
+});
+
+describe("TimerSaveReceipt", () => {
+  function renderReceipt(
+    over: Record<string, unknown> = {},
+    shown: Partial<ShownFigures> = {},
+  ) {
+    render(
+      <TimerSaveReceipt
+        receipt={{
+          roNumber: "88421",
+          result: result(over) as never,
+          shown: { ...SHOWN, ...shown },
+        }}
+        onClose={vi.fn()}
+      />,
     );
-    expect(onClose).not.toHaveBeenCalled();
+  }
+
+  it("restates the server figure and names the clock as the reason", () => {
+    renderReceipt();
+    expect(screen.getAllByText("0.32h").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/isn't the 0\.31h this window showed/)).toBeTruthy();
+    // 0.31h survives only as the labelled contrast, never as a saved figure.
+    expect(screen.queryByText("0.31h")).toBeNull();
   });
 
-  it("still reports a failed ledger write", async () => {
-    saveTimerAction.mockResolvedValue(result({ ledgerWritten: false }));
-    renderModal();
-    await save();
+  it("blames the baseline, not the clock, when only the total moved", () => {
+    renderReceipt({ workHours: 0.31, totalHours: 0.62 });
+    expect(screen.queryByText(/clock kept running/)).toBeNull();
+    expect(screen.getByText(/already had time on it/)).toBeTruthy();
+    expect(screen.getByText(/0\.62h/)).toBeTruthy();
+  });
 
-    await waitFor(() =>
-      expect(screen.getByText(/unpaid-time table isn't set up yet/)).toBeTruthy(),
-    );
+  it("discloses a hold the server says it ledgered, even at 0.01h", () => {
+    renderReceipt({
+      workHours: 0.31,
+      totalHours: 0.31,
+      waitPartsHours: 0.01,
+      waitPartsLedgered: true,
+    });
+    expect(screen.getByText(/0\.01h waiting on parts/)).toBeTruthy();
+  });
+
+  it("still reports a failed ledger write", () => {
+    renderReceipt({ ledgerWritten: false });
+    expect(screen.getByText(/unpaid-time table isn't set up yet/)).toBeTruthy();
     expect(screen.getByText(/Saved with a warning/)).toBeTruthy();
   });
 });
 
 describe("saveDivergence", () => {
-  const shown = { workHours: 0.31, newTotal: 0.31, ledgerPromised: false };
-
-  it("flags a worked-hours difference", () => {
-    expect(
-      saveDivergence(
-        { workHours: 0.32, totalHours: 0.32, waitPartsHours: 0, waitApprovalHours: 0 },
-        shown,
-      ).hours,
-    ).toBe(true);
+  it("flags a worked-hours difference as the clock, not the baseline", () => {
+    const d = saveDivergence(
+      {
+        workHours: 0.32,
+        totalHours: 0.32,
+        waitPartsLedgered: false,
+        waitApprovalLedgered: false,
+      },
+      SHOWN,
+    );
+    expect(d.addedHours).toBe(true);
+    expect(d.baselineTotal).toBe(false);
   });
 
-  it("flags a total-hours difference even when the added hours agree", () => {
+  it("flags a stale baseline separately when the added hours agree", () => {
     // The line's actualHours can be stale in the client's copy of the entry.
-    expect(
-      saveDivergence(
-        { workHours: 0.31, totalHours: 0.62, waitPartsHours: 0, waitApprovalHours: 0 },
-        shown,
-      ).hours,
-    ).toBe(true);
+    // Same divergence, DIFFERENT cause — and the old lumped flag printed "the
+    // clock kept running" here, next to two identical numbers.
+    const d = saveDivergence(
+      {
+        workHours: 0.31,
+        totalHours: 0.62,
+        waitPartsLedgered: false,
+        waitApprovalLedgered: false,
+      },
+      SHOWN,
+    );
+    expect(d.baselineTotal).toBe(true);
+    expect(d.addedHours).toBe(false);
   });
 
   it("says nothing when both figures agree", () => {
     expect(
       saveDivergence(
-        { workHours: 0.31, totalHours: 0.31, waitPartsHours: 0, waitApprovalHours: 0 },
-        shown,
+        {
+          workHours: 0.31,
+          totalHours: 0.31,
+          waitPartsLedgered: false,
+          waitApprovalLedgered: false,
+        },
+        SHOWN,
       ).any,
     ).toBe(false);
   });
 
-  it("does not claim a ledger row for 0.01h — that band straddles the 30s gate", () => {
-    // msToHours rounds to hundredths: 0.01h is anywhere from 18s to 54s, and
-    // MIN_LEDGERED_HOLD_MS is 30s. Claiming "logged as unpaid time" there
-    // could be a lie about a money document.
+  it("trusts the server's ledger verdict over the rounded hours", () => {
+    // 0.01h is anywhere from 18s to 54s and MIN_LEDGERED_HOLD_MS is 30s, so
+    // the rounded figure cannot decide. The server can, and now says so.
+    const base = {
+      workHours: 0.31,
+      totalHours: 0.31,
+      waitApprovalLedgered: false,
+    };
     expect(
-      saveDivergence(
-        {
-          workHours: 0.31,
-          totalHours: 0.31,
-          waitPartsHours: 0.01,
-          waitApprovalHours: 0,
-        },
-        shown,
-      ).undisclosedWait,
+      saveDivergence({ ...base, waitPartsLedgered: false }, SHOWN)
+        .undisclosedWait,
     ).toBe(false);
+    expect(
+      saveDivergence({ ...base, waitPartsLedgered: true }, SHOWN)
+        .undisclosedWait,
+    ).toBe(true);
   });
 
   it("stays quiet about waiting time the modal already promised", () => {
@@ -239,11 +308,27 @@ describe("saveDivergence", () => {
         {
           workHours: 0.31,
           totalHours: 0.31,
-          waitPartsHours: 0.4,
-          waitApprovalHours: 0,
+          waitPartsLedgered: true,
+          waitApprovalLedgered: false,
         },
-        { ...shown, ledgerPromised: true },
+        { ...SHOWN, partsPromised: true },
       ).undisclosedWait,
     ).toBe(false);
+  });
+
+  it("does not let a promise about one hold silence the other", () => {
+    // Parts was promised; the approval hold only crossed the 30s gate after
+    // the display froze. A single lumped `ledgerPromised` swallowed this.
+    expect(
+      saveDivergence(
+        {
+          workHours: 0.31,
+          totalHours: 0.31,
+          waitPartsLedgered: true,
+          waitApprovalLedgered: true,
+        },
+        { ...SHOWN, partsPromised: true },
+      ).undisclosedApproval,
+    ).toBe(true);
   });
 });

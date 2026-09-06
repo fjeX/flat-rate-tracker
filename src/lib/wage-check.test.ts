@@ -854,3 +854,263 @@ describe("effectiveHourly — countedPay", () => {
     expect(r.countedPay).toBeNull();
   });
 });
+
+// ── Denominator parity with pairDay, as a property over many shapes ──────────
+//
+// The previous parity test was a single worked example, and it passed while a
+// four-fold disagreement sat next to it: effectiveHourly built its schedule
+// fill from `workDays` (every date carrying an RO) while pairDay requires
+// `flag > 0 || confirmedZero.has(date)`. A day whose ROs all flag ZERO — an
+// unpaid comeback logged on a day the tech forgot to clock — was therefore a
+// whole scheduled shift in denomHours here and an `unresolved` day there. Both
+// numbers render on one screen: WorkCostCard prints result.denomHours as "At
+// the shop", PeriodStats prints stats.denomHours as "Clocked hrs".
+//
+// So this is a table, not an example: every shape that has ever mattered to the
+// pairing rule, asserted on BOTH denomHours and denomSource. A single example
+// can only prove itself; a table is what makes the next divergence fail here
+// instead of on the tech's screen.
+
+describe("effectiveHourly <-> aggregateStatsWithSchedule — denominator parity", () => {
+  const P = { start: "2026-09-01", end: "2026-09-14" }; // Tue → Mon, 5x8 Mon–Fri
+  const TODAY = "2026-09-10";
+
+  function ctxOf(over: Partial<ScheduleFallback> = {}): ScheduleFallback {
+    return {
+      schedules: [schedule5x8()],
+      daysOff: [],
+      confirmedZeroDays: [],
+      today: TODAY,
+      ...over,
+    };
+  }
+
+  type Case = {
+    name: string;
+    entries: Entry[];
+    clocks: DailyClock[];
+    ctx: ScheduleFallback;
+    /** Only asserted when given — parity itself is asserted for every case. */
+    expectDenom?: number;
+  };
+
+  // The escalated pair, spelled out. Before the fix these read 16-vs-8 and
+  // 32-vs-8 respectively.
+  const S9: Case = {
+    name: "S9 — one flagged+clocked day, one ZERO-flag unclocked day",
+    entries: [entry("2026-09-01", 8), entry("2026-09-02", 0)],
+    clocks: [clock("2026-09-01", 8)],
+    ctx: ctxOf(),
+    expectDenom: 8, // NOT 16: 09-02 flagged nothing, so it is unresolved
+  };
+  const S18: Case = {
+    name: "S18 — one flagged+clocked day, THREE ZERO-flag unclocked days",
+    entries: [
+      entry("2026-09-01", 8),
+      entry("2026-09-02", 0),
+      entry("2026-09-03", 0),
+      entry("2026-09-04", 0),
+    ],
+    clocks: [clock("2026-09-01", 8)],
+    ctx: ctxOf(),
+    expectDenom: 8, // NOT 32
+  };
+
+  const cases: Case[] = [
+    S9,
+    S18,
+    {
+      name: "every day clocked and flagged",
+      entries: [entry("2026-09-01", 9), entry("2026-09-02", 7)],
+      clocks: [clock("2026-09-01", 8), clock("2026-09-02", 8.5)],
+      ctx: ctxOf(),
+      expectDenom: 16.5,
+    },
+    {
+      name: "flagged, unclocked, completed → filled from the schedule",
+      entries: [entry("2026-09-02", 6)],
+      clocks: [],
+      ctx: ctxOf(),
+      expectDenom: 8,
+    },
+    {
+      name: "ZERO-flag and POSITIVE-flag RO on the SAME unclocked day — summed per day, so it counts",
+      entries: [entry("2026-09-02", 0), entry("2026-09-02", 5)],
+      clocks: [],
+      ctx: ctxOf(),
+      expectDenom: 8,
+    },
+    {
+      name: "ZERO-flag RO on a day that IS a confirmed real zero",
+      entries: [entry("2026-09-02", 0)],
+      clocks: [],
+      ctx: ctxOf({ confirmedZeroDays: ["2026-09-02"] }),
+      expectDenom: 8,
+    },
+    {
+      name: "confirmed real zero with no RO at all (the fill that must not regress)",
+      entries: [entry("2026-09-01", 9)],
+      clocks: [],
+      ctx: ctxOf({ confirmedZeroDays: ["2026-09-02"] }),
+      expectDenom: 16,
+    },
+    {
+      name: "ZERO-flag RO on a day the tech was OFF",
+      entries: [entry("2026-09-01", 8), entry("2026-09-02", 0)],
+      clocks: [],
+      ctx: ctxOf({
+        daysOff: [{ startDate: "2026-09-02", endDate: "2026-09-02" }],
+      }),
+      expectDenom: 8,
+    },
+    {
+      name: "POSITIVE-flag RO on a day the tech was OFF (unpaired on both sides)",
+      entries: [entry("2026-09-01", 8), entry("2026-09-02", 6)],
+      clocks: [],
+      ctx: ctxOf({
+        daysOff: [{ startDate: "2026-09-02", endDate: "2026-09-02" }],
+      }),
+      expectDenom: 8,
+    },
+    {
+      name: "ZERO-flag RO today and tomorrow (>= today, still in progress)",
+      entries: [
+        entry("2026-09-01", 8),
+        entry("2026-09-10", 0),
+        entry("2026-09-11", 0),
+      ],
+      clocks: [clock("2026-09-01", 8)],
+      ctx: ctxOf(),
+      expectDenom: 8,
+    },
+    {
+      name: "POSITIVE-flag RO today (>= today, still in progress)",
+      entries: [entry("2026-09-01", 8), entry("2026-09-10", 6)],
+      clocks: [clock("2026-09-01", 8)],
+      ctx: ctxOf(),
+      expectDenom: 8,
+    },
+    {
+      name: "ZERO-flag RO on an unscheduled day (Saturday)",
+      entries: [entry("2026-09-01", 8), entry("2026-09-05", 0)],
+      clocks: [],
+      ctx: ctxOf(),
+      expectDenom: 8,
+    },
+    {
+      name: "ZERO-flag RO on a day that IS clocked (clock wins)",
+      entries: [entry("2026-09-02", 0)],
+      clocks: [clock("2026-09-02", 7.5)],
+      ctx: ctxOf(),
+      expectDenom: 7.5,
+    },
+    {
+      name: "entries and clocks OUTSIDE the range are ignored by both",
+      entries: [
+        entry("2026-08-31", 8),
+        entry("2026-09-02", 0),
+        entry("2026-09-15", 8),
+      ],
+      clocks: [
+        clock("2026-08-31", 8),
+        clock("2026-09-02", 6),
+        clock("2026-09-20", 8),
+      ],
+      ctx: ctxOf(),
+      expectDenom: 6,
+    },
+    {
+      name: "no schedule rows at all — nothing to fill from",
+      entries: [entry("2026-09-01", 8), entry("2026-09-02", 0)],
+      clocks: [clock("2026-09-01", 8)],
+      ctx: ctxOf({ schedules: [] }),
+      expectDenom: 8,
+    },
+    {
+      name: "nothing at all",
+      entries: [],
+      clocks: [],
+      ctx: ctxOf(),
+      expectDenom: 0,
+    },
+    {
+      name: "the lot together — clocked, flagged-unclocked, zero-flag, confirmed zero, day off, in progress, weekend",
+      entries: [
+        entry("2026-09-01", 9), // Tue, clocked
+        entry("2026-09-02", 0), // Wed, zero flag, unclocked → unresolved
+        entry("2026-09-03", 6), // Thu, flagged, unclocked → scheduled 8h
+        entry("2026-09-04", 0), // Fri, zero flag but confirmed zero → 8h
+        entry("2026-09-05", 4), // Sat, unscheduled → unpaired
+        entry("2026-09-08", 5), // Tue, day off → unpaired
+        entry("2026-09-10", 7), // today → in progress
+      ],
+      clocks: [clock("2026-09-01", 8.25)],
+      ctx: ctxOf({
+        confirmedZeroDays: ["2026-09-04", "2026-09-07"],
+        daysOff: [{ startDate: "2026-09-08", endDate: "2026-09-08" }],
+      }),
+      // 8.25 clocked + 8 (Thu flagged) + 8 (Fri confirmed zero) + 8 (Mon 09-07
+      // confirmed zero, no RO on it at all).
+      expectDenom: 32.25,
+    },
+  ];
+
+  for (const c of cases) {
+    it(`agrees on denomHours and denomSource — ${c.name}`, () => {
+      const r = effectiveHourly(c.entries, c.clocks, [], RATES, P, c.ctx);
+      const s = aggregateStatsWithSchedule(c.entries, c.clocks, P, c.ctx);
+      if (c.expectDenom !== undefined) {
+        expect(r.denomHours).toBeCloseTo(c.expectDenom, 6);
+      }
+      expect(r.denomHours).toBeCloseTo(s.denomHours, 6);
+      expect(r.denomSource).toBe(s.denomSource);
+    });
+  }
+
+  // The two figures the escalation was actually about, printed side by side on
+  // one screen. Stated separately so a failure names the symptom rather than a
+  // row index in the table above.
+  it("S18: 'At the shop' and 'Clocked hrs' are the same number, not 32 vs 8", () => {
+    const r = effectiveHourly(S18.entries, S18.clocks, [], RATES, P, S18.ctx);
+    const s = aggregateStatsWithSchedule(S18.entries, S18.clocks, P, S18.ctx);
+    expect(r.denomHours).toBe(8);
+    expect(s.denomHours).toBe(8);
+    // $240 of flag pay over 8 hours — $30.00/hr, not the $7.50/hr a 32-hour
+    // denominator manufactured. That direction invents a below-your-reference
+    // -rate alarm out of work nobody was paid for.
+    expect(r.hourly).toBeCloseTo(30, 6);
+    // Every empty scheduled weekday in the range is unresolved; the three the
+    // zero-flag ROs sit on are the ones this case is about.
+    expect(s.unresolvedDays).toEqual(
+      expect.arrayContaining(["2026-09-02", "2026-09-03", "2026-09-04"]),
+    );
+  });
+
+  it("S9: a lone zero-flag day does not double the denominator", () => {
+    const r = effectiveHourly(S9.entries, S9.clocks, [], RATES, P, S9.ctx);
+    const s = aggregateStatsWithSchedule(S9.entries, S9.clocks, P, S9.ctx);
+    expect(r.denomHours).toBe(8);
+    expect(r.hourly).toBeCloseTo(30, 6);
+    expect(r.denomSource).toBe("clocked"); // was "mixed" — provenance disagreed too
+    expect(s.denomSource).toBe("clocked");
+    expect(s.unresolvedDays).toContain("2026-09-02");
+  });
+
+  // A zero-flag day with no clock and no schedule is not "missing" data — there
+  // is no numerator on it to protect. Blanking the rate for it would hide a
+  // perfectly good figure behind a day nobody was paid for.
+  it("does not report a zero-flag unscheduled day as a missing clock day", () => {
+    const r = effectiveHourly(
+      [entry("2026-09-01", 8), entry("2026-09-05", 0)],
+      [clock("2026-09-01", 8)],
+      [],
+      RATES,
+      P,
+      ctxOf(),
+    );
+    expect(r.missingClockDays).toEqual([]);
+    expect(r.status).toBe("ok");
+    // Still a work day for display purposes — it has an RO on it.
+    expect(r.workDays).toContain("2026-09-05");
+  });
+});

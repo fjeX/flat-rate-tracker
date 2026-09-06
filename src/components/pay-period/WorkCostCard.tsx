@@ -257,19 +257,38 @@ export function WorkCostCard({
           and what your pay works out to once those hours are counted.
         </p>
         <h3>Effective hourly</h3>
+        {/* This paragraph said "your total pay for the period" until the
+            numerator became `countedPay`. It was then describing a division
+            the code does not perform: totalPay covers the whole period,
+            including a shift still in progress, while the denominator has no
+            hours for that shift yet (escalation `costcard-total-pay-mismatch`).
+            The caption under the headline was corrected and this was not, so
+            the explanation of the number contradicted the arithmetic printed
+            three inches below it. Keep the two in step. */}
         <p>
-          Your total pay for the period — flag pay plus spiffs — divided by the
-          hours you were actually at the shop. It answers a question flag pay
-          alone cannot: for every hour of your life the shop had, how much did
-          you earn? A 130% efficiency week can still be a bad week if you sat
-          around for six hours waiting on parts.
+          Your pay on the days counted — flag pay plus spiffs — divided by the
+          hours you were at the shop on those same days. It answers a question
+          flag pay alone cannot: for every hour of your life the shop had, how
+          much did you earn? A 130% efficiency week can still be a bad week if
+          you sat around for six hours waiting on parts.
+        </p>
+        <p>
+          A shift still in progress is left out of <em>both</em> sides — its
+          flagged work and its spiffs are not in the pay, and its hours are not
+          in the denominator, because you have not clocked out of it yet.
+          Otherwise today&apos;s flagged work would be divided by hours that do
+          not exist yet and the rate would drift all day. It joins the figure
+          once the day is done.
         </p>
         <h3>Where the hours come from</h3>
         <p>
           Clocked hours if you logged them. If you did not, FRT falls back to
           your normal shift from the Schedule page, because a day with flagged
-          work on it was obviously a day you worked. A day you marked as a real
-          zero counts its whole shift too — you were there, it just flagged
+          work on it was obviously a day you worked. A day whose repair orders
+          all flagged zero hours is not one of those days — until you mark it a
+          real zero, FRT does not know whether you were there, so it is left out
+          of both sides rather than guessed at. A day you marked as a real zero
+          counts its whole shift too — you were there, it just flagged
           nothing, and that is the time this card is about. You can correct any
           single day with a shift override on the dashboard or schedule page.
         </p>

@@ -6,7 +6,11 @@ import type { DisputePack } from "@/lib/dispute-pack";
 import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
 import { fmtHours2, fmtMoney2 } from "@/lib/format";
 
-// 2dp so printed rows reconcile with printed totals — see lib/format.
+// 2dp so printed rows reconcile with printed totals. The reconciliation itself
+// happens in lib/dispute-pack and lib/unpaid-summary, which round each dollar
+// row to the cent as a VALUE and sum the rounded rows — dollars are hours ×
+// rate, four decimals wide, so no formatter could make the column add up on its
+// own. See roundToCents in lib/format.
 const fmtH = fmtHours2;
 
 // 2dp for the same reason on the dollar column — see lib/format.
