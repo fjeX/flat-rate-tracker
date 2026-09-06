@@ -351,6 +351,19 @@ regardless of which button.
   averages."
 - Buttons: **"Skip"**, and **"Save time"** (reads "Saving…" while in flight).
   "Save time" stays disabled until at least one line has a chip picked.
+  **"Skip" is NEVER disabled, including mid-save (changed 2026-09-06,
+  `retro-modal-stuck-saving`).** It is the escape hatch, and it used to be
+  gated on the same in-flight flag as "Save time" — which wedged the modal
+  permanently, because that flag was never reset. If you ever find Skip
+  disabled, that is a regression; report it.
+- **The prompt must open CLEAN every time (same fix).** Log a retro-eligible
+  RO, tap "Save time", then do a second retro-eligible save in the same page
+  session via **"Save & New"** — without reloading. The second prompt must
+  open with no chip lit, "Save time" disabled, "Saving…" absent, and both
+  buttons live. Previously one component instance survived the whole form
+  session, so the second prompt opened already dead, and its retained answers
+  could write estimates onto the FIRST RO's lines. A reload masks this — you
+  must not navigate away between the two saves or you are not testing it.
 - Storage: an answered line is saved via
   `setLineActualHoursAction(lineId, hours, "estimate")`, writing
   `actual_source = "estimate"`. Downstream, that line is excluded from shared
@@ -425,6 +438,19 @@ start and save in the same breath records ~0 and proves nothing.
 - Glance figures elsewhere on /timer stay at ONE decimal on purpose. Only the
   save-modal receipt is two — a one-decimal figure somewhere else is not a
   mismatch to report.
+- **NEW 2026-09-06 (`timer-receipt-clock-keeps-running`): a post-save
+  confirmation screen appears when the figure actually written differs from
+  the one the modal projected.** The modal freezes its elapsed reading when it
+  OPENS (deliberate — an unreviewable ticking total is worse), but the server
+  recomputes from the live accumulators at submit, so leaving the modal open
+  during a running timer legitimately banks more time than the screen showed.
+  The confirmation restates the **server's** figure and says the clock kept
+  running. It is **divergence-gated**: on a normal save where the two agree,
+  no extra screen appears and no extra tap is required. Both behaviours are
+  correct — do not report the confirmation as an unexpected extra step, and do
+  not report its absence on an agreeing save as a missing screen. **What IS a
+  bug: the confirmation appearing and then vanishing on its own**, or naming a
+  figure that matches the frozen projection rather than what was saved.
 - Check that a 4th timer cannot be started: with 3 running, the add button
   reads "All timers in use" and is disabled.
 - Attaching the **same RO to a second timer** must prompt a line picker
@@ -546,10 +572,21 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
   the Efficiency beside it, because days the app can't measure are excluded from
   the percentage but still counted in the flagged total. When that happens a
   caption sits directly under the grid reading **"Not counted above: N.Nh
-  flagged across N days with no clocked hours and no schedule…"**. Do the
-  division yourself: if the three tiles disagree and there is NO caption
-  explaining the gap, that is a FAIL. (Divide before you trust it — the page
-  used to print 430.1h, 72.0h and 397% side by side with nothing said.)
+  flagged across N day(s) — <reason>…"**. Do the division yourself: if the
+  three tiles disagree and there is NO caption explaining the gap, that is a
+  FAIL. (Divide before you trust it — the page used to print 430.1h, 72.0h and
+  397% side by side with nothing said.)
+  - **The reason half of that sentence VARIES, and that is correct (new
+    2026-09-06, `payperiod-notcounted-caption-reason`).** It used to be one
+    hardcoded "with no clocked hours and no schedule" for every case, which
+    told the tech to add a schedule entry on days that were already on the
+    schedule. There are now four distinct endings, one per exclusion reason:
+    the shift is still **in progress**; the day is **marked off**; the schedule
+    puts **no shift on that day**; or there is **no work schedule** at all.
+    Only the last one says "no schedule". **Do not report a caption whose
+    wording differs from an older run as a change or a bug** — check that the
+    reason it names matches the day it is describing, and report only a
+    MISMATCH (e.g. it says "marked off" for a day that is not marked off).
 - **/pay-period and /insights must report the SAME efficiency for the same
   span.** They are now derived from one shared per-day rule; they were two
   copies that disagreed whenever a period held a scheduled day you had neither
@@ -829,6 +866,15 @@ when both sources are present.
     printed. (This section reads at two decimals on purpose, since it is the
     audit view: at one decimal eleven rows legitimately displayed 2.8h under a
     2.7h total on 2026-08-13. The card headline above stays at one decimal.)
+  - **The DOLLAR column reconciles too, as of 2026-09-06
+    (`disputepack-money-column-rounding`) — check it the same way you check
+    hours.** It now prints **cents**, not whole dollars. Whole dollars could
+    not reconcile even in principle: dollars are `rate × hours`, a 2dp × 2dp
+    product carrying four decimals, so rounding each row and rounding the raw
+    sum are different numbers ($45+$42+$45+$35 = $167 under a $166 total). The
+    total is now the **sum of the already-rounded rows**. If the money rows do
+    not add to the printed money total, that is a FAIL — same severity as the
+    hours column.
     There are no "Rework / Waiting / Shop time" tiles here — this checklist
     described three of them for seven straight nights against a UI that has
     never had them.
@@ -856,6 +902,11 @@ when both sources are present.
     would catch — report as FAIL.
   - Every rework row must read **0.00h flagged** (the pack prints hours at two
     decimals so its rows reconcile with its totals).
+  - **Money prints at cents here too, as of 2026-09-06, and the printed total
+    is the sum of the printed rows.** Add the dollar column up by hand exactly
+    as you do the hours. A pack whose money column does not sum to its own
+    total is a FAIL — it is the one document a service manager checks with a
+    calculator.
   - A period with **no** variance but **with** a comeback must still print the
     unpaid section, and the "Print / Save as PDF" button must be **enabled**.
   - A period with neither must show neither section and a **disabled** print
@@ -1107,8 +1158,24 @@ recovered. Sections appear only when they have something to say.
        window are all comebacks. It must sort to the **TOP** of the table, above
        the worst measured ratio, and the caption below the table must name the
        total hours.
+       **Changed 2026-09-06 (`where-time-goes-uses-count-mismatch`): the use
+       count on an unpaid row now shows the COMEBACK count, not the whole
+       code's.** It used to print "8 uses" beside comeback-only hours, reading
+       as "eight alignments, all rework" when only 2 of 8 were. So the number
+       here should match the count in the pill's own tooltip. A `measured` row
+       still shows its full use count. Do not report the smaller number as
+       missing uses.
     3. **never timed** — em-dashes in both hour columns. This now means ONLY
        "nothing was recorded."
+  - **NEW ELEMENT 2026-09-06 (`opcode-name-collision-indistinguishable`): each
+    op-code row now carries a small `library` or `custom` origin tag.** It
+    appears in "Where your time goes", "Big jobs" and "Maintenance times". It
+    exists because `op_codes.code` has no unique constraint, so a library op
+    code and a one-time custom line can display identical text; the tag is read
+    off the group key that already distinguished them. It makes NO claim about
+    frequency — a `custom` code can legitimately show "40 logged". Do not
+    report `custom` beside a high use count as a contradiction; that reading
+    was the reason the label is not "one-time".
     - **The bug this replaced:** a comeback-only code used to read
       `— — never timed` while holding real hours. If you ever see a row with
       `never timed` on a code you logged a **timed comeback** against in this
@@ -1170,10 +1237,15 @@ recovered. Sections appear only when they have something to say.
     two surfaces on the same period every run; any gap is a real bug, not a
     rounding difference.
   - If some days are excluded, the chart must SAY so underneath: **"Not counted
-    above: N.Nh flagged across N days … with no clocked hours and no schedule"**.
-    Those are days with flagged work the app can't put a length to (a Saturday
-    that was never clocked). Silently dropping them is the bug this replaced —
-    the hours have to be visible somewhere.
+    above: N.Nh flagged across N day(s) — <reason>…"**. Those are days with
+    flagged work the app can't put a length to (a Saturday that was never
+    clocked). Silently dropping them is the bug this replaced — the hours have
+    to be visible somewhere. The reason half varies by cause; see §3's note on
+    `payperiod-notcounted-caption-reason`. **Note the trend caption
+    deliberately does NOT claim the hours are "in your flagged total above"
+    — that phrase is true on /pay-period and false here, because the trend's
+    flag total only counts paired days. The two surfaces saying different
+    things about this is CORRECT, not a contradiction to report.**
   - ⚠️ **A MISSING caption is NOT a bug** (corrected 2026-08-12). It is
     suppressed on purpose when the two finished periods differ by **less than 1
     percentage point** — a deliberate noise floor. This account's last two
