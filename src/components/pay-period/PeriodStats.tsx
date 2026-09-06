@@ -1,5 +1,10 @@
-import type { Stats } from "@/lib/stats";
-import { fmtHours, fmtPct } from "@/lib/stats";
+import type { Stats, UnpairedByReason } from "@/lib/stats";
+import {
+  fmtHours,
+  fmtPct,
+  unpairedNoteClause,
+  unpairedNotes,
+} from "@/lib/stats";
 import { efficiencyDisplay } from "@/lib/efficiency-display";
 import type { DenomSource } from "@/lib/types";
 import { fmtMoney } from "@/lib/earnings";
@@ -45,6 +50,13 @@ export function PeriodStats({
     // numbers, which reads as a bug rather than as excluded days.
     unpairedFlagHours?: number;
     unpairedDays?: number;
+    // WHY those hours weren't counted, split four ways by the pairing rule.
+    // Without it the caption below said "no clocked hours and no schedule" for
+    // a shift that was simply still running — sending the tech to fix a day
+    // that isn't broken. Optional for the same reason the pair above is: the
+    // no-schedule path passes a plain Stats, and a snapshot's frozen blob has
+    // the flat numbers only. Both fall back to the original single sentence.
+    unpairedByReason?: UnpairedByReason;
   };
   // The in-progress and awaiting-pay heroes already carry flagged hours as
   // their headline figure, so repeating it as a tile directly underneath is
@@ -147,25 +159,34 @@ export function PeriodStats({
           <Cell label="Earnings" value={fmtMoney(earnings)} highlighted />
         )}
       </EntranceGrid>
-      {(stats.unpairedFlagHours ?? 0) > 0 && (
-        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+      {/* One caption per REASON, not one caption for all of them. A period can
+          hold both kinds at once — a Saturday nobody clocked and a shift still
+          running — and collapsing them into a single sentence is what made this
+          line tell the tech to schedule a day that was simply not over yet. The
+          clause comes from lib/stats so /insights prints the identical wording;
+          the sentence used to be duplicated byte-for-byte in two files, which
+          is how one of them could have been fixed alone. */}
+      {unpairedNotes(stats.unpairedByReason, {
+        flagHours: stats.unpairedFlagHours ?? 0,
+        days: stats.unpairedDays ?? 0,
+      }).map((note) => (
+        <p
+          key={note.kind}
+          className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]"
+        >
           Not counted above:{" "}
           <span className="font-medium text-[var(--fg-1)]">
-            {fmtHours(stats.unpairedFlagHours!)}h
+            {fmtHours(note.flagHours)}h
           </span>{" "}
-          flagged across {stats.unpairedDays}{" "}
-          {stats.unpairedDays === 1 ? "day" : "days"}{" "}
+          flagged across {note.days} {note.days === 1 ? "day" : "days"}{" "}
           {/* The {" "} above is load-bearing. Text that follows an expression
               container loses its leading space in the JSX transform, which
               shipped this caption reading "1 daywith no clocked hours".
-              InsightsView's copy of this sentence uses explicit separators for
+              InsightsView's copy of this caption uses explicit separators for
               the same reason — match it, don't rely on the source newline. */}
-          with no clocked hours and no schedule — the app can&apos;t tell how
-          long those days were, so they&apos;re in your flagged total but in
-          neither side of the percentage. Clock them or add them to your
-          schedule to include them.
+          {unpairedNoteClause(note)}
         </p>
-      )}
+      ))}
       {unflaggedTime !== null && (
         <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
           {fmtHours(unflaggedTime.gapHours)} clocked hours had no flagged work —

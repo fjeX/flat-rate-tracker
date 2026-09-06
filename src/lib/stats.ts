@@ -206,7 +206,133 @@ export type ScheduleStats = Stats & {
   unpairedFlagHours: number;
   /** How many distinct days those unpaired hours came from. */
   unpairedDays: number;
+  /**
+   * The SAME hours and days as the two fields above, split by WHY the day had
+   * no denominator.
+   *
+   * The counts were always right; the explanation was the bug. `pairDay` folds
+   * four unrelated situations into one `{kind:"none"}` — a shift still running,
+   * an explicit day off, a day the schedule doesn't cover, and no schedule at
+   * all — and both surfaces that print a caption printed the same "clock them
+   * or add them to your schedule" sentence for every one of them. On a day
+   * still in progress that sentence sends the tech to fix something that isn't
+   * broken. Splitting the tally is what lets the caption say which it is.
+   */
+  unpairedByReason: UnpairedByReason;
 };
+
+/**
+ * Why a day contributed to neither side of the efficiency percentage.
+ *
+ * `in_progress` is the only one that resolves itself: the shift is still
+ * running, so there are no hours to divide by YET. The other three are days the
+ * app cannot measure at all until the tech acts.
+ */
+export type UnpairedReason =
+  | "in_progress" // today or later, nothing clocked — the shift is still running
+  | "day_off" // an explicit days_off entry covers the date
+  | "unscheduled" // a schedule exists, but it puts no shift on this day
+  | "no_schedule"; // no work schedule at all
+
+export type UnpairedTally = { flagHours: number; days: number };
+export type UnpairedByReason = Record<UnpairedReason, UnpairedTally>;
+
+export function emptyUnpairedByReason(): UnpairedByReason {
+  return {
+    in_progress: { flagHours: 0, days: 0 },
+    day_off: { flagHours: 0, days: 0 },
+    unscheduled: { flagHours: 0, days: 0 },
+    no_schedule: { flagHours: 0, days: 0 },
+  };
+}
+
+/**
+ * "This day isn't measurable YET" — today or later with nothing clocked.
+ *
+ * The ONE predicate for an in-progress day, exported so the three surfaces that
+ * describe one cannot drift into three different answers. It is deliberately
+ * identical to `wage-check.ts`'s `isOngoing` (`date >= schedule.today &&
+ * !clockDaySet.has(date)`, where clockDays are the dates with hours > 0), which
+ * is where the correct wording for this case already lives — WorkCostCard has
+ * been saying "that shift is still in progress" from it while the two captions
+ * below said the opposite about the same day.
+ *
+ * Not imported from wage-check: that module imports `earnings`/`bonuses` and is
+ * the pay half of the app, while this is the aggregation half — the dependency
+ * runs stats → (nothing), and wiring it the other way to share four tokens
+ * would be the first edge of a cycle. The predicate is three terms and it is
+ * pinned by a test in both modules.
+ */
+export function isInProgressDay(
+  date: string,
+  today: string,
+  clockedHours: number,
+): boolean {
+  return clockedHours <= 0 && date >= today;
+}
+
+/**
+ * One caption's worth of unpaired hours: the tally plus the sentence to print.
+ *
+ * Collapses the four reasons into the two the reader can act on differently —
+ * wait (in progress) or fix (everything else). Both surfaces that print this go
+ * through here, so the pay-period page and /insights cannot describe the same
+ * excluded day in two different ways again.
+ *
+ * `total` is the fallback for a caller that has the old flat pair and no
+ * breakdown (a snapshot, a stats object built before this field existed). It
+ * keeps the pre-existing single sentence rather than dropping the caption.
+ */
+export type UnpairedNoteKind = "in_progress" | "unmeasured";
+export type UnpairedNote = {
+  kind: UnpairedNoteKind;
+  flagHours: number;
+  days: number;
+};
+
+export function unpairedNotes(
+  by: UnpairedByReason | null | undefined,
+  total: UnpairedTally,
+): UnpairedNote[] {
+  const flat: UnpairedNote[] =
+    total.flagHours > 0
+      ? [{ kind: "unmeasured", flagHours: total.flagHours, days: total.days }]
+      : [];
+  if (!by) return flat;
+
+  const inProgress = by.in_progress;
+  const unmeasured: UnpairedTally = {
+    flagHours: by.day_off.flagHours + by.unscheduled.flagHours + by.no_schedule.flagHours,
+    days: by.day_off.days + by.unscheduled.days + by.no_schedule.days,
+  };
+  const notes: UnpairedNote[] = [];
+  if (inProgress.flagHours > 0) {
+    notes.push({ kind: "in_progress", ...inProgress });
+  }
+  if (unmeasured.flagHours > 0) {
+    notes.push({ kind: "unmeasured", ...unmeasured });
+  }
+  // A breakdown that explains none of the hours it was handed is worse than no
+  // breakdown: the caption would vanish and the excluded hours would go unsaid.
+  return notes.length > 0 ? notes : flat;
+}
+
+/**
+ * The clause that follows "…flagged across N days" in both captions.
+ *
+ * The in-progress wording is WorkCostCard's, deliberately: that card has been
+ * printing "isn't counted yet … that shift is still in progress" off
+ * wage-check's `ongoingDays` all along. Two sentences for one situation is how
+ * this page got into trouble; this is the same sentence.
+ */
+export function unpairedNoteClause(note: UnpairedNote): string {
+  if (note.kind === "in_progress") {
+    return note.days === 1
+      ? "— that shift is still in progress, so there are no hours to divide it by yet. It counts once you clock out."
+      : "— those shifts are still in progress, so there are no hours to divide them by yet. They count once you clock out.";
+  }
+  return "with no clocked hours and no schedule — the app can't tell how long those days were, so they're in neither side of the percentage. Clock them or add them to your schedule to include them.";
+}
 
 // Dashboard walks are a month-ish; snapshot generation spans a whole career.
 // The cap only guards against a malformed range hanging the request.
@@ -221,8 +347,11 @@ type DayPairing =
   | { kind: "counted"; denom: DayDenom }
   /** Completed scheduled workday awaiting a day-off / real-zero decision. */
   | { kind: "unresolved" }
-  /** No denominator at all: today, the future, a day off, or no schedule. */
-  | { kind: "none" };
+  /**
+   * No denominator at all: today, the future, a day off, or no schedule.
+   * `reason` says WHICH — the four used to be indistinguishable downstream.
+   */
+  | { kind: "none"; reason: UnpairedReason };
 
 // ---------------------------------------------------------------------------
 // The one per-day pairing rule. Every surface that divides flag hours by a
@@ -254,7 +383,15 @@ function pairDay(
   if (clocked > 0) {
     return { kind: "counted", denom: { hours: clocked, source: "clocked" } };
   }
-  if (!schedule || date >= today || off.has(date)) return { kind: "none" };
+  // Same three tests, same short-circuit order as before — each one now says
+  // which of them fired. `clocked > 0` already returned above, so reaching the
+  // in-progress test means the day has no clock entry, which is exactly
+  // wage-check's `isOngoing` (see isInProgressDay).
+  if (!schedule) return { kind: "none", reason: "no_schedule" };
+  if (isInProgressDay(date, today, clocked)) {
+    return { kind: "none", reason: "in_progress" };
+  }
+  if (off.has(date)) return { kind: "none", reason: "day_off" };
   const scheduled = scheduledHoursFor(
     schedule.schedules,
     date,
@@ -262,7 +399,9 @@ function pairDay(
   );
   // A valid shift always has positive paid hours (shiftFromHours rejects 0), so
   // `<= 0` and `null` are the same answer: this day has no scheduled length.
-  if (scheduled === null || scheduled <= 0) return { kind: "none" };
+  if (scheduled === null || scheduled <= 0) {
+    return { kind: "none", reason: "unscheduled" };
+  }
   if (flag > 0 || confirmedZero.has(date)) {
     return { kind: "counted", denom: { hours: scheduled, source: "scheduled" } };
   }
@@ -296,6 +435,7 @@ export function aggregateStatsWithSchedule(
   let scheduledDays = 0;
   let unpairedFlagHours = 0;
   let unpairedDays = 0;
+  const unpairedByReason = emptyUnpairedByReason();
   const unresolvedDays: string[] = [];
 
   let d = range.start;
@@ -318,6 +458,13 @@ export function aggregateStatsWithSchedule(
     if (flag > 0) {
       unpairedFlagHours += flag;
       unpairedDays += 1;
+      // Same day, same hours, one extra fact: which of the four "none" cases
+      // this was. The totals above are untouched — the breakdown sums to them.
+      if (paired.kind === "none") {
+        const tally = unpairedByReason[paired.reason];
+        tally.flagHours += flag;
+        tally.days += 1;
+      }
     }
   }
 
@@ -338,6 +485,7 @@ export function aggregateStatsWithSchedule(
     unresolvedDays,
     unpairedFlagHours,
     unpairedDays,
+    unpairedByReason,
   };
 }
 
@@ -426,6 +574,10 @@ export function aggregateStatsAuto(
   // handed a number with no way to tell whether it means anything.
   unpairedFlagHours?: number;
   unpairedDays?: number;
+  // Same reason, one level further: a caller that has to EXPLAIN the excluded
+  // hours (PeriodStats' caption) needs to know which of the four cases they
+  // were, and the schedule branch already worked it out.
+  unpairedByReason?: UnpairedByReason;
 } {
   if (schedule && schedule.schedules.length > 0) {
     return aggregateStatsWithSchedule(entries, clocks, range, schedule, unpaid);

@@ -10,7 +10,14 @@ import {
 } from "@/components/insights/JobTimeSections";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Table, Td, Th } from "@/components/ui/Table";
-import { fmtHours, fmtPct, type DayDenom } from "@/lib/stats";
+import {
+  fmtHours,
+  fmtPct,
+  unpairedNoteClause,
+  unpairedNotes,
+  type DayDenom,
+  type UnpairedNote,
+} from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
 import {
   endOfMonth,
@@ -36,11 +43,14 @@ import {
   bigJobCoverage,
   bigJobPerformance,
   displayedHours,
+  displayedUses,
   formatRatio,
   gainBoard,
   leakBoard,
   opCodePerformance,
+  opCodeOrigin,
   opCodeState,
+  OP_CODE_ORIGIN_LABEL,
   periodTrend,
   ratioOrder,
   ratioTier,
@@ -128,7 +138,9 @@ function sortOpCodes(
   // its comeback hours in the Actual column, and sorting that column by
   // actualTotal (0 for those rows) would order it by numbers nobody can see.
   const value = (r: OpCodePerformance): number | null => {
-    if (col === "uses") return r.uses;
+    // Same rule as the hours below: an unpaid-rework row PRINTS its comeback
+    // count, so the column has to order by that and not by the total.
+    if (col === "uses") return displayedUses(r);
     if (col === "ratio") return ratioOrder(r);
     const shown = displayedHours(r);
     if (shown === null) return null;
@@ -152,6 +164,23 @@ function sortOpCodes(
     if (av === bv) return b.unpaidHours - a.unpaidHours || b.uses - a.uses;
     return sign * (av - bv) || b.uses - a.uses;
   });
+}
+
+/**
+ * "library" / "one-time", the quietest thing that can tell two identically
+ * coded rows apart.
+ *
+ * Nothing on these rows is clickable and no figure is at risk — this is a
+ * readability fix, so it is a small dim tag, not a callout. The distinction
+ * itself comes from lib/insights (the group key already carries it); this only
+ * decides what it looks like here.
+ */
+function OriginTag({ row }: { row: { key: string } }) {
+  return (
+    <span className="ml-1.5 align-middle text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+      {OP_CODE_ORIGIN_LABEL[opCodeOrigin(row)]}
+    </span>
+  );
 }
 
 function SortHead({
@@ -344,7 +373,10 @@ function GainSection({ gains }: { gains: Gain[] }) {
 
 // ---------------------------------------------------------------------------
 
-function TimeGoesSection({
+// Exported for its colocated test only — the section is still rendered by
+// InsightsView alone. Both of the tables inside it print a per-row count and a
+// per-row identity, and both got those wrong in ways only a render test catches.
+export function TimeGoesSection({
   rows,
   sortCol,
   sortDir,
@@ -410,6 +442,12 @@ function TimeGoesSection({
                 <div className="opcode-item-head">
                   <span className="opcode-item-name">
                     <span className="opcode-item-code">{row.code}</span>
+                    {/* `op_codes.code` has no unique constraint and a one-time
+                        line's text is free, so the code alone does not identify
+                        a row. Description was the only thing telling them apart
+                        and it is routinely empty. Read off the group key, which
+                        has always kept them separate. */}
+                    <OriginTag row={row} />
                     {row.description && (
                       <span className="opcode-item-desc">{row.description}</span>
                     )}
@@ -425,7 +463,10 @@ function TimeGoesSection({
                   )}
                 </div>
                 <p className="opcode-item-meta">
-                  {row.uses} {row.uses === 1 ? "use" : "uses"}
+                  {/* The count the hours beside it came from. On an unpaid row
+                      that is the comeback subset, not every line of the code —
+                      see displayedUses. */}
+                  {displayedUses(row)} {displayedUses(row) === 1 ? "use" : "uses"}
                   {shownHours !== null &&
                     ` · ${fmtHours(shownHours.flag)}h flag → ${fmtHours(shownHours.actual)}h actual`}
                 </p>
@@ -456,6 +497,7 @@ function TimeGoesSection({
                 <tr key={row.key}>
                   <Td>
                     <span className="font-medium text-[var(--fg-1)]">{row.code}</span>
+                    <OriginTag row={row} />
                     {row.description && (
                       <span className="block text-xs text-[var(--fg-3)]">
                         {row.description}
@@ -463,7 +505,7 @@ function TimeGoesSection({
                     )}
                   </Td>
                   <Td num dim>
-                    {row.uses}
+                    {displayedUses(row)}
                   </Td>
                   <Td num dim>
                     {shownHours === null ? "—" : `${fmtHours(shownHours.flag)}h`}
@@ -701,8 +743,27 @@ export function TrendSection({
   // something a page gets to do silently, and the fix is one the tech can act
   // on (clock the day, or put it on the schedule).
   const unpaired = points.filter((p) => p.unpairedFlagHours > 0);
-  const unpairedHours = unpaired.reduce((sum, p) => sum + p.unpairedFlagHours, 0);
-  const unpairedDays = unpaired.reduce((sum, p) => sum + p.unpairedDays, 0);
+  // Split by REASON before totalling. The caption below used to be one hardcoded
+  // sentence — byte-for-byte the pay-period one — telling the tech to clock the
+  // day or put it on the schedule, which is the wrong instruction for a shift
+  // that is simply still running. Both surfaces now branch on the same notes and
+  // print the same clause from lib/stats.
+  const notes: (UnpairedNote & { labels: string[] })[] = [];
+  for (const point of unpaired) {
+    for (const note of unpairedNotes(point.unpairedByReason, {
+      flagHours: point.unpairedFlagHours,
+      days: point.unpairedDays,
+    })) {
+      const found = notes.find((n) => n.kind === note.kind);
+      if (found) {
+        found.flagHours += note.flagHours;
+        found.days += note.days;
+        if (!found.labels.includes(point.label)) found.labels.push(point.label);
+      } else {
+        notes.push({ ...note, labels: [point.label] });
+      }
+    }
+  }
 
   const deltaFrom = complete.length >= 2 ? complete[complete.length - 2] : null;
   const deltaTo = complete.length >= 2 ? complete[complete.length - 1] : null;
@@ -785,19 +846,17 @@ export function TrendSection({
             in {deltaFrom!.label}.
           </p>
         )}
-        {unpairedHours > 0 && (
-          <p className="mt-3 text-xs text-[var(--fg-2)]">
+        {notes.map((note) => (
+          <p key={note.kind} className="mt-3 text-xs text-[var(--fg-2)]">
             Not counted above:{" "}
             <span className="font-medium text-[var(--fg-1)]">
-              {fmtHours(unpairedHours)}h
+              {fmtHours(note.flagHours)}h
             </span>{" "}
-            flagged across {unpairedDays} {unpairedDays === 1 ? "day" : "days"}{" "}
-            {unpaired.length === 1 ? `in ${unpaired[0].label}` : "in these periods"}{" "}
-            with no clocked hours and no schedule — the app can&apos;t tell how
-            long those days were, so they&apos;re in neither side of the
-            percentage. Clock them or add them to your schedule to include them.
+            flagged across {note.days} {note.days === 1 ? "day" : "days"}{" "}
+            {note.labels.length === 1 ? `in ${note.labels[0]}` : "in these periods"}{" "}
+            {unpairedNoteClause(note)}
           </p>
-        )}
+        ))}
       </Card>
       {/* The "ignores the window above" half of this caption moved up into the
           All time heading, which now says it once for the whole half of the
@@ -1172,8 +1231,11 @@ export function InsightsView({
   );
 
   const trend = useMemo(
-    () => periodTrend(entries, denomByDay, { splitDay, periodOverrides }),
-    [entries, denomByDay, splitDay, periodOverrides],
+    // `today` is not optional in practice: without it periodTrend cannot tell a
+    // day that is still running from one that was never measurable, and the
+    // caption under the chart goes back to giving one answer for both.
+    () => periodTrend(entries, denomByDay, { splitDay, periodOverrides, today }),
+    [entries, denomByDay, splitDay, periodOverrides, today],
   );
 
   // Deliberately NOT built from `trend`, which carries PAIRED flag hours (its

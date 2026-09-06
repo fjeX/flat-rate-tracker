@@ -7,8 +7,13 @@ import {
   efficiencyTier,
   fmtHours,
   fmtPct,
+  isInProgressDay,
   type ScheduleContext,
 } from "./stats";
+// Read-only here, and deliberately: the in-progress wording this fix reuses is
+// driven by effectiveHourly's `ongoingDays` on WorkCostCard, so the two
+// predicates are pinned against each other rather than trusted to match.
+import { effectiveHourly } from "./wage-check";
 import { emptyWeek, type ScheduleWeek, type WorkSchedule } from "./schedule";
 import type { DailyClock, Entry, UnpaidTime } from "./types";
 
@@ -492,6 +497,107 @@ describe("aggregateStatsWithSchedule", () => {
     const stats = aggregateStatsWithSchedule(entries, [], range, ctx());
     expect(stats.unpairedFlagHours).toBe(0);
     expect(stats.unpairedDays).toBe(0);
+  });
+
+  // ── WHY those hours were not counted ─────────────────────────────────────
+  //
+  // payperiod-notcounted-caption-reason. The counts above were always right.
+  // `pairDay` folds four unrelated situations into one `{kind:"none"}`, so the
+  // two captions that print them had one sentence for all four and told the
+  // tech to clock a day or put it on the schedule — for a shift that was still
+  // running. On three of the five nights this escalated, that was the case.
+
+  it("tags a still-running shift as in progress, not as unschedulable", () => {
+    // 2026-07-10 IS today, and it is a scheduled workday. Nothing clocked yet.
+    const entries = [makeEntry("2026-07-06", 8), makeEntry(today, 6)];
+    const stats = aggregateStatsWithSchedule(entries, [], range, ctx());
+
+    expect(stats.unpairedFlagHours).toBe(6);
+    expect(stats.unpairedByReason.in_progress).toEqual({
+      flagHours: 6,
+      days: 1,
+    });
+    // And emphatically NOT the bucket that prints "add it to your schedule".
+    expect(stats.unpairedByReason.unscheduled.flagHours).toBe(0);
+    expect(stats.unpairedByReason.no_schedule.flagHours).toBe(0);
+    expect(stats.unpairedByReason.day_off.flagHours).toBe(0);
+  });
+
+  it("separates a Saturday nobody scheduled from a day off", () => {
+    // Sat 2026-07-11: no shift in the pattern → unscheduled.
+    // Tue 2026-07-07: a scheduled day the tech marked off → day_off.
+    // "today" is moved past the whole range so neither day can be in progress —
+    // that is a different bucket with a different sentence, asserted above.
+    const entries = [makeEntry("2026-07-11", 5), makeEntry("2026-07-07", 4)];
+    const stats = aggregateStatsWithSchedule(
+      entries,
+      [],
+      range,
+      ctx({
+        today: "2026-07-13",
+        daysOff: [{ startDate: "2026-07-07", endDate: "2026-07-07" }],
+      }),
+    );
+
+    expect(stats.unpairedByReason.unscheduled).toEqual({
+      flagHours: 5,
+      days: 1,
+    });
+    expect(stats.unpairedByReason.day_off).toEqual({ flagHours: 4, days: 1 });
+    expect(stats.unpairedByReason.in_progress.flagHours).toBe(0);
+  });
+
+  it("stops calling today in progress once the day is clocked", () => {
+    // A clocked day is counted, so it is not unpaired at all — the same reason
+    // wage-check's isOngoing excludes a date that appears in clockDays.
+    const entries = [makeEntry(today, 6)];
+    const stats = aggregateStatsWithSchedule(
+      entries,
+      [makeClock(today, 8)],
+      range,
+      ctx(),
+    );
+    expect(stats.unpairedFlagHours).toBe(0);
+    expect(stats.unpairedByReason.in_progress).toEqual({
+      flagHours: 0,
+      days: 0,
+    });
+  });
+
+  it("splits the same totals it always reported — nothing is added or lost", () => {
+    const entries = [
+      makeEntry("2026-07-06", 8), // counted, scheduled
+      makeEntry(today, 6), // in progress
+      makeEntry("2026-07-11", 5), // unscheduled Saturday
+    ];
+    const stats = aggregateStatsWithSchedule(entries, [], range, ctx());
+    const buckets = Object.values(stats.unpairedByReason);
+    expect(buckets.reduce((s, b) => s + b.flagHours, 0)).toBeCloseTo(
+      stats.unpairedFlagHours,
+      10,
+    );
+    expect(buckets.reduce((s, b) => s + b.days, 0)).toBe(stats.unpairedDays);
+  });
+
+  it("agrees with wage-check about which day is still in progress", () => {
+    // THE POINT OF THIS TEST. The correct wording for an in-progress day
+    // already existed on WorkCostCard, driven by effectiveHourly's ongoingDays
+    // — a SECOND, independently computed field. This caption is only allowed to
+    // reuse that wording if it describes the same days, so the two predicates
+    // are compared directly rather than by eye.
+    const entries = [makeEntry("2026-07-06", 8), makeEntry(today, 6)];
+    const schedule = ctx();
+    const stats = aggregateStatsWithSchedule(entries, [], range, schedule);
+    const wage = effectiveHourly(entries, [], [], {}, range, schedule);
+
+    expect(wage.ongoingDays).toEqual([today]);
+    expect(stats.unpairedByReason.in_progress.days).toBe(
+      wage.ongoingDays.length,
+    );
+    // And the predicate itself, for the same inputs.
+    expect(isInProgressDay(today, today, 0)).toBe(true);
+    expect(isInProgressDay(today, today, 8)).toBe(false);
+    expect(isInProgressDay("2026-07-06", today, 0)).toBe(false);
   });
 
   // ── the two derivations must not drift ───────────────────────────────────

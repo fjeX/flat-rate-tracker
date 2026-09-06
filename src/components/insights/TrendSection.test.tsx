@@ -25,6 +25,7 @@ import { cleanup, render } from "@testing-library/react";
 import React from "react";
 import { TrendSection } from "./InsightsView";
 import { trendEfficiencyDisplay, type PeriodTrendPoint } from "@/lib/insights";
+import { emptyUnpairedByReason } from "@/lib/stats";
 
 afterEach(cleanup);
 
@@ -43,6 +44,7 @@ function point(p: Partial<PeriodTrendPoint> & { key: string }): PeriodTrendPoint
     efficiency: null,
     unpairedFlagHours: 0,
     unpairedDays: 0,
+    unpairedByReason: emptyUnpairedByReason(),
     ...p,
   };
 }
@@ -253,5 +255,98 @@ describe("TrendSection — the change caption", () => {
     // sentence — worse, because a sentence sounds deliberate.
     expect(text).not.toMatch(/came in at/);
     expect(text).not.toMatch(/down from/);
+  });
+});
+
+// payperiod-notcounted-caption-reason, /insights half.
+//
+// The caption under this chart was a byte-for-byte duplicate of the pay-period
+// one, driven by the same undifferentiated pair — so fixing one file would have
+// left the other still telling the tech to schedule a shift that had not
+// finished. Both surfaces now branch on the same notes and print the same
+// clause from lib/stats, and the in-progress wording is WorkCostCard's.
+describe("TrendSection — why those hours were not counted", () => {
+  const STILL_RUNNING = /still in progress/;
+  const GO_FIX_IT = /Clock them or add them to your schedule/;
+
+  function withReason(
+    kind: "in_progress" | "no_schedule",
+    flagHours: number,
+    days: number,
+  ) {
+    const empty = { flagHours: 0, days: 0 };
+    return point({
+      key: "2026-08-B",
+      label: "Aug 16–31",
+      start: "2026-08-16",
+      end: "2026-08-31",
+      flagHours: 0,
+      denomHours: 8,
+      efficiency: 0,
+      unpairedFlagHours: flagHours,
+      unpairedDays: days,
+      unpairedByReason: {
+        in_progress: kind === "in_progress" ? { flagHours, days } : { ...empty },
+        day_off: { ...empty },
+        unscheduled: { ...empty },
+        no_schedule: kind === "no_schedule" ? { flagHours, days } : { ...empty },
+      },
+    });
+  }
+
+  it("says the shift is still in progress, not that it needs scheduling", () => {
+    render(
+      <TrendSection
+        points={[JUL_A, withReason("in_progress", 6, 1)]}
+        today={TODAY}
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/Not counted above/);
+    expect(text).toMatch(STILL_RUNNING);
+    expect(text).not.toMatch(GO_FIX_IT);
+  });
+
+  it("still says to clock it when the day really is unmeasurable", () => {
+    render(
+      <TrendSection
+        points={[JUL_A, withReason("no_schedule", 6, 1)]}
+        today={TODAY}
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(GO_FIX_IT);
+    expect(text).not.toMatch(STILL_RUNNING);
+  });
+
+  it("explains both, with each sentence carrying its own hours", () => {
+    render(
+      <TrendSection
+        points={[
+          JUL_A,
+          withReason("no_schedule", 5, 1),
+          { ...withReason("in_progress", 6, 1), key: "2026-09-A", label: "Sep 1–15" },
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(STILL_RUNNING);
+    expect(text).toMatch(GO_FIX_IT);
+    expect(text).toMatch(/6\.0h/);
+    expect(text).toMatch(/5\.0h/);
+  });
+
+  it("keeps the original sentence for a point with no breakdown", () => {
+    // AUG_B_HOLLOW comes from the shared factory with an empty breakdown, the
+    // way a caller that never passed `today` builds one.
+    render(<TrendSection points={[JUL_A, AUG_B_HOLLOW]} today={TODAY} />);
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/Not counted above/);
+    expect(text).toMatch(GO_FIX_IT);
   });
 });

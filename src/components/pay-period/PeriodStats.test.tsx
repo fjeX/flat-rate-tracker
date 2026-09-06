@@ -141,6 +141,106 @@ describe("PeriodStats — the efficiency tile", () => {
   });
 });
 
+// payperiod-notcounted-caption-reason.
+//
+// The caption under the grid printed ONE sentence for all four reasons a day
+// can go uncounted: "with no clocked hours and no schedule … Clock them or add
+// them to your schedule to include them." On three of the five nights this
+// escalated, the real reason was a shift still in progress — so the line told
+// the tech to fix a day that was not broken. The numbers were never wrong; the
+// explanation was.
+//
+// The in-progress wording is not new: WorkCostCard has printed "that shift is
+// still in progress" off wage-check's ongoingDays the whole time, one card
+// below. Two sentences for one situation is how this page got here.
+describe("PeriodStats — why those hours were not counted", () => {
+  const IN_PROGRESS = {
+    ...BASE,
+    roCount: 1,
+    flagHours: 6,
+    efficiency: null,
+    denomSource: null,
+    denomHours: 0,
+    unpairedFlagHours: 6,
+    unpairedDays: 1,
+    unpairedByReason: {
+      in_progress: { flagHours: 6, days: 1 },
+      day_off: { flagHours: 0, days: 0 },
+      unscheduled: { flagHours: 0, days: 0 },
+      no_schedule: { flagHours: 0, days: 0 },
+    },
+  };
+
+  const UNSCHEDULED = {
+    ...IN_PROGRESS,
+    unpairedByReason: {
+      in_progress: { flagHours: 0, days: 0 },
+      day_off: { flagHours: 0, days: 0 },
+      unscheduled: { flagHours: 6, days: 1 },
+      no_schedule: { flagHours: 0, days: 0 },
+    },
+  };
+
+  // ONE locator per sentence, reused by the positive and negative assertions on
+  // both sides, so a broken locator fails loudly instead of passing for free.
+  const STILL_RUNNING = /still in progress/;
+  const GO_FIX_IT = /Clock them or add them to your schedule/;
+
+  it("says the shift is still in progress, not that it needs scheduling", () => {
+    render(<PeriodStats stats={IN_PROGRESS} hideFlagHours />);
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/Not counted above/);
+    expect(text).toMatch(STILL_RUNNING);
+    // THE BUG: the instruction that sent the tech to fix nothing.
+    expect(text).not.toMatch(GO_FIX_IT);
+  });
+
+  it("still says to clock it when the day really is unmeasurable", () => {
+    render(<PeriodStats stats={UNSCHEDULED} hideFlagHours />);
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(GO_FIX_IT);
+    expect(text).not.toMatch(STILL_RUNNING);
+  });
+
+  it("explains both when a period holds both kinds of day", () => {
+    render(
+      <PeriodStats
+        stats={{
+          ...IN_PROGRESS,
+          unpairedFlagHours: 11,
+          unpairedDays: 2,
+          unpairedByReason: {
+            in_progress: { flagHours: 6, days: 1 },
+            day_off: { flagHours: 0, days: 0 },
+            unscheduled: { flagHours: 5, days: 1 },
+            no_schedule: { flagHours: 0, days: 0 },
+          },
+        }}
+        hideFlagHours
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(STILL_RUNNING);
+    expect(text).toMatch(GO_FIX_IT);
+    // Each sentence carries its OWN hours, not the period total.
+    expect(text).toMatch(/6\.0h/);
+    expect(text).toMatch(/5\.0h/);
+  });
+
+  it("keeps the original sentence for a stats blob with no breakdown", () => {
+    // Snapshots and the no-schedule path carry the flat pair only. Dropping the
+    // caption there would hide the excluded hours entirely.
+    render(<PeriodStats stats={HOLLOWED} hideFlagHours />);
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/Not counted above/);
+    expect(text).toMatch(GO_FIX_IT);
+  });
+});
+
 describe("the pay-period header band — hero and stats together", () => {
   // Exactly how PayPeriodView composes them: siblings inside one `.pp-band`.
   function Band({ stats }: { stats: typeof HOLLOWED }) {

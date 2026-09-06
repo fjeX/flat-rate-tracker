@@ -19,8 +19,8 @@ import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { InfoBubble } from "@/components/ui/InfoBubble";
 import { fmtHours } from "@/lib/stats";
-import { fmtHours2, HOURS_DISPLAY_STEP } from "@/lib/format";
-import { fmtMoney } from "@/lib/earnings";
+import { fmtHours2 } from "@/lib/format";
+import { fmtMoney, fmtMoney2 } from "@/lib/earnings";
 import { formatDateShort } from "@/lib/periods";
 import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
 import {
@@ -33,6 +33,16 @@ import type { UnpaidSummary } from "@/lib/unpaid-summary";
 
 // Two-decimal currency for an hourly figure ("$27.40/hr") — whole dollars are
 // too coarse for a rate, unlike the period totals fmtMoney handles elsewhere.
+//
+// Deliberately NOT collapsed onto lib/format's fmtMoney2, even though the two
+// produce the same string for every realistic input. fmtMoney2's contract is
+// "shown at the resolution the value is STORED at, so a column of rows adds up
+// to its printed total". An effective hourly rate is a quotient, has no stored
+// 2dp resolution to snap to, and is never summed with anything — borrowing that
+// function here would import a promise this figure cannot make and would make
+// the next reader think this rate is an audit figure. Two decimals is a display
+// choice here and a data-fidelity guarantee there; same output, different
+// reason.
 function fmtRate(n: number): string {
   return n.toLocaleString("en-US", {
     style: "currency",
@@ -114,7 +124,22 @@ export function WorkCostCard({
   // number at every resolution this card prints. The VALUE is deliberately
   // left alone — fmtHours still says "<0.1" for a real sub-resolution figure,
   // and a true zero still says "0.0".
-  const aheadOnHours = gap < -HOURS_DISPLAY_STEP / 2;
+  //
+  // The gate ASKS THE FORMATTER rather than re-deriving the boundary from
+  // HOURS_DISPLAY_STEP, because the two answered differently and the tile said
+  // both at once. fmtHours snaps to stored precision (2dp) before rounding, so
+  // a gap of 40.05 − 40 — which is 0.04999999999999716 in floating point — is a
+  // genuine 0.05 to the formatter and prints "0.1", while `Math.abs(gap) <
+  // HOURS_DISPLAY_STEP / 2` on the raw float still called it sub-resolution.
+  // The tile rendered "Gap −0.1h": the label claiming the figure is too small
+  // to show, next to a figure showing. There is only one honest definition of
+  // "too small to print" and it is whether the printed string IS the
+  // sub-resolution one, so that is what this reads. (Deriving it from
+  // fmtHours' output rather than duplicating the snap also keeps the rule in
+  // one file — lib/format.ts — instead of two.)
+  const gapMagnitude = fmtHours(Math.abs(gap));
+  const gapIsSubResolution = gapMagnitude.includes("<");
+  const aheadOnHours = gap < 0 && !gapIsSubResolution;
 
   // Whether the gap is measured against a COMPLETE set of hours at the shop.
   //
@@ -176,7 +201,7 @@ export function WorkCostCard({
   // (memory/reference_frt_jsx_whitespace.md). One string is also one thing for
   // a test to read back out of the DOM.
   const aheadSentence =
-    `You flagged ${fmtHours(Math.abs(gap))}h ` +
+    `You flagged ${gapMagnitude}h ` +
     (shopTimeIsMeasured
       ? "more than you were at the shop"
       : "more than your scheduled hours") +
@@ -243,8 +268,10 @@ export function WorkCostCard({
         <p>
           Clocked hours if you logged them. If you did not, FRT falls back to
           your normal shift from the Schedule page, because a day with flagged
-          work on it was obviously a day you worked. You can correct any single
-          day with a shift override on the dashboard or schedule page.
+          work on it was obviously a day you worked. A day you marked as a real
+          zero counts its whole shift too — you were there, it just flagged
+          nothing, and that is the time this card is about. You can correct any
+          single day with a shift override on the dashboard or schedule page.
         </p>
         <h3>The gap, and what is in it</h3>
         <p>
@@ -307,10 +334,22 @@ export function WorkCostCard({
                   /hr
                 </span>
               </div>
+              {/* The arithmetic that produces the headline, so it has to be
+                  the arithmetic the headline actually used: countedPay, not
+                  totalPay. totalPay is the FULL period and includes an
+                  in-progress day; denomHours has no hours for that day yet, so
+                  printing one over the other divided a full-period numerator
+                  by a counted-days-only denominator and did not come out to
+                  the rate directly above it (escalation
+                  `costcard-total-pay-mismatch`). The two are equal whenever
+                  nothing is in progress, which is why it read fine most of the
+                  time and wrong on exactly the days a tech is watching it. */}
               <p className="mt-1 text-xs text-[var(--fg-3)]">
-                Total pay{" "}
-                {result.totalPay !== null ? fmtMoney(result.totalPay) : "—"} ÷{" "}
-                {fmtHours(result.denomHours)}{" "}
+                {result.ongoingDays.length > 0
+                  ? "Pay on the days counted "
+                  : "Total pay "}
+                {result.countedPay !== null ? fmtMoney(result.countedPay) : "—"}{" "}
+                ÷ {fmtHours(result.denomHours)}{" "}
                 {result.denomSource === "scheduled"
                   ? "scheduled hours"
                   : result.denomSource === "mixed"
@@ -323,9 +362,14 @@ export function WorkCostCard({
                   measurement, and the tech can override any day. */}
               {result.scheduledDays.length > 0 && (
                 <p className="mt-1 text-xs text-[var(--fg-3)]">
+                  {/* Deliberately no longer says "had flagged work": since
+                      confirmed real-zero days are filled from the schedule too
+                      (they have no RO on them by definition), that clause
+                      would be false for exactly the days that flagged
+                      nothing. */}
                   {result.scheduledDays.length === 1
-                    ? "1 day had flagged work but no clock entry"
-                    : `${result.scheduledDays.length} days had flagged work but no clock entry`}
+                    ? "1 day had no clock entry"
+                    : `${result.scheduledDays.length} days had no clock entry`}
                   , so your normal scheduled shift was used for{" "}
                   {result.scheduledDays.length === 1 ? "it" : "them"}. Set a
                   shift override on any day that wasn&apos;t normal.
@@ -408,8 +452,21 @@ export function WorkCostCard({
           )}
 
           {/* Hours at the shop vs flagged — always available, hours-only, no
-              rates needed. Uses the resolved denominator so a scheduled day
-              counts, matching how efficiency has always been computed. */}
+              rates needed. Uses the resolved denominator, so a day filled from
+              the schedule counts.
+
+              That denominator now agrees with the efficiency tile's, because
+              effectiveHourly fills the same day set pairDay counts —
+              `flag > 0 || confirmedZero.has(date)`. It did NOT when this
+              comment first claimed it: the fill iterated days carrying an RO
+              only, so a confirmed real-zero day (a full shift that flagged
+              nothing, and by definition has no RO) was in the 88h on the
+              efficiency tile and missing from the hours here. The sentence was
+              a true-sounding claim about behaviour the code did not have, which
+              is worse than no comment (escalation
+              `payperiod-scheduled-hours-two-figures`). It is true as written
+              now; if the two fills ever diverge again, this is a lie again —
+              the shared rule is pairDay in lib/stats.ts. */}
           <div className="grid grid-cols-3 gap-2">
             <Cell
               label={
@@ -447,7 +504,7 @@ export function WorkCostCard({
               // that band, epsilon-sized float noise included: "−<0.1" says
               // negligible AND which side of even it fell on, which is strictly
               // more than "<0.1" says.
-              value={`${aheadOnHours || gap >= 0 ? "" : "−"}${fmtHours(Math.abs(gap))}h`}
+              value={`${aheadOnHours || gap >= 0 ? "" : "−"}${gapMagnitude}h`}
             />
           </div>
 
@@ -570,7 +627,18 @@ export function WorkCostCard({
               individually summed to 2.8h under a 2.7h total (2026-08-13) — so
               everything inside here is shown at the resolution hours are
               stored at. The card headline above stays at 1dp, where nothing is
-              being itemised. */}
+              being itemised.
+
+              The DOLLAR column had the identical defect and kept it eight
+              months longer, because it was the hours that got noticed: rows at
+              whole dollars round individually, the total rounds separately, and
+              four rework rows of $44.80/$41.60/$44.80/$35.20 print 45/42/45/35
+              — $167 against a total printing $166. Every figure individually
+              correct, the page still contradicting itself. So the money in here
+              is fmtMoney2 (escalation `disputepack-money-column-rounding`,
+              same fix, other surface). fmtMoney itself is unchanged and still
+              right everywhere a dollar figure is glanced at rather than added
+              up. */}
           {hasUnpaid && (
             <div>
               <button
@@ -622,7 +690,7 @@ export function WorkCostCard({
                           {l.dollars !== null && (
                             <span className="text-[var(--fg-3)]">
                               {" "}
-                              · {fmtMoney(l.dollars)}
+                              · {fmtMoney2(l.dollars)}
                             </span>
                           )}
                         </span>
@@ -639,7 +707,7 @@ export function WorkCostCard({
                       {unpaid.totalDollars !== null && (
                         <span className="text-[var(--fg-2)]">
                           {" "}
-                          · {fmtMoney(unpaid.totalDollars)}
+                          · {fmtMoney2(unpaid.totalDollars)}
                         </span>
                       )}
                     </span>

@@ -554,9 +554,10 @@ export function ReconciliationCard({
           <Switch
             checked={showAll}
             onChange={setShowAll}
-            label={
-              showAll ? "Hide reconciled lines" : "Show reconciled lines too"
-            }
+            // Names the thing, not the action: role="switch" + aria-checked
+            // already carry on/off, so a state-dependent name announces
+            // backwards ("Hide reconciled lines" while checked).
+            label="Show all lines"
           />
         </div>
       )}

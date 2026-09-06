@@ -536,6 +536,42 @@ describe("periodTrend", () => {
     expect(points[0].unpairedDays).toBe(2);
   });
 
+  // payperiod-notcounted-caption-reason, /insights half. The caption under the
+  // chart was a byte-for-byte copy of the pay-period one and read off the same
+  // undifferentiated pair, so it told the tech to schedule a day that had not
+  // finished yet.
+  it("separates hours on a running shift from hours it can never measure", () => {
+    const points = periodTrend(
+      [
+        entry([line({ flagHours: 6 })], { id: "sat", date: "2026-07-04" }),
+        entry([line({ flagHours: 4 })], { id: "now", date: "2026-07-08" }),
+      ],
+      denom({}),
+      { splitDay: 15, today: "2026-07-08" },
+    );
+    expect(points[0].unpairedFlagHours).toBe(10);
+    expect(points[0].unpairedByReason.in_progress).toEqual({
+      flagHours: 4,
+      days: 1,
+    });
+    expect(points[0].unpairedByReason.no_schedule).toEqual({
+      flagHours: 6,
+      days: 1,
+    });
+  });
+
+  it("calls nothing in progress when it was not told what day it is", () => {
+    // The pre-existing behaviour, kept for every caller that has no `today`:
+    // everything reports as unmeasurable, which is what the old caption said.
+    const points = periodTrend(
+      [entry([line({ flagHours: 4 })], { id: "now", date: "2026-07-08" })],
+      denom({}),
+      { splitDay: 15 },
+    );
+    expect(points[0].unpairedByReason.in_progress.flagHours).toBe(0);
+    expect(points[0].unpairedByReason.no_schedule.flagHours).toBe(4);
+  });
+
   // The regression that started this: same entries, same clocks, two surfaces.
   it("agrees with aggregateStatsWithSchedule on a period with weekend work", () => {
     const entries = [

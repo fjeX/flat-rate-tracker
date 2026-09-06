@@ -32,7 +32,7 @@
 // card chooses to print over that number, so the rendered card is the only
 // thing that can fail on it.
 import { describe, it, expect, afterEach } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { WorkCostCard } from "./WorkCostCard";
 import type { EffectiveHourly } from "@/lib/wage-check";
@@ -106,6 +106,12 @@ function result(over: Partial<EffectiveHourly> = {}): EffectiveHourly {
     flagPay: null,
     bonusTotal: 0,
     totalPay: null,
+    // Defaults to null rather than mirroring totalPay ON PURPOSE. countedPay is
+    // the numerator the rate is actually made of; a test that wants the card to
+    // print a division has to say what that numerator is, which is the step the
+    // ongoing-day tests below used to skip (they set totalPay = hourly x
+    // denomHours and so made the wrong field look right).
+    countedPay: null,
     flagHours: 0,
     countedFlagHours: 0,
     clockedHours: 0,
@@ -561,8 +567,20 @@ describe("WorkCostCard — a sub-resolution gap keeps its direction", () => {
     expect(under).not.toBe(over);
   });
 
-  it("keeps the sign right at the epsilon boundary", () => {
-    expect(gapTile(tiny(40.05))).toBe("Gap−<0.1h");
+  // EXACTLY half a display step. This expectation changed with the stored-
+  // precision snap in lib/format (fmtHours now sees 40.05 − 40 as a genuine
+  // 0.05 rather than 0.04999999999999716), and the card's epsilon gate was
+  // moved onto the formatter's answer to match — see the comment on
+  // `gapIsSubResolution`.
+  //
+  // "Gap −<0.1h" is the band's wording for a figure too small to print. 0.05
+  // prints: it rounds to 0.1. Keeping the old expectation would have left the
+  // label saying "too small to show" beside a number showing ("Gap −0.1h"),
+  // which is the one reading that is incoherent rather than merely arguable.
+  // This is also continuous with the 40.06 pin below — both sides of the
+  // boundary now say the same thing.
+  it("flips to 'Ahead' at exactly half a display step, where the value starts printing", () => {
+    expect(gapTile(tiny(40.05))).toBe("Ahead0.1h");
   });
 
   it("flips to 'Ahead' once the gap is big enough to print", () => {
@@ -571,5 +589,165 @@ describe("WorkCostCard — a sub-resolution gap keeps its direction", () => {
     // from being applied one step too far (a signed "Ahead−0.1h" would say the
     // direction twice, once in each half of the same tile).
     expect(gapTile(tiny(40.06))).toBe("Ahead0.1h");
+  });
+});
+
+// ── The division under the headline ──────────────────────────────────────────
+//
+// Escalation `costcard-total-pay-mismatch`. The sentence beneath the rate is
+// presented as the arithmetic that produced it, so it has to BE that
+// arithmetic. It printed result.totalPay — the full period, in-progress day
+// included — over denomHours, which has no hours for that day. The quotient on
+// screen was not the number directly above it.
+//
+// The two ongoing-day tests further up mock totalPay = hourly × denomHours,
+// which is exactly why the suite never caught this: they made the buggy field
+// coincidentally correct. These deliberately do not.
+describe("WorkCostCard — the arithmetic under the headline", () => {
+  const withOngoing = () =>
+    renderCard(
+      result({
+        status: "ok",
+        hourly: 30,
+        // Fri–Mon counted, Tue still running. Tuesday's flagged work and its
+        // spiff are in the period totals and OUT of the rate.
+        flagPay: 1400,
+        totalPay: 1500,
+        countedPay: 1200,
+        flagHours: 55,
+        countedFlagHours: 44,
+        clockedHours: 40,
+        denomHours: 40,
+        denomSource: "clocked",
+        workDays: ["2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20"],
+        clockDays: ["2026-08-17", "2026-08-18", "2026-08-19"],
+        ongoingDays: ["2026-08-20"],
+      }),
+    );
+
+  it("divides the pay the rate was actually computed from, not the period total", () => {
+    const text = withOngoing();
+    expect(text).toContain("$1,200 ÷ 40.0 clocked hours");
+    // The full-period figure must not appear as the numerator of that sentence.
+    expect(text).not.toContain("$1,500 ÷");
+  });
+
+  it("prints a division that reproduces the headline rate", () => {
+    const text = withOngoing();
+    // Pull both sides back out of the DOM and do the division the reader does.
+    const m = text.match(/\$([\d,]+) ÷ ([\d.]+) /);
+    expect(m).not.toBeNull();
+    const numerator = Number(m![1].replace(/,/g, ""));
+    const denominator = Number(m![2]);
+    expect(numerator / denominator).toBeCloseTo(30, 2);
+    // …and 30 is what the headline says.
+    expect(text).toContain("$30.00");
+  });
+
+  it("says whose pay it is when a shift is still running", () => {
+    expect(withOngoing()).toContain("Pay on the days counted $1,200");
+  });
+
+  it("still calls it the period total when nothing is in progress", () => {
+    const text = renderCard(
+      result({
+        status: "ok",
+        hourly: 30,
+        flagPay: 1160,
+        totalPay: 1200,
+        countedPay: 1200,
+        flagHours: 44,
+        countedFlagHours: 44,
+        clockedHours: 40,
+        denomHours: 40,
+        denomSource: "clocked",
+        workDays: ["2026-08-17"],
+        clockDays: ["2026-08-17"],
+      }),
+    );
+    expect(text).toContain("Total pay $1,200 ÷ 40.0 clocked hours");
+  });
+});
+
+// ── The unpaid audit card's money column ─────────────────────────────────────
+//
+// Same defect the dispute pack was just fixed for
+// (`disputepack-money-column-rounding`), same card that already learned it for
+// HOURS: this drill-down itemises every row and then totals them, so a reader
+// adds it up. At whole dollars the rows round individually, the total rounds
+// separately, and the page contradicts itself while every figure in it is
+// individually correct.
+describe("WorkCostCard — every unpaid record, money column", () => {
+  const priced = (hours: number, dollars: number, i: number) => ({
+    source: "ledger" as const,
+    date: "2026-07-14",
+    kind: "comeback_own" as const,
+    hours,
+    roNumber: `100${i}`,
+    entryId: null,
+    code: null,
+    description: "rework",
+    dollars,
+  });
+
+  // 1.40/1.30/1.40/1.10h at $32 — the dispute pack's own case. Whole dollars
+  // print 45/42/45/35 = $167 under a total of $166.
+  const HOURS = [1.4, 1.3, 1.4, 1.1];
+  const RATE = 32;
+  const DOLLARS = HOURS.map((h) => h * RATE);
+  const TOTAL = DOLLARS.reduce((s, d) => s + d, 0);
+
+  const summary: UnpaidSummary = {
+    ...NO_UNPAID,
+    lines: HOURS.map((h, i) => priced(h, DOLLARS[i], i)),
+    comebackHours: HOURS.reduce((s, h) => s + h, 0),
+    totalHours: HOURS.reduce((s, h) => s + h, 0),
+    byKind: {
+      ...NO_UNPAID.byKind,
+      comeback_own: HOURS.reduce((s, h) => s + h, 0),
+    },
+    totalDollars: TOTAL,
+    unpricedHours: 0,
+    hasRates: true,
+  };
+
+  // The drill-down is a nested disclosure — open it before reading the rows.
+  function openRecords(unpaid: UnpaidSummary): string {
+    const { container, getByText } = render(
+      <WorkCostCard
+        result={result({ status: "ok", hourly: 30, denomHours: 40 })}
+        referenceRate={null}
+        unpaid={unpaid}
+        defaultOpen
+      />,
+    );
+    fireEvent.click(getByText("Every unpaid record"));
+    return container.textContent ?? "";
+  }
+
+  it("prints every row to the cent so the column adds up to its own total", () => {
+    const text = openRecords(summary);
+    for (const d of DOLLARS) {
+      expect(text).toContain(`$${d.toFixed(2)}`);
+    }
+    expect(text).toContain(`$${TOTAL.toFixed(2)}`);
+    // The property, not just the fixture: what a reader sums equals what the
+    // total says. Both sides are parsed back out of the rendered DOM.
+    // Scoped to the drill-down: the headline rate above it is a dollar figure
+    // too, and sweeping it into the column would make this assertion pass or
+    // fail for the wrong reason.
+    const drill = text.slice(text.indexOf("Every unpaid record"));
+    const split = drill.indexOf("Total unpaid");
+    expect(split).toBeGreaterThan(0);
+    const money = (t: string) =>
+      [...t.matchAll(/\$([\d,]+\.\d{2})/g)].map((m) =>
+        Number(m[1].replace(/,/g, "")),
+      );
+    const rows = money(drill.slice(0, split));
+    const total = money(drill.slice(split))[0];
+    expect(rows).toHaveLength(DOLLARS.length);
+    expect(rows.reduce((s, d) => s + d, 0)).toBeCloseTo(total, 2);
+    // The whole-dollar rendering that could not reconcile is gone.
+    expect(drill).not.toMatch(/\$167(?!\.)/);
   });
 });

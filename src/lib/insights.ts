@@ -15,7 +15,13 @@
 // to "how efficient was I", which is exactly how the last round of drift
 // started: a weekday with one unclocked heavy day would read 300%.
 import { HEAVY_FLAG_HOURS } from "./mix";
-import { computeEfficiency, type DayDenom } from "./stats";
+import {
+  computeEfficiency,
+  emptyUnpairedByReason,
+  isInProgressDay,
+  type DayDenom,
+  type UnpairedByReason,
+} from "./stats";
 import {
   efficiencyDisplay,
   type EfficiencyDisplay,
@@ -122,6 +128,55 @@ export function displayedHours(
       return null;
   }
 }
+
+/**
+ * The USE COUNT a row puts on the page — state-gated exactly like
+ * `displayedHours`, and for the same reason.
+ *
+ * `uses` counts every line of the code, timed or not. On an `unpaid` row the
+ * hours beside it are drawn from the comeback subset ONLY, so printing the full
+ * count glued a total to a subset: "8 uses · 0.0h flag → 6.2h actual" under an
+ * "unpaid rework" pill reads as eight alignments that were all rework, when two
+ * of the eight were. `unpaidUses` is the count those hours actually came from —
+ * it is already what the pill's own tooltip quotes.
+ *
+ * A measured or untimed row is unchanged: its hours describe every line, so its
+ * count does too.
+ */
+export function displayedUses(row: OpCodePerformance): number {
+  switch (opCodeState(row)) {
+    case "unpaid":
+      return row.unpaidUses;
+    case "measured":
+    case "untimed":
+      return row.uses;
+  }
+}
+
+/**
+ * Which kind of thing a row is: a code from the tech's library, or a one-time
+ * line typed onto a single ticket.
+ *
+ * `op_codes.code` has no unique constraint, and a custom line's text is free —
+ * so a library "ALIGN" and a one-time "ALIGN" are two different rows that
+ * render identically. The grouping layer never confused them (`groupKey` keys
+ * them `lib:<id>` and `custom:<CODE>`, and they never merge); only the screen
+ * did, and the one disambiguator on screen — `description` — is optional and
+ * commonly blank. This reads the distinction straight off the key that already
+ * carries it, so there is no new data to plumb and nothing to keep in sync.
+ */
+export type OpCodeOrigin = "library" | "custom";
+
+export function opCodeOrigin(row: { key: string }): OpCodeOrigin {
+  return row.key.startsWith("lib:") ? "library" : "custom";
+}
+
+/** The tag text for each origin. Kept beside the predicate so the three tables
+ *  that print it cannot word it three ways. */
+export const OP_CODE_ORIGIN_LABEL: Record<OpCodeOrigin, string> = {
+  library: "library",
+  custom: "one-time",
+};
 
 /**
  * Where a row sits when the table is ordered by "actual vs flag", worst first.
@@ -718,6 +773,21 @@ export type PeriodTrendPoint = {
   // page that silently subtracts it is a page that hides work.
   unpairedFlagHours: number;
   unpairedDays: number;
+  /**
+   * The same hours and days, split by WHY the day had no length — so the
+   * caption under the chart can tell "you never clocked that Saturday" from
+   * "that shift is still running", which are opposite instructions.
+   *
+   * Only two of the four buckets can ever be filled here, and that is not a
+   * shortcut: this function is handed the finished denominator map, not the
+   * schedule, so the one distinction it can make honestly is the in-progress
+   * one — a day is absent from `denomByDay` only if it had no clock entry
+   * (clocked hours always produce a denominator), so `date >= today` and absent
+   * is exactly stats' `isInProgressDay`. Everything else lands in
+   * `no_schedule`, which prints the same "clock it or schedule it" sentence the
+   * whole caption used to print unconditionally.
+   */
+  unpairedByReason: UnpairedByReason;
 };
 
 /**
@@ -768,9 +838,16 @@ export function periodTrend(
     splitDay: number;
     periodOverrides?: Record<string, PeriodOverride>;
     limit?: number;
+    /**
+     * Today in the tech's timezone. Optional ONLY so existing callers and
+     * fixtures keep compiling: without it no day can be recognised as still
+     * running and every unpaired hour is reported as unmeasurable, which is the
+     * behaviour this function had before. Pass it.
+     */
+    today?: string;
   },
 ): PeriodTrendPoint[] {
-  const { splitDay, periodOverrides = {}, limit = 6 } = opts;
+  const { splitDay, periodOverrides = {}, limit = 6, today } = opts;
   const byKey = new Map<string, PeriodTrendPoint>();
 
   const touch = (date: string): PeriodTrendPoint => {
@@ -787,6 +864,7 @@ export function periodTrend(
         efficiency: null,
         unpairedFlagHours: 0,
         unpairedDays: 0,
+        unpairedByReason: emptyUnpairedByReason(),
       };
       byKey.set(range.key, point);
     }
@@ -818,9 +896,19 @@ export function periodTrend(
       continue;
     }
     point.unpairedFlagHours += entry.flagHours;
+    // Absent from denomByDay means the day had no clock entry — a clocked day
+    // always yields a denominator — so `date >= today` here is stats'
+    // isInProgressDay with clocked hours of zero. Same predicate, same answer
+    // as the pay-period caption and WorkCostCard's "still in progress" note.
+    const reason: keyof UnpairedByReason =
+      today !== undefined && isInProgressDay(entry.date, today, 0)
+        ? "in_progress"
+        : "no_schedule";
+    point.unpairedByReason[reason].flagHours += entry.flagHours;
     if (!unpairedDates.has(entry.date)) {
       unpairedDates.add(entry.date);
       point.unpairedDays += 1;
+      point.unpairedByReason[reason].days += 1;
     }
   }
   for (const [date, denom] of Object.entries(denomByDay)) {

@@ -15,12 +15,36 @@ import { Table, Td, Th } from "@/components/ui/Table";
 import { fmtHours } from "@/lib/format";
 import {
   formatRatio,
+  opCodeOrigin,
+  OP_CODE_ORIGIN_LABEL,
   ratioTier,
   type BigJobCoverage,
   type BigJobRow,
 } from "@/lib/insights";
 import { HEAVY_FLAG_HOURS } from "@/lib/mix";
 import type { Inference } from "@/lib/time-inference";
+
+/**
+ * "library" / "one-time" — the only reliable way to tell two rows apart when
+ * they carry the same code text.
+ *
+ * `op_codes.code` has no unique constraint and a one-time line's code is free
+ * text, so a library ALIGN and a typed ALIGN print identically here. The
+ * grouping never merged them; the table just could not show which was which,
+ * and the description that used to be the hint is optional and often blank.
+ * Kept dim and small: nothing on this row is clickable and no figure is wrong,
+ * so this is legibility, not a warning.
+ */
+function OriginTag({ row }: { row: { key: string } }) {
+  return (
+    <span
+      className="ml-1.5 align-middle text-[10px] uppercase tracking-wide"
+      style={{ color: "var(--fg-3)" }}
+    >
+      {OP_CODE_ORIGIN_LABEL[opCodeOrigin(row)]}
+    </span>
+  );
+}
 
 const TIER_COLOR: Record<string, string> = {
   good: "var(--good)",
@@ -101,6 +125,7 @@ export function BigJobsSection({
                       <Td>
                         <div className="mono text-sm" style={{ color: "var(--fg-0)" }}>
                           {row.code}
+                          <OriginTag row={row} />
                         </div>
                         <div className="text-[11px]" style={{ color: "var(--fg-3)" }}>
                           {row.timedUses} timed
@@ -204,8 +229,13 @@ export function MaintenanceTimesSection({ inference }: { inference: Inference })
                   className="flex items-center justify-between gap-3 py-1.5"
                 >
                   <div className="min-w-0">
+                    {/* Same collision, same fix as Big jobs above: lib/time-inference
+                        keys these rows `lib:`/`custom:` exactly as lib/insights
+                        does, so a typed "ALIGN" and the library one are two rows
+                        with one label unless the origin is stated. */}
                     <span className="mono text-sm" style={{ color: "var(--fg-0)" }}>
                       {d.code}
+                      <OriginTag row={d} />
                     </span>
                     <span
                       className="ml-2 text-[11px]"

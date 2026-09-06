@@ -10,6 +10,10 @@ import {
 import type { Bonus, DailyClock, Entry, LaborType } from "./types";
 import type { RateMap } from "./earnings";
 import type { WorkSchedule } from "./schedule";
+// Read-only here. pairDay (via aggregateStatsWithSchedule) is the shared
+// per-day pairing rule; this suite asserts effectiveHourly AGREES with it
+// rather than re-stating the rule and letting the two drift again.
+import { aggregateStatsWithSchedule } from "./stats";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -641,5 +645,212 @@ describe("effectiveHourly — in-progress day", () => {
     expect(r.ongoingDays).toEqual(["2026-07-22"]);
     expect(r.scheduledDays).toEqual([]);
     expect(r.status).toBe("ok");
+  });
+});
+
+// ── Confirmed real-zero days ─────────────────────────────────────────────────
+//
+// Escalation `payperiod-scheduled-hours-two-figures`, filed six nights running
+// as "confusing, not wrong". It was wrong.
+//
+// A confirmed zero is a day the tech was at the shop for a full scheduled shift
+// and flagged nothing — the single largest block of unproductive time this
+// module exists to surface (see the file header). It has no RO on it BY
+// DEFINITION, so the schedule fill, which iterated dates carrying an RO, never
+// saw it: the hours were absent from denomHours while the efficiency tile beside
+// it counted them via pairDay's `flag > 0 || confirmedZero.has(date)`. Two
+// figures for one quantity, and the one effective hourly reported was the
+// flattering one — dividing the same pay by fewer hours makes the rate look
+// BETTER than the day the tech actually had.
+
+describe("effectiveHourly — confirmed real-zero days", () => {
+  it("counts a confirmed zero day's full scheduled shift in the denominator", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({ confirmedZeroDays: ["2026-07-21"] }),
+    );
+    // Mon filled from the schedule (8h) + Tue, a confirmed zero, also 8h.
+    expect(r.denomHours).toBe(16);
+    expect(r.scheduledDays).toEqual(["2026-07-20", "2026-07-21"]);
+    // Zero in the numerator, full shift in the denominator: $270 over 16h, not
+    // over 8h. The unproductive day drags the rate DOWN, which is the point.
+    expect(r.hourly).toBeCloseTo(270 / 16, 6);
+    expect(r.countedFlagHours).toBe(9);
+  });
+
+  it("counts a day that is BOTH confirmed-zero and has entries exactly once", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({ confirmedZeroDays: ["2026-07-20"] }),
+    );
+    expect(r.denomHours).toBe(8);
+    expect(r.scheduledDays).toEqual(["2026-07-20"]);
+  });
+
+  it("prefers a real clock entry on a confirmed zero day, and never adds both", () => {
+    // pairDay's first branch: clocked hours win outright.
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [clock("2026-07-20", 8), clock("2026-07-21", 6)],
+      [],
+      RATES,
+      RANGE,
+      fallback({ confirmedZeroDays: ["2026-07-21"] }),
+    );
+    expect(r.denomHours).toBe(14); // 8 clocked + 6 clocked, no 8h shift added
+    expect(r.scheduledDays).toEqual([]);
+    expect(r.denomSource).toBe("clocked");
+  });
+
+  it("never counts a confirmed zero day that is also a day off", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({
+        confirmedZeroDays: ["2026-07-21"],
+        daysOff: [{ startDate: "2026-07-21", endDate: "2026-07-21" }],
+      }),
+    );
+    expect(r.denomHours).toBe(8);
+    expect(r.scheduledDays).toEqual(["2026-07-20"]);
+  });
+
+  it("never counts a confirmed zero day at or after today", () => {
+    // today is 2026-07-25; the shift is still running or hasn't happened.
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({ confirmedZeroDays: ["2026-07-27"] }),
+    );
+    expect(r.denomHours).toBe(8);
+    expect(r.scheduledDays).toEqual(["2026-07-20"]);
+  });
+
+  it("never counts a confirmed zero day with no scheduled shift (Saturday)", () => {
+    // 2026-07-18 is a Saturday, which this schedule leaves null.
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({ confirmedZeroDays: ["2026-07-18"] }),
+    );
+    expect(r.denomHours).toBe(8);
+    expect(r.scheduledDays).toEqual(["2026-07-20"]);
+  });
+
+  it("ignores a confirmed zero day outside the period", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE, // 2026-07-16 .. 2026-07-31
+      fallback({ confirmedZeroDays: ["2026-07-13"] }),
+    );
+    expect(r.denomHours).toBe(8);
+  });
+
+  it("does not turn a confirmed zero day into a missing or ongoing day", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 9)],
+      [],
+      [],
+      RATES,
+      RANGE,
+      fallback({ confirmedZeroDays: ["2026-07-21"] }),
+    );
+    expect(r.missingClockDays).toEqual([]);
+    expect(r.ongoingDays).toEqual([]);
+    expect(r.status).toBe("ok");
+  });
+
+  // The point of the whole fix, stated as the thing that has to stay true: one
+  // real-world quantity, one number, whichever function you ask.
+  it("agrees with aggregateStatsWithSchedule's denomHours, confirmed zeros included", () => {
+    const entries = [entry("2026-07-20", 9), entry("2026-07-22", 6)];
+    const clocks = [clock("2026-07-22", 8)];
+    const ctx = {
+      schedules: [schedule5x8()],
+      daysOff: [],
+      confirmedZeroDays: ["2026-07-21", "2026-07-23"],
+      today: "2026-07-25",
+    };
+    const r = effectiveHourly(entries, clocks, [], RATES, RANGE, ctx);
+    const s = aggregateStatsWithSchedule(entries, clocks, RANGE, ctx);
+    // 8 clocked (Wed) + 8 scheduled (Mon, flagged) + 8 + 8 (two real zeros).
+    expect(s.denomHours).toBe(32);
+    expect(r.denomHours).toBe(s.denomHours);
+    expect(r.denomSource).toBe(s.denomSource);
+  });
+});
+
+// ── countedPay ───────────────────────────────────────────────────────────────
+//
+// Escalation `costcard-total-pay-mismatch`. The card printed
+// "Total pay {totalPay} ÷ {denomHours}" under the headline rate as the
+// arithmetic that produced it. totalPay is the FULL period and includes an
+// in-progress day; denomHours has no hours for that day. The quotient on screen
+// was not the rate above it, and the numerator the rate actually used was not
+// exported at all.
+
+describe("effectiveHourly — countedPay", () => {
+  it("excludes an in-progress day's flag pay and spiffs, and reproduces hourly", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8), entry("2026-07-22", 5)],
+      [clock("2026-07-20", 8)],
+      [bonus("2026-07-20", 40), bonus("2026-07-22", 100)],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.ongoingDays).toEqual(["2026-07-22"]);
+    // Full period, for display continuity: (8+5)x30 + 140.
+    expect(r.totalPay).toBeCloseTo(530, 6);
+    // What the rate is actually made of: 8x30 + 40.
+    expect(r.countedPay).toBeCloseTo(280, 6);
+    expect(r.hourly).toBeCloseTo(280 / 8, 6);
+    // The printed division must BE the headline.
+    expect(r.countedPay! / r.denomHours).toBeCloseTo(r.hourly!, 10);
+  });
+
+  it("equals totalPay when nothing is in progress", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8)],
+      [clock("2026-07-20", 8)],
+      [bonus("2026-07-20", 40)],
+      RATES,
+      RANGE,
+      fallback(),
+    );
+    expect(r.countedPay).toBe(r.totalPay);
+  });
+
+  it("is null exactly when totalPay is null (no rates priced)", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8)],
+      [clock("2026-07-20", 8)],
+      [],
+      {},
+      RANGE,
+      fallback(),
+    );
+    expect(r.totalPay).toBeNull();
+    expect(r.countedPay).toBeNull();
   });
 });

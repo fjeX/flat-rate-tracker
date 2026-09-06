@@ -43,23 +43,32 @@ export type ScheduleFallback = {
   today: string;
   shiftOverrides?: ShiftOverrideMap;
   /**
-   * ISO dates the tech confirmed as real zero-work days. effectiveHourly does
-   * not read this — a day with no flagged work has no numerator to divide, so
-   * it never reaches the fallback. It is carried anyway because this type is
-   * what callers hand around as "the schedule context", and a caller that has
-   * to REBUILD a ScheduleContext from it (PayPeriodView → PeriodOverrideModal)
-   * has nowhere to get the field from and quietly substitutes []. Under the
-   * shared pairing rule that turns every confirmed real-zero day into an
-   * unresolved one and drops it from the denominator, so the same period reads
-   * one efficiency in the modal and another in the hero.
+   * ISO dates the tech confirmed as real zero-work days. effectiveHourly DOES
+   * read this: a confirmed zero is a full scheduled shift that flagged nothing,
+   * so it belongs in the denominator with zero in the numerator — exactly what
+   * `pairDay` (lib/stats.ts) does with `flag > 0 || confirmedZero.has(date)`.
    *
-   * REQUIRED, deliberately. `effectiveHourly` ignores it, so the temptation is
-   * to mark it optional — but an omitted field is exactly how this bug shipped
-   * twice: once on the history page (fixed 8692d27) and again here, because a
-   * construction site that simply left it out still compiled. Required makes
-   * the next omission a type error instead of a wrong number on screen. Pass
-   * `[]` explicitly if a caller genuinely has none; that is a statement, not
-   * an accident.
+   * It used to be ignored here, on the reasoning that "a day with no flagged
+   * work has no numerator to divide". That reasoning is backwards for this
+   * module: a whole shift that produced nothing is the single largest piece of
+   * unproductive time there is, and it is the thing the header of this file
+   * says effective hourly exists to catch. Dropping it made the rate read
+   * BETTER than reality, and made the same period report one number of hours
+   * on the efficiency tile and a smaller one here (escalation
+   * `payperiod-scheduled-hours-two-figures`).
+   *
+   * REQUIRED, deliberately. Even when it was unread the omission was a bug —
+   * this type is what callers hand around as "the schedule context", and a
+   * caller that has to REBUILD a ScheduleContext from it (PayPeriodView →
+   * PeriodOverrideModal) has nowhere to get the field from and quietly
+   * substitutes []. Under the shared pairing rule that turns every confirmed
+   * real-zero day into an unresolved one and drops it from the denominator, so
+   * the same period reads one efficiency in the modal and another in the hero.
+   * That shipped twice: once on the history page (fixed 8692d27) and again
+   * here, because a construction site that simply left it out still compiled.
+   * Required makes the next omission a type error instead of a wrong number on
+   * screen. Pass `[]` explicitly if a caller genuinely has none; that is a
+   * statement, not an accident.
    */
   confirmedZeroDays: string[];
 };
@@ -90,6 +99,15 @@ export type EffectiveHourly = {
   flagPay: number | null; // null when no rates are priced (dollars unknown)
   bonusTotal: number; // always real — spiffs need no rates
   totalPay: number | null; // flagPay + bonuses; null when flagPay is null
+  // The numerator actually used: flag pay + bonuses over the days actually
+  // counted — excludes an in-progress day (see ongoingDays). null exactly when
+  // totalPay is null. Pair this with denomHours, NOT totalPay: a surface that
+  // prints "totalPay ÷ denomHours" beside the headline is printing a
+  // full-period numerator over a counted-days-only denominator, and the
+  // division on screen does not produce the rate above it (escalation
+  // `costcard-total-pay-mismatch`). Same trap as flagHours vs countedFlagHours,
+  // one field down.
+  countedPay: number | null;
   flagHours: number; // every flagged hour in the period, for display continuity
   // Flagged hours over the days actually counted — excludes an in-progress day
   // (see ongoingDays). Pair this with denomHours; mixing flagHours and
@@ -97,7 +115,8 @@ export type EffectiveHourly = {
   countedFlagHours: number;
   clockedHours: number; // hours from real clock entries ONLY
   // The denominator actually used: clocked hours, plus scheduled shift hours
-  // for completed days that have flagged work but no clock entry. Equals
+  // for completed days with no clock entry that pairDay would count — days
+  // with flagged work, and days the tech confirmed as a real zero. Equals
   // clockedHours when no schedule context is supplied.
   denomHours: number;
   // Where denomHours came from, for honest labelling. null when there is no
@@ -105,7 +124,9 @@ export type EffectiveHourly = {
   denomSource: "clocked" | "scheduled" | "mixed" | null;
   workDays: string[]; // distinct dates that had flagged work (an RO)
   clockDays: string[]; // distinct dates with clocked hours > 0
-  // Work days filled in from the schedule rather than a clock entry.
+  // Days filled in from the schedule rather than a clock entry — days with
+  // flagged work, plus confirmed real-zero days (which have no RO on them by
+  // definition and so are never "work days").
   scheduledDays: string[];
   // Work days at or after "today" with no clock entry — the shift is still
   // running, so they're excluded from BOTH sides of the average rather than
@@ -141,6 +162,11 @@ export function effectiveHourly(
   // override on the dashboard and schedule pages exists precisely so the tech
   // can correct it when a day wasn't normal.
   //
+  // The fill covers the same days `pairDay` counts on the schedule side:
+  // completed days with flagged work, AND completed days confirmed as real
+  // zeros. See `confirmedZeroDays` above for why the second half is not
+  // optional.
+  //
   // Omitted → identical behaviour to before (denomHours === clockedHours, and
   // no in-progress day is excluded). Pass it with an empty `schedules` array to
   // get the today handling without any schedule fill.
@@ -171,14 +197,30 @@ export function effectiveHourly(
   );
   const clockDaySet = new Set(clockDays);
 
-  // Fill unclocked work days from the schedule, on exactly the terms
+  // Fill unclocked days from the schedule, on exactly the terms
   // aggregateStatsWithSchedule uses: completed days only (never today, which is
   // mid-shift, and never the future), and never an explicit day off.
+  //
+  // WHICH days is `pairDay`'s rule verbatim — `flag > 0 || confirmedZero`.
+  // Iterating work days alone (dates carrying an RO) silently dropped every
+  // confirmed real-zero day, which by definition has no RO on it: a full
+  // scheduled shift of unproductive time, absent from the denominator here
+  // while the efficiency tile beside it counted the same day. Two figures for
+  // one quantity, and the one this module reports was the flattering one.
   const scheduledDays: string[] = [];
   let scheduledHours = 0;
   if (schedule) {
     const off = expandDaysOff(schedule.daysOff);
-    for (const d of workDays) {
+    // distinctDates dedupes, so a date that is BOTH confirmed-zero and has
+    // entries is filled once — pairDay counts it once too (the `flag > 0` arm
+    // wins, with the identical scheduled hours).
+    const fillCandidates = distinctDates([
+      ...workDays,
+      ...schedule.confirmedZeroDays.filter((d) =>
+        inRange(d, range.start, range.end),
+      ),
+    ]);
+    for (const d of fillCandidates) {
       if (clockDaySet.has(d)) continue;
       if (d >= schedule.today || off.has(d)) continue;
       const hours = scheduledHoursFor(
@@ -265,6 +307,7 @@ export function effectiveHourly(
     flagPay,
     bonusTotal,
     totalPay,
+    countedPay,
     flagHours,
     countedFlagHours,
     clockedHours,
