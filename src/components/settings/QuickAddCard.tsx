@@ -33,7 +33,7 @@ export function QuickAddCard() {
           <Switch
             checked={enabled}
             onChange={handleToggle}
-            label={enabled ? "Disable quick add" : "Enable quick add"}
+            label="Quick Add RO"
           />
         )}
       </div>

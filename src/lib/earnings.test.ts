@@ -9,6 +9,7 @@ import {
   earningsByLaborType,
   warrantyLoss,
   fmtMoney,
+  fmtMoney2,
 } from "./earnings";
 import type { Entry, EntryOpCode, LaborType } from "./types";
 
@@ -175,5 +176,29 @@ describe("fmtMoney", () => {
     expect(fmtMoney(412)).toBe("$412");
     expect(fmtMoney(1234)).toBe("$1,234");
     expect(fmtMoney(0)).toBe("$0");
+  });
+
+  // Escalation shortfall-one-decimal-float (2026-09-06). periodEarnings is an
+  // unrounded reduce over rate x hours, so a true $3,455.50 arrives as
+  // 3455.4999999999995 and used to print "$3,455" — a dollar short, downward,
+  // with nothing on screen to suggest it. Snapping to cents first fixes it
+  // WITHOUT changing the whole-dollar rule, which is intentional here.
+  it("rounds float dust up to the dollar it really is", () => {
+    expect(3455.4999999999995).not.toBe(3455.5); // the dust is real
+    expect(fmtMoney(3455.4999999999995)).toBe("$3,456");
+    expect(fmtMoney(3455.5)).toBe("$3,456");
+  });
+
+  it("still drops cents, because cents are noise on a period total", () => {
+    expect(fmtMoney(412.49)).toBe("$412");
+    expect(fmtMoney(412.51)).toBe("$413");
+  });
+});
+
+// The 2dp twin, re-exported from lib/format so callers here get it too.
+describe("fmtMoney2 re-export", () => {
+  it("is the audit-surface formatter, not fmtMoney", () => {
+    expect(fmtMoney2(44.8)).toBe("$44.80");
+    expect(fmtMoney(44.8)).toBe("$45");
   });
 });

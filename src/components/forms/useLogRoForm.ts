@@ -70,6 +70,12 @@ function linesFromEntry(entry: Entry | undefined): LineDraft[] {
     // diff-based update no longer deletes-and-reinserts — the value would fall
     // out of the round-trip. Pure pass-through: the form never edits it.
     paidHours: oc.paidHours ?? null,
+    // Pass-through, same as paidHours, and load-bearing for data integrity:
+    // actualSource === "estimate" is the ONLY thing keeping a retro-captured
+    // guess out of the shared True Time pool (lib/true-time.ts isPoolableLine).
+    // Dropping it here made an ordinary RO edit silently null the column, which
+    // promoted a guess to a measurement and polluted everyone's average.
+    actualSource: oc.actualSource ?? null,
     // Form-owned, unlike paidHours — the toggle below edits this directly.
     isComeback: oc.isComeback ?? false,
     // Pure pass-through, like paidHours. Upsells are marked in the RO detail
@@ -715,6 +721,13 @@ export function useLogRoForm({
             subOpCodeId: line.subOpCodeId,
             laborType: line.laborType,
             paidHours: line.paidHours ?? null, // pass-through so edits never wipe it
+            // Pass-through, same reason as paidHours — but this one is data
+            // integrity, not bookkeeping. db/entries.ts writes
+            // `actualHours === null ? null : (actualSource ?? null)`, so an
+            // undefined here becomes a NULL actual_source on every edit-save,
+            // and a nulled estimate joins the shared True Time pool as though a
+            // timer had measured it.
+            actualSource: line.actualSource ?? null,
             isComeback: line.isComeback ?? false,
             isUpsell: line.isUpsell ?? false, // pass-through, same reason
           })),

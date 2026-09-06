@@ -11,7 +11,7 @@
 //
 // See lib/retro-capture.ts for why the buckets are coarse and why the book time
 // is deliberately not marked on the ladder.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { retroBuckets, type RetroCandidate } from "@/lib/retro-capture";
@@ -31,6 +31,37 @@ export function RetroTimePrompt({
 }) {
   const [picked, setPicked] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
+
+  // This component NEVER UNMOUNTS. LogRoForm renders it unconditionally and
+  // only flips `open`/`candidates` — the `return null` below is an internal
+  // early return, not a parent-level unmount — so every piece of state here
+  // outlives what looks like a close. `saving` was set true on "Save time" and
+  // nothing ever set it back: submitRetro's finishRetro() clears the candidate
+  // list and closes the modal on both the success and the swallowed-failure
+  // path, but neither one can reach this component's state. The next
+  // retro-eligible save in the same page session (Save & New calls resetForm(),
+  // which does not remount) reopened the prompt already reading "Saving…" with
+  // both buttons dead, permanently, until a navigation or reload built a fresh
+  // instance. That reload is why every incident-log row said "never reproduces
+  // on retry" — it was stale state, not flakiness.
+  //
+  // So reset on every open. The key is empty while closed, which means
+  // reopening with the SAME lines re-triggers too, and it changes if the parent
+  // swaps candidate sets without an intervening close. `picked` is reset for
+  // the same reason: stale answers are keyed by the previous RO's lineIds, and
+  // submitting them would write an estimate onto lines that aren't on screen.
+  const openKey =
+    open && candidates.length > 0
+      ? candidates.map((c) => c.lineId).join("|")
+      : "";
+  const prevOpenKey = useRef("");
+  useEffect(() => {
+    if (openKey && openKey !== prevOpenKey.current) {
+      setSaving(false);
+      setPicked({});
+    }
+    prevOpenKey.current = openKey;
+  }, [openKey]);
 
   if (candidates.length === 0) return null;
 
@@ -115,7 +146,9 @@ export function RetroTimePrompt({
         </p>
 
         <div className="flex gap-2 pt-1">
-          <Button variant="ghost" onClick={onSkip} disabled={saving}>
+          {/* Never disabled. Skip is the escape hatch; if a save ever wedges,
+              the one control that gets the tech out must not wedge with it. */}
+          <Button variant="ghost" onClick={onSkip}>
             Skip
           </Button>
           <Button

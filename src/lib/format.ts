@@ -21,9 +21,38 @@
 //
 // fmtHoursGrouped is fmtHours plus thousands separators, for four-digit
 // lifetime totals. It is a wrapper, not a third rule — see its own note.
+//
+// Money has the same two rules for the same reasons, and they live next to the
+// hours ones so the pair can't drift apart again:
+//
+//   fmtMoney  — whole dollars, app UI. Stays in lib/earnings.ts where it has
+//               always lived, and where its call sites already import it.
+//   fmtMoney2 — 2dp, exact, for documents. Same contract as fmtHours2. Defined
+//               here next to its hours twin and re-exported from lib/earnings
+//               for callers that already import fmtMoney from there. The
+//               re-export goes one way only (earnings → format); format must
+//               never import from earnings or the two become a cycle.
 
 /** Display resolution of {@link fmtHours}: anything under this rounds to zero. */
 export const HOURS_DISPLAY_STEP = 0.1;
+
+/**
+ * Snap a float accumulation back to the resolution the data is actually stored
+ * at (2dp — hours are `numeric(5,2)`, money is cents) before it is rounded for
+ * display.
+ *
+ * Escalation `shortfall-one-decimal-float` (2026-09-06): every figure here
+ * arrives as an unrounded `reduce` over floats, so `82.1 - 70.25` is
+ * `11.849999999999994`, not `11.85`. Rounded straight to one decimal that lands
+ * *below* the x.x5 boundary and prints `11.8` — the number is off by a tenth in
+ * the shop's favour on a document whose whole job is to argue about tenths.
+ * Snapping to 2dp first removes the binary dust and only the dust: at the
+ * stored resolution `11.85` is a genuine half and rounds up, while a true
+ * `330.75` still rounds to `330.8` exactly as before.
+ */
+function toStoredPrecision(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 /**
  * Hours for the app UI, to one decimal.
@@ -33,7 +62,7 @@ export const HOURS_DISPLAY_STEP = 0.1;
  * the same string. A true zero still prints "0.0".
  */
 export function fmtHours(n: number): string {
-  const rounded = Math.round(n * 10) / 10;
+  const rounded = Math.round(toStoredPrecision(n) * 10) / 10;
   if (rounded === 0 && n !== 0) return n > 0 ? "<0.1" : "-<0.1";
   return rounded.toFixed(1);
 }
@@ -47,9 +76,38 @@ export function fmtHours(n: number): string {
  * total. No floor is needed because nothing is rounded away.
  */
 export function fmtHours2(n: number): string {
-  // Normalise -0 so a line that nets to zero never prints "-0.00".
-  const v = Object.is(n, -0) ? 0 : n;
+  const snapped = toStoredPrecision(n);
+  // Normalise -0 so a line that nets to zero never prints "-0.00". Snapping
+  // can produce -0 from a tiny negative, so this has to come after it.
+  const v = snapped === 0 ? 0 : snapped;
   return v.toFixed(2);
+}
+
+/**
+ * Money for external-facing documents, to two decimals.
+ *
+ * The money twin of {@link fmtHours2}, and it exists for the identical reason
+ * (escalation `disputepack-money-column-rounding`, 2026-09-06). Four rework
+ * rows of 1.40/1.30/1.40/1.10h at $32 are 44.80/41.60/44.80/35.20 — at whole
+ * dollars they print 45/42/45/35, which adds to $167, under a total of 166.40
+ * printing as $166. Every one of those five figures is individually correct and
+ * the page still contradicts itself, which is exactly what a service manager
+ * needs to wave the claim off.
+ *
+ * Deliberately NOT a change to {@link fmtMoney}: whole dollars are the right
+ * call on a period total or a spiff, where cents are noise and nobody is adding
+ * the column up. Use this one only where a reader checks the arithmetic — the
+ * dispute pack and the unpaid-rework audit rows.
+ */
+export function fmtMoney2(n: number): string {
+  const snapped = toStoredPrecision(n);
+  const v = snapped === 0 ? 0 : snapped;
+  return v.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 /**

@@ -72,9 +72,7 @@ export function TrueTimeCard({ initialShare }: { initialShare: boolean }) {
           checked={share}
           onChange={toggle}
           disabled={isPending}
-          label={
-            share ? "Stop contributing to True Time" : "Contribute to True Time"
-          }
+          label="Contribute to True Time"
         />
       </div>
     </section>

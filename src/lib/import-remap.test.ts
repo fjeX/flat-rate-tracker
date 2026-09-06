@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildImportPayload, CURRENT_BACKUP_VERSION, type ImportBundle } from "./import-remap";
 import type { Dispute, Entry, EntryOpCode, OpCode, UnpaidTime } from "./types";
+import { MIN_LEDGERED_HOLD_MS, msToHours } from "./timer";
 
 // Deterministic ids so assertions can name them: n1, n2, n3...
 function counter() {
@@ -633,6 +634,64 @@ describe("buildImportPayload — unpaid time", () => {
 
     expect(payload.unpaid_time?.[0].entry_id).toBeNull();
     expect(payload.unpaid_time?.[0].hours).toBe(3.3);
+  });
+
+  // --- the phantom-hold gate (import-restores-phantom-hold-rows).
+  //
+  // saveTimerAction stopped writing sub-30-second holds on 2026-08-24, but the
+  // import RPC is a bare INSERT with no validation, so restoring a backup taken
+  // before that date put every phantom row straight back. These tests pin BOTH
+  // halves — the drop and, more importantly, the keep.
+  it("drops a pre-fix phantom timer hold (0 hours)", () => {
+    const payload = buildImportPayload(
+      bundle({
+        unpaidTime: [
+          unpaid({ id: "U1", source: "timer", kind: "wait_parts", hours: 0 }),
+          unpaid({ id: "U2", source: "timer", kind: "wait_parts", hours: 1.25 }),
+        ],
+      }),
+      { newId: counter() },
+    );
+
+    expect(payload.unpaid_time).toHaveLength(1);
+    expect(payload.unpaid_time?.[0].hours).toBe(1.25);
+  });
+
+  // THE LOAD-BEARING ONE. A 30-second hold is the shortest the timer still
+  // ledgers today, and msToHours rounds it to exactly 0.01 — the same value an
+  // 18-to-30-second phantom lands on. A filter that reached up to 0.01 would
+  // pass the test above and silently delete this row, which is real unpaid time
+  // the tech earned. If this ever fails, the filter got greedy.
+  it("keeps a legitimate short timer hold that rounds to 0.01h", () => {
+    expect(msToHours(MIN_LEDGERED_HOLD_MS)).toBe(0.01);
+
+    const payload = buildImportPayload(
+      bundle({
+        unpaidTime: [
+          unpaid({ source: "timer", kind: "wait_approval", hours: msToHours(MIN_LEDGERED_HOLD_MS) }),
+        ],
+      }),
+      { newId: counter() },
+    );
+
+    expect(payload.unpaid_time).toHaveLength(1);
+    expect(payload.unpaid_time?.[0].hours).toBe(0.01);
+  });
+
+  // The 30-second gate is a TIMER rule. Hand-entered and zero-day rows never
+  // passed through it, so a 0-hour note the user typed is theirs to keep.
+  it("never filters manual or zero-day rows, whatever the hours", () => {
+    const payload = buildImportPayload(
+      bundle({
+        unpaidTime: [
+          unpaid({ id: "U1", source: "manual", hours: 0 }),
+          unpaid({ id: "U2", source: "zero_day", hours: 0 }),
+        ],
+      }),
+      { newId: counter() },
+    );
+
+    expect(payload.unpaid_time).toHaveLength(2);
   });
 });
 

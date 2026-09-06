@@ -2,7 +2,7 @@
 // unpaid-record-row-rounding, 2026-08-13): a nonzero value never prints as a
 // bare zero, and a document's rows add up to the total printed under them.
 import { describe, expect, it } from "vitest";
-import { fmtHours, fmtHours2, fmtHoursGrouped } from "./format";
+import { fmtHours, fmtHours2, fmtHoursGrouped, fmtMoney2 } from "./format";
 
 describe("fmtHours", () => {
   it("renders whole and rounded hours to one decimal", () => {
@@ -20,7 +20,19 @@ describe("fmtHours", () => {
   it("never prints a bare zero for a nonzero value", () => {
     expect(fmtHours(0.01)).toBe("<0.1");
     expect(fmtHours(0.04)).toBe("<0.1");
-    expect(fmtHours(0.049)).toBe("<0.1");
+    expect(fmtHours(0.044)).toBe("<0.1");
+  });
+
+  it("snaps to the stored resolution before rounding for display", () => {
+    // Changed 2026-09-06 by the shortfall-one-decimal-float fix, and worth
+    // being explicit about: fmtHours now rounds to 2dp first, so 0.049 lands on
+    // 0.05 and prints "0.1" where it used to print "<0.1". Hours are
+    // numeric(5,2), so 0.049 is not a value the data can hold — it is float
+    // dust around 0.05, and 0.05 is the boundary case the floor was never
+    // meant to catch. The floor itself is unchanged for anything that really
+    // is below the resolution.
+    expect(fmtHours(0.049)).toBe("0.1");
+    expect(fmtHours(0.045)).toBe("0.1");
   });
 
   it("keeps the sign on a negative that rounds away", () => {
@@ -80,6 +92,89 @@ describe("fmtHours2", () => {
       .map((h) => Number(fmtHours2(h)))
       .reduce((s, h) => s + h, 0);
     expect(fmtHours2(summedFrom2dp)).toBe(fmtHours2(total));
+  });
+});
+
+// Escalation shortfall-one-decimal-float (2026-09-06). Every number these
+// formatters see is an unrounded reduce over floats, so the value that reaches
+// them is not the value the database holds. Snapping to the stored resolution
+// (2dp) before rounding for display is the whole fix — and it must NOT disturb
+// values that were already rounding correctly.
+describe("float dust below a rounding boundary", () => {
+  it("rounds the real reproducer up, not down", () => {
+    // The bot's shortfall figure: 82.1 flagged - 70.25 paid. In binary that is
+    // 11.849999999999994, which rounds to 11.8 at one decimal even though the
+    // stored data says 11.85 → 11.9.
+    const dusty = 82.1 - 70.25;
+    expect(dusty).not.toBe(11.85); // the dust is real, not a test artefact
+    expect(fmtHours(dusty)).toBe("11.9");
+    expect(fmtHours2(dusty)).toBe("11.85");
+  });
+
+  it("leaves already-correct round-half-up cases alone", () => {
+    // Both of these were cited as manifestations of the bug and neither is one:
+    // they are exact halves at the stored resolution and already rounded up.
+    expect(fmtHours(330.75)).toBe("330.8");
+    expect(fmtHours(305.25)).toBe("305.3");
+    // And a value genuinely below the boundary still rounds down.
+    expect(fmtHours(11.84)).toBe("11.8");
+  });
+
+  it("does not resurrect the sub-resolution floor bypass", () => {
+    // Snapping must not turn a real-but-tiny value into a printed zero.
+    expect(fmtHours(0.004)).toBe("<0.1");
+    expect(fmtHours(0)).toBe("0.0");
+  });
+
+  it("applies the same snap to money", () => {
+    // Earnings are summed the same way: rate x hours, reduced unrounded.
+    expect(fmtMoney2(3455.4999999999995)).toBe("$3,455.50");
+  });
+});
+
+describe("fmtMoney2", () => {
+  it("renders money at the resolution money is stored at", () => {
+    expect(fmtMoney2(44.8)).toBe("$44.80");
+    expect(fmtMoney2(0)).toBe("$0.00");
+    expect(fmtMoney2(1234.5)).toBe("$1,234.50");
+  });
+
+  it("never prints a negative zero", () => {
+    expect(fmtMoney2(-0)).toBe("$0.00");
+    expect(fmtMoney2(-0.001)).toBe("$0.00");
+  });
+
+  // The money twin of the fmtHours2 property above, and the escalation that
+  // forced it: disputepack-money-column-rounding. Four unpaid-rework rows at
+  // $32/hr printed 45/42/45/35 = $167 under a total printing $166.
+  it("makes displayed rows sum to the displayed total", () => {
+    const rows = [1.4, 1.3, 1.4, 1.1].map((h) => h * 32);
+    const total = rows.reduce((s, d) => s + d, 0);
+
+    const summedFromDisplay = rows
+      .map((d) => Number(fmtMoney2(d).replace(/[$,]/g, "")))
+      .reduce((s, d) => s + d, 0);
+
+    expect(fmtMoney2(summedFromDisplay)).toBe(fmtMoney2(total));
+    expect(fmtMoney2(total)).toBe("$166.40");
+  });
+
+  it("would NOT have reconciled at whole dollars — the regression this replaces", () => {
+    const rows = [1.4, 1.3, 1.4, 1.1].map((h) => h * 32);
+    const total = rows.reduce((s, d) => s + d, 0);
+    const whole = (n: number) =>
+      n.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      });
+    const summedFromWhole = rows
+      .map((d) => Number(whole(d).replace(/[$,]/g, "")))
+      .reduce((s, d) => s + d, 0);
+
+    expect(whole(summedFromWhole)).toBe("$167");
+    expect(whole(total)).toBe("$166");
+    expect(whole(summedFromWhole)).not.toBe(whole(total));
   });
 });
 

@@ -20,7 +20,7 @@ import {
 import { lineCode, lineDescription } from "./line-label";
 import { payStatus } from "./reconcile";
 import { buildUnpaidSummary, type UnpaidSummary } from "./unpaid-summary";
-import { fmtHours2 } from "./format";
+import { fmtHours2, fmtMoney2 } from "./format";
 
 // One disputed line, flattened with enough context to render a report row
 // without re-deriving anything.
@@ -179,13 +179,12 @@ export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
 // page adds up.
 const fmtH = fmtHours2;
 
-function fmtD(n: number): string {
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-}
+// Two decimals for the same reason, and it took a second escalation to notice
+// that the hours fix in 2026-08-13 had left the dollar column beside it still
+// printing whole dollars. Four rows at $44.80/$41.60/$44.80/$35.20 printed
+// 45/42/45/35 — $167 — under a total of $166. Money is stored to the cent, so
+// at the cent the page adds up. (disputepack-money-column-rounding)
+const fmtD = fmtMoney2;
 
 export function formatDisputePackText(pack: DisputePack): string {
   const lines: string[] = [];

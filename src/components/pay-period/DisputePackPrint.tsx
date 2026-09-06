@@ -4,18 +4,13 @@ import "./dispute-pack.css";
 import Link from "next/link";
 import type { DisputePack } from "@/lib/dispute-pack";
 import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
-import { fmtHours2 } from "@/lib/format";
+import { fmtHours2, fmtMoney2 } from "@/lib/format";
 
 // 2dp so printed rows reconcile with printed totals — see lib/format.
 const fmtH = fmtHours2;
 
-function fmtD(n: number): string {
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-}
+// 2dp for the same reason on the dollar column — see lib/format.
+const fmtD = fmtMoney2;
 
 // One-page printable variance report. Styles live in dispute-pack.css so it
 // prints as clean black-on-white regardless of the app theme, and the

@@ -156,10 +156,24 @@ export function warrantyLoss(entries: Entry[], rates: RateMap): number | null {
 
 // Whole-dollar currency formatting. Cents are noise on a period total ("$412")
 // and rarely meaningful on a single flat-rate line either.
+//
+// The whole-dollar rule is deliberate and stays. What did NOT stay is feeding
+// it a raw float: every dollar figure in this file is an unrounded reduce over
+// products (rate × hours), so a true $3,455.50 arrives as 3455.4999999999995
+// and printed "$3,455" — a dollar short, downward, silently. Snapping to cents
+// first removes the binary dust without touching the digit behaviour: a genuine
+// half-dollar rounds up, everything else prints exactly as it did.
+// (escalation shortfall-one-decimal-float, 2026-09-06)
 export function fmtMoney(n: number): string {
-  return n.toLocaleString("en-US", {
+  return (Math.round(n * 100) / 100).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
   });
 }
+
+// The 2dp money formatter for documents whose rows a reader adds up. Defined in
+// ./format next to fmtHours2, re-exported here so the many call sites that
+// already pull fmtMoney from this module don't need a second import path.
+// See lib/format.ts for why it is a separate function and not a flag on fmtMoney.
+export { fmtMoney2 } from "./format";

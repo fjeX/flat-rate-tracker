@@ -66,9 +66,7 @@ export function RoTimeCard({ initialTrack }: { initialTrack: boolean }) {
           checked={track}
           onChange={toggle}
           disabled={isPending}
-          label={
-            track ? "Stop recording a time on each RO" : "Record a time on each RO"
-          }
+          label="Record a time on each RO"
         />
       </div>
     </section>

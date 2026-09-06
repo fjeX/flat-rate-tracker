@@ -146,6 +146,10 @@ sends you there.
   - Realistic RO numbers (5–6 digits), realistic vehicles — fill **year, make,
     AND model** (the vehicle section may be collapsed; expand it), plausible
     op codes and descriptions (you know cars — write like a tech)
+  - **At least one RO number must be a different digit-length than the rest**
+    (e.g. one 4-digit number like 993 alongside your usual 5–6 digit ones).
+    §5's RO-number sort check needs a short/long pair to be testable at all —
+    without one, "993 before 9910" has nothing to compare.
   - Include today's seeded scenario (§9's rotation), unless §9 was dropped for time
 - Duplicate RO numbers (changed 2026-07-15): saving an RO number that already
   exists now shows a "RO #X already exists" dialog on EVERY path — full log
@@ -640,7 +644,14 @@ Reference rail in every mode.
 - **Sort control (new 2026-07-30).** Defaults to **RO number**, because shops
   hand out a printed sheet in RO order. Check all three options:
   - **RO number** must sort NUMERICALLY, not as text — RO 993 comes BEFORE
-    RO 9910. If 9910 sorts first, that's the bug.
+    RO 9910. If 9910 sorts first, that's the bug. **This only bites when the
+    period's RO numbers span different digit lengths.** §2 now seeds one
+    RO number of a different digit length each night specifically so this is
+    testable — but if that step was skipped, or every RO number in the period
+    still happens to share a digit length, this check is opportunistic, not
+    guaranteed every night, and a `SKIPPED` result is the expected outcome,
+    not a gap to flag. Log `SKIPPED — no digit-length variation among RO
+    numbers` under **What I did**, not under Questions/possible issues.
   - **Date** is newest-first. **Biggest shortfall first** puts the largest gap
     on top and pushes not-yet-reconciled ("pending") lines to the bottom.
   - Change the sort, then mark a line paid. The remaining rows must keep their
@@ -1460,9 +1471,19 @@ in the wrong state, or copy that lies about why something failed". There is
 automated coverage now (`tests/smoke/auth.smoke.ts`), so treat this section as a
 second pair of eyes on the wording and the look, not as the primary gate.
 
-1. **/signin has a "Forgot your password?" link**, under the Sign in button and
-   above the "or" divider. If it is missing, a locked-out tech has no route at
-   all — report it.
+1. **This check is opportunistic, not guaranteed every night — a `SKIPPED`
+   result is the expected outcome, not a gap to flag.** /signin should have a
+   "Forgot your password?" link, under the Sign in button and above the "or"
+   divider. But `decideAuthRedirect()` (src/lib/supabase/proxy-routes.ts)
+   bounces any signed-in visitor off `/signin` to `/dashboard` before it can
+   render, and §8j forbids re-authenticating mid-run to protect the sign-in
+   rate-limit budget — so a normal bot session, already signed in per §1, can
+   never actually reach this page. This is not the only safety net:
+   `tests/smoke/auth.smoke.ts` already asserts the link exists while signed
+   out. If you are ever genuinely signed out when you reach this section,
+   still check it: a missing link means a locked-out tech has no route at
+   all — report it as CRITICAL. Otherwise log `SKIPPED — /signin unreachable
+   while signed in` under **What I did**.
 2. **Visit `/forgot-password` while logged in.** It must LOAD, showing "Reset
    your password" and a "Send reset link" button. If it bounces you to
    /dashboard, that is the 2026-08-14 deadlock regressing — clicking any reset

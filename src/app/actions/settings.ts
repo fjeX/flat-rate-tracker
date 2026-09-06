@@ -77,13 +77,13 @@ export async function setPeriodOverrideAction(
     const prev = settings.periodOverrides[neighbors.prev];
     if (prev && start > addDays(prev.end, 1)) {
       throw new Error(
-        `${orphanedDays(addDays(prev.end, 1), addDays(start, -1))} would belong to no pay period. The previous one ends ${formatDateLong(prev.end)}, so this one has to start ${formatDateLong(addDays(prev.end, 1))} or earlier.`,
+        `That would leave ${orphanedDays(addDays(prev.end, 1), addDays(start, -1))} in no pay period. The previous one ends ${formatDateLong(prev.end)}, so this one has to start ${formatDateLong(addDays(prev.end, 1))} or earlier.`,
       );
     }
     const next = settings.periodOverrides[neighbors.next];
     if (next && end < addDays(next.start, -1)) {
       throw new Error(
-        `${orphanedDays(addDays(end, 1), addDays(next.start, -1))} would belong to no pay period. The next one starts ${formatDateLong(next.start)}, so this one has to end ${formatDateLong(addDays(next.start, -1))} or later.`,
+        `That would leave ${orphanedDays(addDays(end, 1), addDays(next.start, -1))} in no pay period. The next one starts ${formatDateLong(next.start)}, so this one has to end ${formatDateLong(addDays(next.start, -1))} or later.`,
       );
     }
   }

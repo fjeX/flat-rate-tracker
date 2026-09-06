@@ -176,6 +176,54 @@ export type BuildPayloadOptions = {
   now?: string;
 };
 
+/**
+ * Whether an unpaid_time row from a backup file may be restored.
+ *
+ * WHY THIS EXISTS
+ * On 2026-08-24 the timer stopped ledgering sub-30-second holds
+ * (`MIN_LEDGERED_HOLD_MS` / `isLedgerableHold` in @/lib/timer, called per hold
+ * kind from saveTimerAction). Restore never learned that rule: it hands rows to
+ * `import_replace_account()`, which is a bare INSERT ... jsonb_populate_recordset
+ * with no validation at all. So restoring any backup taken before that date
+ * re-injects every "Waiting on parts 0m" phantom row verbatim — onto the dispute
+ * pack and the Insights leak board, exactly where they were removed from.
+ *
+ * WHY THE PREDICATE IS `hours <= 0` AND NOT `hours <= 0.01`
+ * A backup carries `hours`, never the raw ms the timer gate tests. msToHours is
+ * `round(ms / 3_600_000 * 100) / 100`, so the hours domain is quantised to
+ * hundredths and the two populations OVERLAP:
+ *
+ *     hold ms        hours     ledgerable today?
+ *     0 – 18s        0.00      no  (phantom)
+ *     18 – 30s       0.01      no  (phantom)
+ *     30 – 54s       0.01      YES (a real 45-second hold)
+ *     54s+           0.02+     YES
+ *
+ * `hours === 0.01` is therefore genuinely ambiguous — a naive `hours <= 0.01`
+ * filter would DELETE a legitimate 30-to-54-second hold on restore. Losing a
+ * tech's real unpaid time is strictly worse than the bug being fixed, so the
+ * filter stops at the band that cannot be anything but a phantom: hours of zero
+ * means ms < 18s, which is below the 30s gate under every rounding.
+ *
+ * The 18-to-30-second phantoms (hours 0.01) survive on purpose. They are NOT
+ * separable in the hours domain by any predicate, here or in SQL — the
+ * discriminating value (raw ms) was never written to the database or the backup.
+ *
+ * SCOPE: timer-sourced rows only. `manual` rows are typed in by hand and
+ * `zero_day` rows come from resolving an empty scheduled day (schedule.ts) —
+ * neither ever passed through the 30-second gate, and a hand-entered 0-hour note
+ * is the user's own record to keep.
+ *
+ * `Number(...)` and the `> 0` phrasing are deliberate: a hand-edited backup can
+ * carry a string or NaN there, and NaN must be KEPT (every comparison is false)
+ * so a weird value fails loudly downstream instead of being silently dropped.
+ */
+function isRestorableUnpaidTime(u: UnpaidTime): boolean {
+  if (u.source !== "timer") return true;
+  const hours = Number(u.hours);
+  return !(hours <= 0);
+}
+
 export function buildImportPayload(
   bundle: ImportBundle,
   opts: BuildPayloadOptions = {},
@@ -406,7 +454,7 @@ export function buildImportPayload(
   }
 
   if (bundle.unpaidTime) {
-    payload.unpaid_time = bundle.unpaidTime.map((u) => ({
+    payload.unpaid_time = bundle.unpaidTime.filter(isRestorableUnpaidTime).map((u) => ({
       id: newId(),
       date: u.date,
       hours: u.hours,

@@ -458,3 +458,116 @@ describe("redo-of chip back-fill on edit-load", () => {
     expect(result.current.comebackOfEntryId).toBeNull();
   });
 });
+
+// The same shape of bug as the resetForm one at the top of this file: a field
+// missing from a hand-maintained list. `actualSource` was absent from BOTH
+// linesFromEntry and the performSave payload, so every edit-save sent
+// `undefined` — and db/entries.ts writes
+// `actualHours === null ? null : (actualSource ?? null)`, which turns that into
+// a NULL actual_source. A retro-captured "estimate" would silently become
+// indistinguishable from a timed measurement, and lib/true-time.ts's
+// isPoolableLine (the only reader that cares) would let a guess into the shared
+// True Time average. Nothing else in the stack can catch it: the type is
+// optional, the zod schema is optional, and both are happy with undefined.
+describe("actualSource round-trip on edit-save", () => {
+  type SavedLine = {
+    id?: string;
+    actualHours: number | null;
+    actualSource?: "timer" | "estimate" | null;
+  };
+
+  /** An edit-mode entry with one line carrying whatever source is passed. */
+  function entryWithSource(
+    actualSource: "timer" | "estimate" | null,
+    actualHours: number | null = 1.4,
+  ): Entry {
+    return {
+      id: "entry-est",
+      userId: "user-1",
+      createdAt: "2026-09-01T15:00:00.000Z",
+      updatedAt: "2026-09-01T15:00:00.000Z",
+      date: "2026-09-01",
+      roNumber: "80231",
+      vehicle: { year: "2019", make: "Toyota", model: "Camry", vin: "", mileage: "" },
+      opCodes: [
+        {
+          id: "line-1",
+          opCodeId: null,
+          custom: true,
+          customCode: "OIL",
+          customDescription: "LOF",
+          flagHours: 0.5,
+          actualHours,
+          notes: "",
+          position: 0,
+          subOpCodeId: null,
+          laborType: null,
+          actualSource,
+        },
+      ],
+      flagHours: 0.5,
+      notes: "",
+    };
+  }
+
+  /** The op-code lines performSave would actually persist. */
+  async function savedLines(
+    result: { current: ReturnType<typeof useLogRoForm> },
+  ): Promise<SavedLine[]> {
+    await act(async () => {
+      result.current.handleSave();
+    });
+    expect(saveEntry).toHaveBeenCalledTimes(1);
+    const [input] = saveEntry.mock.calls[0] as unknown as [
+      { opCodes: SavedLine[] },
+    ];
+    return input.opCodes;
+  }
+
+  it("loads actualSource into the form's line drafts", () => {
+    const { result } = setup({ existingEntry: entryWithSource("estimate") });
+    expect(result.current.lines[0].actualSource).toBe("estimate");
+  });
+
+  it("keeps an estimate an estimate through an ordinary edit-save", async () => {
+    const { result } = setup({ existingEntry: entryWithSource("estimate") });
+    // Touch an unrelated field — the real-world trigger is a tech fixing a
+    // typo, not anything to do with hours.
+    act(() => {
+      result.current.setNotes("customer waited");
+    });
+    const [line] = await savedLines(result);
+    expect(line.actualSource).toBe("estimate");
+    // Guard against passing for the wrong reason: db/entries.ts only reads
+    // actualSource when actualHours is non-null.
+    expect(line.actualHours).toBe(1.4);
+    // The line has to keep its DB id too, or updateEntry treats it as a new
+    // row and the assertion above says nothing about the persisted line.
+    expect(line.id).toBe("line-1");
+  });
+
+  it("keeps a timer measurement labelled as one", async () => {
+    const { result } = setup({ existingEntry: entryWithSource("timer") });
+    const [line] = await savedLines(result);
+    expect(line.actualSource).toBe("timer");
+  });
+
+  it("sends an explicit null — never undefined — when there is no source", async () => {
+    const { result } = setup({ existingEntry: entryWithSource(null, null) });
+    const [line] = await savedLines(result);
+    // `undefined` would pass a loose toBe(null)-free check but is exactly the
+    // value that made the bug invisible, so assert the property is present.
+    expect(line).toHaveProperty("actualSource", null);
+  });
+
+  it("leaves a brand-new line with no source at all", async () => {
+    const { result } = setup();
+    act(() => {
+      result.current.setRoNumber("80999");
+      result.current.addCustomLine({ code: "TIRE", description: "Rotate", flagHours: 0.3 });
+    });
+    const [line] = await savedLines(result);
+    expect(line.actualSource).toBeNull();
+    expect(line.actualHours).toBeNull();
+  });
+});

@@ -270,11 +270,40 @@ describe("formatDisputePackText", () => {
     expect(text).toContain("Technician: Jane Tech");
     expect(text).toContain("RO #1001");
     expect(text).toContain("Total variance: 2.00h");
-    expect(text).toContain("$60");
+    expect(text).toContain("$60.00");
     expect(text).toContain("Photo record available for 1 of 1");
     // No accusatory language / emoji.
     expect(text).not.toMatch(/shorted me|you owe|cheated/i);
     expect(text).not.toMatch(/\p{Emoji_Presentation}/u);
+  });
+
+  // Escalation disputepack-money-column-rounding (2026-09-06). The dollar
+  // column is a claim document's arithmetic: if the rows a service manager adds
+  // up do not equal the total printed under them, the claim gets waved off over
+  // a discrepancy that was never in the data. At whole dollars these four rows
+  // printed 45/42/45/35 = $167 under a total of $166.
+  it("prints a dollar column whose rows sum to the printed total", () => {
+    const rates = ratesToMap([rateOf("customer_pay", 32)]);
+    const shorts = [1.4, 1.3, 1.4, 1.1];
+    const entries = shorts.map((h, i) =>
+      entry([line({ id: `l${i}`, flagHours: h, paidHours: 0 })], {
+        id: `e${i}`,
+        roNumber: `100${i}`,
+      }),
+    );
+    const pack = build({ entries, rates });
+    expect(pack.lines).toHaveLength(4);
+
+    const text = formatDisputePackText(pack);
+    // Every per-row amount is printed to the cent…
+    for (const d of [44.8, 41.6, 44.8, 35.2]) {
+      expect(text).toContain(`$${d.toFixed(2)}`);
+    }
+    // …and so is the total, which is what makes the page reconcile.
+    expect(text).toContain("$166.40");
+    expect(shorts.reduce((s, h) => s + h * 32, 0)).toBeCloseTo(166.4, 5);
+    // The old whole-dollar rendering is gone from the document entirely.
+    expect(text).not.toMatch(/\$167/);
   });
 
   it("renders an empty-state message for a zero-short pack", () => {

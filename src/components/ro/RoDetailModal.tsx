@@ -358,6 +358,20 @@ function LineRow({
               onClick={toggleUpsell}
               disabled={markingUpsell}
               aria-pressed={upsell}
+              // Named like the Remove-line button beside it (line ~427): every
+              // line's upsell toggle announced the identical string "Upsell",
+              // and with no row-level labelledby relationship, each control
+              // must self-identify. `code` falls back to an em dash, which
+              // names nothing, so treat that as no code at all.
+              aria-label={
+                code && code !== "—"
+                  ? upsell
+                    ? `Unmark ${code} as upsell`
+                    : `Mark ${code} as upsell`
+                  : upsell
+                    ? "Unmark as upsell"
+                    : "Mark as upsell"
+              }
               title={
                 upsell
                   ? "Marked as an upsell — tap to unmark"

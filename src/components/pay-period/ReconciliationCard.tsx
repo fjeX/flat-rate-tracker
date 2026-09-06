@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Entry, EntryOpCode, OpCode, UnpaidTime } from "@/lib/types";
@@ -83,6 +83,15 @@ function ReconLineRow({
   const [saved, setSaved] = useState<number | null>(initial);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Whether the tech is in the box right now. State, not a ref, because the
+  // resync effect below has to re-run the moment focus leaves — a prop change
+  // that arrived while they were typing has to land as soon as it's safe.
+  const [focused, setFocused] = useState(false);
+  // The last paid_hours value this row seeded its local state from — either at
+  // mount, from a later prop, or from its own successful write. It is the
+  // "we already know about this number" marker, and it is what makes the effect
+  // fire on an actual SERVER change rather than on every incidental re-render.
+  const syncedFrom = useRef<number | null>(initial);
 
   // An EMPTY field means Pending, not "nothing to do". paid_hours is nullable
   // all the way down (setLinePaidHoursSchema is .nullable(), the column is
@@ -104,6 +113,42 @@ function ReconLineRow({
   // line is not dirty and fires no write.
   const dirty = !invalid && parsed !== saved;
 
+  // The same staleness the commit path below already guards against (see the
+  // comment at setPaidText there), but caused by an EXTERNAL writer instead of
+  // this row. The row is keyed by line.id and stays mounted across a
+  // router.refresh(), so when DisputeOutcomeCard's "apply recovery" writes new
+  // paid_hours and refreshes, the Server Component props update and this row's
+  // local paidText/saved do not. The tiles show the new figure and this one box
+  // shows yesterday's — and a tech who "corrects" it retypes over a value that
+  // was already right, because setLinePaidHours is an absolute SET.
+  //
+  // WHY paidText AND saved MOVE TOGETHER, ALWAYS: `dirty` compares them, and
+  // re-seeding only `saved` would make an untouched stale box read as dirty and
+  // start writing its stale text on a mere tab-through. Today an untouched box
+  // no-ops on blur because both halves are equally stale; that stays true.
+  //
+  // WHY IT SKIPS WHILE FOCUSED OR DIRTY: overwriting hours the tech is halfway
+  // through typing is a worse bug than the one being fixed. `dirty` alone isn't
+  // enough — "5." typed over a saved 5 parses back to not-dirty mid-keystroke —
+  // so the focus check covers the whole time they're in the box. `focused` is a
+  // dep, so a change that arrived while they were typing lands on blur instead
+  // of being dropped.
+  //
+  // WHY IT SKIPS WHILE PENDING, and why commit() advances syncedFrom: during
+  // this row's own write the props still carry the OLD number, and resyncing
+  // from them would undo the write on screen. commit() marks that old prop as
+  // already accounted for on success, which keeps this effect quiet across the
+  // gap before the refresh lands, so the two re-seed paths never fight over the
+  // same box.
+  const incoming = line.paidHours ?? null;
+  useEffect(() => {
+    if (incoming === syncedFrom.current) return;
+    if (isPending || focused || dirty) return;
+    syncedFrom.current = incoming;
+    setPaidText(incoming === null ? "" : String(incoming));
+    setSaved(incoming);
+  }, [incoming, isPending, focused, dirty]);
+
   function commit() {
     if (invalid) {
       setError("Enter a number, or clear the box to set it back to Pending.");
@@ -124,6 +169,15 @@ function ReconLineRow({
           return;
         }
         setSaved(value);
+        // Account for the PRE-write prop, not for `value`. The props still
+        // carry the old number for the moment between this write landing and
+        // the refresh below arriving, and the effect must read that moment as
+        // "nothing new from the server" — marking it with `value` instead would
+        // make old-prop ≠ synced true and flash the pre-write figure back into
+        // the box until the refresh caught up. When the refresh does arrive the
+        // prop differs from this mark, so the effect re-seeds from what
+        // actually landed (a server clamp included) exactly once.
+        syncedFrom.current = incoming;
         // The row stays mounted across the refresh (stable key, and with the
         // toggle on it doesn't drop off the list), so the local text has to be
         // re-seeded from what actually landed. Otherwise "1.30" typed over a
@@ -171,7 +225,15 @@ function ReconLineRow({
           max={999.99}
           value={paidText}
           onChange={(e) => setPaidText(e.target.value)}
-          onBlur={commit}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            // Order matters only in that both must happen: commit() decides on
+            // the value the tech left in the box, and clearing `focused` lets
+            // the resync effect deliver any server change that arrived while
+            // they were in it.
+            setFocused(false);
+            commit();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
