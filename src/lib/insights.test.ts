@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   dataRange,
   displayedHours,
+  displayedUses,
   bigJobCoverage,
   bigJobPerformance,
   formatRatio,
@@ -417,6 +418,178 @@ describe("opCodePerformance", () => {
 
   it("returns an empty array for no entries", () => {
     expect(opCodePerformance([], library)).toEqual([]);
+  });
+});
+
+// The one invariant this whole group exists to pin: THE COUNT AND THE HOURS
+// BESIDE IT DESCRIBE THE SAME LINES. Every case below builds a row where the
+// two populations genuinely differ, because a row whose lines are all timed (or
+// all rework) passes whatever displayedUses returns and proves nothing.
+describe("displayedUses", () => {
+  it("prints the TIMED count on a measured row with untimed lines beside it", () => {
+    // The defect, in its live shape. BRK-R: five lines carrying the code, ONE
+    // of them on a clock. `uses` is 5; flagTotal, actualTotal and the ratio all
+    // came from that single line, so the row rendered "5 uses · 2.5h flag →
+    // 3.0h actual · 1.20x" and a tech reads five jobs flagging 2.5h between
+    // them. Four of the five contributed nothing to any number on the row.
+    const rows = opCodePerformance(
+      [
+        entry([line({ id: "t", custom: true, customCode: "BRK-R", flagHours: 2.5, actualHours: 3 })], { id: "e1" }),
+        ...[1, 2, 3, 4].map((n) =>
+          entry([line({ id: `u${n}`, custom: true, customCode: "BRK-R", flagHours: 2.5, actualHours: null })], { id: `eu${n}` }),
+        ),
+      ],
+      [],
+    );
+    const row = rows[0];
+    // Preconditions — if these drift the test stops testing the mismatch.
+    expect(opCodeState(row)).toBe("measured");
+    expect(row.uses).toBe(5);
+    expect(row.timedUses).toBe(1);
+    expect(displayedHours(row)).toEqual({ flag: 2.5, actual: 3 });
+
+    expect(displayedUses(row)).toBe(1);
+  });
+
+  it("counts only the lines the hours came from when a code is timed sometimes", () => {
+    // Two timed lines out of four, and the flag hours differ between the timed
+    // and untimed ones so the count cannot be recovered from the hours. The
+    // hours describe two jobs; the count must say two.
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", custom: true, customCode: "DIAG", flagHours: 1, actualHours: 1.4 }),
+          line({ id: "b", custom: true, customCode: "DIAG", flagHours: 1, actualHours: 1.6 }),
+          line({ id: "c", custom: true, customCode: "DIAG", flagHours: 4, actualHours: null }),
+          line({ id: "d", custom: true, customCode: "DIAG", flagHours: 4, actualHours: null }),
+        ]),
+      ],
+      [],
+    );
+    const row = rows[0];
+    expect(row.uses).toBe(4);
+    expect(displayedUses(row)).toBe(2);
+    expect(displayedHours(row)).toEqual({ flag: 2, actual: 3 });
+  });
+
+  it("excludes an implausible reading from the count, exactly as the hours do", () => {
+    // A mis-tapped timer is not a measurement — isMeasuredLine drops it from
+    // flagTotal/actualTotal, so it must drop out of the count too, or the row
+    // claims two readings behind hours drawn from one.
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "real", custom: true, customCode: "ENG", flagHours: 10, actualHours: 11 }),
+          line({ id: "tap", custom: true, customCode: "ENG", flagHours: 10, actualHours: 0.12 }),
+        ]),
+      ],
+      [],
+    );
+    const row = rows[0];
+    expect(row.uses).toBe(2);
+    expect(row.implausibleUses).toBe(1);
+    expect(displayedUses(row)).toBe(1);
+  });
+
+  it("never prints 0 uses beside a live ratio", () => {
+    // The failure mode the fix could have introduced: "1.20x" over "0 uses".
+    // It cannot happen — flagTotal only grows on the same line that increments
+    // timedUses — but a measured row with zero uses would be a worse bug than
+    // the one being fixed, so it is pinned rather than argued.
+    const rows = opCodePerformance(
+      [
+        entry([
+          line({ id: "a", custom: true, customCode: "X", flagHours: 1, actualHours: 1.2 }),
+          line({ id: "b", custom: true, customCode: "X", flagHours: 1, actualHours: null }),
+          line({ id: "c", custom: true, customCode: "Y", flagHours: 3, actualHours: 3 }),
+          line({ id: "d", custom: true, customCode: "Z", flagHours: 0, actualHours: 2, isComeback: true }),
+          line({ id: "e", custom: true, customCode: "W", flagHours: 2, actualHours: null }),
+        ]),
+      ],
+      [],
+    );
+    for (const row of rows) {
+      if (opCodeState(row) !== "measured") continue;
+      expect(row.ratio).not.toBeNull();
+      expect(displayedUses(row)).toBeGreaterThan(0);
+    }
+  });
+
+  it("still prints the comeback count on an unpaid row", () => {
+    // The case fixed first (7b2f7bc). Kept here so the two branches live in one
+    // place: eight lines, two of them the rework the hours came from.
+    const rows = opCodePerformance(
+      [
+        entry([
+          ...[1, 2].map((n) =>
+            line({ id: `c${n}`, custom: true, customCode: "ALIGN", flagHours: 0, actualHours: 3.1, isComeback: true }),
+          ),
+          ...[1, 2, 3, 4, 5, 6].map((n) =>
+            line({ id: `u${n}`, custom: true, customCode: "ALIGN", flagHours: 1, actualHours: null }),
+          ),
+        ]),
+      ],
+      [],
+    );
+    const row = rows[0];
+    expect(opCodeState(row)).toBe("unpaid");
+    expect(row.uses).toBe(8);
+    expect(displayedUses(row)).toBe(2);
+  });
+
+  it("prints every line on an untimed row, because there are no hours to agree with", () => {
+    // The one state where the full count IS the honest number: displayedHours
+    // returns null and the row shows em-dashes, so "4 uses · — · never timed"
+    // is the finding. timedUses here is 0, and printing that would erase four
+    // real jobs from the page.
+    const rows = opCodePerformance(
+      [
+        entry(
+          [1, 2, 3, 4].map((n) =>
+            line({ id: `n${n}`, custom: true, customCode: "NEVER", flagHours: 2, actualHours: null }),
+          ),
+        ),
+      ],
+      [],
+    );
+    const row = rows[0];
+    expect(opCodeState(row)).toBe("untimed");
+    expect(row.timedUses).toBe(0);
+    expect(displayedHours(row)).toBeNull();
+    expect(displayedUses(row)).toBe(4);
+  });
+
+  it("breaks a ratio tie by the displayed count, not by the raw one", () => {
+    // opCodePerformance's own comparator. Two codes at exactly 1.20x: SPARSE
+    // has one timed line among six, DENSE has three timed among three. Raw
+    // `.uses` ranks SPARSE first (6 > 3); the displayed counts are 1 and 3, so
+    // DENSE leads. This order is what BigJobsSection renders — it filters the
+    // rows, it never re-sorts them.
+    const rows = opCodePerformance(
+      [
+        entry(
+          [
+            line({ id: "s0", custom: true, customCode: "SPARSE", flagHours: 5, actualHours: 6 }),
+            ...[1, 2, 3, 4, 5].map((n) =>
+              line({ id: `s${n}`, custom: true, customCode: "SPARSE", flagHours: 5, actualHours: null }),
+            ),
+            ...[1, 2, 3].map((n) =>
+              line({ id: `d${n}`, custom: true, customCode: "DENSE", flagHours: 5, actualHours: 6 }),
+            ),
+          ],
+        ),
+      ],
+      [],
+    );
+    const sparse = rows.find((r) => r.code === "SPARSE")!;
+    const dense = rows.find((r) => r.code === "DENSE")!;
+    // The precondition: an exact ratio tie, and the two counts disagreeing.
+    expect(sparse.ratio).toBeCloseTo(1.2, 10);
+    expect(dense.ratio).toBeCloseTo(1.2, 10);
+    expect(sparse.uses).toBeGreaterThan(dense.uses);
+    expect(displayedUses(sparse)).toBeLessThan(displayedUses(dense));
+
+    expect(rows.map((r) => r.code)).toEqual(["DENSE", "SPARSE"]);
   });
 });
 

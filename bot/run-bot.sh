@@ -46,6 +46,53 @@ export FRT_BOT_EMAIL FRT_BOT_PASSWORD RUN_DATE WEEKLY_DIGEST
 # be the only guard, so the runner no longer trusts the exit code:
 # THE REPORT FILE IS THE ONLY SUCCESS SIGNAL, and a missing one earns one retry.
 cd "$REPO_DIR"
+
+# --- sync: pull latest before the bot reads the checklist --------------------
+# Until now this runner never synced the repo at all -- cron fires straight
+# against whatever happens to be checked out. A checklist fix that is
+# committed AND pushed does nothing until some unrelated process happens to
+# `git pull` this working tree by hand. Commit a2937b5 sat unpulled for a full
+# day this way, and the 09-07 run read a checklist missing 80 lines describing
+# behaviour that had already shipped -- then escalated exactly that
+# already-correct behaviour as new bugs.
+#
+# This step MUST NOT be able to wedge or derail the run. The working tree
+# legitimately carries local modifications (other sessions can be mid-edit)
+# and dozens of untracked nightly screenshots, and `git pull --ff-only` is
+# safe against both by construction: a fast-forward never touches an
+# untracked path, and git refuses -- loudly, nonzero exit, zero side effects
+# -- rather than overwrite a tracked file that has local changes. So a failed
+# or non-fast-forward pull just means "run on what's already here"; it is
+# never a reason to stop the night's run. Never `reset --hard`, never `clean`,
+# never drop a stash to force it through -- none of that runs here, on
+# purpose.
+PRE_PULL_HEAD="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+PRE_PULL_CHECKLIST_SHA="$(sha256sum "$BOT_DIR/INSTRUCTIONS.md" 2>/dev/null | cut -d' ' -f1)"
+
+if PULL_OUT="$(git pull --ff-only 2>&1)"; then
+  POST_PULL_HEAD="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  POST_PULL_CHECKLIST_SHA="$(sha256sum "$BOT_DIR/INSTRUCTIONS.md" 2>/dev/null | cut -d' ' -f1)"
+  if [[ "$PRE_PULL_CHECKLIST_SHA" != "$POST_PULL_CHECKLIST_SHA" ]]; then
+    CHECKLIST_NOTE="checklist CHANGED"
+  else
+    CHECKLIST_NOTE="checklist unchanged"
+  fi
+  if [[ "$PRE_PULL_HEAD" == "$POST_PULL_HEAD" ]]; then
+    echo "sync: already up to date at $POST_PULL_HEAD ($CHECKLIST_NOTE)" >>"$LOG_FILE"
+  else
+    echo "sync: pulled $PRE_PULL_HEAD -> $POST_PULL_HEAD ($CHECKLIST_NOTE)" >>"$LOG_FILE"
+  fi
+  SYNC_LINE="Ran against commit \`$POST_PULL_HEAD\` ($CHECKLIST_NOTE since the last run)."
+else
+  # Loud, non-fatal -- this branch is the entire point of the guard. A stuck
+  # or diverged repo must never stop tonight's run; it must just run on
+  # whatever was already checked out, and say so where a human will see it.
+  echo "WARN: git pull --ff-only failed -- running on the existing working tree, unpulled" >>"$LOG_FILE"
+  echo "$PULL_OUT" >>"$LOG_FILE"
+  SYNC_LINE="⚠️ git pull failed before this run started -- ran on commit \`$PRE_PULL_HEAD\` (unpulled; see runner log for the error). This is the exact failure mode that let a checklist fix sit invisible for a day on 2026-09-07 -- if you see this warning, pull the repo by hand."
+fi
+export SYNC_LINE
+
 BASE_PROMPT="You are the FRT nightly bot. Read bot/INSTRUCTIONS.md and follow it exactly. RUN_DATE=$RUN_DATE WEEKLY_DIGEST=$WEEKLY_DIGEST. Login email is in \$FRT_BOT_EMAIL, password in \$FRT_BOT_PASSWORD."
 
 # How long one attempt gets, and the wall the whole run has to be finished by.
@@ -273,6 +320,15 @@ $(tail -n 40 "$LOG_FILE" 2>/dev/null)
 \`\`\`"
   STATUS="FAIL"
 fi
+
+# Attach sync status to whatever report is about to ship -- this has to run
+# after both branches above (a real report loaded from disk, or the
+# synthesized FAIL block) so the digest can always show which checklist
+# version tonight's run actually read, independent of whether the run passed.
+REPORT="$REPORT
+
+---
+**Sync:** $SYNC_LINE"
 
 # --- ship to n8n -> email ----------------------------------------------------
 jq -n \

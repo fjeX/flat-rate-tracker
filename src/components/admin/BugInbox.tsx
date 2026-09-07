@@ -222,7 +222,7 @@ function BugDetail({
   }
 
   return (
-    <Modal open onClose={handleClose} title="Bug report" wide>
+    <Modal open onClose={handleClose} title="Bug report" size="lg">
       <div className="flex flex-col gap-5">
         {/* Description */}
         <div>

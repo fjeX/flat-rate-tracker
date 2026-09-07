@@ -625,7 +625,7 @@ export function OpCodeFormModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={title} wide>
+    <Modal open={open} onClose={onClose} title={title} size="lg">
       <OpCodeFormBody
         mode={mode}
         initial={seeded}

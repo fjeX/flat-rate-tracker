@@ -49,6 +49,12 @@ export async function updateBonusAction(
   const clean = validate(newBonusSchema, input);
   const supabase = await createClient();
   const bonus = await db.updateBonus(supabase, bonusId, bonusColumns(clean));
+  // null = the update matched no row: already deleted, or not this account's.
+  // Reporting that as a save would leave the form showing edited numbers that
+  // are not in the ledger, which is worse than an error on the money screen.
+  if (!bonus) {
+    throw new Error("That spiff no longer exists — nothing was saved.");
+  }
   revalidateBonusScreens();
   return bonus;
 }
@@ -56,7 +62,12 @@ export async function updateBonusAction(
 export async function deleteBonusAction(id: string): Promise<void> {
   const bonusId = validate(bonusIdSchema, id);
   const supabase = await createClient();
-  await db.deleteBonus(supabase, bonusId);
+  // false = nothing matched, so nothing was deleted. Throwing (rather than
+  // returning quietly) is what puts it in front of the tech: SpiffsCard's catch
+  // is the only thing that reports a failed money delete out loud.
+  if (!(await db.deleteBonus(supabase, bonusId))) {
+    throw new Error("That spiff was not deleted — it may already be gone. Refresh and try again.");
+  }
   revalidateBonusScreens();
 }
 

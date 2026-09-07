@@ -133,21 +133,43 @@ export function displayedHours(
  * The USE COUNT a row puts on the page — state-gated exactly like
  * `displayedHours`, and for the same reason.
  *
- * `uses` counts every line of the code, timed or not. On an `unpaid` row the
- * hours beside it are drawn from the comeback subset ONLY, so printing the full
- * count glued a total to a subset: "8 uses · 0.0h flag → 6.2h actual" under an
- * "unpaid rework" pill reads as eight alignments that were all rework, when two
- * of the eight were. `unpaidUses` is the count those hours actually came from —
- * it is already what the pill's own tooltip quotes.
+ * THE INVARIANT: the count must describe the SAME POPULATION as the hours
+ * printed beside it. `uses` counts every line of the code, timed or not, and on
+ * two of the three states that is a different set of lines from the one the
+ * hours were drawn from — so printing it glues a total to a subset.
  *
- * A measured or untimed row is unchanged: its hours describe every line, so its
- * count does too.
+ *   unpaid   — the hours come from the comeback subset ONLY, so "8 uses · 0.0h
+ *     flag → 6.2h actual" under an "unpaid rework" pill reads as eight
+ *     alignments that were all rework, when two of the eight were. `unpaidUses`
+ *     is the count those hours actually came from, and it is already what the
+ *     pill's own tooltip quotes.
+ *
+ *   measured — flagTotal and actualTotal accumulate ONLY inside isMeasuredLine,
+ *     in lockstep with `timedUses` and never with `uses`. A code with one timed
+ *     line and four untimed ones rendered "5 uses · 2.5h flag → 3.0h actual ·
+ *     1.20×", where the 2.5h, the 3.0h and the ratio all describe that ONE line;
+ *     a tech reads five jobs flagging 2.5h between them, which is false, and the
+ *     more of a code's lines go untimed the more confidently the row overstates
+ *     its own evidence. Exactly the unpaid failure above, reached through the
+ *     timed/untimed split instead of the comeback one.
+ *
+ *   untimed  — `displayedHours` returns null and the row prints em-dashes, so
+ *     there are no hours for the count to disagree with. `uses` is the honest
+ *     number here and the only useful one: "4 uses · — · never timed" says the
+ *     code was worked four times and measured none of them, which is the whole
+ *     finding. Switching it to timedUses would print a permanent "0 uses" and
+ *     erase the work.
+ *
+ * A measured row always has timedUses >= 1, so this cannot print "0 uses" beside
+ * a live ratio: `ratio` is non-null only when flagTotal > 0, and flagTotal grows
+ * only on the same line of opCodePerformance that increments timedUses.
  */
 export function displayedUses(row: OpCodePerformance): number {
   switch (opCodeState(row)) {
     case "unpaid":
       return row.unpaidUses;
     case "measured":
+      return row.timedUses;
     case "untimed":
       return row.uses;
   }
@@ -390,17 +412,30 @@ export function opCodePerformance(
     row.ratio = row.flagTotal > 0 ? row.actualTotal / row.flagTotal : null;
   }
 
+  // The tie-breaks read the DISPLAYED count, exactly as sortOpCodes' do, and for
+  // the same reason: a measured row prints `timedUses` and an unpaid row prints
+  // `unpaidUses`, so breaking a tie on raw `.uses` orders rows by a number the
+  // tech cannot see. It resolves to `.uses` unchanged for the untimed-vs-untimed
+  // case, which is the only branch where `.uses` IS what the row prints.
+  //
+  // Worth keeping correct even though the op-code table re-sorts through
+  // sortOpCodes before rendering: BigJobsSection renders bigJobPerformance's
+  // rows in THIS order (it only filters them by timedUses, it never sorts), so
+  // this comparator is what the Big jobs table shows.
+  const tie = (a: OpCodePerformance, b: OpCodePerformance) =>
+    displayedUses(b) - displayedUses(a);
+
   return rows.sort((a, b) => {
     const ao = ratioOrder(a);
     const bo = ratioOrder(b);
-    if (ao === null && bo === null) return b.uses - a.uses;
+    if (ao === null && bo === null) return tie(a, b);
     if (ao === null) return 1;
     if (bo === null) return -1;
     // Equality first, and not only for tidiness: both-unpaid means both are
     // Infinity, and Infinity - Infinity is NaN, which a comparator silently
     // reads as "equal" and leaves the block in arbitrary order.
-    if (ao === bo) return b.unpaidHours - a.unpaidHours || b.uses - a.uses;
-    return bo - ao || b.uses - a.uses;
+    if (ao === bo) return b.unpaidHours - a.unpaidHours || tie(a, b);
+    return bo - ao || tie(a, b);
   });
 }
 

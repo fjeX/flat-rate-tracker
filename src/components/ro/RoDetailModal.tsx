@@ -74,7 +74,7 @@ export function RoDetailModal({
   const roEarnings = showMoney ? entryEarnings(entry, rates) : 0;
 
   return (
-    <Modal open onClose={onClose} title={`RO #${entry.roNumber}`} wide>
+    <Modal open onClose={onClose} title={`RO #${entry.roNumber}`} size="lg">
       <div className="space-y-4">
         <div className="text-xs text-[var(--fg-3)]">
           {/* The time the tech recorded for the WORK sits on the date line,

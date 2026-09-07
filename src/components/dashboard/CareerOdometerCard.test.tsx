@@ -169,3 +169,41 @@ describe("CareerOdometerCard survives RollingNumber's digit shredder", () => {
     expect(visibleReadout()).toBe("1,234.6");
   });
 });
+
+describe("CareerOdometerCard names the window its delta actually covers", () => {
+  // The defect, as it shipped: this delta is a ROLLING seven days ending today
+  // (gamification.ts — `addDays(today, -6)` … today), but it was labelled "this
+  // week". The dashboard's "This Week" stat tile is a calendar week, anchored on
+  // a start day the tech configures. On 2026-09-07 (a Sunday) the two windows
+  // were Sep 1–7 and Sep 6–7: both figures correct, 179 hours apart, one card
+  // apart on screen, both claiming the same three words.
+  //
+  // Asserted alongside the figure on purpose — the string is only meaningful as
+  // a description of the window the number came from.
+  const ROLLING_7_DAYS = 208.4; // Sep 1–7
+  const CALENDAR_WEEK = 29.1; // Sep 6–7, what the "This Week" tile showed
+
+  function deltaText(): string {
+    return document.querySelector(".gami-odo-delta")?.textContent ?? "";
+  }
+
+  it("labels a rolling-window delta as the last 7 days, not the week", () => {
+    render(
+      <CareerOdometerCard
+        careerTotal={1240.2}
+        careerMilestones={[]}
+        weekDelta={ROLLING_7_DAYS}
+      />,
+    );
+    expect(deltaText()).toContain(`+${fmtHours(ROLLING_7_DAYS)} last 7 days`);
+    // The number is a superset of the calendar week beside it, so it must not
+    // borrow that word in any casing or phrasing.
+    expect(ROLLING_7_DAYS).toBeGreaterThan(CALENDAR_WEEK);
+    expect(deltaText()).not.toMatch(/week/i);
+  });
+
+  it("still says nothing at all when the window is empty", () => {
+    renderCard(1240.2); // weekDelta = 0
+    expect(document.querySelector(".gami-odo-delta")).toBeNull();
+  });
+});

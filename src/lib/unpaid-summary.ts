@@ -31,6 +31,17 @@ export type UnpaidLineSource = "ro" | "ledger";
 /** One row of unpaid time, flattened with enough context to render directly. */
 export type UnpaidLine = {
   source: UnpaidLineSource;
+  /**
+   * The unpaid_time PRIMARY KEY for a ledger row; null for an RO-side line,
+   * which has no ledger row behind it (it is an op code on a repair order and
+   * is edited on the RO).
+   *
+   * Carried so a surface can act on the exact row — the delete affordance
+   * targets this and only this. Never identify a row by its hours: a stored
+   * 0.01h spans 18s–54s of hold time, so a real 30s rework and a pre-gate
+   * phantom are indistinguishable by value.
+   */
+  id: string | null;
   date: string; // "YYYY-MM-DD"
   kind: UnpaidTimeKind;
   hours: number;
@@ -102,6 +113,8 @@ export function buildUnpaidSummary(
       const rate = resolveLineRate(line, rates);
       lines.push({
         source: "ro",
+        // No ledger row exists behind an RO-side line.
+        id: null,
         date: entry.date,
         // A comeback line on an RO whose kind was never set predates the kind
         // selector; treat it as the tech's own work, which is what the RO shape
@@ -126,6 +139,7 @@ export function buildUnpaidSummary(
     if (!inRange(row.date, range)) continue;
     lines.push({
       source: "ledger",
+      id: row.id,
       date: row.date,
       kind: row.kind,
       hours: row.hours,

@@ -44,9 +44,13 @@ export function CareerOdometerCard({
           <span className="unit">hrs</span>
         </RollingNumber>
       </div>
+      {/* "last 7 days", never "this week": this delta is a rolling window ending
+          today (gamification.ts), while the dashboard's "This Week" tile is a
+          calendar week whose start day the tech configures. Same words, two
+          different windows, side by side — so this one doesn't use the word. */}
       {weekDelta > 0 && (
         <div className="gami-odo-delta tabular">
-          <TrendingUp size={12} aria-hidden="true" /> +{fmtHours(weekDelta)} this week
+          <TrendingUp size={12} aria-hidden="true" /> +{fmtHours(weekDelta)} last 7 days
         </div>
       )}
       <div className="gami-road">

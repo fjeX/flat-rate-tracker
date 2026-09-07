@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle, Loader2, Upload, X } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
 import { createClient } from "@/lib/supabase/client";
 import { saveRoTemplateMetadata } from "@/app/actions/ro-template";
 import type { FieldId, FieldRegion, RoTemplate } from "@/lib/types";
@@ -264,26 +265,18 @@ export function RoTemplateEditor({
   const canSave = !!imageObjectUrl && regions.length > 0 && !saving;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-4 pt-8">
-      <div className="card relative flex w-full max-w-4xl flex-col gap-5 p-6">
+    // Renders through the shared Modal so it gets role="dialog", aria-modal,
+    // an accessible name, Escape-to-close, a focus trap, focus restore and a
+    // background scroll lock. onClose is wrapped: Modal's ✕ passes its click
+    // event to onClose, which our (saved?: RoTemplate) signature would read as
+    // a saved template.
+    <Modal open onClose={() => onClose()} title="RO Template Setup" size="xl">
+      <div className="flex flex-col gap-5">
 
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-[var(--fg-0)]">RO Template Setup</h2>
-            <p className="mt-0.5 text-sm text-[var(--fg-2)]">
-              Upload a sample RO, pick a field, then drag on the image to mark where it appears.
-              The scanner will only read those regions — much more accurate than scanning the whole page.
-            </p>
-          </div>
-          <button
-            onClick={() => onClose()}
-            className="relative rounded-full p-1 text-[var(--fg-2)] hover:text-[var(--fg-0)] after:absolute after:-inset-2.5 after:content-['']"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+        <p className="text-sm text-[var(--fg-2)]">
+          Upload a sample RO, pick a field, then drag on the image to mark where it appears.
+          The scanner will only read those regions — much more accurate than scanning the whole page.
+        </p>
 
         {/* Template name */}
         <div>
@@ -468,6 +461,6 @@ export function RoTemplateEditor({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

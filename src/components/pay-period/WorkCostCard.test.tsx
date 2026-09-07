@@ -31,12 +31,32 @@
 // states and has its own tests. The defect is entirely in which sentence the
 // card chooses to print over that number, so the rendered card is the only
 // thing that can fail on it.
-import { describe, it, expect, afterEach } from "vitest";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
-import { WorkCostCard } from "./WorkCostCard";
 import type { EffectiveHourly } from "@/lib/wage-check";
 import type { UnpaidSummary } from "@/lib/unpaid-summary";
+
+// The card now owns the app's only per-row unpaid-time delete, so it calls a
+// server action and asks the router to repaint. Both are mocked; the factories
+// reference these fns lazily (inside an arrow) so the hoisted vi.mock cannot
+// touch them before they are initialised.
+const deleteUnpaidTimeAction = vi.fn();
+vi.mock("@/app/actions/unpaid-time", () => ({
+  deleteUnpaidTimeAction: (...a: [string]) => deleteUnpaidTimeAction(...a),
+}));
+
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }),
+}));
+
+// Imported after the mocks so the component picks them up.
+import { WorkCostCard } from "./WorkCostCard";
+
+// The id of the ledger row in WITH_UNPAID. A uuid, because the action validates
+// the shape before it reaches the data layer.
+const LEDGER_ROW_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 
 afterEach(cleanup);
 
@@ -84,6 +104,7 @@ const WITH_UNPAID: UnpaidSummary = {
   lines: [
     {
       source: "ledger",
+      id: LEDGER_ROW_ID,
       date: "2026-07-14",
       kind: "wait_parts",
       hours: 3.3,
@@ -680,6 +701,7 @@ describe("WorkCostCard — the arithmetic under the headline", () => {
 describe("WorkCostCard — every unpaid record, money column", () => {
   const priced = (hours: number, dollars: number, i: number) => ({
     source: "ledger" as const,
+    id: `00000000-0000-4000-8000-00000000000${i}`,
     date: "2026-07-14",
     kind: "comeback_own" as const,
     hours,
@@ -803,5 +825,191 @@ describe("WorkCostCard — the explainer matches the maths", () => {
     const text = openBubble();
     expect(text).toMatch(/all flagged zero hours is not one of those days/);
     expect(text).toMatch(/A day you marked as a real zero counts its whole shift too/);
+  });
+});
+
+// ── Deleting one unpaid record ───────────────────────────────────────────────
+//
+// The gap this closes: every unpaid_time row was permanent from the UI. The
+// data layer had deleteUnpaidTime with ZERO callers, and the only escape hatch
+// in the whole app was Settings' "clear all data", which also destroys every
+// RO, spiff, dispute and clock hour the account owns. Meanwhile these rows
+// print on the dispute pack — the document a tech hands a service manager — so
+// a wrong one costs credibility on every other row beside it.
+//
+// Three things are pinned here, and they are the three that can hurt someone:
+//   1. Nothing is deleted without a confirmation.
+//   2. That confirmation NAMES the row — kind, hours, date — so a mis-click on
+//      a list of similar-looking rows cannot be silent. A dialog that says
+//      "delete this record?" protects nobody.
+//   3. The action is called with the row's ID and nothing else. A stored 0.01h
+//      spans 18s-54s of hold time, so a real 30s rework and an old pre-gate
+//      phantom are the SAME VALUE — a delete phrased over hours destroys real
+//      evidence.
+describe("WorkCostCard — deleting one unpaid record", () => {
+  let confirmSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    deleteUnpaidTimeAction.mockReset();
+    deleteUnpaidTimeAction.mockResolvedValue({});
+    refresh.mockReset();
+    // jsdom's window.confirm throws "not implemented". The guard is deliberate
+    // product behaviour, so it stays in the component and gets answered here.
+    confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(window, "alert").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Render the card and open the nested "Every unpaid record" drill-down. */
+  function openRecords(unpaid: UnpaidSummary = WITH_UNPAID) {
+    render(
+      <WorkCostCard
+        result={result({
+          status: "no_rates",
+          flagHours: 40,
+          countedFlagHours: 40,
+          clockedHours: 48,
+          denomHours: 48,
+          denomSource: "clocked",
+          workDays: ["2026-07-14"],
+          clockDays: ["2026-07-14"],
+        })}
+        referenceRate={null}
+        unpaid={unpaid}
+        defaultOpen
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Every unpaid record/ }));
+  }
+
+  const deleteButtons = () =>
+    screen.queryAllByRole("button", { name: /^Delete unpaid record/ });
+
+  it("offers one delete control per ledger row, named by kind, hours and date", () => {
+    openRecords();
+
+    const buttons = deleteButtons();
+    expect(buttons).toHaveLength(1);
+    // The label is what a script or a screen reader SELECTS BY. Generic labels
+    // across a list of rows is how the wrong one gets deleted (SpiffsCard,
+    // 2026-08-19), so it names the same three facts the dialog does.
+    expect(buttons[0].getAttribute("aria-label")).toBe(
+      "Delete unpaid record — Waiting on parts, 3.30h, Jul 14, 2026",
+    );
+  });
+
+  it("asks first, and does not delete when the confirm is declined", () => {
+    confirmSpy.mockReturnValue(false);
+    openRecords();
+
+    fireEvent.click(deleteButtons()[0]);
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(deleteUnpaidTimeAction).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("names the row in the confirm — kind, hours to 2dp, and the date", () => {
+    openRecords();
+    fireEvent.click(deleteButtons()[0]);
+
+    const asked = confirmSpy.mock.calls[0][0] as string;
+
+    // The three facts, asserted individually so a reworded sentence that DROPS
+    // one still fails.
+    expect(asked).toContain("Waiting on parts"); // kind
+    expect(asked).toContain("3.30h"); // hours, at the resolution they're stored
+    expect(asked).toContain("Jul 14, 2026"); // date
+    expect(asked).not.toMatch(/undefined/);
+    // And the whole sentence, so the copy is a decision rather than an accident.
+    expect(asked).toBe(
+      "Delete this unpaid record — Waiting on parts, 3.30h, Jul 14, 2026? " +
+        "This can't be undone, and it comes off your unpaid totals and your dispute pack.",
+    );
+  });
+
+  it("hours are named at 2dp, so the 0.01h rows are not all 'the 0.0h one'", () => {
+    // The band the safety warning is about: 0.01h could be a phantom or a real
+    // 30-54s comeback. At the card's usual 1dp the dialog would say "0.0h" for
+    // every one of them, which names nothing.
+    openRecords({
+      ...NO_UNPAID,
+      lines: [
+        {
+          source: "ledger",
+          id: LEDGER_ROW_ID,
+          date: "2026-07-14",
+          kind: "comeback_own",
+          hours: 0.01,
+          roNumber: null,
+          entryId: null,
+          code: null,
+          description: "",
+          dollars: null,
+        },
+      ],
+      comebackHours: 0.01,
+      totalHours: 0.01,
+      byKind: { ...NO_UNPAID.byKind, comeback_own: 0.01 },
+      unpricedHours: 0.01,
+    });
+
+    fireEvent.click(deleteButtons()[0]);
+    expect(confirmSpy.mock.calls[0][0]).toContain("0.01h");
+  });
+
+  it("deletes by primary key — the id, and nothing else", async () => {
+    openRecords();
+    fireEvent.click(deleteButtons()[0]);
+
+    expect(deleteUnpaidTimeAction).toHaveBeenCalledTimes(1);
+    expect(deleteUnpaidTimeAction).toHaveBeenCalledWith(LEDGER_ROW_ID);
+    // Pinned as the WHOLE argument list. Hours, date and kind must never be
+    // part of how a row is identified for deletion.
+    expect(deleteUnpaidTimeAction.mock.calls[0]).toEqual([LEDGER_ROW_ID]);
+  });
+
+  it("offers no delete control for an RO-side line — that row lives on the RO", () => {
+    openRecords({
+      ...NO_UNPAID,
+      lines: [
+        {
+          source: "ro",
+          id: null,
+          date: "2026-07-14",
+          kind: "comeback_own",
+          hours: 2.5,
+          roNumber: "40381",
+          entryId: "entry-1",
+          code: "BRK-FR",
+          description: "Pads only",
+          dollars: null,
+        },
+      ],
+      comebackHours: 2.5,
+      totalHours: 2.5,
+      byKind: { ...NO_UNPAID.byKind, comeback_own: 2.5 },
+      unpricedHours: 2.5,
+    });
+
+    // The row itself is rendered — this is not a vacuous "nothing is here".
+    expect(screen.getByText(/Pads only/)).toBeTruthy();
+    expect(deleteButtons()).toHaveLength(0);
+  });
+
+  it("reports a delete the server refused instead of pretending it worked", async () => {
+    deleteUnpaidTimeAction.mockResolvedValue({ error: "That record is no longer there." });
+    openRecords();
+
+    fireEvent.click(deleteButtons()[0]);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(window.alert).toHaveBeenCalledWith("That record is no longer there.");
+    // A failed delete must not repaint as if it succeeded.
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

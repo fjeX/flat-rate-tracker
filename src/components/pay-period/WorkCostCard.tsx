@@ -14,14 +14,15 @@
 // The hard constraint carried over from wage-check.ts is unchanged — NUMBERS
 // ONLY. No verdicts, no legal framing, no hardcoded wage figure. The only
 // reference rate is one the user typed into Settings.
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { InfoBubble } from "@/components/ui/InfoBubble";
 import { fmtHours } from "@/lib/stats";
 import { fmtHours2 } from "@/lib/format";
 import { fmtMoney, fmtMoney2 } from "@/lib/earnings";
-import { formatDateShort } from "@/lib/periods";
+import { formatDateLong, formatDateShort } from "@/lib/periods";
 import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
 import {
   clockFlagGap,
@@ -29,7 +30,11 @@ import {
   type EffectiveHourly,
   type GapComposition,
 } from "@/lib/wage-check";
-import type { UnpaidSummary } from "@/lib/unpaid-summary";
+import type { UnpaidLine, UnpaidSummary } from "@/lib/unpaid-summary";
+import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
+import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
+import { reportError } from "@/lib/report-error";
+import { deleteUnpaidTimeAction } from "@/app/actions/unpaid-time";
 
 // Two-decimal currency for an hourly figure ("$27.40/hr") — whole dollars are
 // too coarse for a rate, unlike the period totals fmtMoney handles elsewhere.
@@ -79,6 +84,114 @@ function MissingDayLinks({ days }: { days: string[] }) {
   );
 }
 
+// One sentence that names a ledger row: KIND, HOURS, DATE — the same three
+// facts the row itself shows. Shared by the confirm dialog AND the trash
+// button's aria-label so the thing a click targets and the thing the dialog
+// describes cannot disagree about which row is which (the lesson SpiffsCard
+// learned the expensive way on 2026-08-19, when a positional selector answered
+// a generic "delete this spiff?" and destroyed a real one).
+//
+// HOURS ARE SHOWN AT 2dp, deliberately. Unpaid rows are stored to hundredths
+// and a great many of them are 0.01h; at the card's usual 1dp every one of them
+// reads "0.0h", which is not a description of anything. The dialog has to name
+// the row the user is about to lose from a money document.
+//
+// Returns null when nothing survives validation, so the caller falls back to a
+// generic string rather than announcing "undefined".
+function describeUnpaidLine(line: UnpaidLine): string | null {
+  const bits = [
+    UNPAID_TIME_KIND_LABELS[line.kind] ?? null,
+    Number.isFinite(line.hours) ? `${fmtHours2(line.hours)}h` : null,
+    // formatDateLong indexes MONTHS_SHORT[m - 1] with no bounds check, so a
+    // month outside 1-12 prints the literal "undefined". Range-check it so the
+    // clause is dropped rather than announced broken.
+    /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(line.date)
+      ? formatDateLong(line.date)
+      : null,
+  ].filter(Boolean);
+  return bits.length > 0 ? bits.join(", ") : null;
+}
+
+// The one destructive control in this card, and the only way in the whole app
+// to remove a single unpaid-time row. Before this, the only escape hatch was
+// Settings' "clear all data", which also takes every RO, spiff and dispute with
+// it.
+//
+// SCOPE: ledger rows only. An RO-side line is an op code on a repair order —
+// its home is the RO, and deleting it from here would mean editing a ticket
+// from a summary card. Those rows get no button, which is why `line.id` is the
+// gate rather than a prop flag.
+function DeleteUnpaidRowButton({
+  line,
+  onDeleted,
+}: {
+  line: UnpaidLine;
+  onDeleted: () => void;
+}) {
+  const [pending, start] = useTransition();
+  const desc = describeUnpaidLine(line);
+  const id = line.id;
+  if (id === null) return null;
+
+  // An arrow const, not a function declaration: a declaration is hoisted, so TS
+  // treats it as created BEFORE the `id === null` early return and refuses to
+  // narrow the captured `id` inside it.
+  const handle = () => {
+    // NAME THE ROW. These hours are printed on the dispute pack — the document
+    // a tech hands a service manager — so "delete this record?" is not a
+    // confirmation, it is a coin flip. The sentence carries the same kind,
+    // hours and date the row shows on screen.
+    const what = desc ? `this unpaid record — ${desc}` : "this unpaid record";
+    if (
+      !window.confirm(
+        `Delete ${what}? This can't be undone, and it comes off your unpaid totals and your dispute pack.`,
+      )
+    )
+      return;
+    start(async () => {
+      try {
+        // BY PRIMARY KEY. Never by hours: msToHours quantises to hundredths, so
+        // a stored 0.01h is anywhere from 18s to 54s of hold time and the 30s
+        // ledger gate sits inside that band — a real 30s rework and an old
+        // pre-gate phantom are the same number. Nothing here may ever grow a
+        // "clear the 0.01h rows" convenience.
+        const res = await deleteUnpaidTimeAction(id);
+        if (res.error) {
+          window.alert(res.error);
+          return;
+        }
+        onDeleted();
+      } catch (err) {
+        // A failed delete that leaves the row sitting there is indistinguishable
+        // from a successful one that didn't repaint. Say so out loud, and record
+        // it — this is the destructive path.
+        void reportError(err, { url: "WorkCostCard/deleteUnpaidTime" });
+        window.alert(
+          err instanceof Error
+            ? err.message
+            : "Failed to delete that unpaid record.",
+        );
+      }
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handle}
+      disabled={pending}
+      // The dialog is the last line of defence; this label is the targeting.
+      // Both come from describeUnpaidLine so they can't drift apart.
+      aria-label={
+        desc ? `Delete unpaid record — ${desc}` : "Delete unpaid record"
+      }
+      className="relative shrink-0 rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 after:absolute after:-inset-1.5 after:content-['']"
+    >
+      <Trash2 className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 function Cell({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
@@ -105,6 +218,7 @@ export function WorkCostCard({
   // mid-period and reference material once a period is settled.
   defaultOpen?: boolean;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(defaultOpen);
   const [recordsOpen, setRecordsOpen] = useState(false);
 
@@ -683,7 +797,7 @@ export function WorkCostCard({
                   <ul className="m-0 list-none p-0">
                     {unpaid.lines.map((l, i) => (
                       <li
-                        key={`${l.source}-${l.entryId ?? "x"}-${i}`}
+                        key={l.id ?? `${l.source}-${l.entryId ?? "x"}-${i}`}
                         className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-dashed border-[var(--line-soft)] py-2 text-sm first:border-t-0"
                       >
                         <span className="min-w-0 flex-1">
@@ -704,14 +818,31 @@ export function WorkCostCard({
                             {l.description ? ` — ${l.description}` : ""}
                           </span>
                         </span>
-                        <span className="mono shrink-0 tabular-nums text-[var(--fg-1)]">
-                          {fmtHours2(l.hours)}h
-                          {l.dollars !== null && (
-                            <span className="text-[var(--fg-3)]">
-                              {" "}
-                              · {fmtMoney2(l.dollars)}
-                            </span>
-                          )}
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          <span className="mono tabular-nums text-[var(--fg-1)]">
+                            {fmtHours2(l.hours)}h
+                            {l.dollars !== null && (
+                              <span className="text-[var(--fg-3)]">
+                                {" "}
+                                · {fmtMoney2(l.dollars)}
+                              </span>
+                            )}
+                          </span>
+                          {/* Ledger rows only — an RO-side line belongs to its
+                              repair order. DeleteUnpaidRowButton returns null
+                              when there is no ledger id to target. */}
+                          <DeleteUnpaidRowButton
+                            line={l}
+                            onDeleted={() => {
+                              router.refresh();
+                              // Same stale-tree hazard SpiffsCard documents
+                              // (c655c010): without the flush the row stays on
+                              // screen after a successful delete, which reads
+                              // as "the delete didn't work".
+                              window.dispatchEvent(new Event(FLUSH_EVENT));
+                              notifyDataChanged(); // and the other open tabs
+                            }}
+                          />
                         </span>
                       </li>
                     ))}

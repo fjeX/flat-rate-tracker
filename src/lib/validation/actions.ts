@@ -130,6 +130,7 @@ export const dayOffIdSchema = uuidField("Day-off id");
 export const scheduleIdSchema = uuidField("Schedule id");
 export const reportIdSchema = uuidField("Report id");
 export const timerIdSchema = uuidField("Timer ID");
+export const unpaidTimeIdSchema = uuidField("Unpaid time ID");
 
 // ---------------------------------------------------------------------------
 // entries.ts

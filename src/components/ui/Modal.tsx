@@ -3,6 +3,15 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
+// Written out in full because Tailwind scans source for literal class names —
+// a computed `max-w-${size}` would be correct TypeScript and would silently
+// ship with no width class at all.
+const PANEL_MAX_W = {
+  md: "max-w-md",
+  lg: "max-w-2xl",
+  xl: "max-w-4xl",
+} as const;
+
 // Bottom-sheet on mobile, centered dialog on desktop. Closes on backdrop
 // click and Escape.
 export function Modal({
@@ -10,14 +19,27 @@ export function Modal({
   onClose,
   title,
   children,
-  wide = false,
+  size = "md",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  /** Wider desktop panel for forms with row grids (e.g. sub op codes). */
-  wide?: boolean;
+  /**
+   * Desktop panel width. Mobile is always a full-width bottom sheet.
+   *
+   *   md — the default, for ordinary forms and confirmations.
+   *   lg — forms with row grids (e.g. sub op codes, the RO detail lines).
+   *   xl — a DIRECT-MANIPULATION surface, where the panel is the workspace
+   *        rather than a container for fields. The RO template editor is the
+   *        only one: you drag on a photo of a repair order to draw the region
+   *        boxes the parser reads, so every pixel taken off the width is
+   *        precision taken off the gesture.
+   *
+   * Sized here rather than by the caller because the focus trap, scroll lock
+   * and max height are tuned together with it.
+   */
+  size?: "md" | "lg" | "xl";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -103,7 +125,7 @@ export function Modal({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={`modal-panel max-h-[90vh] w-full ${wide ? "max-w-2xl" : "max-w-md"} overflow-y-auto rounded-t-[var(--radius)] border border-[var(--line)] bg-[var(--bg-1)] outline-none sm:rounded-[var(--radius)]`}
+        className={`modal-panel max-h-[90vh] w-full ${PANEL_MAX_W[size]} overflow-y-auto rounded-t-[var(--radius)] border border-[var(--line)] bg-[var(--bg-1)] outline-none sm:rounded-[var(--radius)]`}
       >
         <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
           <h2 className="text-base font-semibold text-[var(--fg-0)]">{title}</h2>

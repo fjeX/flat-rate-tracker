@@ -103,11 +103,25 @@ export async function createBonus(
   return toBonus(data);
 }
 
+/**
+ * Patch exactly ONE spiff, by primary key, and say whether it landed.
+ *
+ * The `user_id` filter is belt-and-braces over RLS (`own_bonuses` is `for all
+ * using (user_id = auth.uid()) with check (user_id = auth.uid())`). It is here
+ * so ownership is enforced by this function's own SQL rather than only by a
+ * policy in a migration — and so it is testable without a database.
+ *
+ * Returns null when nothing matched: the row is already gone, or it is not this
+ * account's. The previous `.select().single()` collapsed those into a PGRST116
+ * whose message ("JSON object requested, multiple (or no) rows returned") tells
+ * a tech nothing about their money; the caller turns null into a sentence.
+ */
 export async function updateBonus(
   supabase: DbClient,
   id: string,
   patch: BonusPatch,
-): Promise<Bonus> {
+): Promise<Bonus | null> {
+  const userId = await getCurrentUserId(supabase);
   const update: Database["public"]["Tables"]["bonuses"]["Update"] = {
     updated_at: new Date().toISOString(),
   };
@@ -122,13 +136,49 @@ export async function updateBonus(
     .from("bonuses")
     .update(update)
     .eq("id", id)
-    .select()
-    .single();
+    .eq("user_id", userId)
+    .select();
   if (error) throw error;
-  return toBonus(data);
+  // `id` is the primary key, so this is 0 or 1 — never a range. The full row is
+  // selected rather than just the id because the caller hands the saved spiff
+  // straight back to the form; it is the same request either way.
+  const rows = data ?? [];
+  return rows.length === 1 ? toBonus(rows[0]) : null;
 }
 
-export async function deleteBonus(supabase: DbClient, id: string): Promise<void> {
-  const { error } = await supabase.from("bonuses").delete().eq("id", id);
+/**
+ * Delete exactly ONE spiff, by primary key.
+ *
+ * BY `id` AND NOTHING ELSE, and never in bulk. This is the dollar ledger: on
+ * 2026-08-19 a mis-click hard-deleted a real $35 spiff that no backup could
+ * return, and spiffs are not distinguishable by value — two $25 "spiff" rows on
+ * the same date are routine, so any delete phrased as a predicate over amount,
+ * date or category destroys money the tech is about to reconcile against a
+ * paystub. There is no bulk path here on purpose.
+ *
+ * The `user_id` filter is belt-and-braces over RLS (`own_bonuses` is `for all
+ * using (user_id = auth.uid())`). It is here so ownership is enforced by this
+ * function's own SQL rather than only by a policy in a migration — and so it is
+ * testable without a database.
+ *
+ * Returns false when nothing matched: the row is already gone, or it is not
+ * this account's. Without the `.select("id")` this function could not tell a
+ * deleted row from a no-op and reported both as success — and a failed delete
+ * reported as success is exactly how "it worked, the screen just didn't
+ * repaint" gets believed about money.
+ */
+export async function deleteBonus(
+  supabase: DbClient,
+  id: string,
+): Promise<boolean> {
+  const userId = await getCurrentUserId(supabase);
+  const { data, error } = await supabase
+    .from("bonuses")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select("id");
   if (error) throw error;
+  // `id` is the primary key, so this is 0 or 1 — never a range.
+  return (data ?? []).length === 1;
 }

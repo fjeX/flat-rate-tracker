@@ -21,7 +21,14 @@
 // Keep it there: a direct render of the receipt passes whether or not anybody
 // can ever see it.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import React from "react";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import type { TimerSlot } from "@/lib/timer";
@@ -330,5 +337,184 @@ describe("saveDivergence", () => {
         { ...SHOWN, partsPromised: true },
       ).undisclosedApproval,
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// timer-save-modal-stale-hold-promise
+//
+// The worked total is frozen at open on purpose (above). The HOLD figures are
+// not, and that distinction is the whole point of this block: the modal only
+// prints "waiting time is logged as unpaid time against this RO" once a hold
+// clears MIN_LEDGERED_HOLD_MS (30s), and the server re-applies that gate to
+// LIVE accumulators at commit. Sit in this modal across the 30s boundary of a
+// running hold and the frozen copy said "0m" and promised nothing while the row
+// was written anyway — true hours, but the tech only found out from the receipt
+// afterwards.
+//
+// These tests are worthless unless they STRADDLE the boundary: open under 30s,
+// advance past it. A test that opens above the gate passes with or without the
+// fix, because a frozen snapshot taken above the gate already promises.
+// ---------------------------------------------------------------------------
+describe("TimerSaveModal — the hold promise is live, the worked total is not", () => {
+  const T0 = new Date("2026-03-12T17:30:00Z").getTime();
+  const PROMISE = /logged as unpaid time against this RO/;
+
+  /** On a parts hold RIGHT NOW, `heldMs` into it, with 0.31h of banked work. */
+  function holdSlot(heldMs: number): TimerSlot {
+    return {
+      id: "t-2",
+      slot: 1,
+      entryId: "e-1",
+      lineId: "line-1",
+      status: "hold_parts",
+      startTime: T0 - heldMs,
+      workAccumulated: 0.31 * 3_600_000,
+      holdPartsAccumulated: 0,
+      holdApprovalAccumulated: 0,
+    };
+  }
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it("flips the hold readout and the promise when a running hold crosses 30s", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    renderModal(holdSlot(10_000));
+
+    // 10s in. The time is shown honestly; no row is coming, so nothing is
+    // promised. Both halves matter — a missing readout would make the second
+    // assertion pass for the wrong reason.
+    expect(screen.getByText("0m")).toBeTruthy();
+    expect(screen.queryByText(PROMISE)).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(25_000);
+    });
+
+    // 35s in. saveTimerAction WILL write the row now, so the screen says so
+    // before the tech commits instead of after.
+    expect(screen.getByText("1m")).toBeTruthy();
+    expect(screen.getByText(PROMISE)).toBeTruthy();
+  });
+
+  it("leaves the worked total frozen while the hold figures tick", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    renderModal(holdSlot(10_000));
+    // formatElapsed(0.31h) — the figure being reviewed.
+    expect(screen.getByText(/00:18:36/)).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(25_000);
+    });
+
+    // Control: the tick really did fire in this render pass.
+    expect(screen.getByText("1m")).toBeTruthy();
+    // ...and the headline did not move with it. (A slot banks into exactly one
+    // accumulator, so a hold cannot accrue work — this pins the wiring, not the
+    // arithmetic: it fails if the worked line is ever re-pointed at `live`
+    // alongside a differently-clamped `capAt`.)
+    expect(screen.getByText(/00:18:36/)).toBeTruthy();
+    expect(screen.getAllByText(/0\.31h/).length).toBeGreaterThan(0);
+  });
+
+  it("carries the LIVE promise into the divergence check, so a promised row isn't re-announced", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    const { onSaved } = renderModal(holdSlot(10_000));
+    act(() => {
+      vi.advanceTimersByTime(25_000);
+    });
+    // Real timers from here: the save is a promise, not a timer.
+    vi.useRealTimers();
+
+    saveTimerAction.mockResolvedValue(
+      result({ waitPartsHours: 0.01, waitPartsLedgered: true }),
+    );
+    await save();
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+
+    const receipt = onSaved.mock.calls[0][0];
+    // The promise handed to saveDivergence is the one the screen was making at
+    // the moment of the click — not the one it made 25 seconds earlier.
+    expect(receipt.shown.partsPromised).toBe(true);
+    expect(saveDivergence(receipt.result, receipt.shown).undisclosedParts).toBe(
+      false,
+    );
+  });
+
+  it("still discloses after the fact when the row crosses the gate AFTER the click", async () => {
+    // The no-bypass chain, end to end and unweakened: going live narrows the
+    // window but cannot close it — the server can cross 30s in the moment
+    // between the click and the commit. When the modal promised nothing and the
+    // server wrote a row anyway, the receipt must still say so.
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    const { onSaved } = renderModal(holdSlot(10_000));
+    expect(screen.queryByText(PROMISE)).toBeNull();
+    vi.useRealTimers();
+
+    saveTimerAction.mockResolvedValue(
+      result({
+        workHours: 0.31,
+        totalHours: 0.31,
+        waitPartsHours: 0.01,
+        waitPartsLedgered: true,
+      }),
+    );
+    await save();
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+
+    const receipt = onSaved.mock.calls[0][0];
+    expect(receipt).not.toBeNull();
+    expect(receipt.shown.partsPromised).toBe(false);
+    expect(saveDivergence(receipt.result, receipt.shown).undisclosedParts).toBe(
+      true,
+    );
+  });
+});
+
+describe("TimerSaveReceipt — the title carries the new fact", () => {
+  function renderReceipt(over: Record<string, unknown> = {}) {
+    render(
+      <TimerSaveReceipt
+        receipt={{ roNumber: "88421", result: result(over) as never, shown: SHOWN }}
+        onClose={vi.fn()}
+      />,
+    );
+  }
+
+  it("says unpaid time was logged in the title, not only in the body", () => {
+    renderReceipt({
+      workHours: 0.31,
+      totalHours: 0.31,
+      waitPartsHours: 0.01,
+      waitPartsLedgered: true,
+    });
+    // A tech who reads the title and taps Done has to learn this from the title.
+    expect(screen.getByText(/unpaid time also logged/)).toBeTruthy();
+    expect(screen.getByText(/0\.01h waiting on parts/)).toBeTruthy();
+  });
+
+  it("stays a plain Saved when the only divergence is the baseline total", () => {
+    renderReceipt({ workHours: 0.31, totalHours: 0.62 });
+    expect(screen.getByText("Saved")).toBeTruthy();
+    expect(screen.queryByText(/unpaid time also logged/)).toBeNull();
+  });
+
+  it("keeps the failed ledger write a warning even when a hold went undisclosed", () => {
+    // A failed write outranks the disclosure: the hours did NOT land.
+    renderReceipt({
+      workHours: 0.31,
+      totalHours: 0.31,
+      waitPartsHours: 0.01,
+      waitPartsLedgered: true,
+      ledgerWritten: false,
+    });
+    expect(screen.getByText("Saved with a warning")).toBeTruthy();
   });
 });

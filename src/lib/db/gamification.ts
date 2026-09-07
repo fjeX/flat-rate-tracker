@@ -508,7 +508,14 @@ export type GamificationData = {
   /** Earned-once milestones (stored ∪ derived) for the road pins. */
   careerMilestones: number[];
   nextCareerMilestone: number | null;
-  /** Flag hours in the trailing 7 days — the "+x this week" delta. */
+  /**
+   * Flag hours in the rolling 7-day window ending today (today-6 … today) —
+   * the card's "+x last 7 days" delta. Deliberately NOT the calendar week the
+   * dashboard's "This Week" tile uses: a motivational odometer that reset to
+   * near-zero every week boundary would be worse, and the tile's week start is
+   * user-configurable anyway. The two figures legitimately differ; only the
+   * copy has to stay honest about which window it describes.
+   */
   weekDelta: number;
   snapshots: PortfolioSnapshot[]; // newest first
   nextSnapshotAt: number;

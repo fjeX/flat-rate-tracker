@@ -169,6 +169,27 @@ sends you there.
   hours, **on the right date (today, your local date)**, and with the full
   vehicle (year + make + model) displayed — a missing field you typed is a bug.
 - Edit one of tonight's ROs (change hours or add a line) and verify the edit stuck.
+- **Reading the RO detail modal's Actual column is a property read, not a
+  text scrape (new 2026-09-07).** The Actual cell is an `<input>`
+  (`RoDetailModal.tsx:485-505`), so its value lives in the DOM **value
+  property** — never in `textContent` — and a text scrape of that cell is
+  empty **by design**. This has been filed as a confirmed bug twice; both
+  filings were a measurement artifact, not an app bug. Read each line's
+  actual hours with `input[aria-label^="Actual hours"].value` (or select by
+  the `.opc-hours-input` class), never row text.
+  - **Use the prefix `^="Actual hours"` — the previously prescribed selector,
+    `input[aria-label^="Actual hours for"]`, was WRONG.** When a line has no
+    op code and no duplicate-code position, `lineName` is null and the label
+    is the bare `"Actual hours"` with no `"for"` clause — the `"for"`-anchored
+    selector silently misses those lines entirely.
+  - Report the Actual column only if the input's `.value` is wrong or missing
+    for a line known to have actual hours — an empty text scrape on its own
+    is not evidence of anything. The file already reads real state this way
+    elsewhere, not just the DOM's rendered text: §8h reads the plain-text
+    twin via `document.querySelector('.pace-now .sr-only').textContent`
+    (the visible digits are a RollingNumber odometer and `innerText` returns
+    garbage), and §8's pace ring reads the real percent off `aria-label`
+    rather than trusting what's displayed — same idiom, different surface.
 - Delete one RO you created **tonight only** and verify it's gone. Never delete
   entries from previous nights — they are accumulated test data.
   - **Identify the row before you touch it — this list re-sorts (date desc,
@@ -453,26 +474,43 @@ start and save in the same breath records ~0 and proves nothing.
   figure that matches the frozen projection rather than what was saved.
 - Check that a 4th timer cannot be started: with 3 running, the add button
   reads "All timers in use" and is disabled.
-- Attaching the **same RO to a second timer** must prompt a line picker
-  ("RO #71264 — Which line?") that offers only the lines not already on a
-  timer — the busy line must not appear. Three outright refusals (no
-  picker at all) are CORRECT, not bugs — `attachBlockReason` in
-  src/components/timer/TimerSlots.tsx:96-107 (mirrored in
-  GuestTimerSlots.tsx, and re-enforced server-side in
-  src/app/actions/timer.ts) blocks the attach in exactly these cases:
-  1. the RO has a timer running with no line assigned yet: "On a timer
-     that has no line set yet — set that one's line first."
-  2. every line is taken and the RO has only one line: "Its only line is
-     already on a timer."
-  3. every line is taken and the RO has multiple lines: "Every line is
-     already on a timer."
-  4. server-only, and you will not normally reach it: submitting a line
-     that got taken after the picker rendered — "That line of RO #71264
-     is already on a timer." The picker filters this case out, so seeing
-     it means two sessions raced. Report it as a race, not as a broken
-     picker.
-  A refusal for any OTHER reason, or a picker that still shows the busy
-  line, is a bug.
+- **Attaching the same RO to a second timer branches on how many lines are
+  still free (`handleAttach`, `TimerSlots.tsx:142-164`, mirrored in
+  GuestTimerSlots.tsx) — check both paths, they are both correct:**
+  - **2 or more free lines** ⇒ expect a line picker ("RO #71264 — Which
+    line?") that offers ONLY the lines not already on a timer — a busy line
+    must never appear in it.
+  - **Exactly 1 free line** ⇒ **no picker — the app auto-binds that line, and
+    that is correct, not a bug.** Verify the resulting timer card's "Line:"
+    row names that one remaining line. Busy lines are filtered out of the
+    RO's free-line list *before* this count is taken, so auto-bind can never
+    grab a line that's already running elsewhere — that filtering is what
+    makes binding without asking safe here.
+  - **Seed a three-line RO for this check where possible.** A two-line RO can
+    only ever demonstrate the 1-free-line auto-bind path once one line is
+    taken — the 2+-line picker path never gets real coverage from it.
+    Documenting auto-bind alone silences the old false report; it doesn't
+    test the picker. A three-line RO still has two lines free after the
+    first attach, so the picker path actually gets exercised.
+  - Three outright refusals (no picker, no auto-bind — zero free lines) are
+    CORRECT, not bugs — `attachBlockReason` in
+    src/components/timer/TimerSlots.tsx:96-107 (mirrored in
+    GuestTimerSlots.tsx, and re-enforced server-side in
+    src/app/actions/timer.ts) blocks the attach in exactly these cases:
+    1. the RO has a timer running with no line assigned yet: "On a timer
+       that has no line set yet — set that one's line first."
+    2. every line is taken and the RO has only one line: "Its only line is
+       already on a timer."
+    3. every line is taken and the RO has multiple lines: "Every line is
+       already on a timer."
+    4. server-only, and you will not normally reach it: submitting a line
+       that got taken after the picker rendered — "That line of RO #71264
+       is already on a timer." The picker filters this case out, so seeing
+       it means two sessions raced. Report it as a race, not as a broken
+       picker.
+  A refusal for any OTHER reason, a picker that still shows the busy line, or
+  the wrong behaviour (picker vs. auto-bind) for the actual free-line count,
+  is a bug.
 - Only test the multi-timer mechanics if there are enough ROs; don't create
   extra ROs just to fill slots.
 - The live display ticks from a Web Worker. In a real, foregrounded browser it
@@ -655,7 +693,15 @@ unconditional and unrelated to how often the check runs.
   pay" button are **replaced by the settled hero** (paid vs logged). That
   replacement IS the success condition — it is not a vanishing-button bug, so
   don't report it and don't hunt for the button to press again. Check what
-  replaced it: the settled hero must read `74.25h` paid.
+  replaced it: the settled hero renders paid hours at **1dp, the same
+  half-away-from-zero rounding used everywhere on this page (see §4's
+  hours-rounding note)** — a stub figure of `74.25` displays as `74.3`, and
+  `68.75` displays as `68.8`. That rounding is intentional and is not
+  reportable on its own. The only reportable failure here is a
+  **stored-vs-displayed contradiction**: confirm the figure you typed
+  (`74.25`) is still what's actually stored (e.g. via the export capture in
+  §8g) — if the stored value and the hero's rounded display disagree about
+  anything other than that expected rounding, report it.
 - Then clear it with **Reset to unpaid** — this is a figure you created, so the
   first cleanup rule above applies.
 
@@ -673,6 +719,22 @@ Reference rail in every mode.
 - Open **"Did I get paid?"** and run the check against the current pay period.
 - Verify the math: does flagged-vs-paid line up with the ROs you can see?
   Spot-check one number by hand.
+  - **Hours here are 1dp on purpose, rounded half-away-from-zero (`fmtHours`)
+    — round your own hand-check the same way BEFORE comparing it to the
+    app's figure, or you will file a correct render as a defect.** Two
+    fingerprints did exactly that: `shortfall-one-decimal-float` (8 straight
+    nights) and `settled-hero-paid-hours-precision` (5 straight nights) — both
+    correct rounding filed as bugs. The genuine float bug that once caused
+    real misrounds was fixed in `7b2f7bc`, and an adversarial sweep of ~1.8M
+    cases afterward found zero remaining failures — this display is
+    trustworthy now. CORRECT rounding looks like: `336.25 → 336.3`,
+    `68.75 → 68.8`, and an exact `335.0 → 335.0` (nothing to round).
+  - File a defect here ONLY if (a) the app's printed figure and the
+    correctly-rounded figure round in **opposite directions** across an
+    x.x5 boundary (e.g. the app shows `336.2` where half-away-from-zero
+    demands `336.3`), or (b) the printed hours contradict a dollar figure
+    from the same stub. "The digit isn't what I expected" — without doing
+    the rounding step yourself first — is not evidence of anything.
 
 ### 5. Pay reconciliation
 > **Moved 2026-07-30.** Now a drill-down row inside "Did I get paid?", labelled
@@ -1159,12 +1221,23 @@ recovered. Sections appear only when they have something to say.
        the worst measured ratio, and the caption below the table must name the
        total hours.
        **Changed 2026-09-06 (`where-time-goes-uses-count-mismatch`): the use
-       count on an unpaid row now shows the COMEBACK count, not the whole
-       code's.** It used to print "8 uses" beside comeback-only hours, reading
-       as "eight alignments, all rework" when only 2 of 8 were. So the number
-       here should match the count in the pill's own tooltip. A `measured` row
-       still shows its full use count. Do not report the smaller number as
-       missing uses.
+       count on an unpaid row shows the COMEBACK count, not the whole code's.**
+       It used to print "8 uses" beside comeback-only hours, reading as "eight
+       alignments, all rework" when only 2 of 8 were. So the number here
+       should match the count in the pill's own tooltip.
+       **A `measured` row now shows its TIMED count the same way (this same
+       change: `displayedUses` returns `row.timedUses` for measured rows),
+       not the code's whole use count.** The flag/actual hours beside a
+       measured row are accumulated over the timed subset only — a code with
+       one timed line and four untimed ones must show "1 use," not "5 uses,"
+       beside hours that only that one line produced; printing the whole
+       count there would overstate the row's own evidence. Do not report
+       either row's smaller, subset-scoped count as missing uses.
+       **The general invariant: the use count always describes the same
+       population as the hours printed beside it.** The one row that still
+       prints the code's full use count is **never timed** — there its hours
+       are em-dashes (nothing to pair the count against), so the full count
+       is the only honest number left to show.
     3. **never timed** — em-dashes in both hour columns. This now means ONLY
        "nothing was recorded."
   - **NEW ELEMENT 2026-09-06 (`opcode-name-collision-indistinguishable`): each
@@ -1189,6 +1262,17 @@ recovered. Sections appear only when they have something to say.
     - **Known and deliberate, do NOT report:** a code with BOTH paid and
       comeback work shows only its measured ratio; its rework hours stay hidden.
       That's an accepted scope call, not a defect.
+  - **Collisions are a byte-for-byte text match, not "looks similar" (new
+    2026-09-07).** There is no collision check anywhere else in this
+    checklist — the bot invented this one itself, and on its first night
+    reported `TRANS-SVC` vs `TRANS-SERV`, `ENG-R` vs `ENG-RR`, and `STRUT-F`
+    vs `STRUT-FR` as collisions. Those are three pairs of **different** op
+    codes, not a collision — a shared prefix or one extra letter is not the
+    same string. Only report a collision when two rows display **identical**
+    code text, character for character. When that happens, each of the
+    identical-text rows must carry the `library`/`custom` origin tag above —
+    that pairing is the tag doing its job, not a bug. Merely similar text is
+    never reportable under this check, tag or no tag.
 - **Best days** — seven weekday tiles with a By day / By efficiency sort toggle.
   Tiles count only days the app knows the length of, so the day count under each
   is real. Check a weekday's figure is not wildly out of line with the dashboard.
@@ -1212,7 +1296,10 @@ recovered. Sections appear only when they have something to say.
   - **Big jobs** — every code flagging 2h+, with a coverage bar ("N/M timed")
     and a table of measured jobs (flag / actual / vs book). Check the coverage
     fraction matches the table, and that a code with zero timed jobs shows the
-    "next time you log one" message instead of an empty table.
+    "next time you log one" message instead of an empty table. This table also
+    carries the `library`/`custom` origin tag — apply the same collision rule
+    as "Where your time goes": a collision is byte-for-byte identical code
+    text, never merely similar text.
   - **The quick stuff** — the app's own worked-out times for everything under
     2h, inferred from day lengths rather than measured (no per-job timer data
     exists for these by design). If there's not enough history to solve for it,
@@ -1438,17 +1525,39 @@ Settings → Data has **Export** (download a backup) and **Import** (restore one
 clock, spiff, dispute and pay rate — and there is no undo. Running it would wipe
 the streak, snapshots and career hours that §8b checks against. Export only.
 
-- **Export downloads:** click Export, confirm a `.json` file downloads without an
-  error toast and is more than a few KB. A 0-byte or failed download is a bug.
+- **Export — capture the blob in-page. Do NOT attempt a real browser
+  download.** A real download kills the Playwright transport outright — it
+  has done so on 08-13, 09-01, 09-02, 09-03, 09-06, and TWICE on 09-07. The
+  app is blameless (`DataCard.tsx:19-31` is a textbook
+  `URL.createObjectURL` → `<a>.click()` blob-download pattern); it's the CDP
+  download event itself that this harness cannot survive. §8g is also the
+  ONLY check in the whole run that catches deploy drift (the version compare
+  below), so losing the section to a crashed session is expensive. The
+  in-page capture below is the sanctioned, **primary** method — not a
+  fallback to reach for only after a download fails:
+  1. Before clicking Export, stub `URL.createObjectURL` to capture the
+     blob's text into a page global (e.g. resolve a `window.__frtBackup`
+     promise with `await blob.text()` inside the stub), and neutralise
+     `HTMLAnchorElement.prototype.click` so the anchor Export creates never
+     fires a real download.
+  2. Click Export normally.
+  3. **Poll the global — it resolves asynchronously** (`blob.text()` is a
+     promise), so read it in a loop until it holds the JSON, not once,
+     immediately after the click.
+  4. Parse that captured text as the export payload for every check below.
+  Success is the captured payload being valid, non-trivial JSON (more than a
+  few KB) — not a downloaded file existing anywhere, and not an error toast.
+  A 0-byte or unparseable payload is a bug.
 - **Its version must match the app's, not a number written in this doc.**
   Read `CURRENT_BACKUP_VERSION` out of `src/lib/import-remap.ts` (you can read
-  repo source from where the run executes), then open the export and confirm
-  `"version"` equals that value exactly — not `>=`. A mismatch means a stale
-  build is deployed (the container is serving an older bundle than the repo
-  you just read) and should be reported. Do not hardcode the expected number
-  here — this checklist has drifted behind three straight version bumps
-  (v2→v3→v4) from doing exactly that, and equality against the source is what
-  keeps this check able to catch a stale deploy at all.
+  repo source from where the run executes), then parse the captured export
+  payload and confirm its `"version"` equals that value exactly — not `>=`.
+  A mismatch means a stale build is deployed (the container is serving an
+  older bundle than the repo you just read) and should be reported. Do not
+  hardcode the expected number here — this checklist has drifted behind three
+  straight version bumps (v2→v3→v4) from doing exactly that, and equality
+  against the source is what keeps this check able to catch a stale deploy at
+  all.
 - **The v2 sections must be present**, because a backup that silently omits them
   restores an incomplete account (that was the 2026-08-05 Critical bug):
   `laborRates`, `disputes`, `unpaidTime`, plus the long-standing `entries`,

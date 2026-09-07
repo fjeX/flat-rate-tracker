@@ -51,7 +51,7 @@ export function GuestRoDetailModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={`RO #${entry.roNumber}`} wide>
+    <Modal open onClose={onClose} title={`RO #${entry.roNumber}`} size="lg">
       <div className="space-y-4">
         {/* Date section */}
         <div className="text-xs text-[var(--fg-3)]">

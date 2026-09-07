@@ -141,12 +141,42 @@ export async function updateUnpaidTime(
   if (error) throw error;
 }
 
+/**
+ * Delete exactly ONE ledger row, by primary key.
+ *
+ * BY `id` AND NOTHING ELSE. A row's `hours` cannot identify it: msToHours
+ * quantises to hundredths, so a stored 0.01h covers 18s–54s of real hold time
+ * and the 30s ledger gate sits inside that band — a genuine 30–54s hold and an
+ * old pre-gate phantom are the SAME VALUE. Any delete phrased as a predicate
+ * over hours (or a "clear the phantoms" sweep) therefore destroys real rework a
+ * tech is about to hand a service manager. There is no bulk path here on
+ * purpose; if one is ever wanted, this comment is the reason it can't be a
+ * value match.
+ *
+ * The `user_id` filter is belt-and-braces over RLS (`own_unpaid_time` is `for
+ * all using (user_id = auth.uid())`). It is here so ownership is enforced by
+ * this function's own SQL rather than only by a policy in a migration — and so
+ * it is testable without a database.
+ *
+ * Returns false when nothing matched: the row is already gone, or it is not
+ * this user's. Deliberately NOT an exception — the caller reports it as data,
+ * and a silent no-op reported as success is how a failed delete gets read as
+ * "it worked, the screen just didn't repaint".
+ */
 export async function deleteUnpaidTime(
   supabase: DbClient,
   id: string,
-): Promise<void> {
-  const { error } = await supabase.from("unpaid_time").delete().eq("id", id);
+): Promise<boolean> {
+  const userId = await getCurrentUserId(supabase);
+  const { data, error } = await supabase
+    .from("unpaid_time")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select("id");
   if (error) throw error;
+  // `id` is the primary key, so this is 0 or 1 — never a range.
+  return (data ?? []).length === 1;
 }
 
 /** Used by clearAllDataAction. Tolerates a pre-migration DB. */

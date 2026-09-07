@@ -12,10 +12,13 @@ import {
   elapsedFor,
   formatDuration,
   formatElapsed,
+  isAccruing,
+  isHold,
   isLedgerableHold,
   msToHours,
   type TimerSlot,
 } from "@/lib/timer";
+import { useTickingNow } from "@/lib/use-ticking-now";
 import { tap } from "@/lib/haptics";
 
 // Closing out a timer. Two things happen and the modal has to be honest about
@@ -140,12 +143,20 @@ export function TimerSaveReceipt({
     .filter(Boolean)
     .join(" and ");
 
+  // The title is the part a tech actually reads before tapping Done. A bare
+  // "Saved" over a body paragraph announcing unpaid time nobody was warned
+  // about is technically true and hides the only new fact on the screen. Say it
+  // in the title instead. Not "warning" — the ledger write SUCCEEDED here, and
+  // banking real waiting time is the feature working; this is the "here's what
+  // actually got recorded" state, and only the failed-write case is a warning.
+  const title = !saved.ledgerWritten
+    ? "Saved with a warning"
+    : divergence.undisclosedWait
+      ? "Saved — unpaid time also logged"
+      : "Saved";
+
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={saved.ledgerWritten ? "Saved" : "Saved with a warning"}
-    >
+    <Modal open onClose={onClose} title={title}>
       <div className="space-y-4">
         {!saved.ledgerWritten && (
           <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
@@ -246,13 +257,49 @@ export function TimerSaveModal({
     [library],
   );
 
-  // Frozen at open rather than ticking: a total that moves while you're reading
-  // it is unreviewable. The server recomputes from persisted state on save, so
-  // the few seconds spent in this modal aren't lost — they just aren't shown
-  // HERE. They are shown afterwards: when the saved figure differs from this
-  // frozen projection, TimerSaveReceipt restates what actually landed on the
-  // RO (see saveDivergence). The freeze stays; the silence about it doesn't.
-  const [elapsed] = useState(() => elapsedFor(slot, Date.now(), capAt));
+  // The WORKED total is frozen at open rather than ticking: the headline figure
+  // being reviewed can't move while you're reading it. The server recomputes
+  // from persisted state on save, so the few seconds spent in this modal aren't
+  // lost — they just aren't shown HERE. They are shown afterwards: when the
+  // saved figure differs from this frozen projection, TimerSaveReceipt restates
+  // what actually landed on the RO (see saveDivergence). The freeze stays; the
+  // silence about it doesn't. See lib/timer.ts MIN_LEDGERED_HOLD_MS.
+  const [openedAt] = useState(() => Date.now());
+  const [frozen] = useState(() => elapsedFor(slot, openedAt, capAt));
+
+  // The HOLD figures do NOT get that freeze, because they carry a promise the
+  // worked total doesn't. "Waiting time is logged as unpaid time against this
+  // RO" is printed only once a hold clears MIN_LEDGERED_HOLD_MS — and the
+  // server re-applies that same gate to LIVE accumulators at commit
+  // (saveTimerAction → isLedgerableHold(w.rawMs)). Leave this modal open across
+  // the 30s boundary of a RUNNING hold and the frozen copy still read "0m" and
+  // promised nothing while the row got written anyway: honest hours, disclosed
+  // only afterwards by the receipt, and a confusing two-step for the tech.
+  // Re-deriving on a tick makes what's on screen agree with what will commit.
+  //
+  // Direction matters, and it is the whole safety argument: elapsedFor only
+  // ever ADDS the in-flight segment, so a live re-derive can turn a promise ON
+  // and can never withdraw one. Nothing here gates anything either — the modal
+  // takes no timing data to the server, which re-derives everything itself, so
+  // this is display-only by construction. Suppressing a row because a render
+  // said "0m" would drop real waiting time off a money document; that decision
+  // lives in actions/timer.ts and stays there.
+  //
+  // Only ticks while a hold is actually accruing: a paused slot, or one banking
+  // WORK time, has no hold figure that can move, and re-rendering this list
+  // every second for nothing is churn on a page that can have three timers up.
+  const holdRunning = isAccruing(slot) && isHold(slot.status);
+  const tickedNow = useTickingNow(holdRunning);
+  // useTickingNow returns null until it has mounted (SSR/hydration honesty —
+  // see the hook). Falling back to `openedAt` means the first render is exactly
+  // the frozen snapshot rather than a smaller number that drops the in-flight
+  // segment and then jumps. The hook owns its interval's teardown: unmounting
+  // this modal terminates the worker and drops the visibility listeners.
+  const live = elapsedFor(slot, tickedNow ?? openedAt, capAt);
+  // Read `frozen` for worked time and `live` for holds, deliberately and
+  // explicitly, so neither can be swapped for the other by accident.
+  const holdParts = live.holdParts;
+  const holdApproval = live.holdApproval;
 
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     const valid = slot.lineId && entry.opCodes.some((l) => l.id === slot.lineId);
@@ -261,18 +308,21 @@ export function TimerSaveModal({
   const [error, setError] = useState<string | null>(null);
   const [pending, startPending] = useTransition();
 
-  const workHours = msToHours(elapsed.work);
+  const workHours = msToHours(frozen.work);
   const selected = entry.opCodes.find((l) => l.id === selectedId) ?? null;
   const existing = selected?.actualHours ?? null;
   const newTotal = Math.round(((existing ?? 0) + workHours) * 100) / 100;
   // Per hold reason, not lumped: promising a row for the parts hold must not
   // silence a disclosure about an approval hold that only crossed the 30s gate
-  // after this display froze.
+  // later. Derived from the LIVE hold ms so this is the promise the screen is
+  // making right now — which is what saveDivergence must compare the server's
+  // verdict against. A promise read off a stale snapshot made the receipt
+  // announce a row the tech had just been told wasn't coming.
   const shown: ShownFigures = {
     workHours,
     newTotal,
-    partsPromised: isLedgerableHold(elapsed.holdParts),
-    approvalPromised: isLedgerableHold(elapsed.holdApproval),
+    partsPromised: isLedgerableHold(holdParts),
+    approvalPromised: isLedgerableHold(holdApproval),
   };
   const ledgerPromised = shown.partsPromised || shown.approvalPromised;
 
@@ -313,29 +363,31 @@ export function TimerSaveModal({
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-sm text-[var(--fg-2)]">Worked</span>
             <span className="font-mono text-sm text-[var(--fg-0)]">
-              {formatElapsed(elapsed.work)} · {fmtHours(workHours)}h
+              {formatElapsed(frozen.work)} · {fmtHours(workHours)}h
             </span>
           </div>
-          {elapsed.holdParts > 0 && (
+          {holdParts > 0 && (
             <div className="mt-1.5 flex items-baseline justify-between gap-3">
               <span className="text-sm text-[var(--warn)]">Waiting on parts</span>
               <span className="font-mono text-sm text-[var(--warn)]">
-                {formatDuration(elapsed.holdParts)}
+                {formatDuration(holdParts)}
               </span>
             </div>
           )}
-          {elapsed.holdApproval > 0 && (
+          {holdApproval > 0 && (
             <div className="mt-1.5 flex items-baseline justify-between gap-3">
               <span className="text-sm text-[var(--info)]">Waiting on approval</span>
               <span className="font-mono text-sm text-[var(--info)]">
-                {formatDuration(elapsed.holdApproval)}
+                {formatDuration(holdApproval)}
               </span>
             </div>
           )}
           {/* Only promise a ledger row when one will actually be written.
            * The save action drops holds under MIN_LEDGERED_HOLD_MS, so a
            * 20-second hold shows its time above but earns no row — saying it
-           * was logged would be a lie on the way to a money document. */}
+           * was logged would be a lie on the way to a money document. Live, not
+           * frozen: a hold still running crosses that gate while this modal is
+           * open, and the promise has to appear when it does. */}
           {ledgerPromised && (
             <p className="mt-2 text-xs text-[var(--fg-3)]">
               Waiting time is logged as unpaid time against this RO. It never
