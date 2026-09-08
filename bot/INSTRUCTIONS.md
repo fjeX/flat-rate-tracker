@@ -946,6 +946,26 @@ when both sources are present.
   - A comeback line's hours here are its **actual** hours, not flag hours
     (a comeback flags zero — if this card shows 0.0h for a comeback you gave
     actual hours to, that's the bug).
+  - **NEW 2026-09-07 (`unpaid-ledger-row-undeletable`): a LEDGER row can now be
+    deleted from this list.** Until today there was no way to remove an
+    unpaid-time record at all — every row was permanent from the UI, on a
+    document a shop reads, and the only escape hatch wiped the whole account.
+    Ledger rows now carry a small trash button; **comeback rows do NOT and must
+    not** — those are op codes on a repair order and are edited on the RO.
+    Exercise it on a ledger row you created tonight:
+      - The confirm names the record's **reason, hours (two decimals) and
+        date** before anything is deleted. A generic "are you sure" is a FAIL —
+        naming the row is the whole point on a money document.
+      - Cancel must leave the row and the totals untouched.
+      - Confirm must remove exactly THAT row, and the "Total unpaid" and the
+        card headline must both drop by its hours without a reload.
+      - Then check `/insights` and `/dashboard` for the same window: neither
+        may still be quoting a total that has no row behind it.
+    **Do not try to delete a row by matching on hours, and do not report the
+    absence of a bulk "clear all" as a gap — it is deliberate.** A stored
+    `0.01h` covers 18–54s of hold time, so a real 30-second wait and an old
+    pre-gate phantom are the same number; anything that deletes by value would
+    destroy genuine rework.
   - With rates set: RO-side rows show dollars; **ledger rows must never show a
     dollar figure** (there's no labor type on them to price against — inventing
     one is the bug). When both are present, a note must say how many hours carry
