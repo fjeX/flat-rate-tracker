@@ -21,7 +21,7 @@
 // hours-only forever rather than being valued at an assumed rate. `unpricedHours`
 // reports exactly how much of the total that is, so a report can say so out loud
 // instead of quietly under-totalling.
-import type { Entry, OpCode, UnpaidTime, UnpaidTimeKind } from "./types";
+import { isUnpaidKind, type Entry, type OpCode, type UnpaidTime, type UnpaidTimeKind } from "./types";
 import { hasAnyRate, resolveLineRate, type RateMap } from "./earnings";
 import { lineCode, lineDescription } from "./line-label";
 import { roundToCents } from "./format";
@@ -76,6 +76,9 @@ const ZERO_BY_KIND: () => Record<UnpaidTimeKind, number> = () => ({
   wait_parts: 0,
   wait_approval: 0,
   shop_time: 0,
+  // Present so the record is exhaustive over the type; always 0 here, because
+  // open_work rows never enter this summary (see the ledger loop below).
+  open_work: 0,
 });
 
 function inRange(date: string, range?: { start: string; end: string }): boolean {
@@ -137,6 +140,11 @@ export function buildUnpaidSummary(
   const entryById = new Map(entries.map((e) => [e.id, e]));
   for (const row of unpaid) {
     if (!inRange(row.date, range)) continue;
+    // Hours on an OPEN TICKET are not unpaid (Open Tickets, decision 10): they
+    // are paid late, on the close day's flag. They never appear on the dispute
+    // pack, the leak board or the unpaid card — before OR after the ticket
+    // closes — or the pack would say different things on different days.
+    if (!isUnpaidKind(row.kind)) continue;
     lines.push({
       source: "ledger",
       id: row.id,

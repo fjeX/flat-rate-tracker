@@ -9,7 +9,7 @@ import {
   isoDateInTz,
   type PeriodRange,
 } from "@/lib/periods";
-import { aggregateStats, aggregateStatsWithSchedule } from "@/lib/stats";
+import { aggregateStats, aggregateStatsWithSchedule, withOpenWorkDays } from "@/lib/stats";
 import { computeForecast } from "@/lib/forecast";
 import { ratesToMap } from "@/lib/earnings";
 import { filterBonusesInRange } from "@/lib/bonuses";
@@ -205,23 +205,32 @@ export default async function PayPeriodPage({
       today={today}
       goalHours={goalHours}
       forecast={forecast}
-      schedule={{
-        // The SAME context the efficiency denominator above is built from —
-        // every field of it, not most of them. This literal used to claim that
-        // parity while omitting confirmedZeroDays, and PayPeriodView had to
-        // substitute [] to rebuild a ScheduleContext for the custom-dates
-        // modal. That dropped every confirmed real-zero day from the modal's
-        // denominator, so the modal read 365% where the hero read 183%.
-        //
-        // Passed even when no schedule exists (empty array): `today` is what
-        // lets an in-progress shift be excluded rather than flagged as missing
-        // data, and that matters to every user, schedule or not.
-        schedules: schedules ?? [],
-        daysOff: daysOff ?? [],
-        confirmedZeroDays: confirmedZeroDays ?? [],
-        today,
-        shiftOverrides: shiftOverrides ?? {},
-      }}
+      schedule={withOpenWorkDays(
+        {
+          // The SAME context the efficiency denominator above is built from —
+          // every field of it, not most of them. This literal used to claim that
+          // parity while omitting confirmedZeroDays, and PayPeriodView had to
+          // substitute [] to rebuild a ScheduleContext for the custom-dates
+          // modal. That dropped every confirmed real-zero day from the modal's
+          // denominator, so the modal read 365% where the hero read 183%.
+          //
+          // Passed even when no schedule exists (empty array): `today` is what
+          // lets an in-progress shift be excluded rather than flagged as missing
+          // data, and that matters to every user, schedule or not.
+          schedules: schedules ?? [],
+          daysOff: daysOff ?? [],
+          confirmedZeroDays: confirmedZeroDays ?? [],
+          today,
+          shiftOverrides: shiftOverrides ?? {},
+        },
+        // Open Tickets, decision 7: a day with open-ticket hours is a worked
+        // day, folded in HERE — the same fold aggregateStatsWithSchedule
+        // applies to `stats` above — so the wage check and the custom-dates
+        // modal see the identical day set. Two figures for one quantity was
+        // the escalation this literal's comment describes.
+        unpaid,
+        { start: selected.start, end: selected.end },
+      )}
     />
   );
 }

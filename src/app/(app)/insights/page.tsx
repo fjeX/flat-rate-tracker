@@ -71,6 +71,8 @@ export default async function InsightsPage() {
               shiftOverrides: shiftOverrides ?? {},
             }
           : null,
+        // A day on an open ticket pairs here as it does on the dashboard.
+        unpaid ?? [],
       )
     : {};
 

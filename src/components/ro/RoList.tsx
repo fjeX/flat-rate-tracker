@@ -108,6 +108,12 @@ export function RoList({
               <div className="grow">
                 <div>
                   <span className="ro-num">#{e.roNumber}</span>
+                  {/* An open ticket's date is the OPENED day placeholder and its
+                      hours column reads 0.0h — both true, both misleading
+                      without the chip. The chip is the explanation. */}
+                  {e.status === "open" && (
+                    <span className="badge badge-info" style={{ marginRight: 6 }}>Open</span>
+                  )}
                   <span className="ro-meta">· {formatDateShort(e.date)}</span>
                   {/* Only when there is one. An RO logged before the feature, or
                       with the setting off, shows the date alone — no placeholder

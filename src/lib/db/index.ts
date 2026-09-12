@@ -20,5 +20,6 @@ export * from "./gamification";
 export * from "./schedules";
 export * from "./timers";
 export * from "./unpaid-time";
+export * from "./ro-events";
 export * from "./disputes";
 export * from "./true-time";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Entry } from "@/lib/types";
+import type { Entry, UnpaidTime } from "@/lib/types";
 import { fmtHours, type DayDenom } from "@/lib/stats";
 import { getPeriodForDate, addDays } from "@/lib/periods";
 import { flagHoursByDate } from "@/lib/forecast";
@@ -27,6 +27,9 @@ type BarData = {
 
 type Props = {
   entries: Entry[];
+  /** The ledger, so a day on an open ticket is a worked day for the averages
+   * (Open Tickets, decision 7). Optional: the guest page has no ledger. */
+  unpaid?: UnpaidTime[];
   /** Per-day efficiency denominators (clocked > scheduled) — day-bar hover
    * shows that day's efficiency when present. */
   denomByDay?: Record<string, DayDenom>;
@@ -73,6 +76,7 @@ function daysInMonth(year: number, month1: number): number {
 //            drag the average down).
 function computeWeek(
   entries: Entry[],
+  unpaid: UnpaidTime[],
   weekStart: string,
   weekEnd: string,
   windowStart: string,
@@ -88,7 +92,7 @@ function computeWeek(
   const totalByDow: number[] = new Array(7).fill(0);
   const workedByDow: number[] = new Array(7).fill(0);
 
-  for (const [date, hours] of flagHoursByDate(entries, windowStart, windowEnd)) {
+  for (const [date, hours] of flagHoursByDate(entries, windowStart, windowEnd, unpaid)) {
     const jsDay = new Date(date + "T00:00:00").getDay();
     totalByDow[jsDay] += hours;
     workedByDow[jsDay]++;
@@ -133,6 +137,7 @@ function computeWeek(
 
 function computePeriod(
   entries: Entry[],
+  unpaid: UnpaidTime[],
   windowStart: string,
   windowEnd: string,
   splitDay: number,
@@ -143,17 +148,18 @@ function computePeriod(
   const periodTotals = new Map<string, { total: number; start: string; end: string }>();
   const periodWorkedDates = new Map<string, Set<string>>();
 
-  for (const entry of entries) {
-    if (entry.date < windowStart || entry.date > windowEnd) continue;
-    const period = getPeriodForDate(entry.date, splitDay, {});
+  // Through flagHoursByDate — the app-wide worked-day rule — so a day on an
+  // open ticket counts as worked here exactly as it does in the forecast.
+  for (const [date, hours] of flagHoursByDate(entries, windowStart, windowEnd, unpaid)) {
+    const period = getPeriodForDate(date, splitDay, {});
     const existing = periodTotals.get(period.key);
     if (existing) {
-      existing.total += entry.flagHours;
+      existing.total += hours;
     } else {
-      periodTotals.set(period.key, { total: entry.flagHours, start: period.start, end: period.end });
+      periodTotals.set(period.key, { total: hours, start: period.start, end: period.end });
     }
     if (!periodWorkedDates.has(period.key)) periodWorkedDates.set(period.key, new Set());
-    periodWorkedDates.get(period.key)!.add(entry.date);
+    periodWorkedDates.get(period.key)!.add(date);
   }
 
   let cursor = windowStart;
@@ -203,6 +209,7 @@ function computePeriod(
 
 function computeMonth(
   entries: Entry[],
+  unpaid: UnpaidTime[],
   windowStart: string,
   windowEnd: string,
   today: string,
@@ -223,12 +230,13 @@ function computeMonth(
     if (m > 12) { m = 1; y++; }
   }
 
-  for (const entry of entries) {
-    if (entry.date < windowStart || entry.date > windowEnd) continue;
-    const key = entry.date.substring(0, 7);
-    monthTotals.set(key, (monthTotals.get(key) ?? 0) + entry.flagHours);
+  // Through flagHoursByDate — the app-wide worked-day rule — so a day on an
+  // open ticket counts as worked here exactly as it does in the forecast.
+  for (const [date, hours] of flagHoursByDate(entries, windowStart, windowEnd, unpaid)) {
+    const key = date.substring(0, 7);
+    monthTotals.set(key, (monthTotals.get(key) ?? 0) + hours);
     if (!workedDaysByMonth.has(key)) workedDaysByMonth.set(key, new Set());
-    workedDaysByMonth.get(key)!.add(entry.date);
+    workedDaysByMonth.get(key)!.add(date);
   }
 
   const currentMonth = today.substring(0, 7);
@@ -477,6 +485,7 @@ function RoomierBarChart({
 
 export function AveragesChart({
   entries,
+  unpaid = [],
   denomByDay,
   today,
   weekStart,
@@ -496,9 +505,9 @@ export function AveragesChart({
 
   const bars: BarData[] = (() => {
     switch (activeTab) {
-      case "week":   return computeWeek(entries, weekStart, weekEnd, windowStart, windowEnd, today, mode);
-      case "period": return computePeriod(entries, windowStart, windowEnd, splitDay, today, mode, subMode);
-      case "month":  return computeMonth(entries, windowStart, windowEnd, today, mode, subMode);
+      case "week":   return computeWeek(entries, unpaid, weekStart, weekEnd, windowStart, windowEnd, today, mode);
+      case "period": return computePeriod(entries, unpaid, windowStart, windowEnd, splitDay, today, mode, subMode);
+      case "month":  return computeMonth(entries, unpaid, windowStart, windowEnd, today, mode, subMode);
     }
   })();
 

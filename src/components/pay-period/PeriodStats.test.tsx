@@ -49,6 +49,8 @@ const BASE = {
   waitingHours: 0,
   shopHours: 0,
   upsellHours: 0,
+  openTicketHours: 0,
+  openTicketCount: 0,
 };
 
 // The escalated period, exactly: 42.0h flagged across an unscheduled Saturday

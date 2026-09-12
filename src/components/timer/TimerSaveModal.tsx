@@ -399,7 +399,12 @@ export function TimerSaveModal({
 
         {entry.opCodes.length === 0 ? (
           <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
-            This RO has no op codes. Edit it first to add one.
+            {/* An open ticket has no lines BY DESIGN; the timer learns to save
+                to one in Open Tickets Phase 2. Until then, say where the hours
+                go rather than send the tech to add a code they don't have. */}
+            {entry.status === "open"
+              ? "This is an open ticket — no op codes yet. Log these hours on the ticket's timeline (open it from the dashboard) until the timer can save to open tickets."
+              : "This RO has no op codes. Edit it first to add one."}
           </p>
         ) : (
           <>

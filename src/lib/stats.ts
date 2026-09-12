@@ -8,6 +8,7 @@ import {
 } from "./schedule";
 import { expandDaysOff } from "./streak";
 import { upsellFlagHours } from "./upsells";
+import { openWorkDates, openWorkRows } from "./open-tickets";
 
 export type Stats = {
   flagHours: number;
@@ -35,6 +36,18 @@ export type Stats = {
    * work you found. Never add it to anything.
    */
   upsellHours: number;
+  /**
+   * Hours worked on OPEN TICKETS in the range (Open Tickets plan, decision
+   * 7/10): teardown and diag time on a job whose op codes don't exist yet.
+   *
+   * Its OWN bucket. Not in unpaidHours (those hours are paid late, not never),
+   * not in flagHours (the flag pays on the close day), and not in efficiency
+   * (decision 7 — the raw number never moves; attribution sits beside it, as
+   * "8.0h on 1 open ticket"). Adding it to any of the three is the bug.
+   */
+  openTicketHours: number;
+  /** Distinct open tickets those hours were on. */
+  openTicketCount: number;
 };
 
 export function computeEfficiency(
@@ -96,6 +109,8 @@ export function aggregateStats(
   let ledgerComeback = 0;
   let waitingHours = 0;
   let shopHours = 0;
+  let openTicketHours = 0;
+  const openTickets = new Set<string>();
   for (const u of includedUnpaid) {
     switch (u.kind) {
       case "comeback_own":
@@ -109,6 +124,12 @@ export function aggregateStats(
         break;
       case "shop_time":
         shopHours += u.hours;
+        break;
+      case "open_work":
+        // Deliberately NOT added to any unpaid figure (decision 10). Counted
+        // under its own name so the day can say where the hours went.
+        openTicketHours += u.hours;
+        openTickets.add(u.entryId ?? "");
         break;
     }
   }
@@ -130,6 +151,8 @@ export function aggregateStats(
     // the /insights trend cannot come to different conclusions about what an
     // upsold line is worth.
     upsellHours: includedEntries.reduce((s, e) => s + upsellFlagHours(e), 0),
+    openTicketHours,
+    openTicketCount: openTickets.size,
   };
 }
 
@@ -497,14 +520,44 @@ function pairDay(
   return { kind: "unresolved" };
 }
 
+/**
+ * A day with open-ticket hours is a WORKED day (Open Tickets, decision 7): no
+ * unresolved-day prompt, the streak continues, schedule inference sees a
+ * shift. In the pairing rule that is exactly what a confirmed real-zero day
+ * already is — a day the tech was at the shop and flagged nothing — so the
+ * open_work dates are folded into `confirmedZeroDays` here, in ONE place,
+ * rather than taught to pairDay, dailyDenominators and wage-check's fill
+ * separately (the two-figures escalation was three copies of one rule).
+ *
+ * "Worked — unpaid" set the precedent: it reuses the confirmed_zero_day
+ * marker for the same reason (src/app/actions/schedule.ts).
+ *
+ * The efficiency arithmetic is untouched by this: the day's flag is still 0
+ * and its scheduled hours still count, exactly as they would once the tech
+ * confirmed the day by hand. What changes is that the app no longer ASKS.
+ */
+export function withOpenWorkDays(
+  ctx: ScheduleContext,
+  unpaid: UnpaidTime[],
+  range: { start: string; end: string },
+): ScheduleContext {
+  const dates = openWorkDates(unpaid, range.start, range.end);
+  if (dates.size === 0) return ctx;
+  return {
+    ...ctx,
+    confirmedZeroDays: [...new Set([...ctx.confirmedZeroDays, ...dates])],
+  };
+}
+
 export function aggregateStatsWithSchedule(
   entries: Entry[],
   clocks: DailyClock[],
   range: { start: string; end: string },
-  ctx: ScheduleContext,
+  schedCtx: ScheduleContext,
   unpaid: UnpaidTime[] = [],
 ): ScheduleStats {
   const base = aggregateStats(entries, clocks, range, unpaid);
+  const ctx = withOpenWorkDays(schedCtx, unpaid, range);
 
   const flagByDay = new Map<string, number>();
   for (const e of entries) {
@@ -604,8 +657,15 @@ export function dailyDenominators(
   range: { start: string; end: string },
   today: string,
   schedule: ScheduleContext | null,
+  // Optional so every existing caller keeps working. Passed by the surfaces
+  // that have the ledger, so a day with open-ticket hours pairs here exactly
+  // as it pairs in aggregateStatsWithSchedule — see withOpenWorkDays.
+  unpaid: UnpaidTime[] = [],
 ): Record<string, DayDenom> {
   const out: Record<string, DayDenom> = {};
+  if (schedule && openWorkRows(unpaid).length > 0) {
+    schedule = withOpenWorkDays(schedule, unpaid, range);
+  }
   const flagByDay = new Map<string, number>();
   for (const e of entries) {
     if (!inRange(e.date, range.start, range.end)) continue;

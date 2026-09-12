@@ -85,6 +85,8 @@ const STATS: Stats = {
   waitingHours: 0,
   shopHours: 0,
   upsellHours: 0,
+  openTicketHours: 0,
+  openTicketCount: 0,
 };
 
 function setup(initialPaid: number | null = 65) {

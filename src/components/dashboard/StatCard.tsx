@@ -76,6 +76,15 @@ export function StatCard({
           ? `${fmtPct(eff)} efficiency`
           : `${fmtHours(denomHours)}h ${DENOM_WORD[source ?? "clocked"]}`}
       </div>
+      {/* Attribution BESIDE the flag figure, never in it (Open Tickets,
+          decision 7): hours worked on tickets whose flag hasn't landed yet.
+          Absent when zero — a quiet tile stays quiet. */}
+      {stats.openTicketHours > 0 && (
+        <div className="stat-delta neutral" data-testid="open-ticket-line">
+          {fmtHours(stats.openTicketHours)}h on {stats.openTicketCount} open ticket
+          {stats.openTicketCount === 1 ? "" : "s"}
+        </div>
+      )}
     </div>
   );
 }

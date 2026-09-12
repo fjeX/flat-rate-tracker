@@ -1,6 +1,6 @@
 # PLAN — Open Tickets: multi-day ROs that tell the truth about the days between
 
-**Status:** design locked 2026-09-12 (grilling, 13 decisions). Nothing built.
+**Status:** design locked 2026-09-12 (grilling, 13 decisions). **Phase 1 built 2026-09-12** (not yet deployed — see Build notes at the end). Phase 2 not started.
 **Depends on:** PLAN-unpaid-time-engine (Phase 1 shipped: `active_timers`,
 `unpaid_time` ledger, additive timer saves). Extends it; changes nothing it locked.
 
@@ -318,3 +318,21 @@ A modal step, not a page:
 - Guest support. Rejected (Q12).
 - Warranty-specific fields (claim number, cause-of-failure text). The `custom`
   event + note covers it for now; promote to columns only if a pattern emerges.
+
+---
+
+## Build notes — Phase 1 (2026-09-12)
+
+- Migration `20260912000000_open_tickets.sql`; postgres-guard dry-ran it on
+  prod in a rolled-back transaction (idempotent, partial index used by EXPLAIN).
+- The close flow is the log form in close mode (`/log?edit=<id>&close=1`) rather
+  than a modal step: it IS "the existing line editor, same validation", and a
+  second editor in the modal would duplicate every line rule. Decision 8 holds.
+- Worked-day rule, schedule side: `withOpenWorkDays` (stats.ts) folds open_work
+  dates into `confirmedZeroDays` — the marker "Worked — unpaid" already reuses —
+  so pairDay, dailyDenominators and the wage check share one day set.
+- `import-remap.ts` has no kinds allow-list (this plan assumed one); open_work
+  rows pass through and `open-tickets.test.ts` pins it.
+- The timer still lists open tickets in its picker; saving to one explains that
+  the timer path is Phase 2.
+

@@ -67,6 +67,56 @@ export async function listUnpaidTime(
   return (data ?? []).map(toUnpaidTime);
 }
 
+/**
+ * Every ledger row attached to ONE entry — the RO modal's Timeline section
+ * (the open-work rows it lists and deletes, and the hold rows the close flow
+ * says it excluded). Not range-filtered: a ticket's rows belong to the ticket
+ * whatever days they fell on.
+ */
+export async function listUnpaidTimeForEntry(
+  supabase: DbClient,
+  entryId: string,
+): Promise<UnpaidTime[]> {
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("unpaid_time")
+      .select("*")
+      .eq("entry_id", entryId)
+      .order("date", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data;
+  });
+  return (data ?? []).map(toUnpaidTime);
+}
+
+/**
+ * Distinct dates carrying open-ticket hours, all time — the streak's read
+ * (Open Tickets, decision 7: a day on an open ticket is a worked day). Dates
+ * only, like listAllEntryDays: the streak needs presence, not hours.
+ *
+ * Tolerates a pre-migration DB the way listUnpaidTimeSafe does, and ALSO a DB
+ * whose CHECK doesn't know the kind yet — that just means no rows match.
+ */
+export async function listOpenWorkDatesSafe(
+  supabase: DbClient,
+): Promise<string[]> {
+  try {
+    const data = await retryOnce(async () => {
+      const { data, error } = await supabase
+        .from("unpaid_time")
+        .select("date")
+        .eq("kind", "open_work");
+      if (error) throw error;
+      return data;
+    });
+    return [...new Set((data ?? []).map((r) => r.date))];
+  } catch (err) {
+    if (isMissingTable(err)) return [];
+    throw err;
+  }
+}
+
 /** Null pre-migration — callers hide the feature rather than crash. */
 export async function listUnpaidTimeSafe(
   supabase: DbClient,

@@ -3,15 +3,15 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { hasAnyRate, ratesToMap } from "@/lib/earnings";
-import { hhmmInTz } from "@/lib/periods";
+import { hhmmInTz, isoDate, isoDateInTz } from "@/lib/periods";
 import { LogRoForm } from "@/components/forms/LogRoForm";
 
 export default async function LogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ edit?: string }>;
+  searchParams: Promise<{ edit?: string; close?: string }>;
 }) {
-  const { edit } = await searchParams;
+  const { edit, close } = await searchParams;
 
   const supabase = await createClient();
   const [opCodes, settings, laborRates] = await Promise.all([
@@ -39,6 +39,13 @@ export default async function LogPage({
   const cookieStore = await cookies();
   const tz = cookieStore.get("frt_timezone")?.value ?? "";
   const defaultLoggedTime = settings.trackRoTime ? hhmmInTz(tz) : "";
+  const today = tz ? isoDateInTz(tz) : isoDate();
+
+  // `?close=1` on an OPEN ticket puts the form in close mode (Open Tickets,
+  // Phase 1): the full line editor, the close date defaulting to today, and
+  // the actual-hours prefill from the ticket's timeline. On a closed RO the
+  // flag is ignored — there is nothing to close.
+  const closeMode = Boolean(close) && existingEntry?.status === "open";
 
   return (
     <LogRoForm
@@ -50,6 +57,10 @@ export default async function LogPage({
       trackRoTime={settings.trackRoTime}
       defaultLoggedTime={defaultLoggedTime}
       timeZone={tz}
+      today={today}
+      // Signed-in only (decision 12). The guest log page never passes this.
+      openTicketEnabled
+      closeMode={closeMode}
     />
   );
 }

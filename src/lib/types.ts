@@ -99,6 +99,21 @@ export type EntryOpCode = {
   isUpsell?: boolean;
 };
 
+/**
+ * An open ticket is an ordinary Entry with no lines YET (Open Tickets plan,
+ * decision 1). `open` from teardown day until the op codes are known; `closed`
+ * is every finished RO, including every row that predates the feature.
+ *
+ * While open, `date` is a placeholder (the opened day) and `flagHours` is 0 by
+ * construction — no lines, so the recompute trigger never fires. On close,
+ * `date` becomes the close day (the day the flag pays) and the lines land.
+ */
+export type EntryStatus = "open" | "closed";
+
+export function isEntryStatus(v: unknown): v is EntryStatus {
+  return v === "open" || v === "closed";
+}
+
 export type Entry = {
   id: string;
   userId: string;
@@ -132,6 +147,106 @@ export type Entry = {
   // but the original was never logged", "another tech's work", and "same-visit
   // rework", which are three different facts.
   comebackKind?: ComebackKind | null;
+  // Optional so the hundreds of Entry literals in tests still typecheck; the DB
+  // mapper always populates it, and an absent value reads as `closed` — the
+  // same reading the column default gives every pre-feature row.
+  status?: EntryStatus;
+};
+
+// ── Open tickets: the timeline ────────────────────────────────────────────────
+// The STORY of a multi-day RO, one row per thing that happened. Hours never
+// ride on an event (decision 4): they live in the unpaid_time ledger as
+// `open_work` rows, so editing a note can never change a day total.
+//
+// Fixed vocabulary + `custom` (decision 5). The latest event IS the ticket's
+// status — there is no separate status-text column to drift from it.
+export type RoEventKind =
+  | "opened"
+  | "diag_done"
+  | "teardown_approved"
+  | "teardown_done"
+  | "cause_found"
+  | "parts_ordered"
+  | "approval_received"
+  | "repair_done"
+  | "hold_parts"
+  | "hold_approval"
+  | "reopened"
+  | "closed"
+  | "custom";
+
+export const RO_EVENT_KINDS: readonly RoEventKind[] = [
+  "opened",
+  "diag_done",
+  "teardown_approved",
+  "teardown_done",
+  "cause_found",
+  "parts_ordered",
+  "approval_received",
+  "repair_done",
+  "hold_parts",
+  "hold_approval",
+  "reopened",
+  "closed",
+  "custom",
+];
+
+export const RO_EVENT_KIND_LABELS: Record<RoEventKind, string> = {
+  opened: "Opened",
+  diag_done: "Diagnosis done",
+  teardown_approved: "Teardown approved",
+  teardown_done: "Teardown done",
+  cause_found: "Cause found",
+  parts_ordered: "Parts ordered",
+  approval_received: "Approval received",
+  repair_done: "Repair done",
+  hold_parts: "Waiting on parts",
+  hold_approval: "Waiting on approval",
+  reopened: "Reopened",
+  closed: "Closed",
+  custom: "Custom",
+};
+
+/**
+ * The kinds a tech PICKS in the add-event form. `opened`, `closed` and
+ * `reopened` are written by the server actions that perform those transitions
+ * (so they cannot be forgotten, and cannot be faked), never chosen by hand.
+ */
+export const RO_EVENT_PICKABLE_KINDS: readonly RoEventKind[] = [
+  "diag_done",
+  "teardown_approved",
+  "teardown_done",
+  "cause_found",
+  "parts_ordered",
+  "approval_received",
+  "repair_done",
+  "hold_parts",
+  "hold_approval",
+  "custom",
+];
+
+export function isRoEventKind(v: unknown): v is RoEventKind {
+  return typeof v === "string" && (RO_EVENT_KINDS as readonly string[]).includes(v);
+}
+
+export type RoEvent = {
+  id: string;
+  userId: string;
+  entryId: string;
+  date: string; // "YYYY-MM-DD"
+  time: string | null; // "HH:MM" wall clock on `date`, or null
+  kind: RoEventKind;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NewRoEvent = {
+  entryId: string;
+  date: string;
+  time?: string | null;
+  kind: RoEventKind;
+  note?: string;
 };
 
 // A photographic record attached to an entry (RO ticket photo). captured_at is
@@ -191,7 +306,14 @@ export type UnpaidTimeKind =
   | "rework_same_visit" // caught it before the car left; no ticket
   | "wait_parts"
   | "wait_approval"
-  | "shop_time"; // meetings, cleanup, dispatch limbo
+  | "shop_time" // meetings, cleanup, dispatch limbo
+  // Hours worked on an OPEN TICKET before its op codes exist (Open Tickets
+  // plan, decision 4/10). Lives in this ledger because the stats layer already
+  // sums it by date and it is already backed up — but it is NOT unpaid time.
+  // Teardown hours on a warranty job are paid late, not never. Every unpaid
+  // total excludes this kind, before and after the ticket closes; see
+  // aggregateStats / buildUnpaidSummary.
+  | "open_work";
 
 export const UNPAID_TIME_KINDS: readonly UnpaidTimeKind[] = [
   "comeback_own",
@@ -200,7 +322,15 @@ export const UNPAID_TIME_KINDS: readonly UnpaidTimeKind[] = [
   "wait_parts",
   "wait_approval",
   "shop_time",
+  "open_work",
 ];
+
+/** The kinds that ARE unpaid — every kind except open_work. */
+export const OPEN_WORK_KIND: UnpaidTimeKind = "open_work";
+
+export function isUnpaidKind(kind: UnpaidTimeKind): boolean {
+  return kind !== OPEN_WORK_KIND;
+}
 
 // Display labels for every kind, for surfaces that report the ledger back to
 // the user (Phase 3). Capture UIs keep their own wording where the context is
@@ -214,6 +344,7 @@ export const UNPAID_TIME_KIND_LABELS: Record<UnpaidTimeKind, string> = {
   wait_parts: "Waiting on parts",
   wait_approval: "Waiting on approval",
   shop_time: "Shop time",
+  open_work: "On open ticket",
 };
 
 export function isUnpaidTimeKind(v: unknown): v is UnpaidTimeKind {
@@ -364,6 +495,18 @@ export type NewEntry = {
 };
 
 export type EntryPatch = Partial<NewEntry>;
+
+/**
+ * What it takes to OPEN a ticket: the RO number, and nothing else (decision
+ * 2). Vehicle and notes are progressive — learned later, edited in place.
+ * `date` is the opened day, resolved server-side in the user's timezone.
+ */
+export type NewOpenEntry = {
+  date: string;
+  roNumber: string;
+  vehicle?: Vehicle;
+  notes?: string;
+};
 
 // Slim summary of an existing entry that shares an RO number — used by the
 // duplicate-RO prompt to let the user tell repeat RO numbers apart.

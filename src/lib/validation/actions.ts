@@ -27,10 +27,12 @@ import {
 import {
   COMEBACK_KINDS,
   DISPUTE_STATUSES,
+  RO_EVENT_PICKABLE_KINDS,
   UNPAID_TIME_KINDS,
   type ComebackKind,
   type DisputeStatus,
   type LaborType,
+  type RoEventKind,
   type UnpaidTimeKind,
 } from "@/lib/types";
 
@@ -107,6 +109,16 @@ const unpaidTimeKind = oneOf<UnpaidTimeKind>(
 const disputeStatus = oneOf<DisputeStatus>(
   DISPUTE_STATUSES,
   (v) => `Unknown status: ${String(v)}`,
+);
+
+/**
+ * The kinds a form may WRITE. `opened`, `closed` and `reopened` are absent on
+ * purpose: the server actions that perform those transitions write them, so a
+ * caller cannot fake a close it never performed.
+ */
+const roEventPickableKind = oneOf<RoEventKind>(
+  RO_EVENT_PICKABLE_KINDS,
+  "Unrecognized event kind.",
 );
 
 const timerStatus = oneOf(TIMER_STATUSES, "Unknown timer status.");
@@ -249,6 +261,66 @@ export const setLineUpsellSchema = z.object({
 export const setLinePaidHoursSchema = z.object({
   lineId: lineIdSchema,
   paidHours: hours("Paid hours", MAX_NUMERIC_5_2).nullable(),
+});
+
+// ---------------------------------------------------------------------------
+// open-tickets.ts
+// ---------------------------------------------------------------------------
+
+/** HH:MM wall clock — the DB CHECK, not a stricter opinion of our own. */
+const hhmm = z
+  .string({ error: "Time must be text." })
+  .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, {
+    error: "Time must be in HH:MM format.",
+  });
+
+/** Opening a ticket: the RO number is the only required field (decision 2). */
+export const openTicketSchema = z.object({
+  roNumber: requiredText("RO number is required.", TEXT_LIMITS.roNumber),
+  vehicle: vehicleSchema,
+  notes: freeText(TEXT_LIMITS.notes).optional().default(""),
+  // Same absent-vs-null contract as newEntrySchema.loggedTime; only the
+  // open-ticket EDIT path sends it (opening never records a time — the
+  // opened day is the `opened` event, and the flag-day time is set at close).
+  loggedTime: hhmm.nullable().optional(),
+});
+
+export const roEventIdSchema = uuidField("Event ID");
+
+/** Adding a timeline event by hand. */
+export const addRoEventSchema = z.object({
+  entryId: entryIdSchema,
+  kind: roEventPickableKind,
+  date: isoDate("Date must be in YYYY-MM-DD format."),
+  time: hhmm.nullable().optional().default(null),
+  note: freeText(TEXT_LIMITS.notes).optional().default(""),
+});
+
+/** Adding a day's hours to an open ticket (a manual open_work ledger row). */
+export const addOpenWorkSchema = z.object({
+  entryId: entryIdSchema,
+  date: isoDate("Date must be in YYYY-MM-DD format."),
+  hours: z
+    .number({ error: "Hours must be greater than zero." })
+    .refine(Number.isFinite, { error: "Hours must be greater than zero." })
+    .gt(0, { error: "Hours must be greater than zero." })
+    .max(24, { error: "Hours can't exceed 24 in a day." }),
+  note: freeText(TEXT_LIMITS.notes).optional().default(""),
+});
+
+/**
+ * Closing a ticket. This is where the "at least one op code" rule belongs for
+ * an open ticket (the close flow is the moment the codes become known), so the
+ * array is `.min(1)` exactly like newEntrySchema's.
+ */
+export const closeTicketSchema = z.object({
+  entryId: entryIdSchema,
+  date: isoDate("Close date must be in YYYY-MM-DD format."),
+  // Same absent-vs-null contract as newEntrySchema.loggedTime.
+  loggedTime: hhmm.nullable().optional(),
+  opCodes: z
+    .array(entryLineSchema, { error: "Add at least one op code." })
+    .min(1, { error: "Add at least one op code." }),
 });
 
 // ---------------------------------------------------------------------------

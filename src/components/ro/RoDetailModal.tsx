@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EntryPhotos } from "@/components/ro/EntryPhotos";
+import { TicketTimeline } from "@/components/ro/TicketTimeline";
 import { LinkedSpiffs } from "@/components/bonuses/LinkedSpiffs";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { formatDateLong, formatLoggedTime } from "@/lib/periods";
@@ -73,10 +74,28 @@ export function RoDetailModal({
   // Dollars only surface once the user has priced at least one rate.
   const showMoney = hasAnyRate(rates);
   const roEarnings = showMoney ? entryEarnings(entry, rates) : 0;
+  // An open ticket has no lines YET (Open Tickets, decision 1). The lines
+  // block, the add-line picker and the earnings row describe the flag, which
+  // lands at close — so on an open ticket the Timeline section stands where
+  // they would, and the close flow is where the codes get entered.
+  const isOpen = entry.status === "open";
+  // Guest entries are in-memory and the timeline actions cannot resolve them.
+  // A guest RO never carries a status (decision 12 — the guest store builds
+  // its entries client-side without one), so the status IS the guest gate:
+  // the section mounts only for a row the database mapper produced.
+  const hasTimeline = entry.status !== undefined;
 
   return (
     <Modal open onClose={onClose} title={`RO #${entry.roNumber}`} size="lg">
       <div className="space-y-4">
+        {isOpen && (
+          <div className="flex items-center gap-2">
+            <Badge tone="info">Open ticket</Badge>
+            <span className="text-xs text-[var(--fg-3)]">
+              No op codes yet — flag lands when you close it.
+            </span>
+          </div>
+        )}
         <div className="text-xs text-[var(--fg-3)]">
           {/* The time the tech recorded for the WORK sits on the date line,
               because it is part of that date. The "Logged" line below is a
@@ -104,6 +123,7 @@ export function RoDetailModal({
           mileage={entry.vehicle.mileage}
         />
 
+        {!isOpen && (
         <div className="card-inset overflow-hidden">
           {/* Header, rows, and total all share this exact template (incl. the
               22px trash-button column) so Flag/Actual line up with the inputs. */}
@@ -162,15 +182,26 @@ export function RoDetailModal({
             </div>
           )}
         </div>
+        )}
 
-        {/* Quick-add op code from library */}
-        <AddOpCodePicker
-          entryId={entry.id}
-          library={library}
-          autoOpen={autoOpenAddLine}
-          defaultUpsell={autoOpenAddLine}
-          onAdded={() => router.refresh()}
-        />
+        {/* Quick-add op code from library. Not on an open ticket: its lines
+            arrive through the close flow, which is where the "at least one
+            op code" rule is enforced for a ticket. */}
+        {!isOpen && (
+          <AddOpCodePicker
+            entryId={entry.id}
+            library={library}
+            autoOpen={autoOpenAddLine}
+            defaultUpsell={autoOpenAddLine}
+            onAdded={() => router.refresh()}
+          />
+        )}
+
+        {/* The ticket's story and per-day hours. Renders nothing on an ordinary
+            RO with no timeline; always renders on an open ticket. */}
+        {hasTimeline && (
+          <TicketTimeline entry={entry} onChanged={() => router.refresh()} />
+        )}
 
         {entry.notes && (
           <div className="card-inset p-3">
@@ -812,13 +843,25 @@ function Footer({
         </Button>
         <div className="flex items-center gap-2">
           <Button onClick={onClose}>Close</Button>
+          {/* On an open ticket "Edit" edits the progressive fields (vehicle,
+              notes) and the close flow is the primary action; the timeline
+              section above carries the Close button too, next to the hours
+              it is closing. */}
           <Link
             href={`/log?edit=${entry.id}`}
-            className="btn btn-primary"
+            className={entry.status === "open" ? "btn" : "btn btn-primary"}
           >
             <Pencil className="h-4 w-4" />
-            Edit RO
+            {entry.status === "open" ? "Edit ticket" : "Edit RO"}
           </Link>
+          {entry.status === "open" && (
+            <Link
+              href={`/log?edit=${entry.id}&close=1`}
+              className="btn btn-primary"
+            >
+              Close ticket
+            </Link>
+          )}
         </div>
       </div>
     </div>

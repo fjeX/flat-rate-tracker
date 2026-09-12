@@ -21,6 +21,7 @@ import type {
   SnapshotStats,
 } from "@/lib/types";
 import { computeStreak, type StreakResult } from "@/lib/streak";
+import { listOpenWorkDatesSafe } from "./unpaid-time";
 import {
   careerMilestonesHit,
   nextCareerMilestone,
@@ -533,15 +534,22 @@ export async function getGamificationData(
   opts: { today: string; nowMs?: number },
 ): Promise<GamificationData | null> {
   try {
-    const [entryDays, daysOff, storedMilestones, snapshots] = await Promise.all([
-      listAllEntryDays(supabase),
-      listDaysOff(supabase),
-      listCareerMilestones(supabase),
-      listSnapshots(supabase),
-    ]);
+    const [entryDays, daysOff, storedMilestones, snapshots, openWorkDates] =
+      await Promise.all([
+        listAllEntryDays(supabase),
+        listDaysOff(supabase),
+        listCareerMilestones(supabase),
+        listSnapshots(supabase),
+        // Open Tickets, decision 7: a day with hours on an open ticket is a
+        // worked day, so the streak sees it. The ledger keeps the date after
+        // the ticket closes and its RO row moves to the close day.
+        listOpenWorkDatesSafe(supabase),
+      ]);
 
     const streak = computeStreak({
-      loggedDates: [...new Set(entryDays.map((d) => d.date))],
+      loggedDates: [
+        ...new Set([...entryDays.map((d) => d.date), ...openWorkDates]),
+      ],
       daysOff,
       today: opts.today,
     });

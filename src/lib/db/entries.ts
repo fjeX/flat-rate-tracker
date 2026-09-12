@@ -2,6 +2,7 @@
 import type { Database } from "@/lib/supabase/database.types";
 import {
   isComebackKind,
+  isEntryStatus,
   type ActualSource,
   type Entry,
   type EntryOpCode,
@@ -9,8 +10,15 @@ import {
   type LaborType,
   type NewEntry,
   type NewEntryOpCode,
+  type NewOpenEntry,
 } from "@/lib/types";
-import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
+import {
+  getCurrentUserId,
+  isMissingColumn,
+  isMissingTable,
+  retryOnce,
+  type DbClient,
+} from "./_client";
 
 type EntryRow = Database["public"]["Tables"]["entries"]["Row"];
 type EntryOpCodeRow = Database["public"]["Tables"]["entry_op_codes"]["Row"];
@@ -63,6 +71,12 @@ function toEntry(row: EntryRow & { entry_op_codes?: EntryOpCodeRow[] }): Entry {
     // A kind the DB allows but this build doesn't know means the code is older
     // than the schema — drop to null rather than crash the whole RO list.
     comebackKind: isComebackKind(row.comeback_kind) ? row.comeback_kind : null,
+    // A DB that predates the open-tickets migration returns no column at all,
+    // and every row it holds is a finished RO — the same reading the column
+    // default gives. An unknown value (a future status this build doesn't know)
+    // also reads as closed: it keeps the RO in every list rather than hiding it
+    // behind an "open" it may not be.
+    status: isEntryStatus(row.status) ? row.status : "closed",
     opCodes: (row.entry_op_codes ?? [])
       .slice()
       .sort((a, b) => a.position - b.position)
@@ -125,6 +139,61 @@ export async function getEntry(
     return data;
   });
   return data ? toEntry(data) : null;
+}
+
+/**
+ * Every OPEN ticket, oldest-opened first — the dashboard card's read.
+ *
+ * Sorted by created_at, not `date`: while open, `date` is the opened day too,
+ * but created_at is immutable and `date` moves at close, so the row that has
+ * sat longest is the one to chase and created_at is what says so. Uses the
+ * partial index entries_user_open_idx.
+ */
+export async function listOpenEntries(supabase: DbClient): Promise<Entry[]> {
+  const data = await retryOnce(async () => {
+    const { data, error } = await supabase
+      .from("entries")
+      .select("*, entry_op_codes(*)")
+      .eq("status", "open")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data;
+  });
+  return (data ?? []).map(toEntry);
+}
+
+/** Null pre-migration — the dashboard card hides rather than the page failing. */
+export async function listOpenEntriesSafe(
+  supabase: DbClient,
+): Promise<Entry[] | null> {
+  try {
+    return await listOpenEntries(supabase);
+  } catch (err) {
+    if (isMissingColumn(err) || isMissingTable(err)) return null;
+    throw err;
+  }
+}
+
+/**
+ * Open tickets sharing this RO number — the "RO 12345 is already open" warning.
+ *
+ * OPEN tickets only, by design (plan risk #4): the shop recycles numbers, so
+ * comparing against every row would fire on every reused number. A match
+ * against a CLOSED RO is normal and silent — that is what the ordinary
+ * duplicate-RO prompt on a closed save already handles.
+ */
+export async function findOpenEntriesByRoNumber(
+  supabase: DbClient,
+  roNumber: string,
+): Promise<Entry[]> {
+  const { data, error } = await supabase
+    .from("entries")
+    .select("*, entry_op_codes(*)")
+    .eq("status", "open")
+    .ilike("ro_number", roNumber)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(toEntry);
 }
 
 export async function getEntriesByRoNumber(
@@ -313,6 +382,102 @@ export async function createEntry(
   const fresh = await getEntry(supabase, entry.id);
   if (!fresh) throw new Error("Entry disappeared after creation");
   return fresh;
+}
+
+/**
+ * Open a ticket: an entries row with status 'open' and NO lines.
+ *
+ * A separate function, not createEntry with an empty array — the "at least one
+ * op code" throw above is a real guard for closed ROs and stays. The RO number
+ * is the only required field (decision 2); the vehicle columns default to ''.
+ *
+ * `date` is the OPENED day and is a placeholder while the ticket is open
+ * (decision 9): on close it becomes the close day. The opened day itself is
+ * preserved by the `opened` timeline event the server action writes right
+ * after this — this function does not write it, because the event carries the
+ * user id and date the action already resolved, and the two writes are
+ * reported together by the action.
+ */
+export async function createOpenEntry(
+  supabase: DbClient,
+  input: NewOpenEntry,
+): Promise<Entry> {
+  const userId = await getCurrentUserId(supabase);
+
+  const entryInsert: Database["public"]["Tables"]["entries"]["Insert"] = {
+    user_id: userId,
+    date: input.date,
+    ro_number: input.roNumber,
+    vehicle_year: input.vehicle?.year ?? "",
+    vehicle_make: input.vehicle?.make ?? "",
+    vehicle_model: input.vehicle?.model ?? "",
+    vehicle_vin: input.vehicle?.vin ?? "",
+    vehicle_mileage: input.vehicle?.mileage ?? "",
+    notes: input.notes ?? "",
+    status: "open",
+  };
+
+  const { data: entry, error } = await supabase
+    .from("entries")
+    .insert(entryInsert)
+    .select("*, entry_op_codes(*)")
+    .single();
+  if (error) throw error;
+  return toEntry(entry);
+}
+
+/**
+ * Append the close-day lines to an open ticket in ONE bulk insert.
+ *
+ * Same insert shape as createEntry (toLineInsert, positions by index), so the
+ * NOT-NULL-always-present rule documented there holds here too. The recompute
+ * trigger sets entries.flag_hours as the lines land. No status change — the
+ * close action flips status LAST, so a failure after this leaves an open
+ * ticket WITH lines (visible, retryable) rather than a closed one without.
+ */
+export async function addEntryLines(
+  supabase: DbClient,
+  entryId: string,
+  lines: NewEntryOpCode[],
+): Promise<void> {
+  if (lines.length === 0) throw new Error("At least one op code is required.");
+  const { error } = await supabase
+    .from("entry_op_codes")
+    .insert(lines.map((line, i) => toLineInsert(entryId, line, i)));
+  if (error) throw error;
+}
+
+/**
+ * The close-day date move (decision 9). `logged_time` is cleared with it: a
+ * wall-clock time captured on the opened day would otherwise describe a time
+ * on the close day (plan risk #3). The close form re-defaults it from the
+ * setting when it wants one, and passes it here.
+ */
+export async function setEntryCloseDate(
+  supabase: DbClient,
+  id: string,
+  date: string,
+  loggedTime: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from("entries")
+    .update({ date, logged_time: loggedTime })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** The status flip. Deliberately its own write so the close action can do it
+ *  LAST — see addEntryLines. */
+export async function setEntryStatus(
+  supabase: DbClient,
+  id: string,
+  status: "open" | "closed",
+): Promise<void> {
+  const { error } = await supabase
+    .from("entries")
+    .update({ status })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function updateEntry(

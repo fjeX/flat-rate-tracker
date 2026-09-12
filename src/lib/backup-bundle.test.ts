@@ -75,6 +75,9 @@ function fullParts(): BackupParts {
       { id: "P1", seq: 1, roThreshold: 100, stats: {}, createdAt: ts },
     ] as unknown as BackupParts["portfolioSnapshots"],
     careerMilestones: [{ threshold: 100, achievedAt: ts }],
+    roEvents: [
+      { id: "EV1", entryId: "E1", date: "2026-01-01", kind: "opened" },
+    ] as unknown as BackupParts["roEvents"],
   };
 }
 

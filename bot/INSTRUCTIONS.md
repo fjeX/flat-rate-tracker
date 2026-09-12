@@ -1866,6 +1866,117 @@ back to unset (the period returns to awaiting-pay).
   and press **Enter**, and separately type a figure and click blank space. Both
   must save. A silently discarded first figure is the regression to watch for.
 
+### 8m. Open tickets — multi-day ROs (shipped 2026-09-12 — newest code, hunt it hard)
+
+A warranty job used to be one RO on the close day: nine days of nothing and
+one 14-hour shift. Now a ticket can exist from teardown day. Read this whole
+section before filing anything about a 0.0h day or a 0.0h RO — most of what
+follows is deliberate.
+
+**Vocabulary.** An *open ticket* is an RO with no op codes yet. Its hours land
+per day on a *timeline*; its *flag* lands on the day it is *closed*. Nothing
+here is "unpaid time" — see the last bullet.
+
+**Open one.** /log → the new switch **"Open ticket — no op codes yet"** at the
+top of a NEW RO (not on an edit). Turn it on:
+
+- The date pill, the op-code step and the Scan banner disappear. Only the RO
+  number is required; vehicle and notes are optional. The save button reads
+  **Open ticket**. Save it. You land on the dashboard.
+- Open a second ticket with the SAME RO number: the form must refuse with
+  "RO … is already open" and offer **View open ticket** (opens the RO modal)
+  and **Open another under #…** (proceeds). A match against a CLOSED RO with
+  that number is normal and must NOT warn here — the shop recycles numbers.
+- The switch is signed-in only. On /guest/log it must not exist. If it does,
+  that is a real bug.
+
+**Dashboard card.** A new **Open tickets** card sits above the unresolved-days
+card, and ONLY when you have at least one open ticket — zero open means no
+card, not an empty state. One row per ticket: RO number, a status chip (the
+latest timeline event — a fresh ticket reads **Opened**), "Vehicle not set" or
+the vehicle, **Open N days** (counted from the day it was opened, inclusive),
+and hours-so-far on the right. Oldest-opened first. Tap a row → the RO modal.
+
+**RO modal on an open ticket.** An **Open ticket** badge at the top; no op-code
+table, no Add-op-code picker, no earnings row (nothing has flagged yet).
+Instead a **Timeline** section:
+
+- The story: *Opened <date>* is already there — written by the server, never
+  by you. **Add event** → pick a kind (Diagnosis done, Teardown approved,
+  Parts ordered, Waiting on parts, Waiting on approval, … , Custom), a date
+  (defaults to today), optional time, note. A **Custom** event shows its note
+  as its label and needs one. Add two or three. The dashboard chip must now
+  read the LATEST one.
+- Remove an event you added: trash icon, named confirm, gone on reload. The
+  **Opened** (and later **Closed**) milestones have NO trash icon — deliberate,
+  and the server refuses to delete them even if you find a way to ask.
+- The hours: **Add hours for a day** → date (default today) + hours + note.
+  Add **8.0h on yesterday** and **2.5h on today**. The list under the timeline
+  shows one row per day with a trash icon; the total updates; the dashboard
+  card's hours-so-far shows 10.5h. Delete one — the confirm must name the
+  hours and the date. Try 0, negative, 25: refused with a sentence, not a
+  crash.
+- **Close ticket** button at the bottom of the timeline (and in the footer).
+  Don't press it yet.
+
+**The calendar — the point of the feature.** With 8.0h logged on yesterday and
+NO closed RO that day:
+
+- Yesterday must NOT appear in the **unresolved days** card ("was this a day
+  off?"). If it does, that is the bug this whole feature exists to fix.
+- The **streak** must count yesterday as worked.
+- The dashboard **Today** tile shows "2.5h on 1 open ticket" under the 0.0h
+  flag; the **This Week** / **Pay Period** tiles show "10.5h on 1 open ticket".
+  The FLAG figures above those lines must NOT move. Efficiency must NOT move
+  (record the % before and after). A "pending efficiency" does not exist and
+  must not be reported as missing.
+- **/pay-period** → "What did the work cost me?" → the unpaid list, and
+  **/insights** → the leak board: open-ticket hours must appear on NEITHER.
+  They are not unpaid; they are paid late. Waiting-on-parts hours logged on the
+  same ticket through the timer (Phase 2) or the zero-day card DO still count
+  as unpaid. If open-ticket hours show up under "unpaid" anywhere, file it.
+- Recent ROs / History: the open ticket is listed with an **Open** chip and
+  0.0h. Correct — the chip is the explanation.
+
+**Close it.** Modal → **Close ticket** → /log opens in close mode: title
+"Close ticket #…", a banner "Closing this ticket", the full op-code editor,
+and the date pill now means the CLOSE date, defaulting to today.
+
+- The banner reads **"Timeline says 10.5h worked. Put it on:"** with a line
+  picker and an editable actual-hours box. Add two op codes (say 1.2h and
+  9.0h): the picker defaults to the bigger line. Hold time (waiting rows) is
+  excluded and the banner says so in one line when there is any.
+- Save with NO op codes: refused — "Add at least one op code." That rule
+  lives here, on the close, and nowhere earlier.
+- Save properly. Then check: the RO is gone from the Open tickets card (the
+  card disappears if it was the last one); the RO now carries today's date and
+  10.2h flagged; the modal shows the lines, the chosen line has actual 10.5h,
+  and the timeline is still there, now ending in **Closed <today>**, read-only.
+  **Yesterday is still a worked day** (still no unresolved-day prompt, streak
+  intact) even though the RO's date moved to today. The 8.0h is still listed
+  under the timeline's hours.
+- The **Reopen** button does not exist yet (Phase 2). Do not report its absence.
+
+**Edit an open ticket** (modal → **Edit ticket**): vehicle and notes save;
+there is no op-code step; the save button reads **Save ticket**. Delete ticket
+from that form works and takes the timeline with it; hours you logged on it
+stay on the calendar as worked days (that is correct — the hours happened).
+
+**Do NOT report:**
+- 0.0h flag on an open ticket, or on the day it was opened. Flag lands at close.
+- The open ticket's date equalling the day it was opened (it is a placeholder
+  until close).
+- Open-ticket hours missing from unpaid time, the dispute pack, or the leak
+  board. They are excluded on purpose.
+- The timer refusing to save to an open ticket ("This is an open ticket…").
+  The timer path is Phase 2.
+- Backup: a v5 backup carries the timelines (`roEvents`) and each RO's
+  `status`. Export one and confirm both keys are present; a pre-v5 file still
+  restores.
+
+**End the run with every ticket you opened CLOSED or DELETED**, so the card is
+empty for the next night and the streak isn't carrying your test days.
+
 ### 9. Nightly edge case (seeded rotation)
 
 One per night, by weekday:

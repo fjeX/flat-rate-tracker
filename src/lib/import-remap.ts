@@ -35,6 +35,7 @@ import type {
   PaidPeriod,
   PeriodOverride,
   PortfolioSnapshot,
+  RoEvent,
   UnpaidTime,
 } from "@/lib/types";
 import type { ShiftOverrideMap, WorkSchedule } from "@/lib/schedule";
@@ -91,6 +92,10 @@ export type ImportBundle = {
   confirmedZeroDays?: string[];
   portfolioSnapshots?: PortfolioSnapshot[];
   careerMilestones?: CareerMilestone[];
+  // --- version 5 addition: Open Ticket timelines. Absent from every backup
+  // written before 2026-09-12. Same "absent is meaningful" rule; the hours side
+  // of an open ticket rides inside unpaidTime (kind open_work) and needs no key.
+  roEvents?: RoEvent[];
 };
 
 // CareerMilestone lives in @/lib/types with the other domain shapes. The
@@ -106,9 +111,14 @@ export type ImportBundle = {
  * entry_op_codes.is_upsell and user_settings.track_ro_time. Older files simply
  * don't carry those keys, and the builder below fills each with the value that
  * means "nobody said" — null, false, and omitted-so-keep-the-destination's.
+ *
+ * v5 (2026-09-12) adds entries.status (NOT NULL — a pre-v5 file fills
+ * 'closed', which is what every RO that predates open tickets is) and the
+ * ro_events table under `roEvents`. An unpaid_time row of kind `open_work` is
+ * just a row; it needed no format change.
  */
-export const CURRENT_BACKUP_VERSION = 4;
-export const SUPPORTED_BACKUP_VERSIONS = [1, 2, 3, 4];
+export const CURRENT_BACKUP_VERSION = 5;
+export const SUPPORTED_BACKUP_VERSIONS = [1, 2, 3, 4, 5];
 
 /** Row payload handed to import_replace_account(). Keys are table names. */
 export type ImportPayload = {
@@ -144,6 +154,7 @@ export type ImportPayload = {
   confirmed_zero_days?: Record<string, unknown>[];
   portfolio_snapshots?: Record<string, unknown>[];
   career_milestones?: Record<string, unknown>[];
+  ro_events?: Record<string, unknown>[];
 };
 
 /**
@@ -329,6 +340,11 @@ export function buildImportPayload(
       // comeback_kind below still records that this WAS rework.
       comeback_of_entry_id: entryIds.get(e.comebackOfEntryId),
       comeback_kind: e.comebackKind ?? null,
+      // NOT NULL in the database, and the RPC populates rows against a null
+      // base — so a pre-v5 file without this key would write NULL and fail the
+      // whole import. Every RO from before open tickets existed is a finished
+      // one, so 'closed' is both the correct reading and the fix.
+      status: e.status ?? "closed",
       created_at: e.createdAt,
       updated_at: e.updatedAt,
     })),
@@ -531,6 +547,25 @@ export function buildImportPayload(
       // multi-year career into a single afternoon.
       achieved_at: m.achievedAt,
     }));
+  }
+
+  // --- v5: Open Ticket timelines. entry_id is NOT NULL, so an event whose
+  // ticket is not in the bundle cannot be imported at all — dropped, like a
+  // variant with no parent, rather than crashing or pointing at a stranger's
+  // row. Ids are minted fresh; nothing references an event.
+  if (bundle.roEvents) {
+    payload.ro_events = bundle.roEvents
+      .map((ev) => ({
+        id: newId(),
+        entry_id: entryIds.get(ev.entryId),
+        date: ev.date,
+        time: ev.time ?? null,
+        kind: ev.kind,
+        note: ev.note ?? "",
+        created_at: ev.createdAt,
+        updated_at: ev.updatedAt,
+      }))
+      .filter((ev) => ev.entry_id !== null);
   }
 
   return payload;

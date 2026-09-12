@@ -323,7 +323,7 @@ describe("buildImportPayload — every NOT NULL column is emitted", () => {
     op_code_variants: ["id", "op_code_id", "code", "description", "flag_hours", "sort_order", "created_at"],
     entries: [
       "id", "date", "ro_number", "vehicle_year", "vehicle_make", "vehicle_model",
-      "vehicle_mileage", "vehicle_vin", "flag_hours", "notes", "created_at", "updated_at",
+      "vehicle_mileage", "vehicle_vin", "flag_hours", "notes", "status", "created_at", "updated_at",
     ],
     entry_op_codes: ["id", "entry_id", "custom", "flag_hours", "position", "notes", "is_comeback"],
     bonuses: ["id", "date", "amount", "category", "created_at", "updated_at"],
@@ -339,6 +339,8 @@ describe("buildImportPayload — every NOT NULL column is emitted", () => {
       "claimed_hours", "recovered_hours", "had_photo", "position", "created_at", "updated_at",
     ],
     unpaid_time: ["id", "date", "hours", "kind", "source", "note", "created_at", "updated_at"],
+    // v5. `time` is nullable and deliberately absent from this list.
+    ro_events: ["id", "entry_id", "date", "kind", "note", "created_at", "updated_at"],
   };
 
   it("emits a defined value for every NOT NULL column of every table", () => {
@@ -393,6 +395,16 @@ describe("buildImportPayload — every NOT NULL column is emitted", () => {
                 recoveredDollars: null, hadPhoto: false, position: 0,
               },
             ],
+          },
+        ],
+        // v5. Points at the entry fixture above, so the remap resolves and the
+        // row survives into the payload — an unresolved one is dropped, which
+        // would let this guard pass vacuously on an empty array.
+        roEvents: [
+          {
+            id: "EV1", userId: "OLD", entryId: "E1", date: "2026-01-01", time: null,
+            kind: "opened", note: "",
+            createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
           },
         ],
       }),

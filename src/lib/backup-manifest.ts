@@ -172,6 +172,30 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
       logged_time: "carry",
       comeback_of_entry_id: "carry",
       comeback_kind: "carry",
+      // open | closed (Open Tickets). Dropping it would close every open
+      // ticket on restore — the timeline would survive but the card would be
+      // empty and the close flow unreachable. NOT NULL, so a pre-v5 file fills
+      // 'closed' in buildImportPayload (every pre-feature RO is a finished RO).
+      status: "carry",
+      created_at: "carry",
+      updated_at: "carry",
+      user_id: "server-controlled",
+    },
+  },
+
+  ro_events: {
+    carried: true,
+    bundleKey: "roEvents",
+    columns: {
+      id: "carry",
+      // Remapped like unpaid_time.entry_id, but NOT NULL — an event whose
+      // ticket isn't in the bundle is dropped rather than pointed at a
+      // stranger's row (same rule as op_code_variants).
+      entry_id: "carry",
+      date: "carry",
+      time: "carry",
+      kind: "carry",
+      note: "carry",
       created_at: "carry",
       updated_at: "carry",
       user_id: "server-controlled",

@@ -291,6 +291,7 @@ export type Database = {
           logged_time: string | null
           notes: string
           ro_number: string
+          status: string
           updated_at: string
           user_id: string
           vehicle_make: string
@@ -309,6 +310,7 @@ export type Database = {
           logged_time?: string | null
           notes?: string
           ro_number: string
+          status?: string
           updated_at?: string
           user_id: string
           vehicle_make?: string
@@ -327,6 +329,7 @@ export type Database = {
           logged_time?: string | null
           notes?: string
           ro_number?: string
+          status?: string
           updated_at?: string
           user_id?: string
           vehicle_make?: string
@@ -742,6 +745,50 @@ export type Database = {
           work_accumulated?: number
         }
         Relationships: []
+      }
+      ro_events: {
+        Row: {
+          created_at: string
+          date: string
+          entry_id: string
+          id: string
+          kind: string
+          note: string
+          time: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          entry_id: string
+          id?: string
+          kind: string
+          note?: string
+          time?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          entry_id?: string
+          id?: string
+          kind?: string
+          note?: string
+          time?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ro_events_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "entries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unpaid_time: {
         Row: {

@@ -91,6 +91,7 @@ const NO_UNPAID: UnpaidSummary = {
     wait_parts: 0,
     wait_approval: 0,
     shop_time: 0,
+    open_work: 0,
   },
   totalDollars: null,
   unpricedHours: 0,

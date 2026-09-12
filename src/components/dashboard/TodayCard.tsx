@@ -156,6 +156,16 @@ export function TodayCard({
           </>
         )}
 
+        {/* Hours on open tickets today — beside the flag, never in it (Open
+            Tickets, decision 7). A 0.0h flag day with 8.0h here is a worked
+            day whose pay is still coming. */}
+        {stats.openTicketHours > 0 && (
+          <div className="stat-delta neutral" style={{ marginTop: 4 }} data-testid="open-ticket-line">
+            {fmtHours(stats.openTicketHours)}h on {stats.openTicketCount} open ticket
+            {stats.openTicketCount === 1 ? "" : "s"}
+          </div>
+        )}
+
         <div style={{ height: 1, background: "var(--line)", margin: "10px 0" }} />
 
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>

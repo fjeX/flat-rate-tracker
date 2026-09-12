@@ -35,6 +35,7 @@ import type {
   OpCode,
   PaidPeriod,
   PortfolioSnapshot,
+  RoEvent,
   UnpaidTime,
   UserSettings,
 } from "@/lib/types";
@@ -66,6 +67,8 @@ export type BackupParts = {
   confirmedZeroDays: string[] | null;
   portfolioSnapshots: PortfolioSnapshot[] | null;
   careerMilestones: CareerMilestone[] | null;
+  /** v5. Open Ticket timelines; null on a DB that predates the table. */
+  roEvents: RoEvent[] | null;
 };
 
 export function buildBackupBundle(parts: BackupParts, exportedAt: string): ImportBundle {
@@ -127,5 +130,10 @@ export function buildBackupBundle(parts: BackupParts, exportedAt: string): Impor
     ...(parts.confirmedZeroDays ? { confirmedZeroDays: parts.confirmedZeroDays } : {}),
     ...(parts.portfolioSnapshots ? { portfolioSnapshots: parts.portfolioSnapshots } : {}),
     ...(parts.careerMilestones ? { careerMilestones: parts.careerMilestones } : {}),
+
+    // v5 — Open Ticket timelines. The hours half of a ticket rides inside
+    // unpaidTime (kind open_work) and entries.status rides inside entries;
+    // only the story needs its own key.
+    ...(parts.roEvents ? { roEvents: parts.roEvents } : {}),
   };
 }

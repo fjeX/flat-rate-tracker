@@ -23,6 +23,8 @@ import { TodayCard } from "@/components/dashboard/TodayCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { StreakCard } from "@/components/dashboard/StreakCard";
 import { UnresolvedDaysCard } from "@/components/dashboard/UnresolvedDaysCard";
+import { OpenTicketsCard } from "@/components/dashboard/OpenTicketsCard";
+import { summarizeOpenTickets } from "@/lib/open-tickets";
 import { CareerOdometerCard } from "@/components/dashboard/CareerOdometerCard";
 import { SnapshotsCard } from "@/components/dashboard/SnapshotsCard";
 import { RecoveredCard } from "@/components/dashboard/RecoveredCard";
@@ -104,7 +106,7 @@ export default async function DashboardPage() {
   const ninetyDaysAgo = addDays(today, -90);
   const fetchFrom = [ninetyDaysAgo, monthStart, period.start, weekStart].sort()[0];
 
-  const [entries, clocks, library, laborRates, gamification, schedules, daysOff, confirmedZeroDays, shiftOverrides, unpaidTime, disputeList] = await Promise.all([
+  const [entries, clocks, library, laborRates, gamification, schedules, daysOff, confirmedZeroDays, shiftOverrides, unpaidTime, disputeList, openEntries] = await Promise.all([
     db.listEntries(supabase, { from: fetchFrom, to: monthEnd }),
     db.listDailyClocks(supabase, { from: fetchFrom, to: monthEnd }),
     db.listOpCodes(supabase),
@@ -124,7 +126,26 @@ export default async function DashboardPage() {
     // Null until the dispute-ledger migration lands — the card hides itself.
     // Not date-filtered: "recovered with FRT" is a lifetime figure.
     db.listDisputesSafe(supabase),
+    // Open tickets (status = open), all of them — a ticket opened three weeks
+    // ago is exactly the one the card exists to show, so this is not clipped
+    // to the 90-day fetch window above. Null until the open-tickets migration
+    // lands — the card hides itself.
+    db.listOpenEntriesSafe(supabase),
   ]);
+  // Their timelines (for the status chip and days-open) and every open_work
+  // row on them (for hours-so-far). The ledger read above is date-clipped, so
+  // a ticket's hours are read by ticket here rather than trusted to be inside
+  // the window.
+  const openIds = (openEntries ?? []).map((e) => e.id);
+  const [openEvents, openLedger] = await Promise.all([
+    openIds.length > 0
+      ? db.listRoEventsForEntries(supabase, openIds)
+      : Promise.resolve(new Map()),
+    openIds.length > 0
+      ? Promise.all(openIds.map((id) => db.listUnpaidTimeForEntry(supabase, id))).then((rows) => rows.flat())
+      : Promise.resolve([]),
+  ]);
+  const openTickets = summarizeOpenTickets(openEntries ?? [], openEvents, openLedger, today);
   // Null until the dispute-ledger migration lands — kept as null so the card
   // hides entirely rather than rendering a surface whose links go nowhere.
   const disputes = disputeList;
@@ -165,12 +186,16 @@ export default async function DashboardPage() {
   // Empty scheduled workdays from the trailing 30 days, awaiting a
   // day-off / real-zero decision. Older ones stop nagging (their periods just
   // keep the day held out). Entries/clocks are already fetched 90 days back.
+  //
+  // `unpaid` is passed so a day with open-ticket hours is resolved (Open
+  // Tickets, decision 7) — it must not be asked about.
   const unresolvedDays = scheduleCtx
     ? aggregateStatsWithSchedule(
         entries,
         clocks,
         { start: addDays(today, -30), end: addDays(today, -1) },
         scheduleCtx,
+        unpaid,
       ).unresolvedDays
     : [];
 
@@ -181,6 +206,7 @@ export default async function DashboardPage() {
     { start: weekStart, end: today },
     today,
     scheduleCtx,
+    unpaid,
   );
 
   const todaysClock  = clocks.find((c) => c.date === today);
@@ -218,6 +244,9 @@ export default async function DashboardPage() {
     periodEnd: period.end,
     current: statsPeriod.flagHours,
     goal: goalHours,
+    // A day on an open ticket is a worked day for the average and the
+    // inferred week (Open Tickets, decision 7).
+    unpaid,
   });
 
   // The pace card prints a forecast built from the RAW flagged total and, four
@@ -376,6 +405,12 @@ export default async function DashboardPage() {
           </EntranceGrid>
         </div>
 
+        {/* ── Open tickets — absent when there are none ───────── */}
+        {/* Above the unresolved-days card on purpose: an open ticket is the
+            thing most likely to explain a quiet day, and it is the one the
+            tech is actively working. */}
+        <OpenTicketsCard tickets={openTickets} library={library} rates={rateMap} />
+
         {/* ── Empty scheduled days needing a decision ─────────── */}
         {unresolvedDays.length > 0 && (
           <div className="mt-4">
@@ -468,6 +503,7 @@ export default async function DashboardPage() {
         {/* ── Averages chart ──────────────────────────────────── */}
         <AveragesChart
           entries={entries}
+          unpaid={unpaid}
           denomByDay={denomByDay}
           today={today}
           periodStart={period.start}

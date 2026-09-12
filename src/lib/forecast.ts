@@ -5,8 +5,9 @@
 // "YYYY-MM-DD" strings and follow the same string-date convention as
 // src/lib/periods.ts — no Date objects at the boundaries, so server/client
 // timezones can never disagree.
-import type { Entry } from "./types";
+import type { Entry, UnpaidTime } from "./types";
 import { addDays } from "./periods";
+import { openWorkDates } from "./open-tickets";
 
 // ------------------------------------------------------------------------
 // Constants
@@ -57,13 +58,27 @@ function weekdayOf(date: string): number {
  * quietly rose to exclude it. That is precisely the blindness the Unpaid Time
  * Engine exists to remove — if comebacks ate your Tuesdays, your Tuesday
  * average IS lower, and the forecast should say so.
+ *
+ * OPEN TICKETS (decision 7) add the second half of the rule: a date is worked
+ * iff an RO row is dated that day OR an `open_work` ledger row is dated that
+ * day. Both are needed. While a ticket is open, its intermediate days have
+ * only ledger rows; after it closes, the opened day LOSES its RO row (the date
+ * moved to the close day) and only the ledger row keeps it worked. Those days
+ * are seeded here with 0 flag — present in the map, contributing nothing to
+ * the numerator — so a ten-day warranty job is ten worked days with a low
+ * average, not one 14-hour day and nine days off.
+ *
+ * `unpaid` is optional so every existing caller keeps working; the surfaces
+ * that have the ledger pass it. Guest mode has no ledger and never does.
  */
 export function flagHoursByDate(
   entries: Entry[],
   from: string,
   to: string,
+  unpaid: UnpaidTime[] = [],
 ): Map<string, number> {
   const byDate = new Map<string, number>();
+  for (const date of openWorkDates(unpaid, from, to)) byDate.set(date, 0);
   for (const e of entries) {
     if (e.date < from || e.date > to) continue;
     byDate.set(e.date, (byDate.get(e.date) ?? 0) + e.flagHours);
@@ -82,7 +97,13 @@ export function flagHoursByDate(
  */
 export function inferWorkedWeekdays(
   entries: Entry[],
-  opts: { today: string; lookbackWeeks?: number; fallbackToDefault?: boolean },
+  opts: {
+    today: string;
+    lookbackWeeks?: number;
+    fallbackToDefault?: boolean;
+    /** The ledger, so a day on an open ticket counts as a shift. */
+    unpaid?: UnpaidTime[];
+  },
 ): Set<number> {
   const lookbackWeeks = opts.lookbackWeeks ?? 8;
   const fallbackToDefault = opts.fallbackToDefault ?? true;
@@ -92,7 +113,7 @@ export function inferWorkedWeekdays(
   // Presence, not hours > 0 — a day spent on unpaid rework is still a day the
   // tech was at the shop, and inferring the schedule from flag hours alone
   // would drop those weekdays entirely.
-  for (const date of flagHoursByDate(entries, from, opts.today).keys()) {
+  for (const date of flagHoursByDate(entries, from, opts.today, opts.unpaid).keys()) {
     worked.add(weekdayOf(date));
   }
 
@@ -141,6 +162,7 @@ export function recentDailyAverage(
     lookbackDays?: number;
     workedDaysOnly?: boolean;
     minWorkedDays?: number;
+    unpaid?: UnpaidTime[];
   },
 ): number | null {
   const lookbackDays = opts.lookbackDays ?? 30;
@@ -148,7 +170,7 @@ export function recentDailyAverage(
   const minWorkedDays = opts.minWorkedDays ?? MIN_WORKED_DAYS;
   const from = addDays(opts.today, -(lookbackDays - 1));
 
-  const byDate = flagHoursByDate(entries, from, opts.today);
+  const byDate = flagHoursByDate(entries, from, opts.today, opts.unpaid);
 
   let total = 0;
   let workedDays = 0;
@@ -219,7 +241,7 @@ export type WeekdayStat = {
  */
 export function weekdayPattern(
   entries: Entry[],
-  opts: { today: string; weeks?: number },
+  opts: { today: string; weeks?: number; unpaid?: UnpaidTime[] },
 ): WeekdayStat[] {
   const weeks = opts.weeks ?? 8;
   const from = addDays(opts.today, -(weeks * 7 - 1));
@@ -227,7 +249,7 @@ export function weekdayPattern(
   const totalByDow = new Array(7).fill(0);
   const workedByDow = new Array(7).fill(0);
 
-  for (const [date, hours] of flagHoursByDate(entries, from, opts.today)) {
+  for (const [date, hours] of flagHoursByDate(entries, from, opts.today, opts.unpaid)) {
     const dow = weekdayOf(date);
     totalByDow[dow] += hours;
     workedByDow[dow]++;
@@ -281,11 +303,13 @@ export function computeForecast(
     goal: number;
     lookbackDays?: number;
     lookbackWeeks?: number;
+    unpaid?: UnpaidTime[];
   },
 ): Forecast {
   const workedSet = inferWorkedWeekdays(entries, {
     today: opts.today,
     lookbackWeeks: opts.lookbackWeeks,
+    unpaid: opts.unpaid,
   });
   const workedWeekdays = [...workedSet].sort((a, b) => a - b);
   const daysRemaining = workingDaysRemaining(opts.periodEnd, opts.today, workedSet);
@@ -293,6 +317,7 @@ export function computeForecast(
   const avgPerDay = recentDailyAverage(entries, {
     today: opts.today,
     lookbackDays: opts.lookbackDays,
+    unpaid: opts.unpaid,
   });
 
   if (avgPerDay === null) {

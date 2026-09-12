@@ -82,6 +82,7 @@ function fullBundle(): ImportBundle {
         notes: "",
         comebackOfEntryId: null,
         comebackKind: null,
+        status: "closed",
         opCodes: [
           {
             id: "L1",
@@ -190,6 +191,20 @@ function fullBundle(): ImportBundle {
       { id: "P1", seq: 1, roThreshold: 100, stats: {}, createdAt: ts },
     ] as unknown as ImportBundle["portfolioSnapshots"],
     careerMilestones: [{ threshold: 100, achievedAt: ts }],
+    // --- v5
+    roEvents: [
+      {
+        id: "EV1",
+        userId: "OLD",
+        entryId: "E1",
+        date: "2026-01-01",
+        time: "08:15",
+        kind: "opened",
+        note: "",
+        createdAt: ts,
+        updatedAt: ts,
+      },
+    ],
   };
 }
 

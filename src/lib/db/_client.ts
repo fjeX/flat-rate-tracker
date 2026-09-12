@@ -33,6 +33,20 @@ export function isMissingTable(err: unknown): boolean {
   return /schema cache|does not exist/i.test(e.message ?? "");
 }
 
+// "This column doesn't exist yet" — Postgres 42703 (PostgREST relays the code).
+//
+// The column-shaped sibling of isMissingTable, for the same deploy-order
+// reason: a build that filters on entries.status can be up before the
+// open-tickets migration has added the column. Only the reads that FILTER on
+// a new column need this — a plain `select *` simply doesn't return it, and
+// the mappers already default what they don't see.
+export function isMissingColumn(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null;
+  if (!e) return false;
+  if (e.code === "42703") return true;
+  return /column .* does not exist/i.test(e.message ?? "");
+}
+
 // "This access token is from the future" — PostgREST PGRST303.
 //
 // GoTrue mints a fresh access token and the very next PostgREST request refuses

@@ -256,6 +256,7 @@ export async function exportDataAction(): Promise<string> {
     confirmedZeroDays,
     portfolioSnapshots,
     careerMilestones,
+    roEvents,
   ] = await Promise.all([
     db.getSettings(supabase),
     db.listEntries(supabase),
@@ -280,6 +281,8 @@ export async function exportDataAction(): Promise<string> {
     db.listConfirmedZeroDaysSafe(supabase),
     db.listSnapshotsSafe(supabase),
     db.listCareerMilestonesForBackupSafe(supabase),
+    // v5. Null on a DB without the ro_events table; the key is then omitted.
+    db.listAllRoEventsSafe(supabase),
   ]);
 
   // Assembly lives in @/lib/backup-bundle so it can be tested without a
@@ -305,6 +308,7 @@ export async function exportDataAction(): Promise<string> {
         confirmedZeroDays,
         portfolioSnapshots,
         careerMilestones,
+        roEvents,
       },
       new Date().toISOString(),
     ),
