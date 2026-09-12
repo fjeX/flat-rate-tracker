@@ -5,6 +5,7 @@ import { Camera, Pencil, Plus, Trash2 } from "lucide-react";
 import { deleteRoTemplateAction } from "@/app/actions/ro-template";
 import { RoTemplateEditor } from "./RoTemplateEditor";
 import type { RoTemplate } from "@/lib/types";
+import { actionErrorMessage } from "@/lib/action-error";
 
 const FIELD_LABELS: Record<string, string> = {
   roNumber: "RO Number",
@@ -62,7 +63,7 @@ export function RoTemplateCard({
         await deleteRoTemplateAction(templateId);
         setTemplates((prev) => prev.filter((t) => t.id !== templateId));
       } catch (err) {
-        setDeleteError(err instanceof Error ? err.message : "Couldn't delete — check your connection and try again.");
+        setDeleteError(actionErrorMessage(err, "Couldn't delete — check your connection and try again."));
       } finally {
         setDeletingId(null);
       }

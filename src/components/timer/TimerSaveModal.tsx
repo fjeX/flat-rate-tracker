@@ -20,6 +20,7 @@ import {
 } from "@/lib/timer";
 import { useTickingNow } from "@/lib/use-ticking-now";
 import { tap } from "@/lib/haptics";
+import { actionErrorMessage } from "@/lib/action-error";
 
 // Closing out a timer. Two things happen and the modal has to be honest about
 // both: worked time is ADDED to an op-code line (jobs span sessions, so
@@ -350,7 +351,7 @@ export function TimerSaveModal({
             : null,
         );
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save.");
+        setError(actionErrorMessage(err, "Failed to save."));
       }
     });
   }

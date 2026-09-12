@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { reportError } from "@/lib/report-error";
+import { isStaleDeployError } from "@/lib/action-error";
 
 export default function GlobalError({
   error,
@@ -13,6 +14,20 @@ export default function GlobalError({
   useEffect(() => {
     console.error(error);
     void reportError(error);
+    // A tab left open across a redeploy holds Server Action IDs the new build
+    // no longer has (bug 33cbab9e). Nothing is wrong with the app — a reload
+    // picks up the current build. Guarded so a persistent failure can't loop.
+    if (isStaleDeployError(error)) {
+      try {
+        const key = "frt:stale-deploy-reloaded";
+        if (sessionStorage.getItem(key) !== (error.digest ?? "1")) {
+          sessionStorage.setItem(key, error.digest ?? "1");
+          window.location.reload();
+        }
+      } catch {
+        // sessionStorage unavailable — fall through to the manual Reload button.
+      }
+    }
   }, [error]);
 
   return (

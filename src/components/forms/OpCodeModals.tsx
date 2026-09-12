@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { actionErrorMessage } from "@/lib/action-error";
 
 // ------------------------------------------------------------------------
 // Shared: a small op-code form used by both modals.
@@ -210,7 +211,7 @@ function NewLibraryBody({
         flagHours: draft.flagHours,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save.");
+      setError(actionErrorMessage(err, "Failed to save."));
     }
   }
 

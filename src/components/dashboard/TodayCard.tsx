@@ -11,6 +11,7 @@ import type { OpCode } from "@/lib/types";
 import { QuickAddModal } from "./QuickAddModal";
 import { useQuickAddEnabled } from "@/lib/quick-add-pref";
 import { RollingNumber } from "@/components/ui/RollingNumber";
+import { actionErrorMessage } from "@/lib/action-error";
 
 
 
@@ -98,7 +99,7 @@ export function TodayCard({
         await upsertDailyClockHoursAction(date, parsedHours);
         setSavedHours(parsedHours);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to save.");
+        setError(actionErrorMessage(e, "Failed to save."));
       }
     });
   }

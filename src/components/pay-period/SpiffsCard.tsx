@@ -21,6 +21,7 @@ import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
 import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import { reportError } from "@/lib/report-error";
 import { deleteBonusAction } from "@/app/actions/bonuses";
+import { actionErrorMessage } from "@/lib/action-error";
 
 // One sentence that names a row, shared by the confirm dialog AND the two icon
 // buttons' aria-labels. It lives in one place on purpose: on 2026-08-19 the
@@ -267,7 +268,7 @@ function DeleteButton({
         // didn't repaint, so say so out loud and record it.
         void reportError(err, { url: "SpiffsCard/deleteBonus" });
         window.alert(
-          err instanceof Error ? err.message : "Failed to delete spiff.",
+          actionErrorMessage(err, "Failed to delete spiff."),
         );
       }
     });

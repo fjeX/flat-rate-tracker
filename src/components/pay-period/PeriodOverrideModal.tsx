@@ -27,6 +27,7 @@ import { fmtMoney, hasAnyRate, periodEarnings, type RateMap } from "@/lib/earnin
 import { setPeriodOverrideAction } from "@/app/actions/settings";
 import type { ScheduleFallback } from "@/lib/wage-check";
 import type { DailyClock, Entry, UnpaidTime } from "@/lib/types";
+import { actionErrorMessage } from "@/lib/action-error";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -255,7 +256,7 @@ function PeriodOverrideBody({
         router.refresh();
         onClose();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save.");
+        setError(actionErrorMessage(err, "Failed to save."));
       }
     });
   }

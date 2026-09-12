@@ -34,6 +34,7 @@ import {
 import { OpCodeRow } from "./OpCodeRow";
 import { OpCodeBrowseBar } from "./OpCodeBrowseBar";
 import { useOpCodeBrowsing } from "./useOpCodeBrowsing";
+import { actionErrorMessage } from "@/lib/action-error";
 
 type ModalState =
   | { kind: "closed" }
@@ -171,7 +172,7 @@ export function OpCodesView({
       } catch (err) {
         setTagColors(prev);
         window.alert(
-          err instanceof Error ? err.message : "Failed to save tag color.",
+          actionErrorMessage(err, "Failed to save tag color."),
         );
       }
     });
@@ -194,7 +195,7 @@ export function OpCodesView({
         router.refresh();
       } catch (err) {
         window.alert(
-          err instanceof Error ? err.message : "Failed to delete op code.",
+          actionErrorMessage(err, "Failed to delete op code."),
         );
       } finally {
         setDeletingId(null);

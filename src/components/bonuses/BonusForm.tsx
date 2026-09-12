@@ -22,6 +22,7 @@ import {
   listRecentRosAction,
   type RecentRo,
 } from "@/app/actions/bonuses";
+import { actionErrorMessage } from "@/lib/action-error";
 
 export function BonusForm({
   initial,
@@ -90,7 +91,7 @@ export function BonusForm({
 
         onSaved(saved);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to save.");
+        setError(actionErrorMessage(e, "Failed to save."));
       }
     });
   }

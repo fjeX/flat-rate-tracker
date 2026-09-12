@@ -38,6 +38,7 @@ import type { OpCodeDraft } from "./OpCodeModals";
 import type { OcrResult } from "@/lib/ocr";
 import { decodeVin, isValidVin } from "@/lib/vin";
 import { tap } from "@/lib/haptics";
+import { actionErrorMessage } from "@/lib/action-error";
 
 export type LineDraft = NewEntryOpCode & {
   key: string;
@@ -372,7 +373,7 @@ export function useLogRoForm({
         await deleteEntryAction(existingEntry.id);
         router.push("/dashboard");
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to delete RO.");
+        setError(actionErrorMessage(e, "Failed to delete RO."));
       }
     });
   }
@@ -785,7 +786,7 @@ export function useLogRoForm({
           router.push(redirectTo);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save.");
+        setError(actionErrorMessage(err, "Failed to save."));
       } finally {
         inFlightRef.current = false;
       }

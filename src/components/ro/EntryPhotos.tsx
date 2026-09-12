@@ -17,6 +17,7 @@ import {
   listEntryPhotosAction,
   uploadEntryPhoto,
 } from "@/app/actions/entry-photos";
+import { actionErrorMessage } from "@/lib/action-error";
 
 // "Photographed Jul 7, 2026 · 3:41 PM" — the immutable capture stamp.
 function formatCaptured(iso: string): string {
@@ -66,7 +67,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
         setPhotos(list);
         await Promise.all(list.map(ensureUrl));
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't load photos.");
+        if (!cancelled) setError(actionErrorMessage(e, "Couldn't load photos."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -90,7 +91,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
         setPhotos((prev) => [...prev, created]);
         await ensureUrl(created);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't attach photo.");
+        setError(actionErrorMessage(err, "Couldn't attach photo."));
       }
     });
   }
@@ -108,7 +109,7 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
       });
       setViewerId((id) => (id === photoId ? null : id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't delete photo.");
+      setError(actionErrorMessage(err, "Couldn't delete photo."));
     }
   }
 

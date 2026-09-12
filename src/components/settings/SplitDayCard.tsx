@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { setSplitDayAction } from "@/app/actions/settings";
 import { getRangeForPeriodKey, formatPeriodLabel, isoDate } from "@/lib/periods";
+import { actionErrorMessage } from "@/lib/action-error";
 
 interface Props {
   initialSplitDay: number;
@@ -42,7 +43,7 @@ export function SplitDayCard({ initialSplitDay, overrideCount }: Props) {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save — check your connection and try again.");
+        setError(actionErrorMessage(err, "Couldn't save — check your connection and try again."));
       }
     });
   }

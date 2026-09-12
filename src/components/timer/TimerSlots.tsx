@@ -29,6 +29,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LogRoForm } from "@/components/forms/LogRoForm";
 import { tap } from "@/lib/haptics";
 import { useTickingNow } from "@/lib/use-ticking-now";
+import { actionErrorMessage } from "@/lib/action-error";
 
 // The signed-in timer page. Up to MAX_TIMER_SLOTS jobs run at once, because a
 // bay does: one car on the lift, one waiting on parts, one waiting on an
@@ -134,7 +135,7 @@ export function TimerSlots({
         await action();
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed.");
+        setError(actionErrorMessage(err, "Failed."));
       }
     });
   }

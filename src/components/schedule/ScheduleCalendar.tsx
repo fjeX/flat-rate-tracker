@@ -27,6 +27,7 @@ import {
 import { formatDateLong, formatDateShort } from "@/lib/periods";
 import { shiftPaidHours, type ShiftDef } from "@/lib/schedule";
 import { fmtHours } from "@/lib/stats";
+import { actionErrorMessage } from "@/lib/action-error";
 
 export type CalendarDay = {
   date: string; // "YYYY-MM-DD"
@@ -194,7 +195,7 @@ function DayDock({
         router.refresh();
         if (settles) onSettled(day.date);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save — try again.");
+        setError(actionErrorMessage(err, "Couldn't save — try again."));
       }
     });
   }

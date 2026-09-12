@@ -26,6 +26,7 @@ import {
   recordDisputeOutcomeAction,
   setDisputeStatusAction,
 } from "@/app/actions/disputes";
+import { actionErrorMessage } from "@/lib/action-error";
 
 // Tone per lifecycle state. 'answered' is warn, not good: they replied, but the
 // claim isn't settled until the tech records what actually came back.
@@ -120,7 +121,7 @@ function OutcomeForm({
         // server hasn't confirmed.
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to save.");
+        setError(actionErrorMessage(e, "Failed to save."));
       }
     });
   }
@@ -329,7 +330,7 @@ export function DisputeOutcomeCard({
         await setDisputeStatusAction(dispute.id, to);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to update.");
+        setError(actionErrorMessage(e, "Failed to update."));
       }
     });
   }
@@ -341,7 +342,7 @@ export function DisputeOutcomeCard({
         await openDisputeAction(periodKey, { includePending: claimPending });
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to start tracking.");
+        setError(actionErrorMessage(e, "Failed to start tracking."));
       }
     });
   }
@@ -355,7 +356,7 @@ export function DisputeOutcomeCard({
         setApplied(result.appliedLines);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to apply recovery.");
+        setError(actionErrorMessage(e, "Failed to apply recovery."));
       }
     });
   }

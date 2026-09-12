@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setTrackRoTimeAction } from "@/app/actions/settings";
 import { Switch } from "@/components/ui/Switch";
+import { actionErrorMessage } from "@/lib/action-error";
 
 /**
  * The RO time-of-day switch. Off by default.
@@ -30,7 +31,7 @@ export function RoTimeCard({ initialTrack }: { initialTrack: boolean }) {
         router.refresh();
       } catch (e) {
         setTrack(!next);
-        setError(e instanceof Error ? e.message : "Couldn't save that.");
+        setError(actionErrorMessage(e, "Couldn't save that."));
       }
     });
   }

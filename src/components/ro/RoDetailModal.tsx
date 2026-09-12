@@ -20,6 +20,7 @@ import {
   setLineActualHoursAction,
   setLineUpsellAction,
 } from "@/app/actions/entries";
+import { actionErrorMessage } from "@/lib/action-error";
 
 export function RoDetailModal({
   entry,
@@ -312,7 +313,7 @@ function LineRow({
         router.refresh();
       } catch (e) {
         setUpsell(!next);
-        setError(e instanceof Error ? e.message : "Couldn't save that.");
+        setError(actionErrorMessage(e, "Couldn't save that."));
       }
     });
   }
@@ -387,7 +388,7 @@ function LineRow({
         }
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed");
+        setError(actionErrorMessage(e, "Failed"));
       }
     });
   }
@@ -404,7 +405,7 @@ function LineRow({
         await deleteEntryLineAction(line.id);
         onDeleted();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to remove.");
+        setError(actionErrorMessage(e, "Failed to remove."));
       }
     });
   }
@@ -605,7 +606,7 @@ function AddOpCodePicker({
         setOpen(false);
         setSubPickOc(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to add.");
+        setError(actionErrorMessage(e, "Failed to add."));
       }
     });
   }
@@ -794,7 +795,7 @@ function Footer({
         if (onDeleted) onDeleted(entry.id);
         else router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to delete.");
+        setError(actionErrorMessage(e, "Failed to delete."));
       }
     });
   }

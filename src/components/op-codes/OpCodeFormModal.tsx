@@ -4,6 +4,7 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { TAG_HUE_SLOTS, tagHueOverride, tagHueSlot, tagHueVar } from "./tagHue";
+import { actionErrorMessage } from "@/lib/action-error";
 
 function HoursInput({
   value,
@@ -380,7 +381,7 @@ function OpCodeFormBody({
         removedSubIds: draft.removedSubIds,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save.");
+      setError(actionErrorMessage(err, "Failed to save."));
     }
   }
 

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { setGoalHoursAction } from "@/app/actions/settings";
+import { actionErrorMessage } from "@/lib/action-error";
 
 export function GoalHoursCard({ initialGoalHours }: { initialGoalHours: number }) {
   const [inputVal, setInputVal] = useState(String(initialGoalHours));
@@ -25,7 +26,7 @@ export function GoalHoursCard({ initialGoalHours }: { initialGoalHours: number }
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save — check your connection and try again.");
+        setError(actionErrorMessage(err, "Couldn't save — check your connection and try again."));
       }
     });
   }

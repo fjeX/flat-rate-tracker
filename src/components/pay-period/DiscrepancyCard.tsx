@@ -11,6 +11,7 @@ import {
 import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
 import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import { toText, parseHours, verdictFor } from "@/lib/discrepancy";
+import { actionErrorMessage } from "@/lib/action-error";
 
 export function DiscrepancyCard({
   periodKey,
@@ -82,7 +83,7 @@ export function DiscrepancyCard({
           setSavedPaid(value);
           repaint();
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Failed to save.");
+          setError(actionErrorMessage(e, "Failed to save."));
         }
       })();
       inFlightSave.current = run;
@@ -121,7 +122,7 @@ export function DiscrepancyCard({
         setPaidText("");
         repaint();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to clear.");
+        setError(actionErrorMessage(e, "Failed to clear."));
       } finally {
         resettingRef.current = false;
       }

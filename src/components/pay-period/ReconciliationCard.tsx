@@ -22,6 +22,7 @@ import { buildDisputePack, formatDisputePackText } from "@/lib/dispute-pack";
 import { buildUnpaidSummary } from "@/lib/unpaid-summary";
 import { recordExport, useExportedAt } from "@/lib/dispute-exports";
 import { setLinePaidHoursAction } from "@/app/actions/entries";
+import { actionErrorMessage } from "@/lib/action-error";
 
 // Resolve a line's display label the same way RoList does — library code,
 // custom code, or a library code plus its sub-op-code variant.
@@ -186,7 +187,7 @@ function ReconLineRow({
         setPaidText(value === null ? "" : String(value));
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to save.");
+        setError(actionErrorMessage(e, "Failed to save."));
       }
     });
   }
@@ -455,7 +456,7 @@ export function ReconciliationCard({
       }
     } catch (e) {
       setMarkError(
-        (e instanceof Error ? e.message : "Failed to mark all paid.") +
+        (actionErrorMessage(e, "Failed to mark all paid.")) +
           stoppedAt(),
       );
     } finally {

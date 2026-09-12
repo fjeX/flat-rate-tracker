@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setTimezoneAction } from "@/app/actions/settings";
 import { useClientValue } from "@/lib/client-storage";
+import { actionErrorMessage } from "@/lib/action-error";
 
 const TIMEZONES = [
   { label: "Eastern (ET) — New York", value: "America/New_York" },
@@ -44,7 +45,7 @@ export function TimezoneCard({ initialTimezone }: { initialTimezone: string }) {
         router.refresh();
         setTimeout(() => setSaved(false), 3000);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save — check your connection and try again.");
+        setError(actionErrorMessage(err, "Couldn't save — check your connection and try again."));
       }
     });
   }

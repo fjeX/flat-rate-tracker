@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 import { addDayOffAction, deleteDayOffAction } from "@/app/actions/gamification";
 import { formatDateShort } from "@/lib/periods";
 import type { DayOff } from "@/lib/types";
+import { actionErrorMessage } from "@/lib/action-error";
 
 export function DaysOffCard({ initialDaysOff }: { initialDaysOff: DayOff[] }) {
   const [daysOff, setDaysOff] = useState(initialDaysOff);
@@ -30,7 +31,7 @@ export function DaysOffCard({ initialDaysOff }: { initialDaysOff: DayOff[] }) {
         setStart("");
         setEnd("");
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save — try again.");
+        setError(actionErrorMessage(err, "Couldn't save — try again."));
       }
     });
   }
@@ -42,7 +43,7 @@ export function DaysOffCard({ initialDaysOff }: { initialDaysOff: DayOff[] }) {
         await deleteDayOffAction(id);
         setDaysOff((prev) => prev.filter((d) => d.id !== id));
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't delete — try again.");
+        setError(actionErrorMessage(err, "Couldn't delete — try again."));
       }
     });
   }

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { AlertTriangle } from "lucide-react";
 import { clearAllDataAction } from "@/app/actions/settings";
 import { tap } from "@/lib/haptics";
+import { actionErrorMessage } from "@/lib/action-error";
 
 const CONFIRM_WORD = "DELETE";
 
@@ -22,7 +23,7 @@ export function DangerZoneCard() {
         setInput("");
         setDone(true);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't clear data — check your connection and try again.");
+        setError(actionErrorMessage(err, "Couldn't clear data — check your connection and try again."));
       }
     });
   }

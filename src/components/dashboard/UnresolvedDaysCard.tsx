@@ -15,6 +15,7 @@ import { useState, useTransition } from "react";
 import { resolveZeroDayAction } from "@/app/actions/schedule";
 import { formatDateLong } from "@/lib/periods";
 import type { UnpaidTimeKind } from "@/lib/types";
+import { actionErrorMessage } from "@/lib/action-error";
 
 const SHOW_LIMIT = 5;
 
@@ -58,7 +59,7 @@ export function UnresolvedDaysCard({ days }: { days: string[] }) {
         await resolveZeroDayAction(date, resolution);
         setRemaining((prev) => prev.filter((d) => d !== date));
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save — try again.");
+        setError(actionErrorMessage(err, "Couldn't save — try again."));
       } finally {
         setBusyDate(null);
       }
@@ -83,7 +84,7 @@ export function UnresolvedDaysCard({ days }: { days: string[] }) {
         setRemaining((prev) => prev.filter((d) => d !== date));
         closeUnpaid();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save — try again.");
+        setError(actionErrorMessage(err, "Couldn't save — try again."));
       } finally {
         setBusyDate(null);
       }

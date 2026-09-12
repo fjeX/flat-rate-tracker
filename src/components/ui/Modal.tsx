@@ -12,6 +12,48 @@ const PANEL_MAX_W = {
   xl: "max-w-4xl",
 } as const;
 
+// ---- Body scroll lock -------------------------------------------------------
+// One shared counter for every open Modal, instead of each instance saving and
+// restoring its own snapshot of document.body.style.overflow.
+//
+// The snapshot version leaked (bug report 6180397c, "can't scroll until I
+// refresh"). Modals stack — Quick Add opens the sub-op-code picker, the timer
+// save flow opens a confirm — and each instance's snapshot is only right if
+// the modals close in exact reverse order of the effects that took them.
+// They don't: React mounts effects child-first, so a nested pair mounted in
+// one commit had the INNER capture "" and the OUTER capture "hidden"; the
+// inner then restored "" while the outer was still up, and the outer later
+// wrote "hidden" back onto an empty page. Two overlapping modals closing in
+// non-stack order did the same. Nothing ever cleared it, so the page stayed
+// unscrollable until a full reload. (Pinned in Modal.test.tsx; both cases fail
+// against the snapshot implementation.)
+//
+// A counter has no order: the lock is held while ANY modal is open and the
+// page's original value comes back when the LAST one closes, whichever that
+// is. Module scope on purpose — every Modal instance must share it.
+let lockDepth = 0;
+let unlockedOverflow = "";
+
+function acquireScrollLock(): void {
+  if (lockDepth === 0) {
+    unlockedOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  lockDepth++;
+}
+
+function releaseScrollLock(): void {
+  lockDepth = Math.max(0, lockDepth - 1);
+  if (lockDepth === 0) document.body.style.overflow = unlockedOverflow;
+}
+
+/** Test seam — the counter is module state and would leak between tests. */
+export function __resetScrollLockForTests(): void {
+  lockDepth = 0;
+  unlockedOverflow = "";
+  if (typeof document !== "undefined") document.body.style.overflow = "";
+}
+
 // Bottom-sheet on mobile, centered dialog on desktop. Closes on backdrop
 // click and Escape.
 export function Modal({
@@ -95,8 +137,7 @@ export function Modal({
     }
 
     window.addEventListener("keydown", handleKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    acquireScrollLock();
 
     // Move focus into the panel — the first focusable element, or the panel.
     const els = focusableEls();
@@ -104,7 +145,7 @@ export function Modal({
 
     return () => {
       window.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = prev;
+      releaseScrollLock();
       // Restore focus to whatever was focused before the modal opened.
       previouslyFocused?.focus?.();
     };

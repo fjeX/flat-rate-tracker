@@ -21,8 +21,8 @@
 //     catches it — a test that merely re-derived the same template literal
 //     would pass while the page broke.
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
-import { Modal } from "./Modal";
+import { describe, it, expect, beforeEach } from "vitest";
+import { Modal, __resetScrollLockForTests } from "./Modal";
 
 function panelFor(ui: React.ReactElement): HTMLElement {
   render(ui);
@@ -89,5 +89,78 @@ describe("Modal panel width", () => {
       expect(dialog.getAttribute("aria-label")).toBe(`T-${size}`);
       unmount();
     }
+  });
+});
+
+// Bug report 6180397c — "unable to scroll down the page unless refreshing".
+// Modal is the only writer of document.body.style.overflow in the app, so a
+// page that stays unscrollable after every dialog is gone means the lock was
+// released in the wrong order. Each case below leaked with the old
+// save-and-restore-my-own-snapshot implementation.
+describe("Modal body scroll lock", () => {
+  beforeEach(() => __resetScrollLockForTests());
+
+  it("locks while open and restores the page's original value on close", () => {
+    document.body.style.overflow = "auto";
+    const { unmount } = render(
+      <Modal open onClose={() => {}} title="One">
+        <p>body</p>
+      </Modal>,
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+    unmount();
+    expect(document.body.style.overflow).toBe("auto");
+  });
+
+  it("releases when a stacked pair unmounts together", () => {
+    // Quick Add → sub-op-code picker; timer save → confirm. Whatever order
+    // React runs the two cleanups in, the last one out must restore the page.
+    const { unmount } = render(
+      <Modal open onClose={() => {}} title="Outer">
+        <Modal open onClose={() => {}} title="Inner">
+          <p>body</p>
+        </Modal>
+      </Modal>,
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+    unmount();
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("releases when two overlapping modals close in non-stack order", () => {
+    const a = render(
+      <Modal open onClose={() => {}} title="A">
+        <p>a</p>
+      </Modal>,
+    );
+    const b = render(
+      <Modal open onClose={() => {}} title="B">
+        <p>b</p>
+      </Modal>,
+    );
+    a.unmount(); // first-opened closes first — B must keep the lock…
+    expect(document.body.style.overflow).toBe("hidden");
+    b.unmount(); // …and the last one out restores the page.
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("keeps the lock while an inner modal closes and the outer stays open", () => {
+    // Effects mount child-first, so with per-instance snapshots the inner
+    // modal captured "" and restored it here — unlocking the page under a
+    // modal that was still open, and leaving "hidden" for the outer to write
+    // back later. This is the leak the reporter hit.
+    const { rerender } = render(
+      <Modal open onClose={() => {}} title="Outer">
+        <Modal open onClose={() => {}} title="Inner">
+          <p>body</p>
+        </Modal>
+      </Modal>,
+    );
+    rerender(
+      <Modal open onClose={() => {}} title="Outer">
+        <p>no inner</p>
+      </Modal>,
+    );
+    expect(document.body.style.overflow).toBe("hidden");
   });
 });

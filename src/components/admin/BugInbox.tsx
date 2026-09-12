@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BUG_SEVERITIES, BUG_CATEGORIES, BUG_STATUSES } from "@/lib/bug-reports";
 import { listBugPhotosWithUrls, setBugTriage } from "@/app/actions/bug-reports";
+import { actionErrorMessage } from "@/lib/action-error";
 
 const CLOSED_STATUSES = ["Resolved", "Won't Fix"];
 
@@ -216,7 +217,7 @@ function BugDetail({
         });
         onClose();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save. Try again.");
+        setError(actionErrorMessage(err, "Couldn't save. Try again."));
       }
     });
   }

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setShareLaborTimesAction } from "@/app/actions/settings";
 import { Switch } from "@/components/ui/Switch";
+import { actionErrorMessage } from "@/lib/action-error";
 
 /**
  * True Time consent. Off by default, and the copy has to earn the yes.
@@ -31,7 +32,7 @@ export function TrueTimeCard({ initialShare }: { initialShare: boolean }) {
         router.refresh();
       } catch (e) {
         setShare(!next);
-        setError(e instanceof Error ? e.message : "Couldn't save that.");
+        setError(actionErrorMessage(e, "Couldn't save that."));
       }
     });
   }

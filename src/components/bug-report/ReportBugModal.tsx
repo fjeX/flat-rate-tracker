@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { downscaleImage } from "@/lib/image";
 import { MAX_BUG_PHOTOS, MAX_BUG_DESCRIPTION_CHARS } from "@/lib/bug-reports";
 import { submitBugReport } from "@/app/actions/bug-reports";
+import { actionErrorMessage } from "@/lib/action-error";
 
 type Attachment = { id: string; file: File; previewUrl: string };
 
@@ -91,7 +92,7 @@ export function ReportBugModal({
         setDescription("");
         setDone({ photosFailed: result.photosFailed });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't send the report. Try again.");
+        setError(actionErrorMessage(err, "Couldn't send the report. Try again."));
       }
     });
   }

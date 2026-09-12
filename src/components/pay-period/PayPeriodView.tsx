@@ -63,6 +63,7 @@ import { PeriodStats } from "./PeriodStats";
 import { PeriodTitleBar } from "./PeriodTitleBar";
 import { SpiffsCard } from "./SpiffsCard";
 import { WorkCostCard } from "./WorkCostCard";
+import { actionErrorMessage } from "@/lib/action-error";
 
 type CardKey = "paidCheck" | "workCost" | "spiffs" | "roList";
 
@@ -260,7 +261,7 @@ export function PayPeriodView({
         await clearPeriodOverrideAction(selected.key);
         router.refresh();
       } catch (err) {
-        setResetError(err instanceof Error ? err.message : "Failed to reset.");
+        setResetError(actionErrorMessage(err, "Failed to reset."));
       }
     });
   }

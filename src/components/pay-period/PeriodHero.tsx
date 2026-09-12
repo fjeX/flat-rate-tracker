@@ -19,6 +19,7 @@ import { parseHours } from "@/lib/discrepancy";
 import { setPaidPeriodHoursAction } from "@/app/actions/paid-periods";
 import { efficiencyDisplay } from "@/lib/efficiency-display";
 import type { ProjectionLabel } from "@/lib/period-mode";
+import { actionErrorMessage } from "@/lib/action-error";
 
 function InProgressHero({
   flagHours,
@@ -273,7 +274,7 @@ function AwaitingPayHero({
           // in production. Only DB failures reach the catch.
           res = await setPaidPeriodHoursAction(periodKey, value);
         } catch (e) {
-          fail(e instanceof Error ? e.message : "Failed to save.");
+          fail(actionErrorMessage(e, "Failed to save."));
           return;
         }
         if (res.error) {

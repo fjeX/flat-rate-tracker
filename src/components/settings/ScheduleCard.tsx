@@ -22,6 +22,7 @@ import {
   type WorkSchedule,
 } from "@/lib/schedule";
 import { fmtHours } from "@/lib/stats";
+import { actionErrorMessage } from "@/lib/action-error";
 
 const DAY_ORDER: { key: WeekdayKey; label: string }[] = [
   { key: "mon", label: "Mon" },
@@ -231,7 +232,7 @@ export function ScheduleCard({
         );
         setEditing(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save — try again.");
+        setError(actionErrorMessage(err, "Couldn't save — try again."));
       }
     });
   }
@@ -243,7 +244,7 @@ export function ScheduleCard({
         await deleteWorkScheduleAction(id);
         setSchedules((prev) => prev.filter((s) => s.id !== id));
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't delete — try again.");
+        setError(actionErrorMessage(err, "Couldn't delete — try again."));
       }
     });
   }

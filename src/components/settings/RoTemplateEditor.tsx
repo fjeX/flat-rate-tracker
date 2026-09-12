@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { createClient } from "@/lib/supabase/client";
 import { saveRoTemplateMetadata } from "@/app/actions/ro-template";
 import type { FieldId, FieldRegion, RoTemplate } from "@/lib/types";
+import { actionErrorMessage } from "@/lib/action-error";
 
 // ── Field config ──────────────────────────────────────────────────────────────
 
@@ -254,7 +255,7 @@ export function RoTemplateEditor({
       await saveRoTemplateMetadata(fd);
       onClose({ id, name, imageStoragePath: storagePath, regions });
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Save failed.");
+      setErrorMsg(actionErrorMessage(err, "Save failed."));
     } finally {
       setSaving(false);
     }

@@ -5,6 +5,7 @@ import { Download, Upload, X } from "lucide-react";
 import { exportDataAction, importDataAction } from "@/app/actions/settings";
 import { SUPPORTED_BACKUP_VERSIONS, type ImportBundle } from "@/lib/import-remap";
 import { summarizeBackup } from "@/lib/backup-summary";
+import { actionErrorMessage } from "@/lib/action-error";
 
 export function DataCard() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -29,7 +30,7 @@ export function DataCard() {
         a.click();
         URL.revokeObjectURL(url);
       } catch (err) {
-        setExportError(err instanceof Error ? err.message : "Couldn't export — check your connection and try again.");
+        setExportError(actionErrorMessage(err, "Couldn't export — check your connection and try again."));
       }
     });
   }
@@ -55,7 +56,7 @@ export function DataCard() {
         }
         setPendingBundle(raw);
       } catch (err) {
-        setParseError(err instanceof Error ? err.message : "Failed to read file.");
+        setParseError(actionErrorMessage(err, "Failed to read file."));
       }
       if (fileRef.current) fileRef.current.value = "";
     };
@@ -80,7 +81,7 @@ export function DataCard() {
         setPendingBundle(null);
         setImportDone(true);
       } catch (err) {
-        setImportError(err instanceof Error ? err.message : "Couldn't import — check your connection and try again.");
+        setImportError(actionErrorMessage(err, "Couldn't import — check your connection and try again."));
       }
     });
   }

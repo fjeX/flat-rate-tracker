@@ -24,6 +24,7 @@ import { BonusForm } from "@/components/bonuses/BonusForm";
 import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
 import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import { tap } from "@/lib/haptics";
+import { actionErrorMessage } from "@/lib/action-error";
 
 type QuickAddMode = "ro" | "spiff";
 
@@ -321,7 +322,7 @@ export function QuickAddModal({
       // the flush — this is the write the cross-tab-stale report was filed on.
       notifyDataChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save.");
+      setError(actionErrorMessage(err, "Failed to save."));
     }
   }
 
