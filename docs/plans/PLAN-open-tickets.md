@@ -1,6 +1,6 @@
 # PLAN — Open Tickets: multi-day ROs that tell the truth about the days between
 
-**Status:** design locked 2026-09-12 (grilling, 13 decisions). **Phase 1 built 2026-09-12** (not yet deployed — see Build notes at the end). Phase 2 not started.
+**Status:** design locked 2026-09-12 (grilling, 13 decisions). **Phase 1 built and deployed 2026-09-12, verified live.** **Phase 2 built 2026-09-13** (timer path + hold-flip events + reopen + keep-or-move second close) — see Build notes.
 **Depends on:** PLAN-unpaid-time-engine (Phase 1 shipped: `active_timers`,
 `unpaid_time` ledger, additive timer saves). Extends it; changes nothing it locked.
 
@@ -335,4 +335,24 @@ A modal step, not a page:
   rows pass through and `open-tickets.test.ts` pins it.
 - The timer still lists open tickets in its picker; saving to one explains that
   the timer path is Phase 2.
+
+### Phase 2 build notes (2026-09-13)
+- `saveTimerAction(timerId, lineId | null)`: an open ticket with no lines
+  writes one `open_work` row (`source='timer'`, dated `ledgerDate`) through
+  the THROWING create; result carries `target: 'line' | 'ticket'` and the
+  ticket's before/after open_work totals. No 30s gate on worked time. A
+  reopened ticket that already has lines takes the ordinary line path.
+- Hold flips write the `ro_events` row inside `setTimerStatusAction`, once per
+  flip, best-effort (a failed event write never fails the flip).
+- A second timer on a lineless ticket is refused with "already on a timer".
+- Reopen: `reopened` event first, status LAST; refuses a closed RO with no
+  timeline. `closeTicketAction` tells a second close from a first-close retry
+  by `isReopened(events)` (latest transition), patches lines through
+  `updateEntry`'s diff, and writes a new `closed` event only when the latest
+  transition isn't already `closed`.
+- Keep-or-move lives in the close form: on a reopened ticket the date pill is
+  seeded with the ticket's current date and a radio offers "Move to today".
+  Known limitation: the actual-hours prefill on a second close still sums
+  every open_work row, so a brand-new line offered the prefill can receive
+  hours already put on a line at the first close — the tech edits the number.
 

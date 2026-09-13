@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -8,6 +8,8 @@ import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { fmtHours2 } from "@/lib/format";
 import { saveTimerAction, type TimerSaveResult } from "@/app/actions/timer";
+import { getTicketTimelineAction } from "@/app/actions/open-tickets";
+import { ticketOpenWorkHours } from "@/lib/open-tickets";
 import {
   elapsedFor,
   formatDuration,
@@ -167,18 +169,36 @@ export function TimerSaveReceipt({
         )}
         {/* What the SERVER wrote — not the frozen projection the modal showed.
          * These are the values saveTimerAction returned, recomputed from
-         * persisted accumulators at submit time. */}
+         * persisted accumulators at submit time. Wording forks on `target`
+         * (Open Tickets Phase 2): a lineless ticket has no "line" to name, and
+         * saying so would be a lie on a money document. */}
         <div className="card-inset" style={{ padding: 12 }}>
           <p className="text-sm text-[var(--fg-1)]">
-            Saved{" "}
-            <strong className="font-mono text-[var(--fg-0)]">
-              {fmtHours2(saved.workHours)}h
-            </strong>{" "}
-            to RO #{roNumber} — that line now totals{" "}
-            <strong className="font-mono text-[var(--fg-0)]">
-              {fmtHours2(saved.totalHours)}h
-            </strong>
-            .
+            {saved.target === "ticket" ? (
+              <>
+                Saved{" "}
+                <strong className="font-mono text-[var(--fg-0)]">
+                  {fmtHours2(saved.workHours)}h
+                </strong>{" "}
+                to open ticket RO #{roNumber} — the ticket now totals{" "}
+                <strong className="font-mono text-[var(--fg-0)]">
+                  {fmtHours2(saved.totalHours)}h
+                </strong>
+                .
+              </>
+            ) : (
+              <>
+                Saved{" "}
+                <strong className="font-mono text-[var(--fg-0)]">
+                  {fmtHours2(saved.workHours)}h
+                </strong>{" "}
+                to RO #{roNumber} — that line now totals{" "}
+                <strong className="font-mono text-[var(--fg-0)]">
+                  {fmtHours2(saved.totalHours)}h
+                </strong>
+                .
+              </>
+            )}
           </p>
           {/* Two different causes, two different sentences. Printing the
            * clock-kept-running line over a stale-baseline divergence restated
@@ -195,9 +215,9 @@ export function TimerSaveReceipt({
           {divergence.baselineTotal && (
             <p className="mt-2 text-xs text-[var(--fg-3)]">
               The {fmtHours2(saved.workHours)}h added is exactly what this
-              window showed, but the line already had time on it that this
-              window didn&apos;t know about. The total above is what&apos;s on
-              the RO.
+              window showed, but {saved.target === "ticket" ? "that ticket" : "the line"}{" "}
+              already had time on it that this window didn&apos;t know about.
+              The total above is what&apos;s on the RO.
             </p>
           )}
           {undisclosed && (
@@ -309,10 +329,40 @@ export function TimerSaveModal({
   const [error, setError] = useState<string | null>(null);
   const [pending, startPending] = useTransition();
 
+  // Open Tickets Phase 2 (plan "Timer (Phase 2)", decision 4/10): an open
+  // ticket has no lines, so there is no line to pick — its hours go on the
+  // ticket itself. `entry` here is the same server-fetched copy the rest of
+  // the modal already uses, so this reads the ticket's true opCodes.length,
+  // not a client guess.
+  const isOpenTicket = entry.status === "open" && entry.opCodes.length === 0;
+
+  // The ticket's running open_work total, fetched once on mount so the modal
+  // can show "2.5h + 1.2h = 3.7h" the same way the line path shows a line
+  // total. null while loading; treated as 0 if the fetch fails outright —
+  // the server recomputes the real figure at save regardless, so a stale or
+  // missing preview here can under-promise but never mis-save.
+  const [ticketTotal, setTicketTotal] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isOpenTicket) return;
+    let cancelled = false;
+    getTicketTimelineAction(entry.id)
+      .then((timeline) => {
+        if (!cancelled) setTicketTotal(ticketOpenWorkHours(timeline.ledger, entry.id));
+      })
+      .catch(() => {
+        if (!cancelled) setTicketTotal(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpenTicket, entry.id]);
+
   const workHours = msToHours(frozen.work);
   const selected = entry.opCodes.find((l) => l.id === selectedId) ?? null;
   const existing = selected?.actualHours ?? null;
-  const newTotal = Math.round(((existing ?? 0) + workHours) * 100) / 100;
+  const newTotal = isOpenTicket
+    ? Math.round(((ticketTotal ?? 0) + workHours) * 100) / 100
+    : Math.round(((existing ?? 0) + workHours) * 100) / 100;
   // Per hold reason, not lumped: promising a row for the parts hold must not
   // silence a disclosure about an approval hold that only crossed the 30s gate
   // later. Derived from the LIVE hold ms so this is the promise the screen is
@@ -321,6 +371,9 @@ export function TimerSaveModal({
   // announce a row the tech had just been told wasn't coming.
   const shown: ShownFigures = {
     workHours,
+    // The projected TICKET total when there's no line — saveDivergence
+    // compares this against res.totalHours regardless of which target
+    // produced it, so this has to already be the right kind of number.
     newTotal,
     partsPromised: isLedgerableHold(holdParts),
     approvalPromised: isLedgerableHold(holdApproval),
@@ -328,14 +381,16 @@ export function TimerSaveModal({
   const ledgerPromised = shown.partsPromised || shown.approvalPromised;
 
   function handleSave() {
-    if (!selected) {
+    // A lineless open ticket has nothing to pick — the save button is enabled
+    // with no selection and saves straight to the ticket (decision 4/10).
+    if (!isOpenTicket && !selected) {
       setError("Pick an op code first.");
       return;
     }
     setError(null);
     startPending(async () => {
       try {
-        const res = await saveTimerAction(slot.id, selected.id);
+        const res = await saveTimerAction(slot.id, isOpenTicket ? null : (selected?.id ?? null));
         tap();
         // Three reasons the tech still needs a receipt:
         //   - the unpaid ledger didn't write (the worked hours still did),
@@ -397,14 +452,45 @@ export function TimerSaveModal({
           )}
         </div>
 
-        {entry.opCodes.length === 0 ? (
+        {isOpenTicket ? (
+          <>
+            {/* An open ticket has no lines BY DESIGN (decision 4/10) — its
+                worked hours land on the ticket's own open_work ledger instead
+                of a line, additive across every session the same way a
+                line's actual hours are. */}
+            <p className="text-xs text-[var(--fg-3)]">
+              Hours go on the ticket&apos;s timeline as a day of work —
+              they&apos;re added to what the ticket already has.
+            </p>
+            {workHours > 0 && (
+              <p className="text-sm text-[var(--fg-2)]">
+                {ticketTotal === null ? (
+                  "Checking this ticket's hours so far…"
+                ) : ticketTotal === 0 ? (
+                  <>
+                    This ticket has no hours yet — it becomes{" "}
+                    <strong className="text-[var(--fg-0)]">
+                      {fmtHours2(workHours)}h
+                    </strong>
+                    .
+                  </>
+                ) : (
+                  <>
+                    <span className="font-mono">{fmtHours2(ticketTotal)}h</span>{" "}
+                    + <span className="font-mono">{fmtHours2(workHours)}h</span>{" "}
+                    ={" "}
+                    <strong className="font-mono text-[var(--fg-0)]">
+                      {fmtHours2(newTotal)}h
+                    </strong>{" "}
+                    on this ticket.
+                  </>
+                )}
+              </p>
+            )}
+          </>
+        ) : entry.opCodes.length === 0 ? (
           <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
-            {/* An open ticket has no lines BY DESIGN; the timer learns to save
-                to one in Open Tickets Phase 2. Until then, say where the hours
-                go rather than send the tech to add a code they don't have. */}
-            {entry.status === "open"
-              ? "This is an open ticket — no op codes yet. Log these hours on the ticket's timeline (open it from the dashboard) until the timer can save to open tickets."
-              : "This RO has no op codes. Edit it first to add one."}
+            This RO has no op codes. Edit it first to add one.
           </p>
         ) : (
           <>
@@ -504,7 +590,7 @@ export function TimerSaveModal({
           <Button
             variant="primary"
             onClick={handleSave}
-            disabled={pending || !selected}
+            disabled={pending || (!isOpenTicket && !selected)}
           >
             {pending ? "Saving…" : "Save & close timer"}
           </Button>

@@ -1,12 +1,13 @@
-// closeTicketAction — the ordering rule from the plan, pinned.
+// closeTicketAction / reopenTicketAction — the ordering rules from the plan, pinned.
 //
-//   1. lines inserted   2. date moved   3. `closed` event   4. status = closed
+//   close:  1. lines (insert or patch)   2. date moved   3. `closed` event   4. status = closed
+//   reopen: 1. `reopened` event                                              2. status = open
 //
-// The status flip is LAST so a failure anywhere before it leaves an OPEN ticket
-// with lines on it (visible on the card, retryable) rather than a closed RO
-// with no lines and no flag. A test that only checked the happy path would
-// pass against a reordered sequence too, so each step is made to fail in turn
-// and the ticket's state afterwards is asserted.
+// Both flip status LAST so a failure anywhere before it leaves the ticket in
+// its PREVIOUS state (open, or closed) with everything else already written —
+// visible, retryable — rather than a half-transitioned row. A test that only
+// checked the happy path would pass against a reordered sequence too, so each
+// step is made to fail in turn and the ticket's state afterwards is asserted.
 //
 // The db layer is mocked at the function boundary (the same seam
 // unpaid-time.test.ts uses); the order of calls IS the thing under test.
@@ -23,7 +24,7 @@ const state = {
   lastClose: null as null | { date: string; loggedTime: string | null },
 };
 
-function openEntry(lines = 0): Entry {
+function openEntry(lines = 0, status: Entry["status"] = "open"): Entry {
   return {
     id: "aaaaaaaa-0000-4000-8000-000000000001",
     userId: "u",
@@ -47,7 +48,7 @@ function openEntry(lines = 0): Entry {
     })),
     flagHours: lines,
     notes: "",
-    status: "open",
+    status,
   };
 }
 
@@ -64,7 +65,22 @@ vi.mock("@/lib/db", () => ({
   addEntryLines: async (_c: unknown, _id: string, lines: unknown[]) => {
     calls.push("lines");
     if (state.fail === "lines") throw new Error("boom lines");
-    state.entry = openEntry(lines.length);
+    state.entry = openEntry(lines.length, state.entry?.status ?? "open");
+  },
+  // A second close (decision 11) already has lines, so closeTicketAction
+  // patches instead of inserting — the same seam updateEntry uses for a
+  // normal edit. The mock only needs to land the right FINAL line count; the
+  // real reconciliation (update-by-id / insert-new / delete-dropped) is
+  // entries.test.ts's job, not this ordering test's.
+  updateEntry: async (_c: unknown, _id: string, patch: { opCodes?: unknown[] }) => {
+    calls.push("lines");
+    if (state.fail === "lines") throw new Error("boom lines");
+    if (patch.opCodes) {
+      state.entry = state.entry
+        ? { ...state.entry, opCodes: patch.opCodes as Entry["opCodes"], flagHours: patch.opCodes.length }
+        : state.entry;
+    }
+    return state.entry;
   },
   setEntryCloseDate: async (
     _c: unknown,
@@ -95,7 +111,7 @@ vi.mock("@/lib/db", () => ({
   syncEntryLaborTimeObservations: async () => {},
 }));
 
-const { closeTicketAction } = await import("./open-tickets");
+const { closeTicketAction, reopenTicketAction } = await import("./open-tickets");
 
 const LINE = {
   opCodeId: null,
@@ -187,5 +203,99 @@ describe("closeTicketAction", () => {
   it("revalidates /dashboard by name — the card is what changes", async () => {
     await closeTicketAction(INPUT);
     expect(revalidatePath.mock.calls.flat()).toContain("/dashboard");
+  });
+
+  // ── Phase 2: a second close, after a reopen (decision 11) ────────────────
+
+  it("second close: existing lines are PATCHED (not re-inserted) and the new line lands too", async () => {
+    // The ticket closed once already (one line), was reopened, and now closes
+    // again with that line kept plus a brand-new second approved line.
+    const EXISTING_LINE_ID = "aaaaaaaa-0000-4000-8000-0000000000aa";
+    state.entry = openEntry(1);
+    state.entry.opCodes = [{ ...state.entry.opCodes[0], id: EXISTING_LINE_ID }];
+    state.events = [{ kind: "opened" }, { kind: "closed" }, { kind: "reopened" }];
+
+    const res = await closeTicketAction({
+      entryId: INPUT.entryId,
+      date: "2026-06-20",
+      opCodes: [
+        { ...LINE, id: EXISTING_LINE_ID, flagHours: 14 },
+        { ...LINE, flagHours: 4 },
+      ],
+    });
+
+    expect(res.error).toBeUndefined();
+    // "lines" here is the patch (updateEntry), not the insert (addEntryLines)
+    // — same call name in `calls` on purpose: the ordering test only cares
+    // WHEN the line step runs, not which db function backs it.
+    expect(calls).toEqual(["lines", "date", "event:closed", "status:closed"]);
+    expect(state.entry?.opCodes).toHaveLength(2);
+    // A SECOND closed event — re-closing after a reopen must still tell the
+    // story, or the timeline would read as reopened forever.
+    expect(state.events.filter((e) => e.kind === "closed")).toHaveLength(2);
+    expect(state.entry?.status).toBe("closed");
+  });
+
+  it("second close with KEEP leaves entries.date exactly where it was (decision 11: never move paid hours silently)", async () => {
+    state.entry = openEntry(1);
+    state.entry.date = "2026-06-08"; // the flag day from the first close
+    state.events = [{ kind: "opened" }, { kind: "closed" }, { kind: "reopened" }];
+
+    const res = await closeTicketAction({ ...INPUT, date: "2026-06-08" });
+
+    expect(res.error).toBeUndefined();
+    expect(state.entry?.date).toBe("2026-06-08");
+  });
+});
+
+describe("reopenTicketAction", () => {
+  it("writes the reopened event, THEN flips status — never the other order", async () => {
+    state.entry = openEntry(1, "closed");
+    state.events = [{ kind: "opened" }, { kind: "closed" }];
+
+    const res = await reopenTicketAction(INPUT.entryId);
+
+    expect(res.error).toBeUndefined();
+    expect(calls).toEqual(["event:reopened", "status:open"]);
+    expect(state.entry?.status).toBe("open");
+    // Lines and flag_hours untouched.
+    expect(state.entry?.opCodes).toHaveLength(1);
+    expect(state.entry?.flagHours).toBe(1);
+  });
+
+  it("refuses a ticket that is already open", async () => {
+    state.entry = openEntry(1, "open");
+    const res = await reopenTicketAction(INPUT.entryId);
+    expect(res.error).toMatch(/already open/i);
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a closed RO with no timeline at all — it was never a ticket", async () => {
+    state.entry = openEntry(1, "closed");
+    state.events = [];
+    const res = await reopenTicketAction(INPUT.entryId);
+    expect(res.error).toMatch(/never a ticket/i);
+    expect(calls).toEqual([]);
+  });
+
+  it("a retry after the event landed but the status write failed does not double the event", async () => {
+    state.entry = openEntry(1, "closed");
+    state.events = [{ kind: "opened" }, { kind: "closed" }];
+    state.fail = "status";
+
+    await expect(reopenTicketAction(INPUT.entryId)).rejects.toThrow("boom status");
+    expect(state.events.filter((e) => e.kind === "reopened")).toHaveLength(1);
+    expect(state.entry?.status).toBe("closed");
+
+    state.fail = null;
+    calls.length = 0;
+    const res = await reopenTicketAction(INPUT.entryId);
+
+    expect(res.error).toBeUndefined();
+    // The event is already there (latest transition is `reopened`) — only
+    // the status flip runs on retry.
+    expect(calls).toEqual(["status:open"]);
+    expect(state.events.filter((e) => e.kind === "reopened")).toHaveLength(1);
+    expect(state.entry?.status).toBe("open");
   });
 });

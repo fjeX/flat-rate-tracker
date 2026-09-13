@@ -158,6 +158,10 @@ export function TimerSlotCard({
                 ) : (
                   <span className="timer-slot-ro">#{entry.roNumber}</span>
                 )}
+                {/* Same badge/tone as RoDetailModal and TicketTimeline (Open
+                    Tickets Phase 2) — one look for "this RO has no lines yet"
+                    everywhere it shows up. */}
+                {entry.status === "open" && <Badge tone="info">Open ticket</Badge>}
                 <span className="text-xs text-[var(--fg-3)]">
                   {formatDateShort(entry.date)}
                 </span>

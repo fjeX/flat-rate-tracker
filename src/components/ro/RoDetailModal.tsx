@@ -79,6 +79,11 @@ export function RoDetailModal({
   // lands at close — so on an open ticket the Timeline section stands where
   // they would, and the close flow is where the codes get entered.
   const isOpen = entry.status === "open";
+  // Phase 2: a REOPENED ticket (decision 11) is `status === "open"` again but
+  // can already carry lines from its first close. Gating the lines block on
+  // isOpen alone would hide a real, flagged line list the moment it reopens —
+  // so the gate is "has no lines yet", not "is open".
+  const hasLines = entry.opCodes.length > 0;
   // Guest entries are in-memory and the timeline actions cannot resolve them.
   // A guest RO never carries a status (decision 12 — the guest store builds
   // its entries client-side without one), so the status IS the guest gate:
@@ -92,7 +97,9 @@ export function RoDetailModal({
           <div className="flex items-center gap-2">
             <Badge tone="info">Open ticket</Badge>
             <span className="text-xs text-[var(--fg-3)]">
-              No op codes yet — flag lands when you close it.
+              {hasLines
+                ? "Reopened — close it again to add or edit lines."
+                : "No op codes yet — flag lands when you close it."}
             </span>
           </div>
         )}
@@ -123,7 +130,7 @@ export function RoDetailModal({
           mileage={entry.vehicle.mileage}
         />
 
-        {!isOpen && (
+        {hasLines && (
         <div className="card-inset overflow-hidden">
           {/* Header, rows, and total all share this exact template (incl. the
               22px trash-button column) so Flag/Actual line up with the inputs. */}

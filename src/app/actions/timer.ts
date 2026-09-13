@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import type { DbClient } from "@/lib/db";
 import { isoDate, isoDateInTz } from "@/lib/periods";
+import { openWorkRows, ticketOpenWorkHours } from "@/lib/open-tickets";
+import { reportServerError } from "@/lib/report-error-server";
 import {
   bucketFor,
   flushAccumulators,
@@ -148,7 +150,16 @@ export async function attachRoToTimerAction(
   }
 
   const all = await db.listTimerSlots(supabase);
-  switch (attachConflict(all, entryId, lineId)) {
+  const conflict = attachConflict(all, entryId, lineId);
+  // An open, lineless ticket (Open Tickets Phase 2) has no lines to name —
+  // attachConflict still reports "needs-line" because lineId is null and the
+  // RO is already on a slot, but there is no line picker to send the tech to.
+  // Special-cased here rather than in attachConflict itself: that function is
+  // shared with the guest store and knows nothing about entry.opCodes.
+  if (conflict === "needs-line" && entry.opCodes.length === 0) {
+    throw new Error(`RO #${entry.roNumber} is already on a timer.`);
+  }
+  switch (conflict) {
     case "needs-line":
       throw new Error(
         `RO #${entry.roNumber} is already on a timer. Pick which line this ` +
@@ -213,6 +224,38 @@ export async function setTimerStatusAction(
     // Paused banks nothing, so it carries no clock. Every other status does.
     startTime: bucketFor(status) === null ? null : now,
   });
+
+  // Open Tickets Phase 2 (plan "Timer (Phase 2)", decision 5): a hold flip on
+  // an open ticket writes a ro_events row of the same kind — the timeline is
+  // the story, and "waiting on parts" starting is part of that story. Once per
+  // flip, not per accrual tick, so the guard is "the status actually changed
+  // TO a hold", not "the status IS a hold". Flipping back to working writes
+  // nothing; the next real event tells that part of the story.
+  //
+  // Only fetch the entry when the new status is a hold, and only when it's
+  // genuinely a change — a read on every flip (including working <-> paused,
+  // which happens far more often) would be a query this feature doesn't need.
+  const flippedToHold =
+    (status === "hold_parts" || status === "hold_approval") &&
+    slot.status !== status;
+  if (flippedToHold && slot.entryId) {
+    try {
+      const entry = await db.getEntry(supabase, slot.entryId);
+      if (entry?.status === "open") {
+        const today = ctx.timeZone ? isoDateInTz(ctx.timeZone) : isoDate();
+        await db.createRoEvent(supabase, {
+          entryId: slot.entryId,
+          date: today,
+          kind: status,
+        });
+      }
+    } catch (err) {
+      // Best-effort: a failed event write must not fail the status change the
+      // tech is actually waiting on.
+      await reportServerError(err, { url: "timer/setTimerStatusAction" });
+    }
+  }
+
   revalidateTimerScreens();
 }
 
@@ -278,10 +321,21 @@ export async function releaseTimerAction(timerIdArg: string): Promise<void> {
 export type TimerSaveResult = {
   /** Hours added to the line (0 when the slot only ever waited). */
   workHours: number;
-  /** The line's actual hours before this save — null when it was unmeasured. */
+  /**
+   * The save's before-figure — a line's actual hours, or (Open Tickets Phase
+   * 2) a ticket's open_work total — null when it was unmeasured/empty before
+   * this save. Which one depends on `target`.
+   */
   previousHours: number | null;
-  /** The line's actual hours after this save. */
+  /** The save's after-figure, same target as `previousHours`. */
   totalHours: number;
+  /**
+   * What the hours above describe: an op-code LINE (the original path), or an
+   * open TICKET with no lines yet (Open Tickets Phase 2, decision 4/10). The
+   * save modal and receipt need this to pick their wording — "that line" vs.
+   * "that ticket" — and to know there is no line total to compare against.
+   */
+  target: "line" | "ticket";
   waitPartsHours: number;
   waitApprovalHours: number;
   /**
@@ -320,7 +374,7 @@ export type TimerSaveResult = {
  */
 export async function saveTimerAction(
   timerIdArg: string,
-  lineIdArg: string,
+  lineIdArg: string | null,
 ): Promise<TimerSaveResult> {
   const { timerId, lineId } = validate(saveTimerSchema, {
     timerId: timerIdArg,
@@ -332,9 +386,13 @@ export async function saveTimerAction(
   if (!slot.entryId) throw new Error("This timer has no RO attached.");
   const entry = await db.getEntry(supabase, slot.entryId);
   if (!entry) throw new Error("That RO no longer exists.");
-  if (!entry.opCodes.some((l) => l.id === lineId)) {
-    throw new Error("That op code line isn't on this RO.");
-  }
+
+  // Open Tickets Phase 2 (plan "Timer (Phase 2)", decisions 4/10): an open
+  // ticket has no lines yet, so there is nothing for lineId to name — its
+  // worked hours land on the TICKET instead, as an `open_work` ledger row.
+  // Every entry that already has lines (open or closed) keeps the original
+  // line contract, unchanged.
+  const isOpenTicket = entry.status === "open" && entry.opCodes.length === 0;
 
   const now = Date.now();
   const ctx = await loadCapContext(supabase);
@@ -357,14 +415,61 @@ export async function saveTimerAction(
 
   let previousHours: number | null = null;
   let totalHours = 0;
-  if (workHours > 0) {
-    const res = await db.addLineActualHours(supabase, lineId, workHours);
-    previousHours = res.previous;
-    totalHours = res.total;
+  let target: "line" | "ticket";
+
+  if (isOpenTicket) {
+    // A lineId can only reach here if it was passed for a ticket that has no
+    // lines to check it against — the same "isn't on this RO" refusal a bad
+    // lineId gets on a lined entry, since there is no line, full stop.
+    if (lineId !== null) {
+      throw new Error("That op code line isn't on this RO.");
+    }
+    target = "ticket";
+
+    // previousHours/totalHours here are the TICKET's open_work total, not a
+    // line's — the save modal's running total and the divergence check both
+    // read these fields regardless of which target they describe.
+    const priorLedger = await db.listUnpaidTimeForEntry(supabase, slot.entryId);
+    const priorWorkRows = openWorkRows(priorLedger);
+    const priorTotal = ticketOpenWorkHours(priorLedger, slot.entryId);
+    previousHours = priorWorkRows.length > 0 ? priorTotal : null;
+
+    // The THROWING create, not createUnpaidTimeSafe: worked hours are the
+    // load-bearing half of a save (see this function's own doc comment), so a
+    // failure here must fail the save rather than silently drop real hours —
+    // and it must do so BEFORE the slot is deleted, so the tech can retry.
+    // No 30-second gate either (contrast the hold loop below): that gate
+    // exists because a hold's value depends on being long enough to be worth
+    // a dispute-pack line, but a worked minute banked here is real the moment
+    // it lands.
+    if (workHours > 0) {
+      await db.createUnpaidTime(supabase, {
+        date: ledgerDate,
+        hours: workHours,
+        kind: "open_work",
+        entryId: slot.entryId,
+        source: "timer",
+      });
+    }
+    totalHours = priorTotal + (workHours > 0 ? workHours : 0);
   } else {
-    const line = entry.opCodes.find((l) => l.id === lineId);
-    previousHours = line?.actualHours ?? null;
-    totalHours = previousHours ?? 0;
+    if (lineId === null) {
+      throw new Error("Pick an op code to save this time to.");
+    }
+    if (!entry.opCodes.some((l) => l.id === lineId)) {
+      throw new Error("That op code line isn't on this RO.");
+    }
+    target = "line";
+
+    if (workHours > 0) {
+      const res = await db.addLineActualHours(supabase, lineId, workHours);
+      previousHours = res.previous;
+      totalHours = res.total;
+    } else {
+      const line = entry.opCodes.find((l) => l.id === lineId);
+      previousHours = line?.actualHours ?? null;
+      totalHours = previousHours ?? 0;
+    }
   }
 
   // Each hold reason writes its own row so the ledger can say WHY the time was
@@ -422,5 +527,6 @@ export async function saveTimerAction(
     waitPartsLedgered: ledgered.holdParts,
     waitApprovalLedgered: ledgered.holdApproval,
     ledgerWritten,
+    target,
   };
 }

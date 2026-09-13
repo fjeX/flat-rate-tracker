@@ -33,6 +33,7 @@ import {
   deleteOpenWorkAction,
   deleteRoEventAction,
   getTicketTimelineAction,
+  reopenTicketAction,
 } from "@/app/actions/open-tickets";
 
 /** The kinds a tech can pick, in the order the job usually goes. */
@@ -244,6 +245,38 @@ export function TicketTimeline({
           >
             Close ticket
           </Link>
+        </div>
+      )}
+
+      {/* Phase 2 (decision 11): closed by mistake, or a second approved line
+          came in. The timeline and lines stay read-only either way — reopen
+          only flips status and writes the `reopened` event; the tech closes
+          again through the same close flow to add or edit lines. */}
+      {!isOpen && (
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--line)] pt-3">
+          <span className="text-xs text-[var(--fg-3)]">
+            Closed by mistake, or a second approved line?
+          </span>
+          <button
+            type="button"
+            disabled={busy}
+            data-testid="reopen-ticket"
+            className="btn btn-sm"
+            onClick={() => {
+              setError(null);
+              startTransition(async () => {
+                try {
+                  const res = await reopenTicketAction(entry.id);
+                  if (res.error) setError(res.error);
+                  else afterWrite();
+                } catch (e) {
+                  setError(actionErrorMessage(e, "Couldn't reopen that ticket."));
+                }
+              });
+            }}
+          >
+            Reopen
+          </button>
         </div>
       )}
     </div>

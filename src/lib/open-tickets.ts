@@ -13,6 +13,14 @@ import type { ActualSource, Entry, RoEvent, UnpaidTime } from "./types";
 import { OPEN_WORK_KIND, RO_EVENT_KIND_LABELS } from "./types";
 import { addDays } from "./periods";
 
+/** The events that ARE the ticket's lifecycle, as opposed to hand-picked story
+ *  entries layered on top of it (decision 5: the latest one is the status). */
+const TRANSITION_KINDS: ReadonlySet<RoEvent["kind"]> = new Set([
+  "opened",
+  "closed",
+  "reopened",
+]);
+
 // ---------------------------------------------------------------------------
 // Ledger side — the hours
 // ---------------------------------------------------------------------------
@@ -140,6 +148,30 @@ export function defaultPrefillLineIndex(
  *  chronological (db.sortRoEvents); the last one wins. */
 export function latestEvent(events: RoEvent[]): RoEvent | null {
   return events.length > 0 ? events[events.length - 1] : null;
+}
+
+/**
+ * The most recent of opened/closed/reopened — the ticket's actual last
+ * transition, ignoring any hand-picked story events (diag_done, custom, …)
+ * that were added after it. Events must be chronological.
+ */
+export function latestTransition(events: RoEvent[]): RoEvent | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (TRANSITION_KINDS.has(events[i].kind)) return events[i];
+  }
+  return null;
+}
+
+/**
+ * True when the ticket was reopened after its last close and has not been
+ * closed again since (decision 11). Drives two things: the close form's
+ * keep-or-move-close-date prompt (a second close must never silently move
+ * paid hours), and reopenTicketAction's own retry-idempotency — a retry that
+ * lands after the `reopened` event wrote but before the status flip must not
+ * write a second one.
+ */
+export function isReopened(events: RoEvent[]): boolean {
+  return latestTransition(events)?.kind === "reopened";
 }
 
 /** What the status chip reads. A custom event shows its note as the label. */

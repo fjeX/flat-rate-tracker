@@ -13,7 +13,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import { closePrefill } from "@/lib/open-tickets";
+import { closePrefill, isReopened, latestTransition } from "@/lib/open-tickets";
 import { hhmmInTz, isoDate, isoDateInTz } from "@/lib/periods";
 import { observationsFromEntry } from "@/lib/true-time";
 import { reportServerError } from "@/lib/report-error-server";
@@ -164,6 +164,57 @@ export async function updateOpenEntryAction(input: {
   return { entry };
 }
 
+/**
+ * Reopen a closed ticket (decision 11): closed by mistake, or a second
+ * approved line came in. Lines, flag_hours and entries.date are untouched — a
+ * reopen must never silently move paid hours off the day they were paid.
+ *
+ * Order, mirroring closeTicketAction's own rule and for the same reason:
+ *   1. `reopened` event   2. status = open   — LAST.
+ * A failure after step 1 leaves a closed ticket whose timeline already says
+ * "reopened" — visible, and the idempotency check below reads that as done on
+ * retry — rather than a ticket that silently reopened with no record of it.
+ */
+export async function reopenTicketAction(
+  entryId: string,
+): Promise<{ entry?: Entry; error?: string }> {
+  const id = validate(entryIdSchema, entryId);
+  const supabase = await createClient();
+  const existing = await db.getEntry(supabase, id);
+  if (!existing) return { error: "That ticket is no longer there." };
+  if (existing.status !== "closed") {
+    return { error: "That ticket is already open." };
+  }
+
+  const events = await db.listRoEvents(supabase, id);
+  // The Reopen button only ever renders on a timeline (TicketTimeline), which
+  // means at least one event — but a row imported or hand-edited before the
+  // timeline existed could have none. That RO was never a ticket; it's a
+  // normal closed RO and reopening it as one would invent a story it doesn't
+  // have.
+  if (events.length === 0) {
+    return { error: "This RO was never a ticket — edit it as a normal RO." };
+  }
+
+  // Step 1 — the event. Retry-safe: skipped when the latest transition is
+  // already `reopened` (a retry after this write landed but the status flip
+  // below failed).
+  if (!isReopened(events)) {
+    await db.createRoEvent(supabase, {
+      entryId: id,
+      date: await todayInUserTz(),
+      kind: "reopened",
+    });
+  }
+
+  // Step 2 — status LAST.
+  await db.setEntryStatus(supabase, id, "open");
+
+  revalidateOpenTicketScreens();
+  const fresh = await db.getEntry(supabase, id);
+  return fresh ? { entry: fresh } : { error: "Ticket disappeared after reopen." };
+}
+
 // ---------------------------------------------------------------------------
 // The timeline
 // ---------------------------------------------------------------------------
@@ -294,19 +345,31 @@ export async function deleteOpenWorkAction(
  */
 export async function getCloseDefaultsAction(entryId: string): Promise<{
   today: string;
+  /** entries.date as it stands right now — the flag day a KEEP leaves alone. */
+  currentDate: string;
+  /**
+   * True when the ticket's latest transition is `reopened` (decision 11):
+   * this is a SECOND close, so the form must ask keep-or-move rather than
+   * silently defaulting the date to today the way a first close does.
+   */
+  reopened: boolean;
   defaultLoggedTime: string;
   trackRoTime: boolean;
   prefill: ReturnType<typeof closePrefill>;
 }> {
   const id = validate(entryIdSchema, entryId);
   const supabase = await createClient();
-  const [settings, ledger, today] = await Promise.all([
+  const [settings, ledger, today, entry, events] = await Promise.all([
     db.getSettings(supabase),
     db.listUnpaidTimeForEntry(supabase, id),
     todayInUserTz(),
+    db.getEntry(supabase, id),
+    db.listRoEvents(supabase, id),
   ]);
   return {
     today,
+    currentDate: entry?.date ?? today,
+    reopened: isReopened(events),
     defaultLoggedTime: settings.trackRoTime ? await nowHhmmInUserTz() : "",
     trackRoTime: settings.trackRoTime,
     prefill: closePrefill(ledger, id),
@@ -317,7 +380,8 @@ export async function getCloseDefaultsAction(entryId: string): Promise<{
  * Close the ticket (decision 6/9, and the ordering rule from the plan).
  *
  * One sequence, in this order, on purpose:
- *   1. lines inserted   — the recompute trigger sets entries.flag_hours
+ *   1. lines inserted (first close) or patched (second close, decision 11) —
+ *      the recompute trigger sets entries.flag_hours either way
  *   2. date moved       — to the close day; logged_time re-defaulted
  *   3. `closed` event   — dated the close day
  *   4. status = closed  — LAST
@@ -353,9 +417,35 @@ export async function closeTicketAction(input: {
     l.isComeback ? { ...l, flagHours: 0 } : l,
   );
 
-  // Step 1 — lines. Only when the ticket has none: a retry after a step-2/3/4
-  // failure already has them and must not double them.
-  if (existing.opCodes.length === 0) {
+  // Fetched once, up front, and reused for both the line step and the event
+  // step below — nothing this action does before either read can change it.
+  const eventsAtStart = await db.listRoEvents(supabase, clean.entryId);
+  // A SECOND close (decision 11, after a reopen) is what "already has lines"
+  // is supposed to mean — but a RETRY of a FIRST close also has lines by the
+  // time it retries (step 1 already landed), and that must still be a no-op,
+  // not a re-patch. The timeline is what tells the two apart: only a ticket
+  // whose latest transition is `reopened` is a genuine second close.
+  const isSecondClose = isReopened(eventsAtStart);
+
+  // Step 1 — lines. A FIRST close inserts (the ticket has none yet); a SECOND
+  // close already has lines and the form sends the FULL set — existing lines,
+  // edited, plus whatever new line the tech added for the second approved
+  // line. Inserting again would duplicate the old lines; only a patch is
+  // safe, so this reuses updateEntry's own diff (diffEntryLines) — the exact
+  // reconciliation a normal RO edit uses to update-by-id, insert what's new,
+  // delete what's gone — rather than reinventing it here.
+  //
+  // Retry note: a retry after a step-2/3/4 failure on a FIRST close sees
+  // isSecondClose === false and opCodes.length > 0, and correctly skips the
+  // insert. A retry on a SECOND close re-runs the patch, which is idempotent
+  // for every line that already carries an id (the diff updates it in place)
+  // — the one gap is a brand new, id-less line, which a retry could insert
+  // twice. That mirrors the same one-bulk-call assumption createEntry's own
+  // line insert makes; closing this gap needs an idempotency key the schema
+  // doesn't have yet.
+  if (isSecondClose) {
+    await db.updateEntry(supabase, clean.entryId, { opCodes: lines });
+  } else if (existing.opCodes.length === 0) {
     await db.addEntryLines(supabase, clean.entryId, lines);
   }
 
@@ -369,9 +459,13 @@ export async function closeTicketAction(input: {
     clean.loggedTime ?? null,
   );
 
-  // Step 3 — the event. Skipped on a retry that already wrote it.
+  // Step 3 — the event. Skipped only when the latest TRANSITION is already
+  // `closed` — a retry that already wrote it. Checking "does ANY closed event
+  // exist" would be wrong: a SECOND close (after a reopen) already has one
+  // from the first close and must still record its own, or the timeline would
+  // read as reopened-forever.
   const events = await db.listRoEvents(supabase, clean.entryId);
-  if (!events.some((e) => e.kind === "closed")) {
+  if (latestTransition(events)?.kind !== "closed") {
     await db.createRoEvent(supabase, {
       entryId: clean.entryId,
       date: clean.date,

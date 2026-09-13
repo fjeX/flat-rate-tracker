@@ -951,5 +951,10 @@ export const timerLineSchema = z.object({
 
 export const saveTimerSchema = z.object({
   timerId: timerIdSchema,
-  lineId: uuidField("Line ID", "Pick an op code to save this time to."),
+  // Nullable now that an open, lineless ticket (Open Tickets Phase 2, plan
+  // decision 4/10) saves to the TICKET rather than a line — null is that
+  // request. Whether null is actually allowed for THIS entry (it has lines,
+  // so it isn't) is entry-shaped business logic the schema can't see; the
+  // action throws "Pick an op code to save this time to." itself.
+  lineId: nullableUuid("Line ID"),
 });

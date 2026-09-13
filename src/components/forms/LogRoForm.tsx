@@ -39,6 +39,7 @@ import { ComebackSection } from "./ComebackSection";
 import { VehicleFields } from "./VehicleFields";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { fmtHours } from "@/lib/stats";
+import { formatDateLong } from "@/lib/periods";
 import { defaultPrefillLineIndex, type ClosePrefill } from "@/lib/open-tickets";
 import {
   closeTicketAction,
@@ -104,23 +105,14 @@ export function LogRoForm({
   const [prefill, setPrefill] = useState<ClosePrefill | null>(null);
   const [prefillHours, setPrefillHours] = useState("");
   const [prefillLine, setPrefillLine] = useState<number | null>(null);
-  useEffect(() => {
-    if (!closing || !existingEntry) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const d = await getCloseDefaultsAction(existingEntry.id);
-        if (cancelled) return;
-        setPrefill(d.prefill);
-        setPrefillHours(d.prefill.actualHours > 0 ? String(d.prefill.actualHours) : "");
-      } catch {
-        // Non-fatal: the tech can still close and type actuals by hand.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [closing, existingEntry]);
+  // --- close: keep-or-move the flag date, Phase 2 / decision 11 -----------
+  // A SECOND close (after a reopen) must never silently move paid hours off
+  // the day they were paid — so on a reopened ticket the date does NOT
+  // default to today the way a first close's does; it defaults to the date
+  // the ticket already carries, and the tech has to actively choose "move".
+  const [reopened, setReopened] = useState(false);
+  const [currentFlagDate, setCurrentFlagDate] = useState<string | null>(null);
+  const [dateChoice, setDateChoice] = useState<"keep" | "move">("keep");
 
   // What the hook persists with, per mode. Declared before the hook so the
   // closure reads the CURRENT mode on every save — performSave is rebuilt each
@@ -212,6 +204,36 @@ export function LogRoForm({
     // (seeded through the existingEntry override above — plan risk #3).
     trackRoTime, defaultLoggedTime, timeZone,
   });
+
+  // Fetches the close defaults (decision 6's prefill, decision 11's reopened
+  // flag). Below the hook call, not above, because a reopened ticket's
+  // default is `setDate(d.currentDate)` — overriding the today the hook just
+  // seeded the field with — and `setDate` doesn't exist until the hook runs.
+  useEffect(() => {
+    if (!closing || !existingEntry) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = await getCloseDefaultsAction(existingEntry.id);
+        if (cancelled) return;
+        setPrefill(d.prefill);
+        setPrefillHours(d.prefill.actualHours > 0 ? String(d.prefill.actualHours) : "");
+        setReopened(d.reopened);
+        setCurrentFlagDate(d.currentDate);
+        if (d.reopened) {
+          // Never move paid hours silently (decision 11): default to KEEP,
+          // overriding the today the hook otherwise seeds a close with.
+          setDateChoice("keep");
+          setDate(d.currentDate);
+        }
+      } catch {
+        // Non-fatal: the tech can still close and type actuals by hand.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [closing, existingEntry, setDate]);
 
   const title = openCreate
     ? "Open a ticket"
@@ -320,6 +342,45 @@ export function LogRoForm({
               Add the op codes and flag hours below. The flag lands on the close
               date above.
             </p>
+            {/* Second close (decision 11): keep the flag date the first close
+                set, or move it to today. KEEP is the default — a reopen must
+                never silently move paid hours off the day they were paid. The
+                date pill above stays editable either way; these just pick
+                which day it starts on. */}
+            {reopened && currentFlagDate && today && (
+              <div
+                style={{ marginTop: 8, display: "grid", gap: 6 }}
+                data-testid="reopen-date-choice"
+              >
+                <div style={{ fontSize: 13 }}>
+                  This ticket was reopened. Keep the flag date, or move it to today?
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <input
+                    type="radio"
+                    name="close-date-choice"
+                    checked={dateChoice === "keep"}
+                    onChange={() => {
+                      setDateChoice("keep");
+                      setDate(currentFlagDate);
+                    }}
+                  />
+                  Keep flag date {formatDateLong(currentFlagDate)}
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <input
+                    type="radio"
+                    name="close-date-choice"
+                    checked={dateChoice === "move"}
+                    onChange={() => {
+                      setDateChoice("move");
+                      setDate(today);
+                    }}
+                  />
+                  Move to today ({formatDateLong(today)})
+                </label>
+              </div>
+            )}
             {prefill && prefill.actualHours > 0 ? (
               <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
                 <div style={{ fontSize: 13 }}>

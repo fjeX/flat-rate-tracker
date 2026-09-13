@@ -11,6 +11,8 @@ import {
   daysOpen,
   defaultPrefillLineIndex,
   eventLabel,
+  isReopened,
+  latestTransition,
   openWorkByDate,
   openWorkDates,
   openedOn,
@@ -353,6 +355,36 @@ describe("the timeline side", () => {
     expect(eventLabel(event("T1", MON, "custom", { note: "Claim #4471 filed" }))).toBe("Claim #4471 filed");
     expect(eventLabel(event("T1", MON, "custom"))).toBe("Custom");
     expect(eventLabel(event("T1", MON, "hold_parts"))).toBe("Waiting on parts");
+  });
+
+  it("isReopened / latestTransition (decision 11) look only at opened/closed/reopened, ignoring story events layered after them", () => {
+    // Never closed at all.
+    expect(latestTransition([event("T1", MON, "opened")])?.kind).toBe("opened");
+    expect(isReopened([event("T1", MON, "opened")])).toBe(false);
+
+    // Closed once, no reopen.
+    const closedOnce = [event("T1", MON, "opened"), event("T1", TUE, "closed")];
+    expect(latestTransition(closedOnce)?.kind).toBe("closed");
+    expect(isReopened(closedOnce)).toBe(false);
+
+    // Reopened after that close — a hand-picked story event after the
+    // `reopened` transition must not hide it (it isn't a transition itself).
+    const reopened = [
+      ...closedOnce,
+      event("T1", WED, "reopened"),
+      event("T1", THU, "diag_done"),
+    ];
+    expect(latestTransition(reopened)?.kind).toBe("reopened");
+    expect(isReopened(reopened)).toBe(true);
+
+    // Closed a second time — no longer "reopened".
+    const closedAgain = [...reopened, event("T1", FRI, "closed")];
+    expect(latestTransition(closedAgain)?.kind).toBe("closed");
+    expect(isReopened(closedAgain)).toBe(false);
+
+    // No events at all.
+    expect(latestTransition([])).toBeNull();
+    expect(isReopened([])).toBe(false);
   });
 
   it("summarizeOpenTickets: latest event is the status, oldest-opened first, hours are the ticket's open_work", () => {

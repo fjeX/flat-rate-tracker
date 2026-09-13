@@ -1866,7 +1866,7 @@ back to unset (the period returns to awaiting-pay).
   and press **Enter**, and separately type a figure and click blank space. Both
   must save. A silently discarded first figure is the regression to watch for.
 
-### 8m. Open tickets — multi-day ROs (shipped 2026-09-12 — newest code, hunt it hard)
+### 8m. Open tickets — multi-day ROs (Phase 1 shipped 2026-09-12, Phase 2 timer + reopen 2026-09-13 — newest code, hunt it hard)
 
 A warranty job used to be one RO on the close day: nine days of nothing and
 one 14-hour shift. Now a ticket can exist from teardown day. Read this whole
@@ -1933,7 +1933,7 @@ NO closed RO that day:
 - **/pay-period** → "What did the work cost me?" → the unpaid list, and
   **/insights** → the leak board: open-ticket hours must appear on NEITHER.
   They are not unpaid; they are paid late. Waiting-on-parts hours logged on the
-  same ticket through the timer (Phase 2) or the zero-day card DO still count
+  same ticket through the timer or the zero-day card DO still count
   as unpaid. If open-ticket hours show up under "unpaid" anywhere, file it.
 - Recent ROs / History: the open ticket is listed with an **Open** chip and
   0.0h. Correct — the chip is the explanation.
@@ -1955,7 +1955,38 @@ and the date pill now means the CLOSE date, defaulting to today.
   **Yesterday is still a worked day** (still no unresolved-day prompt, streak
   intact) even though the RO's date moved to today. The 8.0h is still listed
   under the timeline's hours.
-- The **Reopen** button does not exist yet (Phase 2). Do not report its absence.
+- **Reopen** (Phase 2, shipped 2026-09-13): on a CLOSED RO that has a
+  timeline, the timeline footer reads "Closed by mistake, or a second approved
+  line?" with a **Reopen** button. Press it: the ticket is back on the Open
+  tickets card, the timeline gains **Reopened <today>**, and — this is the
+  rule — the RO's date and flag hours do NOT move. Its lines are still there.
+  Close it a second time: the close form now asks **"Keep flag date <old
+  date>"** (default) or **"Move to today"**. Leave the default and save: the
+  RO's date must be unchanged and the timeline ends in a second **Closed**.
+  Reopen once more, close with **Move to today**: now the date moves. A reopen
+  that silently moves the date, or a second close that drops a line you added,
+  is a real bug. An ordinary RO that was never a ticket has no Reopen button —
+  correct, do not report it.
+
+**The timer on an open ticket (Phase 2).** /timer → Add timer → pick the open
+ticket from the RO picker. It attaches with NO "Pick a line" prompt and the
+slot card shows an **Open ticket** badge. Let it run a minute or two, flip it
+to **Parts** and back to **Working**, then Save:
+
+- The close-out modal has no op-code radio list. It says the hours go on the
+  ticket's timeline and shows the running total ("8.0h + 0.03h = 8.03h on this
+  ticket"). Save & close timer. Open the RO modal: the timeline's hours list
+  has a new row for today, and the dashboard card's hours-so-far grew by the
+  same amount. That row is source `timer`; it sits next to hand-typed rows.
+- The **Parts** flip wrote a **Waiting on parts** event on the timeline by
+  itself, once. Flipping back to Working wrote nothing. Flip to Parts twice in
+  one run and you should see exactly two events, not one per second.
+- The waiting time itself (if it crossed 30s) is a normal unpaid hold row on
+  /pay-period — that half is unchanged and still counts as unpaid.
+- A second timer on the same open ticket is refused with "already on a timer".
+  Correct.
+- The old message "This is an open ticket — no op codes yet. Log these hours on
+  the ticket's timeline…" must be GONE. If you still see it, file it.
 
 **Edit an open ticket** (modal → **Edit ticket**): vehicle and notes save;
 there is no op-code step; the save button reads **Save ticket**. Delete ticket
@@ -1968,8 +1999,6 @@ stay on the calendar as worked days (that is correct — the hours happened).
   until close).
 - Open-ticket hours missing from unpaid time, the dispute pack, or the leak
   board. They are excluded on purpose.
-- The timer refusing to save to an open ticket ("This is an open ticket…").
-  The timer path is Phase 2.
 - Backup: a v5 backup carries the timelines (`roEvents`) and each RO's
   `status`. Export one and confirm both keys are present; a pre-v5 file still
   restores.

@@ -43,6 +43,11 @@ vi.mock("@/app/actions/timer", () => ({
   saveTimerAction: (...args: unknown[]) => saveTimerAction(...args),
 }));
 
+const getTicketTimelineAction = vi.fn();
+vi.mock("@/app/actions/open-tickets", () => ({
+  getTicketTimelineAction: (...args: unknown[]) => getTicketTimelineAction(...args),
+}));
+
 import {
   TimerSaveModal,
   TimerSaveReceipt,
@@ -242,6 +247,127 @@ describe("TimerSaveReceipt", () => {
     renderReceipt({ ledgerWritten: false });
     expect(screen.getByText(/unpaid-time table isn't set up yet/)).toBeTruthy();
     expect(screen.getByText(/Saved with a warning/)).toBeTruthy();
+  });
+});
+
+// Open Tickets Phase 2 (plan "Timer (Phase 2)", decision 4/10): an open,
+// lineless entry has no op codes to pick from — its hours go on the ticket
+// itself, and the modal has to say so instead of showing a radio group that
+// would have nothing in it.
+describe("TimerSaveModal — open lineless ticket", () => {
+  const TICKET_ENTRY: Entry = {
+    ...ENTRY,
+    id: "open-1",
+    roNumber: "77000",
+    opCodes: [],
+    flagHours: 0,
+    status: "open",
+  };
+
+  /** 1.20h of banked work, clock stopped. */
+  const TICKET_SLOT: TimerSlot = {
+    id: "t-2",
+    slot: 1,
+    entryId: "open-1",
+    lineId: null,
+    status: "paused",
+    startTime: null,
+    workAccumulated: 1.2 * 3_600_000,
+    holdPartsAccumulated: 0,
+    holdApprovalAccumulated: 0,
+  };
+
+  function ledgerRow(hours: number) {
+    return {
+      id: "row-1",
+      userId: "u-1",
+      date: "2026-09-10",
+      hours,
+      kind: "open_work" as const,
+      entryId: "open-1",
+      originalEntryId: null,
+      source: "manual" as const,
+      note: "",
+      createdAt: "2026-09-10T00:00:00Z",
+      updatedAt: "2026-09-10T00:00:00Z",
+    };
+  }
+
+  function renderTicketModal() {
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <TimerSaveModal
+        slot={TICKET_SLOT}
+        entry={TICKET_ENTRY}
+        library={LIBRARY}
+        capAt={null}
+        onClose={onClose}
+        onSaved={onSaved}
+      />,
+    );
+    return { onSaved, onClose };
+  }
+
+  it("renders no radio group and shows the ticket's running total", async () => {
+    getTicketTimelineAction.mockResolvedValue({
+      events: [],
+      ledger: [ledgerRow(2.5)],
+    });
+
+    renderTicketModal();
+
+    expect(screen.queryAllByRole("radio")).toHaveLength(0);
+    await waitFor(() =>
+      expect(getTicketTimelineAction).toHaveBeenCalledWith("open-1"),
+    );
+    // 2.50h already on the ticket + 1.20h worked = 3.70h.
+    await waitFor(() => expect(screen.getByText(/3\.70h/)).toBeTruthy());
+    expect(screen.getByText(/2\.50h/)).toBeTruthy();
+  });
+
+  it("shows the no-hours-yet copy when the ticket has nothing on it", async () => {
+    getTicketTimelineAction.mockResolvedValue({ events: [], ledger: [] });
+
+    renderTicketModal();
+
+    await waitFor(() =>
+      expect(screen.getByText(/has no hours yet/)).toBeTruthy(),
+    );
+    expect(screen.getByText(/1\.20h/)).toBeTruthy();
+  });
+
+  it("saves with lineId null and hands back a receipt carrying target ticket", async () => {
+    getTicketTimelineAction.mockResolvedValue({ events: [], ledger: [] });
+    saveTimerAction.mockResolvedValue(
+      result({
+        target: "ticket",
+        workHours: 1.3, // differs from the 1.20h shown, forcing a receipt
+        previousHours: null,
+        totalHours: 1.3,
+      }),
+    );
+    const { onSaved } = renderTicketModal();
+    await waitFor(() =>
+      expect(getTicketTimelineAction).toHaveBeenCalledWith("open-1"),
+    );
+
+    // The button is enabled with nothing selected — there is nothing TO
+    // select on a lineless ticket.
+    const button = screen.getByRole(
+      "button",
+      { name: /save & close timer/i },
+    ) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    await save();
+
+    await waitFor(() =>
+      expect(saveTimerAction).toHaveBeenCalledWith("t-2", null),
+    );
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const receipt = onSaved.mock.calls[0][0];
+    expect(receipt).not.toBeNull();
+    expect(receipt.result.target).toBe("ticket");
   });
 });
 

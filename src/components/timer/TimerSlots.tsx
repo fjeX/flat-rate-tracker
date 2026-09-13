@@ -108,6 +108,11 @@ export function TimerSlots({
   function attachBlockReason(entry: Entry): string | null {
     const taken = slotsByEntry.get(entry.id);
     if (!taken) return null;
+    // An open, lineless ticket (Open Tickets Phase 2) has no line dimension to
+    // split across — it can only ever occupy one slot, full stop. The
+    // "hasn't been assigned a line yet" wording below doesn't apply to it: a
+    // lineless ticket's slot is never going to get a line.
+    if (entry.opCodes.length === 0) return "Already on a timer.";
     if (taken.hasUnassigned) {
       return "On a timer that has no line set yet — set that one's line first.";
     }
