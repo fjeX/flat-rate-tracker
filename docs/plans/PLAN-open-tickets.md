@@ -1,6 +1,6 @@
 # PLAN — Open Tickets: multi-day ROs that tell the truth about the days between
 
-**Status:** design locked 2026-09-12 (grilling, 13 decisions). **Phase 1 built and deployed 2026-09-12, verified live.** **Phase 2 built 2026-09-13** (timer path + hold-flip events + reopen + keep-or-move second close) — see Build notes.
+**Status:** design locked 2026-09-12 (grilling, 13 decisions). **Phase 1 built and deployed 2026-09-12, verified live.** **Phase 2 built, deployed and verified live 2026-09-13** (timer path + hold-flip events + reopen + keep-or-move second close; frt `12a034d`) — see Build notes.
 **Depends on:** PLAN-unpaid-time-engine (Phase 1 shipped: `active_timers`,
 `unpaid_time` ledger, additive timer saves). Extends it; changes nothing it locked.
 
