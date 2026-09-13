@@ -382,6 +382,21 @@ describe("the timeline side", () => {
     expect(latestTransition(closedAgain)?.kind).toBe("closed");
     expect(isReopened(closedAgain)).toBe(false);
 
+    // A second close that KEEPS the earlier flag date is dated BEFORE the
+    // reopen, and the story sorts it there — but it was written after. Write
+    // order decides the lifecycle, or the ticket reads as reopened forever
+    // (live 2026-09-12: the next Reopen skipped its event because of this).
+    const keptDate = [
+      event("T1", MON, "opened", { createdAt: "2026-09-12T10:00:00Z" }),
+      event("T1", MON, "closed", { createdAt: "2026-09-12T11:00:00Z" }),
+      event("T1", TUE, "reopened", { createdAt: "2026-09-12T12:00:00Z" }),
+      event("T1", MON, "closed", { createdAt: "2026-09-12T13:00:00Z" }),
+    ];
+    // In story order (by date) the reopen is last; by write order it isn't.
+    expect(latestTransition(keptDate)?.kind).toBe("closed");
+    expect(isReopened(keptDate)).toBe(false);
+    expect(isReopened(keptDate.slice(0, 3))).toBe(true);
+
     // No events at all.
     expect(latestTransition([])).toBeNull();
     expect(isReopened([])).toBe(false);

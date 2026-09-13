@@ -152,14 +152,25 @@ export function latestEvent(events: RoEvent[]): RoEvent | null {
 
 /**
  * The most recent of opened/closed/reopened — the ticket's actual last
- * transition, ignoring any hand-picked story events (diag_done, custom, …)
- * that were added after it. Events must be chronological.
+ * transition, ignoring any hand-picked story events (diag_done, custom, …).
+ *
+ * "Most recent" is by WRITE ORDER (`createdAt`), never by the event's own
+ * date. The story sorts by date, and that is right for reading it — but a
+ * second close that KEEPS an earlier flag date (decision 11) writes a
+ * `closed` event dated before the `reopened` that preceded it. Read by date,
+ * that ticket looks reopened forever: the next Reopen skipped its event and
+ * the next close prompted keep-or-move on a ticket that was never reopened
+ * (found live 2026-09-12, second reopen wrote no event). The lifecycle is the
+ * order things happened to the ticket, and `createdAt` is the only column
+ * that records that.
  */
 export function latestTransition(events: RoEvent[]): RoEvent | null {
-  for (let i = events.length - 1; i >= 0; i--) {
-    if (TRANSITION_KINDS.has(events[i].kind)) return events[i];
+  let latest: RoEvent | null = null;
+  for (const ev of events) {
+    if (!TRANSITION_KINDS.has(ev.kind)) continue;
+    if (latest === null || ev.createdAt > latest.createdAt) latest = ev;
   }
-  return null;
+  return latest;
 }
 
 /**

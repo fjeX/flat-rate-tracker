@@ -15,11 +15,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Entry } from "@/lib/types";
 
 const calls: string[] = [];
+// Write order is what latestTransition reads (a kept-date second close is
+// dated BEFORE the reopen it follows), so every mocked event gets a stamp.
+let stampSeq = 0;
+const stamp = () => `2026-01-01T00:00:${String(++stampSeq).padStart(2, "0")}Z`;
+const ev = (kind: string) => ({ kind, createdAt: stamp() });
 const revalidatePath = vi.fn();
 
 const state = {
   entry: null as Entry | null,
-  events: [] as { kind: string }[],
+  events: [] as { kind: string; createdAt: string }[],
   fail: null as null | "lines" | "date" | "event" | "status",
   lastClose: null as null | { date: string; loggedTime: string | null },
 };
@@ -97,7 +102,7 @@ vi.mock("@/lib/db", () => ({
   createRoEvent: async (_c: unknown, input: { kind: string }) => {
     calls.push(`event:${input.kind}`);
     if (state.fail === "event") throw new Error("boom event");
-    state.events.push({ kind: input.kind });
+    state.events.push({ kind: input.kind, createdAt: stamp() });
     return input;
   },
   setEntryStatus: async (_c: unknown, _id: string, status: "open" | "closed") => {
@@ -136,7 +141,7 @@ beforeEach(() => {
   calls.length = 0;
   revalidatePath.mockReset();
   state.entry = openEntry();
-  state.events = [{ kind: "opened" }];
+  state.events = [ev("opened")];
   state.fail = null;
   state.lastClose = null;
 });
@@ -213,7 +218,7 @@ describe("closeTicketAction", () => {
     const EXISTING_LINE_ID = "aaaaaaaa-0000-4000-8000-0000000000aa";
     state.entry = openEntry(1);
     state.entry.opCodes = [{ ...state.entry.opCodes[0], id: EXISTING_LINE_ID }];
-    state.events = [{ kind: "opened" }, { kind: "closed" }, { kind: "reopened" }];
+    state.events = [ev("opened"), ev("closed"), ev("reopened")];
 
     const res = await closeTicketAction({
       entryId: INPUT.entryId,
@@ -239,7 +244,7 @@ describe("closeTicketAction", () => {
   it("second close with KEEP leaves entries.date exactly where it was (decision 11: never move paid hours silently)", async () => {
     state.entry = openEntry(1);
     state.entry.date = "2026-06-08"; // the flag day from the first close
-    state.events = [{ kind: "opened" }, { kind: "closed" }, { kind: "reopened" }];
+    state.events = [ev("opened"), ev("closed"), ev("reopened")];
 
     const res = await closeTicketAction({ ...INPUT, date: "2026-06-08" });
 
@@ -251,7 +256,7 @@ describe("closeTicketAction", () => {
 describe("reopenTicketAction", () => {
   it("writes the reopened event, THEN flips status — never the other order", async () => {
     state.entry = openEntry(1, "closed");
-    state.events = [{ kind: "opened" }, { kind: "closed" }];
+    state.events = [ev("opened"), ev("closed")];
 
     const res = await reopenTicketAction(INPUT.entryId);
 
@@ -280,7 +285,7 @@ describe("reopenTicketAction", () => {
 
   it("a retry after the event landed but the status write failed does not double the event", async () => {
     state.entry = openEntry(1, "closed");
-    state.events = [{ kind: "opened" }, { kind: "closed" }];
+    state.events = [ev("opened"), ev("closed")];
     state.fail = "status";
 
     await expect(reopenTicketAction(INPUT.entryId)).rejects.toThrow("boom status");
