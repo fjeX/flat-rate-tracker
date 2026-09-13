@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useGuestStore } from "@/lib/guest/context";
+import { useClientToday } from "@/lib/use-client-today";
 import {
-  isoDate,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -28,7 +28,10 @@ const NO_CLOCKS: DailyClock[] = [];
 export default function GuestDashboard() {
   const { entries, opCodes, settings, hourlyRate } = useGuestStore();
   const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
-  const today = isoDate();
+  // Null until the browser has reported its own date — see the hook. Every
+  // hook above this line stays above it; nothing below may be one.
+  const today = useClientToday();
+  if (!today) return null;
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
   const weekStart = startOfWeek(today);
   const weekEnd = endOfWeek(today);

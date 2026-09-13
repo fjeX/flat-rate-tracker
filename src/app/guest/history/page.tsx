@@ -1,10 +1,10 @@
 "use client";
 
 import { useGuestStore } from "@/lib/guest/context";
+import { useClientToday } from "@/lib/use-client-today";
 import { HistoryView } from "@/components/history/HistoryView";
 import { GuestRoDetailModal } from "@/components/guest/GuestRoDetailModal";
 import {
-  isoDate,
   getPeriodForDate,
   startOfWeek,
   endOfWeek,
@@ -14,7 +14,10 @@ import {
 
 export default function GuestHistoryPage() {
   const { entries, opCodes, settings } = useGuestStore();
-  const today = isoDate();
+  // Null until the browser has reported its own date — see the hook. Every
+  // hook above this line stays above it; nothing below may be one.
+  const today = useClientToday();
+  if (!today) return null;
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
 
   return (
