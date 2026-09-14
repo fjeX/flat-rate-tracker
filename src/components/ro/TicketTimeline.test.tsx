@@ -224,3 +224,133 @@ describe("TicketTimeline — a failed write's banner does not haunt the next ope
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// timeline-add-double-submit (2026-09-13): both add-forms threw away their own
+// useTransition pending flag and disabled Save on the PARENT's `busy`, which no
+// add ever sets. Save stayed live for the whole write, so a second tap wrote a
+// second ro_event / a second open_work ledger row — duplicated hours the tech
+// gets paid for.
+type Deferred = { promise: Promise<{ error?: string }>; resolve: () => void };
+function deferred(): Deferred {
+  let resolve!: () => void;
+  const promise = new Promise<{ error?: string }>((res) => {
+    resolve = () => res({});
+  });
+  return { promise, resolve };
+}
+
+/** Two clicks inside ONE act batch — the case a disabled attribute alone can
+ *  lose, because the re-render carrying it may not have committed yet. */
+async function doubleClick(el: HTMLElement) {
+  await act(async () => {
+    fireEvent.click(el);
+    fireEvent.click(el);
+  });
+}
+
+describe("TicketTimeline — a slow write cannot be submitted twice", () => {
+  it("add-event: Save goes disabled while in flight and the action fires once", async () => {
+    const d = deferred();
+    addRoEventAction.mockImplementationOnce(() => d.promise);
+    await mountTimeline();
+
+    await click(screen.getByTestId("add-event-open"));
+    const save = screen.getByTestId("add-event-save") as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+
+    await click(save);
+    // In flight: the write is not done, and the tech cannot fire it again.
+    expect(addRoEventAction).toHaveBeenCalledTimes(1);
+    expect((screen.getByTestId("add-event-save") as HTMLButtonElement).disabled).toBe(true);
+    // Cancel too — closing mid-write does not cancel the write, it just hides it.
+    expect(button("Cancel").disabled).toBe(true);
+
+    // The impatient second tap.
+    await click(screen.getByTestId("add-event-save"));
+    expect(addRoEventAction).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      d.resolve();
+      await d.promise;
+    });
+    await waitFor(() => expect(screen.getByTestId("add-event-open")).toBeTruthy());
+    expect(addRoEventAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("add-event: two clicks in the same tick still write once", async () => {
+    const d = deferred();
+    addRoEventAction.mockImplementationOnce(() => d.promise);
+    await mountTimeline();
+
+    await click(screen.getByTestId("add-event-open"));
+    await doubleClick(screen.getByTestId("add-event-save"));
+    expect(addRoEventAction).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      d.resolve();
+      await d.promise;
+    });
+    await waitFor(() => expect(screen.getByTestId("add-event-open")).toBeTruthy());
+    expect(addRoEventAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("add-hours: Save goes disabled while in flight and the ledger row is written once", async () => {
+    const d = deferred();
+    addOpenWorkAction.mockImplementationOnce(() => d.promise);
+    await mountTimeline();
+
+    await click(screen.getByTestId("add-hours-open"));
+    set(screen.getByTestId("add-hours-input"), "3.5");
+    const save = screen.getByTestId("add-hours-save") as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+
+    await click(save);
+    expect(addOpenWorkAction).toHaveBeenCalledTimes(1);
+    expect((screen.getByTestId("add-hours-save") as HTMLButtonElement).disabled).toBe(true);
+    expect(button("Cancel").disabled).toBe(true);
+
+    await click(screen.getByTestId("add-hours-save"));
+    expect(addOpenWorkAction).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      d.resolve();
+      await d.promise;
+    });
+    await waitFor(() => expect(screen.getByTestId("add-hours-open")).toBeTruthy());
+    expect(addOpenWorkAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("add-hours: two clicks in the same tick still write once", async () => {
+    const d = deferred();
+    addOpenWorkAction.mockImplementationOnce(() => d.promise);
+    await mountTimeline();
+
+    await click(screen.getByTestId("add-hours-open"));
+    set(screen.getByTestId("add-hours-input"), "2");
+    await doubleClick(screen.getByTestId("add-hours-save"));
+    expect(addOpenWorkAction).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      d.resolve();
+      await d.promise;
+    });
+    await waitFor(() => expect(screen.getByTestId("add-hours-open")).toBeTruthy());
+    expect(addOpenWorkAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed write re-arms Save so the tech can retry", async () => {
+    addRoEventAction.mockResolvedValueOnce({ error: "Server said no." });
+    await mountTimeline();
+
+    await click(screen.getByTestId("add-event-open"));
+    await click(screen.getByTestId("add-event-save"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("Server said no."),
+    );
+    expect((screen.getByTestId("add-event-save") as HTMLButtonElement).disabled).toBe(false);
+
+    await click(screen.getByTestId("add-event-save"));
+    await waitFor(() => expect(addRoEventAction).toHaveBeenCalledTimes(2));
+  });
+});

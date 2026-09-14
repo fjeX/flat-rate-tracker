@@ -18,7 +18,7 @@
 // Signed-in only by construction: it is reached from RoDetailModal, which the
 // guest surfaces render with a guest entry the actions cannot resolve; the
 // modal only mounts this when the entry is not a guest one.
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { CalendarClock, Plus, Trash2 } from "lucide-react";
 import type { Entry, RoEvent, RoEventKind, UnpaidTime } from "@/lib/types";
@@ -348,9 +348,19 @@ function AddEventFields({
   const [date, setDate] = useState(today);
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
-  const [, startTransition] = useTransition();
+  // This form's OWN pending flag. The `busy` prop is the parent's transition
+  // (delete / reopen) and is never set by an add — reading only it left Save
+  // live during the whole write, so a second tap wrote a second event and a
+  // second open_work ledger row (money-adjacent, 2026-09-13).
+  const [pending, startTransition] = useTransition();
+  // Belt and braces: `pending` is only true after React commits the next
+  // render, so a keyboard Enter or a click queued in the same tick could still
+  // slip through an enabled button. The ref flips synchronously inside submit.
+  const sending = useRef(false);
 
   function submit() {
+    if (sending.current || pending) return;
+    sending.current = true;
     onError(null);
     startTransition(async () => {
       try {
@@ -369,6 +379,10 @@ function AddEventFields({
         onSaved();
       } catch (e) {
         onError(actionErrorMessage(e, "Couldn't add that event."));
+      } finally {
+        // On success this component is unmounting anyway; on failure the form
+        // stays open with the tech's typing, so it must be retryable.
+        sending.current = false;
       }
     });
   }
@@ -419,14 +433,23 @@ function AddEventFields({
         </label>
       </div>
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onDone} disabled={busy}>
+        {/* Cancel is disabled mid-write too: unmounting the body does not
+            cancel the write, so letting it close would leave the tech asking
+            "did that save?" while the row lands anyway. */}
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={onDone}
+          disabled={pending || busy}
+        >
           Cancel
         </button>
         <button
           type="button"
           className="btn btn-primary btn-sm"
           onClick={submit}
-          disabled={busy || (kind === "custom" && note.trim() === "")}
+          disabled={pending || busy || (kind === "custom" && note.trim() === "")}
+          data-testid="add-event-save"
         >
           Add event
         </button>
@@ -472,9 +495,14 @@ function AddHoursFields({
   const [date, setDate] = useState(today);
   const [hours, setHours] = useState("");
   const [note, setNote] = useState("");
-  const [, startTransition] = useTransition();
+  // Same story as AddEventFields: our own pending flag, not the parent's.
+  // A double tap here duplicated a ledger row — hours the tech gets paid for.
+  const [pending, startTransition] = useTransition();
+  const sending = useRef(false);
 
   function submit() {
+    if (sending.current || pending) return;
+    sending.current = true;
     const parsed = Number(hours);
     onError(null);
     startTransition(async () => {
@@ -488,6 +516,8 @@ function AddHoursFields({
         onSaved();
       } catch (e) {
         onError(actionErrorMessage(e, "Couldn't add those hours."));
+      } finally {
+        sending.current = false;
       }
     });
   }
@@ -537,14 +567,19 @@ function AddHoursFields({
         Hours you worked on it. Waiting on parts or approval is logged as unpaid time, not here.
       </p>
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onDone} disabled={busy}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={onDone}
+          disabled={pending || busy}
+        >
           Cancel
         </button>
         <button
           type="button"
           className="btn btn-primary btn-sm"
           onClick={submit}
-          disabled={busy || hours.trim() === ""}
+          disabled={pending || busy || hours.trim() === ""}
           data-testid="add-hours-save"
         >
           Add hours
