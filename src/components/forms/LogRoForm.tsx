@@ -104,6 +104,22 @@ export function LogRoForm({
   // The error banner is shared with save/delete failures, so "is the warning on
   // screen still mine?" is answered by identity, not by a substring guess.
   const openDupErrorRef = useRef<string | null>(null);
+  // Same idea, different sentence: the "your number moved, so the check I got
+  // back answers a question you're no longer asking" abort. Kept in its own ref
+  // so it clears on the next RO edit exactly like the warning does, without
+  // borrowing the dup ref — that one also gates the two buttons under the
+  // sentence, and this message must never show them.
+  const openStaleErrorRef = useRef<string | null>(null);
+  // What the RO field reads RIGHT NOW. findOpenRoAction is async and nothing
+  // cancels it, so the closure that awaits it is already stale by the time the
+  // answer lands — a ref is the only way to ask "is this still the number the
+  // tech is typing?". Kept in sync by the onChange below (synchronously, so the
+  // answer is right even before React commits) and by the effect under the hook
+  // (which covers the programmatic setters: scan results, edit-load).
+  const roNumberRef = useRef("");
+  // Monotonic request id: only the newest open-check may act on its result, so
+  // two overlapping checks can't have the older one win the race.
+  const openDupCheckRef = useRef(0);
 
   // --- close: the actual-hours prefill ------------------------------------
   const [prefill, setPrefill] = useState<ClosePrefill | null>(null);
@@ -126,7 +142,30 @@ export function LogRoForm({
         if (openCreate) {
           const ro = input.roNumber.trim();
           if (!openDupAcknowledged) {
+            const checkId = ++openDupCheckRef.current;
             const open = await findOpenRoAction(ro);
+            // A late answer is inert. If the tech corrected the number while
+            // the check was in flight, this result describes an RO that is no
+            // longer on screen — posting it would put the same stale sentence
+            // (and its two buttons) over a field reading something else.
+            //
+            // But the answer expiring does NOT mean the save may proceed. Every
+            // value in `input` — the RO number above all — was captured when
+            // Save was clicked, so continuing would write a ticket under the
+            // OLD number with the duplicate check skipped, and then navigate
+            // away as if it worked. That is exactly the double-open-ticket the
+            // check exists to prevent. So: abort, write nothing, go nowhere.
+            // performSave treats a plain `return` as success and pushes the
+            // redirect, so the abort has to be a throw — it lands in the same
+            // error slot, and the next keystroke on the RO field clears it.
+            const stale =
+              checkId !== openDupCheckRef.current || roNumberRef.current.trim() !== ro;
+            if (stale) {
+              const message =
+                "The RO number changed while FRT was checking it — press Open ticket again.";
+              openStaleErrorRef.current = message;
+              throw new Error(message);
+            }
             if (open.length > 0) {
               setOpenDup(open[0]);
               const message = `RO ${ro} is already open. View it, or open another ticket under the same number.`;
@@ -215,6 +254,11 @@ export function LogRoForm({
   // flag). Below the hook call, not above, because a reopened ticket's
   // default is `setDate(d.currentDate)` — overriding the today the hook just
   // seeded the field with — and `setDate` doesn't exist until the hook runs.
+  // Mirrors the RO field into the ref the async open-check compares against.
+  useEffect(() => {
+    roNumberRef.current = roNumber;
+  }, [roNumber]);
+
   useEffect(() => {
     if (!closing || !existingEntry) return;
     let cancelled = false;
@@ -257,11 +301,17 @@ export function LogRoForm({
   // wiping one of those because the tech edited a field would hide a message
   // they still need. Identity check, so a save failure that landed AFTER the
   // warning survives too.
+  // Also retracts the stale-check abort, for the same reason: it says "press
+  // Open ticket again", and typing a new number is the tech doing precisely
+  // that groundwork — leaving it up would scold them for the edit they just
+  // made. Both sentences are cleared by identity only.
   function clearOpenDupWarning() {
-    const mine = openDupErrorRef.current;
-    if (mine === null) return;
-    openDupErrorRef.current = null;
-    if (error === mine) setError(null);
+    for (const ref of [openDupErrorRef, openStaleErrorRef]) {
+      const mine = ref.current;
+      if (mine === null) continue;
+      ref.current = null;
+      if (error === mine) setError(null);
+    }
   }
 
   // Step numbers are POSITIONS, derived from the steps that actually render.
@@ -500,6 +550,9 @@ export function LogRoForm({
               type="text"
               value={roNumber}
               onChange={(e) => {
+                // Synchronously, ahead of the state update: an open-check that
+                // resolves before React commits must still see the new number.
+                roNumberRef.current = e.target.value;
                 setRoNumber(e.target.value);
                 // A new number is a new question — including the sentence, not
                 // just the buttons under it. The warning names the OLD RO, so

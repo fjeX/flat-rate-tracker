@@ -1272,7 +1272,7 @@ recovered. Sections appear only when they have something to say.
     was the reason the label is not "one-time".
     - **On "What's costing you", only the op-code-sourced rows carry the tag.**
       Ledger rows (Waiting on parts, Waiting on approval, Shop time, unticketed
-      comebacks — the ones whose sub-line reads "N entries, no flag hours")
+      comebacks — the ones whose sub-line reads "N entries, no flag hours" — or "1 entry, no flag hours" when there is one)
       have no op code at all, so they carry **no** tag by design. A ledger row
       without a `library`/`custom` tag is correct output; do not report it as a
       missing tag.

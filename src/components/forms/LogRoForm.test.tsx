@@ -10,8 +10,16 @@ import React from "react";
 import { LogRoForm } from "./LogRoForm";
 import type { RoMatch } from "@/lib/types";
 
+// One stable spy, not a fresh vi.fn() per render: "did the form navigate away
+// as though the save worked?" is an assertion, and a throwaway mock can't be
+// asserted on.
+const routerPush = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({
+    push: (...a: unknown[]) => routerPush(...(a as [])),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+  }),
 }));
 
 const findDuplicateRos = vi.fn(async (): Promise<RoMatch[]> => []);
@@ -139,6 +147,7 @@ function renderOpenTicketForm() {
 
 describe("LogRoForm — the 'already open' warning is retracted, not just defanged", () => {
   const OPEN_WARNING = /is already open/i;
+  const STALE_ABORT = /The RO number changed while FRT was checking it/i;
 
   it("clears the sentence when the RO number changes, not just the buttons", async () => {
     findOpenRoAction.mockResolvedValue([
@@ -180,6 +189,104 @@ describe("LogRoForm — the 'already open' warning is retracted, not just defang
     typeRo("71802");
 
     expect(screen.getByText("Database is unreachable.")).toBeTruthy();
+  });
+
+  // The residual found by adversarial verification of the onChange fix: the
+  // open-check is async and nothing cancels it. Clearing the warning on every
+  // keystroke doesn't help if the warning is POSTED after the keystroke.
+  it("drops an open-check result that lands after the tech retyped the number", async () => {
+    let resolveCheck!: (v: unknown[]) => void;
+    findOpenRoAction.mockImplementation(
+      () => new Promise<unknown[]>((res) => { resolveCheck = res; }),
+    );
+
+    renderOpenTicketForm();
+    typeRo("71801");
+
+    await act(async () => {
+      clickButton("Open ticket").click();
+    });
+
+    // Still in flight: no verdict yet, and the field is NOT locked — a tech
+    // must be able to fix a typo while the check runs.
+    expect(screen.queryByText(OPEN_WARNING)).toBeNull();
+    expect((document.getElementById("ro-number") as HTMLInputElement).disabled).toBe(false);
+
+    // The typo correction, mid-flight.
+    typeRo("71802");
+
+    // The answer for the OLD number finally lands.
+    await act(async () => {
+      resolveCheck([{ id: "open-1", roNumber: "71801", status: "open", opCodes: [] }]);
+    });
+
+    // Nothing about 71801 may appear over a field that reads 71802 — neither
+    // the sentence nor the two actions under it.
+    expect(screen.queryByText(OPEN_WARNING)).toBeNull();
+    expect(screen.queryByText("View open ticket")).toBeNull();
+    expect(screen.queryByText(/Open another under/)).toBeNull();
+    // And the form still belongs to the number the tech is actually typing.
+    expect(document.querySelector(".save-bar .summary")!.textContent).toContain("71802");
+
+    // The heart of it: an expired check is NOT permission to save. The click
+    // captured 71801, the check never got a verdict that still applies, so
+    // writing anything here opens a SECOND ticket under 71801 — the exact
+    // thing the check exists to stop.
+    expect(createOpenEntryAction).not.toHaveBeenCalled();
+    // …and no navigation, because a save that didn't happen must not look like
+    // one that did. (performSave treats a bare `return` from onSave as success
+    // and pushes the redirect, so this is the assertion that a silent drop
+    // would fail.)
+    expect(routerPush).not.toHaveBeenCalled();
+
+    // The tech is told, in one honest sentence, why nothing happened.
+    expect(screen.getByText(STALE_ABORT).textContent).toMatch(/press Open ticket again/);
+  });
+
+  it("retracts the stale-check message on the next RO-number edit", async () => {
+    let resolveCheck!: (v: unknown[]) => void;
+    findOpenRoAction.mockImplementation(
+      () => new Promise<unknown[]>((res) => { resolveCheck = res; }),
+    );
+
+    renderOpenTicketForm();
+    typeRo("71801");
+    await act(async () => {
+      clickButton("Open ticket").click();
+    });
+    typeRo("71802");
+    await act(async () => {
+      resolveCheck([{ id: "open-1", roNumber: "71801", status: "open", opCodes: [] }]);
+    });
+
+    expect(screen.queryByText(STALE_ABORT)).not.toBeNull();
+
+    // "Press Open ticket again" is advice, not a standing accusation — the
+    // next keystroke is the tech taking it.
+    typeRo("718023");
+    expect(screen.queryByText(STALE_ABORT)).toBeNull();
+  });
+
+  it("still warns when the number is unchanged while the check runs", async () => {
+    let resolveCheck!: (v: unknown[]) => void;
+    findOpenRoAction.mockImplementation(
+      () => new Promise<unknown[]>((res) => { resolveCheck = res; }),
+    );
+
+    renderOpenTicketForm();
+    typeRo("71801");
+
+    await act(async () => {
+      clickButton("Open ticket").click();
+    });
+
+    await act(async () => {
+      resolveCheck([{ id: "open-1", roNumber: "71801", status: "open", opCodes: [] }]);
+    });
+
+    // The guard must not swallow the ordinary case it was added to narrow.
+    expect(screen.getByText(OPEN_WARNING).textContent).toContain("71801");
+    expect(screen.queryByText("View open ticket")).not.toBeNull();
   });
 });
 
