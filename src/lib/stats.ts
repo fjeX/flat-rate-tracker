@@ -1,5 +1,11 @@
 // Aggregation of entries + daily clocks over a date range.
-import type { DailyClock, DenomSource, Entry, UnpaidTime } from "./types";
+import type {
+  DailyClock,
+  DenomSource,
+  Entry,
+  EntryStatus,
+  UnpaidTime,
+} from "./types";
 import { addDays } from "./periods";
 import {
   scheduledHoursFor,
@@ -111,6 +117,49 @@ export function aggregateStats(
   let shopHours = 0;
   let openTicketHours = 0;
   const openTickets = new Set<string>();
+
+  /**
+   * Whose ticket is still OPEN — the second half of the open-work rule.
+   *
+   * Closing a ticket deliberately KEEPS its `open_work` rows (they are the
+   * day-by-day record of the work), so `kind === "open_work"` alone is not
+   * enough: filtering by kind only made the dashboard tiles say
+   * "8.0h on 1 open ticket" forever after the flag landed, while the Open
+   * Tickets card (fed by status = open) correctly emptied. The tiles mean
+   * "hours worked on tickets whose flag hasn't landed yet" (StatCard.tsx),
+   * so the owning entry's status decides.
+   *
+   * Built from the FULL `entries` param, NOT `includedEntries`: a ticket
+   * opened Monday and worked today carries entry.date = Monday, which is
+   * outside a today-only range. Looking up in the filtered list would drop
+   * every open ticket from the Today tile.
+   *
+   * This is the ONLY status filter in this function. The flag-hours path
+   * stays status-blind on purpose (PLAN-open-tickets.md: a status filter
+   * there would silently drop a closed RO the day a bug leaves status stale).
+   */
+  const statusById = new Map<string, EntryStatus>();
+  for (const e of entries) statusById.set(e.id, e.status ?? "closed");
+  /**
+   * A row whose entry is not in `entries` at all is COUNTED.
+   *
+   * `entries` is date-clipped by every caller (the dashboard fetches ~90 days;
+   * pay-period fetches the period), while an open ticket can be older than the
+   * window and still be worked today — the dashboard already fetches open
+   * tickets separately and unclipped for exactly that reason. Excluding the
+   * unknown would make a genuinely open long-running ticket vanish from the
+   * count, which is the same class of bug we are fixing. The orphaned-row rule
+   * in openWorkByDate ("its ticket deleted ... counted under its own null so
+   * the hours are never shown as on 0 tickets") already settled this the same
+   * way, and the pinned decision-10 test passes entries = [] with live rows.
+   * Over-reporting a stale unknown is recoverable; hiding live work is not.
+   */
+  const countsAsOpen = (u: UnpaidTime): boolean => {
+    if (!u.entryId) return true; // orphan row — no ticket to ask
+    const status = statusById.get(u.entryId);
+    return status === undefined || status === "open";
+  };
+
   for (const u of includedUnpaid) {
     switch (u.kind) {
       case "comeback_own":
@@ -127,9 +176,12 @@ export function aggregateStats(
         break;
       case "open_work":
         // Deliberately NOT added to any unpaid figure (decision 10). Counted
-        // under its own name so the day can say where the hours went.
-        openTicketHours += u.hours;
-        openTickets.add(u.entryId ?? "");
+        // under its own name so the day can say where the hours went — and
+        // only while the ticket is still open (see countsAsOpen).
+        if (countsAsOpen(u)) {
+          openTicketHours += u.hours;
+          openTickets.add(u.entryId ?? "");
+        }
         break;
     }
   }

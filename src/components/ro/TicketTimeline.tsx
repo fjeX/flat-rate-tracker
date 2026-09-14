@@ -285,31 +285,43 @@ export function TicketTimeline({
 
 // ------------------------------------------------------------------------
 
-function AddEventForm({
-  entryId,
-  today,
-  busy,
-  onError,
-  onSaved,
-}: {
+type AddFormProps = {
   entryId: string;
   today: string;
   busy: boolean;
   onError: (msg: string | null) => void;
   onSaved: () => void;
-}) {
+};
+
+/**
+ * The collapsed/open shell. It owns NOTHING but `open` — every field lives in
+ * the body component below, which is conditionally rendered and therefore
+ * genuinely unmounts on close.
+ *
+ * That unmount IS the reset (timeline-form-no-reset-on-open, 2026-09-13). The
+ * old shape kept the fields in this component and made "collapsed" an early
+ * return, so kind/date/time rode from one open to the next through both Save
+ * and Cancel: a time typed for one event reappeared on a later Custom event,
+ * and hours meant for today were logged into yesterday's date. RetroTimePrompt
+ * (see its header comment) had the same bug and had to fix it with a
+ * reset-on-open effect only because LogRoForm renders it unconditionally and it
+ * can never unmount. Here we control the render, so unmounting is the stronger
+ * fix: a field added later cannot be forgotten by a reset list that nobody
+ * updated, and pending/error state inside the body goes with it.
+ */
+function AddEventForm(props: AddFormProps) {
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<RoEventKind>("diag_done");
-  const [date, setDate] = useState(today);
-  const [time, setTime] = useState("");
-  const [note, setNote] = useState("");
-  const [, startTransition] = useTransition();
 
   if (!open) {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          // A stale banner from the last failed write is not about the form the
+          // tech is opening now.
+          props.onError(null);
+          setOpen(true);
+        }}
         className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
         data-testid="add-event-open"
       >
@@ -318,6 +330,25 @@ function AddEventForm({
       </button>
     );
   }
+
+  return <AddEventFields {...props} onDone={() => setOpen(false)} />;
+}
+
+function AddEventFields({
+  entryId,
+  today,
+  busy,
+  onError,
+  onSaved,
+  onDone,
+}: AddFormProps & { onDone: () => void }) {
+  // First-mount values ARE the defaults, and this component only ever exists
+  // while the form is open — so there is no second open to carry them into.
+  const [kind, setKind] = useState<RoEventKind>("diag_done");
+  const [date, setDate] = useState(today);
+  const [time, setTime] = useState("");
+  const [note, setNote] = useState("");
+  const [, startTransition] = useTransition();
 
   function submit() {
     onError(null);
@@ -334,8 +365,7 @@ function AddEventForm({
           onError(res.error);
           return;
         }
-        setOpen(false);
-        setNote("");
+        onDone();
         onSaved();
       } catch (e) {
         onError(actionErrorMessage(e, "Couldn't add that event."));
@@ -389,7 +419,7 @@ function AddEventForm({
         </label>
       </div>
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} disabled={busy}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onDone} disabled={busy}>
           Cancel
         </button>
         <button
@@ -407,30 +437,18 @@ function AddEventForm({
 
 // ------------------------------------------------------------------------
 
-function AddHoursForm({
-  entryId,
-  today,
-  busy,
-  onError,
-  onSaved,
-}: {
-  entryId: string;
-  today: string;
-  busy: boolean;
-  onError: (msg: string | null) => void;
-  onSaved: () => void;
-}) {
+/** Same shell/body split, same reason — see AddEventForm above. */
+function AddHoursForm(props: AddFormProps) {
   const [open, setOpen] = useState(false);
-  const [date, setDate] = useState(today);
-  const [hours, setHours] = useState("");
-  const [note, setNote] = useState("");
-  const [, startTransition] = useTransition();
 
   if (!open) {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          props.onError(null);
+          setOpen(true);
+        }}
         className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
         data-testid="add-hours-open"
       >
@@ -439,6 +457,22 @@ function AddHoursForm({
       </button>
     );
   }
+
+  return <AddHoursFields {...props} onDone={() => setOpen(false)} />;
+}
+
+function AddHoursFields({
+  entryId,
+  today,
+  busy,
+  onError,
+  onSaved,
+  onDone,
+}: AddFormProps & { onDone: () => void }) {
+  const [date, setDate] = useState(today);
+  const [hours, setHours] = useState("");
+  const [note, setNote] = useState("");
+  const [, startTransition] = useTransition();
 
   function submit() {
     const parsed = Number(hours);
@@ -450,9 +484,7 @@ function AddHoursForm({
           onError(res.error);
           return;
         }
-        setOpen(false);
-        setHours("");
-        setNote("");
+        onDone();
         onSaved();
       } catch (e) {
         onError(actionErrorMessage(e, "Couldn't add those hours."));
@@ -505,7 +537,7 @@ function AddHoursForm({
         Hours you worked on it. Waiting on parts or approval is logged as unpaid time, not here.
       </p>
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} disabled={busy}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onDone} disabled={busy}>
           Cancel
         </button>
         <button

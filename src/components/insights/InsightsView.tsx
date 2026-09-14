@@ -280,7 +280,11 @@ function FindingLede({ board }: { board: LeakBoard }) {
   );
 }
 
-function LeakSection({ board }: { board: LeakBoard }) {
+// Exported for its colocated test only — still rendered by InsightsView alone.
+// The board prints `leak.code`, and an op-code-sourced row's code is exactly as
+// ambiguous here as it is on "Where your time goes": two byte-identical WHL-BRG
+// rows landed at rank 2 and rank 16 with nothing on screen separating them.
+export function LeakSection({ board }: { board: LeakBoard }) {
   const worst = board.leaks[0]?.hours ?? 0;
 
   return (
@@ -303,6 +307,13 @@ function LeakSection({ board }: { board: LeakBoard }) {
                 </span>
                 <span className="leak-name">
                   <span className="leak-code">{leak.code}</span>
+                  {/* Gated on `source`, NOT on the key's prefix. An opcode leak
+                      keys `lib:<id>:overrun` / `custom:<CODE>:rework`, which
+                      opCodeOrigin reads correctly; a ledger leak keys
+                      `ledger:<kind>`, which has no origin at all and would be
+                      silently labelled "custom" — a made-up provenance on a row
+                      that has no op code by definition. */}
+                  {leak.source === "opcode" && <OriginTag row={leak} />}
                   <span className="leak-why">{leakWhy(leak)}</span>
                 </span>
                 <span className={`leak-hours ${tier === "bad" ? "bad" : "warn"}`}>

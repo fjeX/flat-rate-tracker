@@ -43,6 +43,7 @@ function lineLabel(
 }
 
 export function OpCodeLines({
+  step,
   library,
   lines,
   search,
@@ -69,6 +70,9 @@ export function OpCodeLines({
   toggleLineComeback,
   laborTypeEnabled,
 }: {
+  /** Position of this step in the form, counted by LogRoForm — the op-code
+   *  step is skipped entirely in ticket mode, so the badge cannot be a literal. */
+  step: number;
   library: OpCode[];
   lines: LineDraft[];
   search: string;
@@ -110,7 +114,7 @@ export function OpCodeLines({
     <>
       <div className="step-card active">
         <div className="step-head" style={{ cursor: "default" }}>
-          <div className="step-num">2</div>
+          <div className="step-num">{step}</div>
           <div className="step-title">Op codes</div>
           {lines.length > 0 && (
             <div className="step-summary">

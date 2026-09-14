@@ -24,11 +24,26 @@ vi.mock("@/app/actions/entries", () => ({
   getRoMatchById: vi.fn(async () => null),
 }));
 vi.mock("@/app/actions/op-codes", () => ({ createLibraryOpCode: vi.fn() }));
+const findOpenRoAction = vi.fn(async (): Promise<unknown[]> => []);
+const createOpenEntryAction = vi.fn(async (): Promise<{ error?: string }> => ({}));
+vi.mock("@/app/actions/open-tickets", () => ({
+  findOpenRoAction: (...a: unknown[]) => findOpenRoAction(...(a as [])),
+  createOpenEntryAction: (...a: unknown[]) => createOpenEntryAction(...(a as [])),
+  updateOpenEntryAction: vi.fn(async () => ({})),
+  closeTicketAction: vi.fn(async () => ({})),
+  getCloseDefaultsAction: vi.fn(async () => {
+    throw new Error("not used");
+  }),
+}));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));
 vi.mock("@/lib/retro-capture", () => ({ retroCandidates: () => [] }));
 vi.mock("@/lib/haptics", () => ({ tap: vi.fn() }));
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  findOpenRoAction.mockResolvedValue([]);
+  createOpenEntryAction.mockResolvedValue({});
+});
 
 function typeRo(value: string) {
   const input = document.getElementById("ro-number") as HTMLInputElement;
@@ -101,5 +116,82 @@ describe("LogRoForm — backing out of the duplicate prompt", () => {
     });
 
     expect(screen.getByText(/Not saved/i).textContent).toContain("55102");
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+function stepNumbers() {
+  return Array.from(document.querySelectorAll(".step-num")).map((el) =>
+    el.textContent?.trim(),
+  );
+}
+
+/** Renders a NEW RO with the open-ticket toggle flipped on. */
+function renderOpenTicketForm() {
+  render(<LogRoForm initialOpCodes={[]} roTemplates={[]} openTicketEnabled />);
+  act(() => {
+    screen
+      .getByRole("switch", { name: "Open ticket — no op codes yet" })
+      .click();
+  });
+}
+
+describe("LogRoForm — the 'already open' warning is retracted, not just defanged", () => {
+  const OPEN_WARNING = /is already open/i;
+
+  it("clears the sentence when the RO number changes, not just the buttons", async () => {
+    findOpenRoAction.mockResolvedValue([
+      { id: "open-1", roNumber: "71801", status: "open", opCodes: [] },
+    ]);
+
+    renderOpenTicketForm();
+    typeRo("71801");
+
+    await act(async () => {
+      clickButton("Open ticket").click();
+    });
+
+    // The warning names the RO the tech typed.
+    expect(screen.getByText(OPEN_WARNING).textContent).toContain("71801");
+    expect(screen.queryByText("View open ticket")).not.toBeNull();
+
+    // A different number is a different question.
+    typeRo("71802");
+
+    // The buttons going away was never the bug — the SENTENCE staying was.
+    expect(screen.queryByText("View open ticket")).toBeNull();
+    expect(screen.queryByText(OPEN_WARNING)).toBeNull();
+  });
+
+  it("leaves an unrelated save failure on screen when the RO number changes", async () => {
+    createOpenEntryAction.mockResolvedValue({ error: "Database is unreachable." });
+
+    renderOpenTicketForm();
+    typeRo("71801");
+
+    await act(async () => {
+      clickButton("Open ticket").click();
+    });
+
+    expect(screen.getByText("Database is unreachable.")).toBeTruthy();
+
+    // Editing the number must not swallow a failure the tech hasn't read.
+    typeRo("71802");
+
+    expect(screen.getByText("Database is unreachable.")).toBeTruthy();
+  });
+});
+
+describe("LogRoForm — step numbers count the steps that actually render", () => {
+  it("numbers an ordinary RO 1, 2, 3, 4", () => {
+    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    expect(stepNumbers()).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("numbers a ticket 1, 2, 3 — the op-code step is not rendered, so it is not counted", () => {
+    renderOpenTicketForm();
+    // Not 1, 3, 4: a missing step must not leave a hole in the numbering.
+    expect(stepNumbers()).toEqual(["1", "2", "3"]);
   });
 });

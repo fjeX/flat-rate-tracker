@@ -16,6 +16,7 @@ const COMMON_MAKES = [
 ];
 
 export function VehicleFields({
+  step,
   isEdit,
   vehicleOpen,
   setVehicleOpen,
@@ -33,6 +34,9 @@ export function VehicleFields({
   autoFill,
   handleAutoFillToggle,
 }: {
+  /** Position of this step in the form, counted by LogRoForm — the op-code step
+   *  above disappears in ticket mode, so the badge cannot be a literal. */
+  step: number;
   isEdit: boolean;
   vehicleOpen: boolean;
   setVehicleOpen: (fn: (v: boolean) => boolean) => void;
@@ -115,7 +119,7 @@ export function VehicleFields({
         aria-expanded={vehicleOpen}
         aria-controls="vehicle-step-body"
       >
-        <div className="step-num">3</div>
+        <div className="step-num">{step}</div>
         <div className="step-title">
           Vehicle
           <span className="optional-badge">recommended</span>

@@ -1,8 +1,13 @@
 // The ONE origin tag. It was two — one here in the op-code table, one in
 // JobTimeSections — with the same text and two different styling mechanisms
 // (a Tailwind arbitrary value vs an inline `style`), which is the drift the
-// duplicated caption two files over already cost us once. Three tables print
+// duplicated caption two files over already cost us once. Four tables print
 // this tag; there is one component.
+//
+// The fourth — the "What's costing you" leak board — passes only its
+// op-code-sourced rows. A ledger leak keys `ledger:<kind>` and has no origin;
+// the caller gates, because this component cannot tell "no origin" from
+// "custom" and must not guess.
 import { opCodeOrigin, OP_CODE_ORIGIN_LABEL } from "@/lib/insights";
 
 /**

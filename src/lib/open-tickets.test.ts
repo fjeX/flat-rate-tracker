@@ -199,6 +199,63 @@ describe("aggregateStats with open tickets", () => {
     expect(s.flagHours).toBe(0);
   });
 
+  it("a CLOSED ticket's open_work rows leave the tiles (dashboard-open-ticket-count-stale)", () => {
+    // Closing keeps the rows — they are the day-by-day record — so only the
+    // owning entry's status can retire them from "N h on 1 open ticket".
+    const ledger = [
+      row(MON, 8, "open_work", { entryId: "T1" }),
+      row(TUE, 2.5, "open_work", { entryId: "T1" }),
+    ];
+    const closed = entry(WED, 10, { id: "T1", status: "closed" });
+    const s = aggregateStats([closed], [], range, ledger);
+    expect(s.openTicketHours).toBe(0);
+    expect(s.openTicketCount).toBe(0);
+    // The flag still pays on the close day — no status filter leaked into it.
+    expect(s.flagHours).toBe(10);
+    expect(s.roCount).toBe(1);
+  });
+
+  it("an OPEN ticket still counts, even when its entry is dated outside the range", () => {
+    // Opened Monday, worked today: the Today tile's range is today only, so a
+    // status lookup built from the range-filtered entries would drop it.
+    const open = entry(MON, 0, { id: "T1", status: "open" });
+    const ledger = [row(WED, 3, "open_work", { entryId: "T1" })];
+    const s = aggregateStats([open], [], { start: WED, end: WED }, ledger);
+    expect(s.openTicketHours).toBe(3);
+    expect(s.openTicketCount).toBe(1);
+  });
+
+  it("a row whose entry is missing from `entries` is COUNTED, not dropped", () => {
+    // `entries` is date-clipped by every caller; an open ticket older than the
+    // fetch window is exactly the one worth showing. Unknown ⇒ still open.
+    const ledger = [
+      row(MON, 8, "open_work", { entryId: "GONE" }),
+      row(TUE, 1, "open_work", { entryId: undefined }),
+    ];
+    const s = aggregateStats([entry(MON, 4, { id: "OTHER" })], [], range, ledger);
+    expect(s.openTicketHours).toBe(9);
+    expect(s.openTicketCount).toBe(2);
+  });
+
+  it("mixes open, closed and unknown in one range", () => {
+    const ledger = [
+      row(MON, 8, "open_work", { entryId: "OPEN1" }),
+      row(TUE, 4, "open_work", { entryId: "CLOSED1" }),
+      row(WED, 2, "open_work", { entryId: "UNKNOWN" }),
+    ];
+    const s = aggregateStats(
+      [
+        entry(MON, 0, { id: "OPEN1", status: "open" }),
+        entry(TUE, 6, { id: "CLOSED1", status: "closed" }),
+      ],
+      [],
+      range,
+      ledger,
+    );
+    expect(s.openTicketHours).toBe(10);
+    expect(s.openTicketCount).toBe(2);
+  });
+
   it("efficiency is computed from flag and clock exactly as before (decision 7)", () => {
     const ledger = [row(MON, 8, "open_work")];
     const s = aggregateStats([entry(MON, 4)], [{ userId: "u", date: MON, hours: 8 }], range, ledger);

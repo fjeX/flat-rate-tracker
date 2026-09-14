@@ -1262,13 +1262,20 @@ recovered. Sections appear only when they have something to say.
        "nothing was recorded."
   - **NEW ELEMENT 2026-09-06 (`opcode-name-collision-indistinguishable`): each
     op-code row now carries a small `library` or `custom` origin tag.** It
-    appears in "Where your time goes", "Big jobs" and "Maintenance times". It
+    appears in "Where your time goes", "Big jobs", "Maintenance times" and —
+    since 2026-09-13 — "What's costing you". It
     exists because `op_codes.code` has no unique constraint, so a library op
     code and a one-time custom line can display identical text; the tag is read
     off the group key that already distinguished them. It makes NO claim about
     frequency — a `custom` code can legitimately show "40 logged". Do not
     report `custom` beside a high use count as a contradiction; that reading
     was the reason the label is not "one-time".
+    - **On "What's costing you", only the op-code-sourced rows carry the tag.**
+      Ledger rows (Waiting on parts, Waiting on approval, Shop time, unticketed
+      comebacks — the ones whose sub-line reads "N entries, no flag hours")
+      have no op code at all, so they carry **no** tag by design. A ledger row
+      without a `library`/`custom` tag is correct output; do not report it as a
+      missing tag.
     - **The bug this replaced:** a comeback-only code used to read
       `— — never timed` while holding real hours. If you ever see a row with
       `never timed` on a code you logged a **timed comeback** against in this
@@ -1293,6 +1300,12 @@ recovered. Sections appear only when they have something to say.
     identical-text rows must carry the `library`/`custom` origin tag above —
     that pairing is the tag doing its job, not a bug. Merely similar text is
     never reportable under this check, tag or no tag.
+    - **This rule covers four surfaces: "Where your time goes", "Big jobs",
+      "Maintenance times" and "What's costing you".** On the leak board the
+      same op code can legitimately appear twice for two different reasons
+      (an overrun row and a rework row) — that is not a collision either.
+      And the board's **ledger** rows carry no origin tag by design, so a
+      tagless "Waiting on parts" row is never a missing-tag finding.
 - **Best days** — seven weekday tiles with a By day / By efficiency sort toggle.
   Tiles count only days the app knows the length of, so the day count under each
   is real. Check a weekday's figure is not wildly out of line with the dashboard.

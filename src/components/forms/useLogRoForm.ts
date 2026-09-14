@@ -912,6 +912,11 @@ export function useLogRoForm({
     notesOpen, setNotesOpen,
     vehicleOpen, setVehicleOpen,
     error,
+    // Exposed so LogRoForm can retract an error IT raised (the "already open"
+    // warning) the moment the RO number changes out from under it. Deliberately
+    // a raw setter and not a blanket clear-on-edit: a save or delete failure the
+    // tech has not read yet must survive them retyping the number.
+    setError,
     savedRoNumber,
     abandonedRoNumber,
     isSubmitting,

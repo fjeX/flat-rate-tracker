@@ -24,7 +24,7 @@
 //                 sub op codes, custom lines and new-library codes all come
 //                 for free, and there is one place the line rules live.
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RetroTimePrompt } from "@/components/forms/RetroTimePrompt";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import type { Entry, LaborType, NewEntry, OpCode, RoTemplate } from "@/lib/types";
@@ -100,6 +100,10 @@ export function LogRoForm({
   const [openDup, setOpenDup] = useState<Entry | null>(null);
   const [openDupAcknowledged, setOpenDupAcknowledged] = useState(false);
   const [viewDup, setViewDup] = useState(false);
+  // The exact sentence THIS component last threw into the hook's `error` slot.
+  // The error banner is shared with save/delete failures, so "is the warning on
+  // screen still mine?" is answered by identity, not by a substring guess.
+  const openDupErrorRef = useRef<string | null>(null);
 
   // --- close: the actual-hours prefill ------------------------------------
   const [prefill, setPrefill] = useState<ClosePrefill | null>(null);
@@ -125,7 +129,9 @@ export function LogRoForm({
             const open = await findOpenRoAction(ro);
             if (open.length > 0) {
               setOpenDup(open[0]);
-              throw new Error(`RO ${ro} is already open. View it, or open another ticket under the same number.`);
+              const message = `RO ${ro} is already open. View it, or open another ticket under the same number.`;
+              openDupErrorRef.current = message;
+              throw new Error(message);
             }
           }
           const res = await createOpenEntryAction({
@@ -172,7 +178,7 @@ export function LogRoForm({
   // refs, and the react-compiler lint rule otherwise taints every `x` read as
   // "accessing a ref during render".
   const {
-    isEdit, savedRoNumber, abandonedRoNumber, date, setDate, roNumber, setRoNumber, error, roInputRef,
+    isEdit, savedRoNumber, abandonedRoNumber, date, setDate, roNumber, setRoNumber, error, setError, roInputRef,
     loggedTime, setLoggedTime, trackRoTime: timeFieldShown,
     library, handleScanResult, lines, search, setSearch, pickerOpen, setPickerOpen,
     pickerRef, filteredLibrary, totalFlag, quickChips, customOpen, setCustomOpen,
@@ -244,6 +250,28 @@ export function LogRoForm({
         : isEdit
           ? `Edit RO #${existingEntry!.roNumber}`
           : "New repair order";
+
+  // Retracts the "already open" warning once it no longer describes the form —
+  // the tech changed the number, or took the "open another anyway" override.
+  // ONLY that sentence: `error` also carries save and delete failures, and
+  // wiping one of those because the tech edited a field would hide a message
+  // they still need. Identity check, so a save failure that landed AFTER the
+  // warning survives too.
+  function clearOpenDupWarning() {
+    const mine = openDupErrorRef.current;
+    if (mine === null) return;
+    openDupErrorRef.current = null;
+    if (error === mine) setError(null);
+  }
+
+  // Step numbers are POSITIONS, derived from the steps that actually render.
+  // The op-code step is hidden in ticket mode, so hard-coded numerals made the
+  // tech read "1, 3, 4". `steps` is the single source of truth — add a step
+  // here and to the JSX in the same order and the numbering stays right in
+  // every mode. (Unpaid rework is not in the list on purpose: its badge is an
+  // icon, not a number.)
+  const steps: string[] = ["ro", ...(ticketMode ? [] : ["opCodes"]), "vehicle", "notes"];
+  const stepNum = (id: string) => steps.indexOf(id) + 1;
 
   const saveLabel = isChecking
     ? "Checking…"
@@ -455,10 +483,10 @@ export function LogRoForm({
         />
       )}
 
-      {/* ---- Step 1: RO number ---- */}
+      {/* ---- RO number (step 1 in every mode) ---- */}
       <div className="step-card active">
         <div className="step-head" style={{ cursor: "default" }}>
-          <div className="step-num">1</div>
+          <div className="step-num">{stepNum("ro")}</div>
           <div className="step-title">RO number</div>
           <div className="step-summary">required</div>
         </div>
@@ -473,9 +501,12 @@ export function LogRoForm({
               value={roNumber}
               onChange={(e) => {
                 setRoNumber(e.target.value);
-                // A new number is a new question.
+                // A new number is a new question — including the sentence, not
+                // just the buttons under it. The warning names the OLD RO, so
+                // leaving it up accuses a number the tech is no longer typing.
                 setOpenDup(null);
                 setOpenDupAcknowledged(false);
+                clearOpenDupWarning();
               }}
               required
               aria-required="true"
@@ -488,9 +519,10 @@ export function LogRoForm({
         </div>
       </div>
 
-      {/* ---- Step 2: Op codes (hidden while the ticket is open) ---- */}
+      {/* ---- Op codes (hidden while the ticket is open, which renumbers what follows) ---- */}
       {!ticketMode && (
         <OpCodeLines
+          step={stepNum("opCodes")}
           library={library}
           lines={lines}
           search={search}
@@ -536,8 +568,9 @@ export function LogRoForm({
         />
       )}
 
-      {/* ---- Step 3: Vehicle (collapsible) ---- */}
+      {/* ---- Vehicle (collapsible) ---- */}
       <VehicleFields
+        step={stepNum("vehicle")}
         isEdit={isEdit}
         vehicleOpen={vehicleOpen}
         setVehicleOpen={setVehicleOpen}
@@ -556,7 +589,7 @@ export function LogRoForm({
         handleAutoFillToggle={handleAutoFillToggle}
       />
 
-      {/* ---- Step 4: Notes (collapsible) ---- */}
+      {/* ---- Notes (collapsible) ---- */}
       <div className={`step-card${notesOpen ? " active" : " collapsed"}`}>
         <button
           type="button"
@@ -565,7 +598,7 @@ export function LogRoForm({
           aria-expanded={notesOpen}
           aria-controls="notes-step-body"
         >
-          <div className="step-num">4</div>
+          <div className="step-num">{stepNum("notes")}</div>
           <div className="step-title">
             Notes
             <span className="optional-badge">optional</span>
@@ -624,6 +657,9 @@ export function LogRoForm({
                 onClick={() => {
                   setOpenDupAcknowledged(true);
                   setOpenDup(null);
+                  // Same staleness as the RO-number edit: taking the override
+                  // answers the warning, so the sentence goes with the buttons.
+                  clearOpenDupWarning();
                 }}
               >
                 Open another under #{openDup.roNumber}
