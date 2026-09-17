@@ -1144,9 +1144,16 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     shortfall with no mention of what came back is the old wording.
   - Recovery ABOVE the claim (goodwill) must be reported as not mapping to any
     line, never silently written onto one.
-  - A claim closed with a partial recovery and **no per-line breakdown** must
-    REFUSE to apply and ask for the breakdown. It must never split the money
-    across lines by guessing — that would invent the shop's decision.
+  - A claim with TWO OR MORE lines closed with a partial recovery and **no
+    per-line breakdown** must REFUSE to apply and ask for the breakdown. It
+    must never split the money across lines by guessing — that would invent
+    the shop's decision.
+  - **Exception, shipped 2026-09-16:** a claim with exactly ONE line and a
+    partial recovery offers **Apply** straight away — there is nothing to
+    split, the whole recovery belongs to that line. Apply must move that
+    line's paid hours by exactly the recovered figure (not the claimed one),
+    once; a second tap does nothing. Do not file the single-line Apply as a
+    bug, and do not file the multi-line refusal as one either.
   - This does not change the separate-ledger rule above: applying recovery moves
     PAID hours (reconciliation), and period earnings/flag pay must still be
     untouched by the recovered dollars.
@@ -1921,8 +1928,15 @@ and hours-so-far on the right. Oldest-opened first. Tap a row → the RO modal.
 table, no Add-op-code picker, no earnings row (nothing has flagged yet).
 Instead a **Timeline** section:
 
-- The story: *Opened <date>* is already there — written by the server, never
-  by you. **Add event** → pick a kind (Diagnosis done, Teardown approved,
+- The story: *Opened <date> · <time>* is already there — written by the
+  server, never by you. Since 2026-09-16 **Opened** and **Reopened** carry the
+  clock time they happened, so an event you add with an EARLIER time the same
+  day (e.g. 7:45 AM on a ticket opened at 3 AM) correctly lists ABOVE them —
+  the timeline is date, then time, then untimed events last on their day. A
+  **Closed** dated today also gets a time; a close backdated to an earlier day
+  stays untimed and sorts by its date, so it can list above a later Reopened.
+  None of that is a bug. Tickets opened before 2026-09-16 keep an untimed
+  Opened. **Add event** → pick a kind (Diagnosis done, Teardown approved,
   Parts ordered, Waiting on parts, Waiting on approval, … , Custom), a date
   (defaults to today), optional time, note. A **Custom** event shows its note
   as its label and needs one. Add two or three. The dashboard chip must now
