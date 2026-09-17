@@ -759,6 +759,101 @@ describe("pendingRecoveryApplication", () => {
     expect(plan.unmappedHours).toBeCloseTo(0.4, 5);
   });
 
+  // A single-line claim is the normal close flow: recordDisputeOutcomeAction
+  // writes recoveredHours on the claim and never on dispute_lines, so the
+  // per-line breakdown is absent for almost every real claim. With one line
+  // there is nothing to apportion, so the refusal above does not apply.
+  it("applies a partial recovery to the only line on the claim", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 2, // partial: 3 was asked for
+      lines: [
+        line({ entryId: "e1", flaggedHours: 5, paidHours: 2, claimedHours: 3 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(
+      d,
+      [ro([roLine({ flagHours: 5, paidHours: 2 })])],
+      [],
+    );
+    expect(plan.rows).toHaveLength(1);
+    // The RECOVERY, not the ask: applying claimedHours (3) here would write an
+    // hour the shop never paid.
+    expect(plan.rows[0].recoveredHours).toBeCloseTo(2, 5);
+    expect(plan.rows[0].paidAfter).toBeCloseTo(4, 5); // frozen paid 2 + 2
+    expect(plan.applyHours).toBeCloseTo(2, 5);
+    expect(plan.unmappedHours).toBe(0);
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
+
+  // Same guard as every other branch: the offer is armed only while the live
+  // line still reads exactly what the claim froze. One tap moves it to
+  // paidAfter, which no longer matches, so a second tap is offered nothing.
+  it("does not re-apply a single-line partial recovery once it has landed", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 2,
+      lines: [
+        line({ entryId: "e1", flaggedHours: 5, paidHours: 2, claimedHours: 3 }),
+      ],
+    });
+    const after = [ro([roLine({ flagHours: 5, paidHours: 4 })])];
+    const plan = pendingRecoveryApplication(d, after, []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.applyHours).toBe(0);
+    // Not "unmapped": the hours DID map to a live line, they are simply
+    // already on it. matchedRecovery counts the match before the
+    // already-applied guard skips it, so the card does not tell the tech 2h
+    // went nowhere when 2h is sitting on the line in front of them.
+    expect(plan.unmappedHours).toBe(0);
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
+
+  // Goodwill above the line's shortfall is written in full, exactly as the
+  // per-line branch writes a per-line recovery above its claim: nothing in
+  // this module clamps against claimed or flagged hours.
+  it("applies a single-line recovery larger than the line's shortfall in full", () => {
+    const d = dispute({
+      status: "resolved",
+      // claimedHours 0 on the line keeps fullSettlement false (it needs a
+      // non-zero ask), so this lands on the single-line branch with a recovery
+      // well above anything the line is short.
+      recoveredHours: 2,
+      lines: [
+        line({ entryId: "e1", flaggedHours: 2, paidHours: 1.5, claimedHours: 0 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(
+      d,
+      [ro([roLine({ flagHours: 2, paidHours: 1.5 })])],
+      [],
+    );
+    expect(plan.rows).toHaveLength(1);
+    expect(plan.rows[0].paidAfter).toBeCloseTo(3.5, 5);
+    expect(plan.unmappedHours).toBe(0);
+  });
+
+  // The multi-line refusal is untouched by the single-line branch.
+  it("still refuses a partial settlement across two lines", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.4,
+      lines: [
+        line({ id: "a", entryId: "e1", code: "BRK-F", claimedHours: 0.5 }),
+        line({ id: "b", entryId: "e1", code: "ALN", claimedHours: 0.5 }),
+      ],
+    });
+    const entries = [
+      ro([
+        roLine({ id: "l1", customCode: "BRK-F" }),
+        roLine({ id: "l2", customCode: "ALN" }),
+      ]),
+    ];
+    const plan = pendingRecoveryApplication(d, entries, []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.needsLineBreakdown).toBe(true);
+  });
+
   it("reports goodwill above the ask as unmapped rather than writing it somewhere", () => {
     const d = dispute({
       status: "resolved",

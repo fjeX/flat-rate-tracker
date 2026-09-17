@@ -132,7 +132,16 @@ export function LogRoForm({
   // the ticket already carries, and the tech has to actively choose "move".
   const [reopened, setReopened] = useState(false);
   const [currentFlagDate, setCurrentFlagDate] = useState<string | null>(null);
-  const [dateChoice, setDateChoice] = useState<"keep" | "move">("keep");
+  // Client-only (grep: it is read nowhere but the two radios' `checked` below —
+  // closeTicketAction is handed `input.date` and nothing else). So it is a
+  // DESCRIPTION of the date pill, never a second source of truth for it, and it
+  // has to follow the pill when the tech edits the pill directly. "custom" is
+  // the third state that state of affairs needs: a date that is neither the
+  // ticket's flag date nor today leaves BOTH radios unchecked, which is the
+  // honest reading — the tech picked something the two options don't describe.
+  // The alternative (force-checking "move" for any non-keep date) would put a
+  // radio labelled "Move to today (Sep 16)" next to a pill reading Sep 12.
+  const [dateChoice, setDateChoice] = useState<"keep" | "move" | "custom">("keep");
 
   // What the hook persists with, per mode. Declared before the hook so the
   // closure reads the CURRENT mode on every save — performSave is rebuilt each
@@ -368,7 +377,23 @@ export function LogRoForm({
               id="ro-date"
               type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => {
+                setDate(e.target.value);
+                // On a reopened close the radios are on screen beside this
+                // pill, and the pill is what actually gets saved. Editing it
+                // used to leave a radio checked that contradicted the saved
+                // date ("Keep flag date Sep 12" ticked over a pill reading Sep
+                // 16). Keep the radios honest about the date instead.
+                setDateChoice(
+                  // Keep wins a tie: if the ticket was reopened and closed again
+                  // the same day, "keep" is the default and the safer reading.
+                  e.target.value === currentFlagDate
+                    ? "keep"
+                    : e.target.value === today
+                      ? "move"
+                      : "custom",
+                );
+              }}
               required
               aria-required="true"
             />

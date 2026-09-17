@@ -27,6 +27,9 @@ const state = {
   events: [] as { kind: string; createdAt: string }[],
   fail: null as null | "lines" | "date" | "event" | "status",
   lastClose: null as null | { date: string; loggedTime: string | null },
+  // Every event write, with the fields the timeline sorts on.
+  written: [] as { kind: string; date: string; time: string | null }[],
+  deleted: [] as string[],
 };
 
 function openEntry(lines = 0, status: Entry["status"] = "open"): Entry {
@@ -99,11 +102,29 @@ vi.mock("@/lib/db", () => ({
     if (state.entry) state.entry = { ...state.entry, date };
   },
   listRoEvents: async () => state.events,
-  createRoEvent: async (_c: unknown, input: { kind: string }) => {
+  createRoEvent: async (
+    _c: unknown,
+    input: { kind: string; date: string; time?: string | null },
+  ) => {
     calls.push(`event:${input.kind}`);
     if (state.fail === "event") throw new Error("boom event");
+    state.written.push({
+      kind: input.kind,
+      date: input.date,
+      time: input.time ?? null,
+    });
     state.events.push({ kind: input.kind, createdAt: stamp() });
     return input;
+  },
+  createOpenEntry: async (_c: unknown, input: { date: string }) => {
+    calls.push("createOpenEntry");
+    if (state.fail === "lines") throw new Error("boom lines");
+    state.entry = { ...openEntry(0, "open"), date: input.date };
+    return state.entry;
+  },
+  deleteEntry: async (_c: unknown, id: string) => {
+    calls.push("deleteEntry");
+    state.deleted.push(id);
   },
   setEntryStatus: async (_c: unknown, _id: string, status: "open" | "closed") => {
     calls.push(`status:${status}`);
@@ -116,7 +137,17 @@ vi.mock("@/lib/db", () => ({
   syncEntryLaborTimeObservations: async () => {},
 }));
 
-const { closeTicketAction, reopenTicketAction } = await import("./open-tickets");
+const { closeTicketAction, createOpenEntryAction, reopenTicketAction } =
+  await import("./open-tickets");
+
+/** Today as the action sees it — the cookie mock above pins the zone. */
+const TODAY_LA = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}).format(new Date());
+const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 
 const LINE = {
   opCodeId: null,
@@ -144,6 +175,51 @@ beforeEach(() => {
   state.events = [ev("opened")];
   state.fail = null;
   state.lastClose = null;
+  state.written.length = 0;
+  state.deleted.length = 0;
+});
+
+// A milestone that happened just now carries the time it happened, so it sorts
+// among that day's timed events instead of after all of them (sortRoEvents puts
+// a null time last). A milestone dated an EARLIER day did not happen now, and
+// keeps a null time — "sometime that day" is the honest record.
+describe("transition events carry the time they happened", () => {
+  it("stamps the opened event with today's date AND the current time", async () => {
+    const res = await createOpenEntryAction({
+      roNumber: "12345",
+      vehicle: { year: "2019", make: "Ford", model: "F150", vin: "", mileage: "" },
+      notes: "",
+    });
+    expect(res.error).toBeUndefined();
+    const opened = state.written.find((e) => e.kind === "opened")!;
+    expect(opened.date).toBe(TODAY_LA);
+    expect(opened.time).toMatch(HHMM);
+  });
+
+  it("stamps a close made TODAY, and leaves a BACKDATED close untimed", async () => {
+    await closeTicketAction({ ...INPUT, date: TODAY_LA });
+    expect(state.written.find((e) => e.kind === "closed")!.time).toMatch(HHMM);
+
+    state.entry = openEntry();
+    state.events = [ev("opened")];
+    state.written.length = 0;
+    // 2026-06-12 is not today — the tech is recording a day that already ended.
+    await closeTicketAction(INPUT);
+    expect(state.written.find((e) => e.kind === "closed")).toEqual({
+      kind: "closed",
+      date: "2026-06-12",
+      time: null,
+    });
+  });
+
+  it("stamps the reopened event — a reopen has no backdating path", async () => {
+    state.entry = { ...openEntry(1), status: "closed" };
+    state.events = [ev("opened"), ev("closed")];
+    await reopenTicketAction(state.entry.id);
+    const reopened = state.written.find((e) => e.kind === "reopened")!;
+    expect(reopened.date).toBe(TODAY_LA);
+    expect(reopened.time).toMatch(HHMM);
+  });
 });
 
 describe("closeTicketAction", () => {

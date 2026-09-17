@@ -392,7 +392,8 @@ const EMPTY_APPLICATION: RecoveryApplication = {
  * they weren't, the ONLY other honest reading is a settlement that covered the
  * whole ask — then every line got its claim, no split is being invented, and
  * anything above the ask is goodwill. A partial settlement with no breakdown is
- * left alone: which lines the shop paid is a fact the app does not have.
+ * left alone: which lines the shop paid is a fact the app does not have —
+ * UNLESS the claim has exactly one line, where there is no "which" to know.
  */
 export function pendingRecoveryApplication(
   dispute: Dispute | null,
@@ -408,7 +409,33 @@ export function pendingRecoveryApplication(
   const fullSettlement =
     !usePerLine && claimed > 0 && dispute.recoveredHours + RECOVERY_EPS >= claimed;
 
-  if (!usePerLine && !fullSettlement) {
+  // THE ONE-LINE CLAIM — not a guess, an identity.
+  //
+  // A partial settlement with no per-line breakdown is normally unsplittable:
+  // the shop paid *some* of the ask and which rows it landed on is a fact the
+  // app does not have. That is a genuine ambiguity only while there is more
+  // than one row to choose between. With exactly ONE claimed line there is
+  // nothing to apportion — every recovered hour on this claim was claimed on
+  // that line, so the mapping is forced by construction and no split is being
+  // invented. This matters because it is the NORMAL close: the close flow
+  // writes recoveredHours on the claim and never writes
+  // dispute_lines.recovered_hours, so `usePerLine` is false for almost every
+  // real claim, and a single-line partial recovery was being handed back to
+  // the tech to re-type by hand.
+  //
+  // The line gets dispute.recoveredHours, deliberately NOT dl.claimedHours:
+  // claimedHours is what was ASKED for, and the fullSettlement branch may use
+  // it only because that branch has already established the whole ask came
+  // back. Here it did not, so applying the ask would write hours the shop
+  // never paid — the exact failure this module exists to prevent.
+  //
+  // Anything above the ask is left alone the way the other branches leave it:
+  // nothing is clamped against the line's claim or flag hours, and whatever
+  // fails to map falls out in `unmapped` below.
+  const singleLineRecovery =
+    !usePerLine && !fullSettlement && dispute.lines.length === 1;
+
+  if (!usePerLine && !fullSettlement && !singleLineRecovery) {
     return {
       ...EMPTY_APPLICATION,
       unmappedHours: dispute.recoveredHours,
@@ -426,7 +453,11 @@ export function pendingRecoveryApplication(
   const taken = new Set<string>();
 
   for (const dl of dispute.lines) {
-    const hours = usePerLine ? dl.recoveredHours : dl.claimedHours;
+    const hours = usePerLine
+      ? dl.recoveredHours
+      : singleLineRecovery
+        ? dispute.recoveredHours
+        : dl.claimedHours;
     if (hours <= 0) continue;
 
     const live = findLiveLine(dl, entries, libraryById, taken);

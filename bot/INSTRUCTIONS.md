@@ -740,6 +740,11 @@ Reference rail in every mode.
 > **Moved 2026-07-30.** Now a drill-down row inside "Did I get paid?", labelled
 > **"Which lines came up short?"**.
 - Open "Did I get paid?" → "Which lines came up short?".
+  The odd-digit-length RO from §2 always lands in the CURRENT (open) pay
+  period — §2 only ever logs to today. Do not look for it in a settled or
+  past period, and the list does NOT need a paid figure to render: expand
+  "Did I get paid?" on the current period, then "Which lines came up short?"
+  underneath it, and place the short number against the longer ones there.
 - **Sort control (new 2026-07-30).** Defaults to **RO number**, because shops
   hand out a printed sheet in RO order. Check all three options:
   - **RO number** must sort NUMERICALLY, not as text — RO 993 comes BEFORE
@@ -1755,7 +1760,9 @@ switch, **off by default** — this is verified (migration default is
 `not null default false`, and 7 of 8 prod accounts read false). Off means the
 log form shows no time field and no time is stored — that is the designed
 behaviour, not a missing feature. Do not re-test or re-report this as an open
-question; check only that the switch is where §8k leaves it (see below).
+question. You WILL turn it ON in a moment for the checks below — "off by
+default" describes the switch's resting state, not an instruction to leave it
+alone tonight. End the run with it OFF again (see the last bullet below).
 
 Turn it ON, then:
 
@@ -1959,6 +1966,14 @@ and the date pill now means the CLOSE date, defaulting to today.
   picker and an editable actual-hours box. Add two op codes (say 1.2h and
   9.0h): the picker defaults to the bigger line. Hold time (waiting rows) is
   excluded and the banner says so in one line when there is any.
+- **The prefilled actual is "estimate" if ANY contributing timeline hours row
+  was typed by hand — for the whole ticket, not per line.** Only when every
+  open-work row came from the timer does the prefill read "timer". A ticket
+  with 8.0h from the timer and 2.5h typed in still prefills as an estimate,
+  and Insights will say "includes an estimate" for it. This is correct by
+  design (`closePrefill`, src/lib/open-tickets.ts, pinned by a unit test): a
+  typed number must never enter True Time dressed as a measurement. Do not
+  file it as a bug or as a product decision.
 - Save with NO op codes: refused — "Add at least one op code." That rule
   lives here, on the close, and nowhere earlier.
 - Save properly. Then check: the RO is gone from the Open tickets card (the
@@ -2051,13 +2066,21 @@ You are an LLM driving a browser; sometimes *you* fumble. Protocol:
      that would turn correct behavior into a reported bug. Worse, each retry
      spends more of the budget and pushes the wait out further. Note it as
      expected, move on, and come back later if the section still needs covering.
-2. Only if it fails twice does it go in the report as a bug — with the
+2. **Before reporting a card or section as "empty", "shows nothing", or
+   "missing inputs", count the actual elements** — `input`, `button`,
+   headings — from a DOM or accessibility snapshot, and paste that slice into
+   the report. A card that LOOKS empty (collapsed, off-screen, zero-height,
+   needs a toggle expanded) is not evidence that it IS empty; the count is.
+   Example: "Did I get paid?" on an awaiting-pay period was once reported as
+   zero inputs; a live check found the input, the reconciliation row and the
+   claim history all present.
+3. Only if it fails twice does it go in the report as a bug — with the
    screenshot description, the exact steps, and any visible error text.
-3. If it worked the second time, report it as **FLAKY**, not broken.
-4. If you're not sure whether behavior is a bug or intended, put it under
+4. If it worked the second time, report it as **FLAKY**, not broken.
+5. If you're not sure whether behavior is a bug or intended, put it under
    **Questions / possible issues** — never inflate uncertainty into "broken."
-5. Never "fix" anything. You observe and report only.
-6. **A documented-expected `SKIPPED` result is not a finding.** Any section
+6. Never "fix" anything. You observe and report only.
+7. **A documented-expected `SKIPPED` result is not a finding.** Any section
    that is explicitly marked opportunistic / not-guaranteed-every-night
    (e.g. §2c, §3z) and comes back `SKIPPED` for the reason its own note
    describes is the expected outcome, not a gap to surface. Log it once,

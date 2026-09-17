@@ -4,6 +4,7 @@ import {
   sumBonuses,
   periodTotalPay,
 } from "./bonuses";
+import { fmtMoney } from "./earnings";
 import type { Bonus } from "./types";
 
 function bonus(over: Partial<Bonus> = {}): Bonus {
@@ -99,5 +100,57 @@ describe("periodTotalPay", () => {
     const r = periodTotalPay(null, 0);
     expect(r.total).toBe(0);
     expect(r.showBreakdown).toBe(false);
+  });
+
+  // The card prints "Flag pay $X + Spiffs $Y = $Z", all three through the
+  // whole-dollar fmtMoney. If `total` were the raw sum, the three figures would
+  // round independently and the sentence would be arithmetically false on
+  // screen: 489.70 + 27.50 printed "$490 + $28 = $517".
+  //
+  // Both directions of the failure are covered below: fractional parts that sum
+  // to >= $1 (raw sum rounds a dollar LOW) and parts that don't (raw sum rounds
+  // a dollar HIGH).
+  describe("the printed breakdown adds up", () => {
+    // fmtMoney -> "$1,234"; parse back so we can add the PRINTED figures.
+    const parse = (s: string) => Number(s.replace(/[$,]/g, ""));
+
+    const cases: ReadonlyArray<{ flag: number; bonus: number; why: string }> = [
+      { flag: 489.7, bonus: 27.5, why: "reported case 1 (.70 + .50 carries)" },
+      { flag: 709.7, bonus: 27.5, why: "reported case 2 (.70 + .50 carries)" },
+      { flag: 100.4, bonus: 50.4, why: "fractions sum to 0.80 — no carry" },
+      { flag: 0.4, bonus: 0.4, why: "both terms round away to $0" },
+      { flag: 100.6, bonus: 50.6, why: "both terms round UP, fractions carry" },
+      { flag: 12.5, bonus: 12.5, why: "exact halves, round half away from zero" },
+      { flag: 1000, bonus: 234.56, why: "comma grouping in the printed string" },
+      { flag: 3455.4999999999995, bonus: 0, why: "float dust from rate x hours" },
+    ];
+
+    for (const { flag, bonus: bonusAmt, why } of cases) {
+      it(`${flag} + ${bonusAmt}: ${why}`, () => {
+        const r = periodTotalPay(flag, bonusAmt);
+        const printedFlag = parse(fmtMoney(r.flagPay ?? 0));
+        const printedBonus = parse(fmtMoney(r.bonusTotal));
+        const printedTotal = parse(fmtMoney(r.total));
+        expect(printedFlag + printedBonus).toBe(printedTotal);
+      });
+    }
+
+    it("holds when no rates are priced (flagPay null prints nothing)", () => {
+      const r = periodTotalPay(null, 27.5);
+      expect(fmtMoney(r.total)).toBe(fmtMoney(r.bonusTotal));
+    });
+
+    it("leaves the exact terms unrounded for any non-display consumer", () => {
+      const r = periodTotalPay(489.7, 27.5);
+      expect(r.flagPay).toBe(489.7);
+      expect(r.bonusTotal).toBe(27.5);
+      expect(r.total).toBe(518); // 490 + 28, NOT round(517.20)
+    });
+
+    it("still shows the breakdown for a spiff that prints as $0", () => {
+      // Rounding must not silently swallow a real row out of the sentence.
+      const r = periodTotalPay(400, 0.4);
+      expect(r.showBreakdown).toBe(true);
+    });
   });
 });

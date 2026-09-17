@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { entryIdSchema } from "@/lib/validation/actions";
 import { hasAnyRate, ratesToMap } from "@/lib/earnings";
 import { hhmmInTz, isoDate, isoDateInTz } from "@/lib/periods";
 import { LogRoForm } from "@/components/forms/LogRoForm";
@@ -9,7 +10,12 @@ import { LogRoForm } from "@/components/forms/LogRoForm";
 export default async function LogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ edit?: string; close?: string }>;
+  // Next hands back `string[]` for a repeated query param (`?edit=a&edit=b`),
+  // so `edit` is validated below rather than trusted as a row id.
+  searchParams: Promise<{
+    edit?: string | string[];
+    close?: string | string[];
+  }>;
 }) {
   const { edit, close } = await searchParams;
 
@@ -22,7 +28,13 @@ export default async function LogPage({
 
   let existingEntry;
   if (edit) {
-    const entry = await db.getEntry(supabase, edit);
+    // `edit` is a row id, but anyone can type anything into the URL — an RO
+    // number (`?edit=71845`) reaches the uuid column as a malformed literal and
+    // Postgres answers 22P02, which getEntry rethrows out of this Server
+    // Component as a 500. A bad id is a missing page, same as the branch below.
+    const parsed = entryIdSchema.safeParse(edit);
+    if (!parsed.success) notFound();
+    const entry = await db.getEntry(supabase, parsed.data);
     if (!entry) notFound();
     existingEntry = entry;
   }

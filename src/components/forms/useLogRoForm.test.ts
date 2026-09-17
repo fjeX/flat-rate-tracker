@@ -274,6 +274,121 @@ describe("duplicate-RO prompt", () => {
     expect(saveEntry).toHaveBeenCalledTimes(1);
     expect(result.current.abandonedRoNumber).toBeNull();
   });
+
+  // The race the open-ticket form already closed in c511ee4, on the other save
+  // path: findDuplicateRos is async and the RO field stays editable while it
+  // runs, so the `.then` closure can resolve against a number the tech has
+  // already replaced. "No duplicates" for 55102 is not permission to write a
+  // ticket the tech renumbered to 55103 — performSave would persist the OLD
+  // trimmed number out of the stale render and navigate away as if it worked.
+  const STALE_ABORT = /The RO number changed while FRT was checking it/;
+
+  function heldCheck() {
+    let resolveCheck!: (v: RoMatch[]) => void;
+    findDuplicateRos.mockImplementation(
+      () => new Promise<RoMatch[]>((res) => { resolveCheck = res; }),
+    );
+    return () => resolveCheck;
+  }
+
+  it("writes nothing when the RO number changes while the check is in flight", async () => {
+    const getResolve = heldCheck();
+    const { result } = setup();
+    const afterSave = vi.fn();
+
+    act(() => {
+      result.current.setRoNumber("55102");
+      result.current.addCustomLine({ code: "OIL", description: "LOF", flagHours: 0.5 });
+    });
+    await act(async () => {
+      result.current.handleSave(afterSave);
+    });
+    // In flight: no verdict yet, and the field is still the tech's to fix.
+    expect(result.current.isChecking).toBe(true);
+
+    act(() => result.current.setRoNumber("55103"));
+
+    // The answer for 55102 lands — clean, which is the dangerous case.
+    await act(async () => {
+      getResolve()([]);
+    });
+
+    expect(saveEntry).not.toHaveBeenCalled();
+    expect(result.current.dupMatches).toBeNull();
+    // Save & New's callback must not run either: resetForm + "RO #55102 saved ✓"
+    // over a save that never happened is worse than the silent version.
+    expect(afterSave).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(result.current.error).toMatch(STALE_ABORT);
+    // The button has to come back, or the tech can't take the advice.
+    expect(result.current.isChecking).toBe(false);
+    expect(result.current.roNumber).toBe("55103");
+  });
+
+  it("does not open the duplicate dialog for a stale check either", async () => {
+    const getResolve = heldCheck();
+    const { result } = setup();
+
+    act(() => {
+      result.current.setRoNumber("55102");
+      result.current.addCustomLine({ code: "OIL", description: "LOF", flagHours: 0.5 });
+    });
+    await act(async () => {
+      result.current.handleSave();
+    });
+    act(() => result.current.setRoNumber("55103"));
+    await act(async () => {
+      getResolve()([match]);
+    });
+
+    // A dialog naming 55102 over a form reading 55103 offers Edit/Log-as-new
+    // for the wrong RO — the stale sentence problem with a write attached.
+    expect(result.current.dupMatches).toBeNull();
+    expect(saveEntry).not.toHaveBeenCalled();
+    expect(result.current.error).toMatch(STALE_ABORT);
+  });
+
+  it("retracts the stale-check sentence on the next RO-number edit", async () => {
+    const getResolve = heldCheck();
+    const { result } = setup();
+
+    act(() => {
+      result.current.setRoNumber("55102");
+      result.current.addCustomLine({ code: "OIL", description: "LOF", flagHours: 0.5 });
+    });
+    await act(async () => {
+      result.current.handleSave();
+    });
+    act(() => result.current.setRoNumber("55103"));
+    await act(async () => {
+      getResolve()([]);
+    });
+    expect(result.current.error).toMatch(STALE_ABORT);
+
+    // "Tap Save again" is advice, not a standing accusation.
+    act(() => result.current.setRoNumber("551034"));
+    expect(result.current.error).toBeNull();
+  });
+
+  // FIX 2: the banner names a number the tech has moved on from.
+  it("retires the not-saved notice the moment the RO number is edited", async () => {
+    findDuplicateRos.mockResolvedValue([match]);
+    const { result } = setup();
+
+    act(() => {
+      result.current.setRoNumber("55102");
+      result.current.addCustomLine({ code: "OIL", description: "LOF", flagHours: 0.5 });
+    });
+    await act(async () => {
+      result.current.handleSave();
+    });
+    act(() => result.current.handleDupClose());
+    expect(result.current.abandonedRoNumber).toBe("55102");
+
+    // "RO #55102 already exists" is not a fact about a form reading 55103.
+    act(() => result.current.setRoNumber("55103"));
+    expect(result.current.abandonedRoNumber).toBeNull();
+  });
 });
 
 // The redo-of chip's label on edit-load. A saved comeback carries only

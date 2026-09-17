@@ -152,7 +152,20 @@ export function useLogRoForm({
   const [loggedTime, setLoggedTime] = useState(
     existingEntry ? (existingEntry.loggedTime ?? "") : defaultLoggedTime,
   );
-  const [roNumber, setRoNumber] = useState(existingEntry?.roNumber ?? "");
+  const [roNumber, setRoNumberState] = useState(existingEntry?.roNumber ?? "");
+  // What the RO field reads RIGHT NOW. findDuplicateRos is async and nothing
+  // cancels it, so by the time the answer lands the `.then` closure is already
+  // reading a stale render — a ref updated SYNCHRONOUSLY by the setter is the
+  // only way to ask "is this still the number the tech is typing?". Mirrors the
+  // roNumberRef LogRoForm keeps for the open-ticket check (commit c511ee4).
+  const roNumberRef = useRef(existingEntry?.roNumber ?? "");
+  // Monotonic request id: only the newest duplicate check may act on its
+  // result, so two overlapping checks can't have the older one win the race.
+  const dupCheckRef = useRef(0);
+  // The exact sentence the stale-check abort last put in `error`, so the next
+  // RO edit retracts it by identity — never a save or delete failure the tech
+  // hasn't read yet.
+  const staleCheckErrorRef = useRef<string | null>(null);
   const [year, setYear] = useState(existingEntry?.vehicle.year ?? "");
   // null = "the user has not touched this field", which is what lets the saved
   // default fill in below. Distinct from "" — clearing the box must leave it
@@ -321,6 +334,27 @@ export function useLogRoForm({
   // screen. The only other signal is the ABSENCE of the green saved banner,
   // which is not a signal. This says it out loud until the tech acts again.
   const [abandonedRoNumber, setAbandonedRoNumber] = useState<string | null>(null);
+
+  // The ONLY way the RO number changes — the raw state setter is not exported.
+  // Three things have to happen together on every edit, typed or programmatic
+  // (scan result, resetForm):
+  //   1. the ref moves synchronously, ahead of React's commit, so an in-flight
+  //      duplicate check that resolves this instant still sees the new number;
+  //   2. the "Not saved — RO #x already exists" notice is retracted: it names a
+  //      number the tech is no longer typing, so it stops being true the moment
+  //      the field moves;
+  //   3. the stale-check abort is retracted, by identity — it says "tap Save
+  //      again", and editing the number is the tech doing exactly that.
+  function setRoNumber(value: string) {
+    roNumberRef.current = value;
+    setRoNumberState(value);
+    setAbandonedRoNumber(null);
+    const mine = staleCheckErrorRef.current;
+    if (mine !== null) {
+      staleCheckErrorRef.current = null;
+      setError((cur) => (cur === mine ? null : cur));
+    }
+  }
   // Retro capture. The RO is ALREADY SAVED before any of this renders — the
   // prompt defers navigation, it never gates the persist. If anything here
   // throws, the tech still keeps their ticket.
@@ -806,9 +840,33 @@ export function useLogRoForm({
       performSave(afterSave);
       return;
     }
+    // The Save button is disabled while the check runs; the RO field is NOT,
+    // and deliberately so — a tech must be able to fix a typo mid-check. So the
+    // answer can land describing a number that is no longer on screen.
+    //
+    // A late answer is INERT. It is not permission to save either: every value
+    // performSave persists — the RO number above all — is read from the render
+    // that clicked Save, so falling through would write the ticket under the OLD
+    // number with its duplicate check skipped, and then navigate away as though
+    // it had worked. That is the exact silent mis-save the check exists to stop.
+    // So: no write, no dialog, no afterSave (Save & New must not reset the form
+    // and flash "saved ✓"), and one honest sentence instead.
+    const checkId = ++dupCheckRef.current;
+    const isStale = () =>
+      checkId !== dupCheckRef.current || roNumberRef.current.trim() !== ro;
+    function abortStale() {
+      const message =
+        "The RO number changed while FRT was checking it — tap Save again.";
+      staleCheckErrorRef.current = message;
+      setError(message);
+    }
     setIsChecking(true);
     findDuplicateRos(ro)
       .then((matches) => {
+        if (isStale()) {
+          abortStale();
+          return;
+        }
         if (matches.length > 0) {
           pendingAfterSave.current = afterSave;
           setDupMatches(matches);
@@ -817,7 +875,13 @@ export function useLogRoForm({
         }
       })
       .catch(() => {
-        // Don't let a failed check block saving — just proceed.
+        // Don't let a failed check block saving — just proceed. Unless the
+        // number moved: "the check failed" is not a reason to save under an RO
+        // the tech has already replaced.
+        if (isStale()) {
+          abortStale();
+          return;
+        }
         performSave(afterSave);
       })
       .finally(() => setIsChecking(false));

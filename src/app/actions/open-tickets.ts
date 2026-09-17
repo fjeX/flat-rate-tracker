@@ -55,6 +55,29 @@ async function nowHhmmInUserTz(): Promise<string> {
   return hhmmInTz(tz);
 }
 
+/**
+ * Right now in the user's timezone, date and time read off ONE instant so the
+ * pair can never straddle midnight (two separate reads could return yesterday's
+ * date with 00:00).
+ *
+ * The transition events are stamped with this time because they happen at the
+ * moment the tech performs them. sortRoEvents (src/lib/db/ro-events.ts) puts a
+ * null time AFTER every timed event that day — the honest position for
+ * "sometime that day" — so an untimed `opened` rendered BELOW a "Parts ordered
+ * 7:45 AM" logged later the same morning. A transition that is happening right
+ * now knows its own time; only a BACKDATED event (a close dated an earlier day)
+ * genuinely is "sometime that day" and keeps a null time.
+ */
+async function nowInUserTz(): Promise<{ date: string; time: string }> {
+  const cookieStore = await cookies();
+  const tz = cookieStore.get("frt_timezone")?.value ?? "";
+  const at = new Date();
+  return {
+    date: tz ? isoDateInTz(tz, at) : isoDate(at),
+    time: hhmmInTz(tz, at),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Opening
 // ---------------------------------------------------------------------------
@@ -89,7 +112,7 @@ export async function createOpenEntryAction(input: {
   const clean = parsed.data;
 
   const supabase = await createClient();
-  const today = await todayInUserTz();
+  const { date: today, time: now } = await nowInUserTz();
 
   const entry = await db.createOpenEntry(supabase, {
     date: today,
@@ -108,6 +131,8 @@ export async function createOpenEntryAction(input: {
     await db.createRoEvent(supabase, {
       entryId: entry.id,
       date: today,
+      // Stamped: the ticket is being opened right now (see nowInUserTz).
+      time: now,
       kind: "opened",
     });
   } catch (err) {
@@ -200,9 +225,13 @@ export async function reopenTicketAction(
   // already `reopened` (a retry after this write landed but the status flip
   // below failed).
   if (!isReopened(events)) {
+    const { date, time } = await nowInUserTz();
     await db.createRoEvent(supabase, {
       entryId: id,
-      date: await todayInUserTz(),
+      date,
+      // A reopen is always "now" — it has no backdating path — so it is always
+      // stamped.
+      time,
       kind: "reopened",
     });
   }
@@ -464,11 +493,18 @@ export async function closeTicketAction(input: {
   // exist" would be wrong: a SECOND close (after a reopen) already has one
   // from the first close and must still record its own, or the timeline would
   // read as reopened-forever.
+  //
+  // Time: stamped ONLY when the close day IS today — the tech is closing it
+  // right now, so the timeline can say when. A BACKDATED close ("I finished it
+  // Tuesday") honestly happened at an unknown hour of that day, and a null time
+  // sorts after every timed event on it, which is exactly right.
   const events = await db.listRoEvents(supabase, clean.entryId);
   if (latestTransition(events)?.kind !== "closed") {
+    const now = await nowInUserTz();
     await db.createRoEvent(supabase, {
       entryId: clean.entryId,
       date: clean.date,
+      time: clean.date === now.date ? now.time : null,
       kind: "closed",
     });
   }
