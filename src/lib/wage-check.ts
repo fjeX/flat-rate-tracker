@@ -23,6 +23,7 @@
 import type { Bonus, DailyClock, Entry } from "./types";
 import { hasAnyRate, periodEarnings, type RateMap } from "./earnings";
 import { sumBonuses } from "./bonuses";
+import { displayTotalPay } from "./display-money";
 import {
   scheduledHoursFor,
   type ShiftOverrideMap,
@@ -108,6 +109,13 @@ export type EffectiveHourly = {
   // `costcard-total-pay-mismatch`). Same trap as flagHours vs countedFlagHours,
   // one field down.
   countedPay: number | null;
+  // The DISPLAY form of countedPay: each term rounded to whole dollars, then
+  // added (lib/display-money `displayTotalPay`). Print this wherever a card
+  // labels a figure "Total pay" — SpiffsCard's total is built the same way from
+  // the same period, and two "Total pay" labels on one page cannot differ by a
+  // dollar. Never divide it: `countedPay` (exact) is the rate's numerator, and
+  // this is only what the caption prints. null exactly when countedPay is null.
+  countedPayDisplay: number | null;
   flagHours: number; // every flagged hour in the period, for display continuity
   // Flagged hours over the days actually counted — excludes an in-progress day
   // (see ongoingDays). Pair this with denomHours; mixing flagHours and
@@ -308,6 +316,13 @@ export function effectiveHourly(
   );
   const countedPay =
     countedFlagPay === null ? null : countedFlagPay + countedBonuses;
+  // Display twin of the line above — rounded terms, then added. Kept beside it
+  // so the exact numerator and the printed figure can never come from different
+  // day sets: both are the counted days only.
+  const countedPayDisplay =
+    countedFlagPay === null
+      ? null
+      : displayTotalPay(countedFlagPay, countedBonuses);
 
   const denomHours = clockedHours + scheduledHours;
   const denomSource: EffectiveHourly["denomSource"] =
@@ -345,6 +360,7 @@ export function effectiveHourly(
     bonusTotal,
     totalPay,
     countedPay,
+    countedPayDisplay,
     flagHours,
     countedFlagHours,
     clockedHours,

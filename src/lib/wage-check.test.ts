@@ -14,6 +14,8 @@ import type { WorkSchedule } from "./schedule";
 // per-day pairing rule; this suite asserts effectiveHourly AGREES with it
 // rather than re-stating the rule and letting the two drift again.
 import { aggregateStatsWithSchedule } from "./stats";
+import { periodTotalPay } from "./bonuses";
+import { fmtMoney } from "./earnings";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -839,6 +841,38 @@ describe("effectiveHourly — countedPay", () => {
       fallback(),
     );
     expect(r.countedPay).toBe(r.totalPay);
+  });
+
+  it("countedPayDisplay rounds each term then adds, matching SpiffsCard", () => {
+    // 15.07h x $32.50 = 489.775 (prints $490) + a $27.50 spiff (prints $28).
+    // SpiffsCard says $518; this card must not say $517.
+    const r = effectiveHourly(
+      [entry("2026-07-20", 15.07)],
+      [clock("2026-07-20", 8)],
+      [bonus("2026-07-20", 27.5)],
+      { customer_pay: 32.5 },
+      RANGE,
+      fallback(),
+    );
+    expect(r.countedPay).toBeCloseTo(517.275, 6);
+    expect(r.countedPayDisplay).toBe(periodTotalPay(r.flagPay, 27.5).total);
+    expect(fmtMoney(r.countedPayDisplay!)).toBe("$518");
+    // The rate is untouched — still the EXACT numerator over the denominator.
+    expect(r.hourly).toBeCloseTo(517.275 / 8, 10);
+    expect(r.countedPay! / r.denomHours).toBeCloseTo(r.hourly!, 12);
+  });
+
+  it("countedPayDisplay is null exactly when countedPay is null", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8)],
+      [clock("2026-07-20", 8)],
+      [],
+      {},
+      RANGE,
+      fallback(),
+    );
+    expect(r.countedPay).toBeNull();
+    expect(r.countedPayDisplay).toBeNull();
   });
 
   it("is null exactly when totalPay is null (no rates priced)", () => {

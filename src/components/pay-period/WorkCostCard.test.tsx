@@ -53,6 +53,9 @@ vi.mock("next/navigation", () => ({
 
 // Imported after the mocks so the component picks them up.
 import { WorkCostCard } from "./WorkCostCard";
+import { fmtMoney } from "@/lib/earnings";
+import { periodTotalPay } from "@/lib/bonuses";
+import { displayTotalPay } from "@/lib/display-money";
 
 // The id of the ledger row in WITH_UNPAID. A uuid, because the action validates
 // the shape before it reaches the data layer.
@@ -124,6 +127,12 @@ const WITH_UNPAID: UnpaidSummary = {
 
 function result(over: Partial<EffectiveHourly> = {}): EffectiveHourly {
   return {
+    // Mirrors countedPay unless a case says otherwise: the two differ only by
+    // sub-dollar rounding, which every fixture here avoids by using whole
+    // dollars, and the real EffectiveHourly guarantees they are null together.
+    // A case that cares about the rounding (the SpiffsCard-agreement test at
+    // the bottom) passes countedPayDisplay explicitly.
+    countedPayDisplay: over.countedPay ?? null,
     hourly: null,
     flagPay: null,
     bonusTotal: 0,
@@ -1012,5 +1021,60 @@ describe("WorkCostCard — deleting one unpaid record", () => {
     expect(window.alert).toHaveBeenCalledWith("That record is no longer there.");
     // A failed delete must not repaint as if it succeeded.
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+// ── "Total pay" must be the same number on both cards ────────────────────────
+//
+// HEAD 3034b86 made SpiffsCard's total round-then-sum so its sentence adds up
+// ($490 + $28 = $518). This caption kept summing exactly and printing $517 for
+// the same period — two "Total pay" labels on one page, a dollar apart. Same
+// class as `costcard-total-pay-mismatch`: the printed arithmetic has to
+// reconcile with what is beside it.
+describe("WorkCostCard — the printed total agrees with SpiffsCard", () => {
+  const FLAG = 15.07 * 32.5; // 489.775 -> prints $490
+  const SPIFF = 27.5; // prints $28
+  const HOURS = 8;
+
+  it("prints periodTotalPay's total, not the exact sum", () => {
+    const { container } = render(
+      <WorkCostCard
+        result={result({
+          status: "ok",
+          hourly: (FLAG + SPIFF) / HOURS,
+          flagPay: FLAG,
+          bonusTotal: SPIFF,
+          totalPay: FLAG + SPIFF,
+          countedPay: FLAG + SPIFF,
+          countedPayDisplay: displayTotalPay(FLAG, SPIFF),
+          flagHours: 15.07,
+          countedFlagHours: 15.07,
+          clockedHours: HOURS,
+          denomHours: HOURS,
+          denomSource: "clocked",
+          workDays: ["2026-07-14"],
+          clockDays: ["2026-07-14"],
+        })}
+        referenceRate={null}
+        unpaid={NO_UNPAID}
+        defaultOpen
+      />,
+    );
+    const text = container.textContent ?? "";
+    const spiffsCardTotal = fmtMoney(periodTotalPay(FLAG, SPIFF).total);
+    expect(spiffsCardTotal).toBe("$518");
+    expect(text).toContain(`Total pay ${spiffsCardTotal}`);
+    // The old exact-sum rendering is gone.
+    expect(text).not.toContain("Total pay $517");
+    // ...and the rate itself is still the EXACT division, unrounded.
+    // Mirrors the component's local fmtRate (2dp) — the EXACT quotient.
+    expect(text).toContain(
+      ((FLAG + SPIFF) / HOURS).toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    );
   });
 });

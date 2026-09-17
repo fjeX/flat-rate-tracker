@@ -481,7 +481,16 @@ export function WorkCostCard({
                 {result.ongoingDays.length > 0
                   ? "Pay on the days counted "
                   : "Total pay "}
-                {result.countedPay !== null ? fmtMoney(result.countedPay) : "—"}{" "}
+                {/* The PRINTED figure is countedPayDisplay (rounded terms,
+                    then summed) — SpiffsCard prints the same period's total
+                    through periodTotalPay's identical rule, and $518 there
+                    beside $517 here is the same class of bug as
+                    `costcard-total-pay-mismatch`: a caption that does not
+                    reconcile with what is on screen. The RATE above still
+                    divides the exact countedPay; only this caption rounds. */}
+                {result.countedPayDisplay !== null
+                  ? fmtMoney(result.countedPayDisplay)
+                  : "—"}{" "}
                 ÷ {fmtHours(result.denomHours)}{" "}
                 {result.denomSource === "scheduled"
                   ? "scheduled hours"
