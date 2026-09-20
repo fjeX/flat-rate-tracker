@@ -362,15 +362,27 @@ export type RecoveryApplication = {
   applyHours: number;
   /**
    * Recovered hours that land on no live line: goodwill above the claim, a
-   * deleted RO, or a claim whose per-line breakdown was never recorded. Stays
-   * on the claim only. Reported so the two figures visibly reconcile instead of
-   * the tech wondering where 2.6h went.
+   * deleted or renamed RO line, a claim whose per-line breakdown was never
+   * recorded, or a PERIOD-TOTAL claim, which has no lines for money to land on
+   * at all. Stays on the claim only. Reported so the two figures visibly
+   * reconcile instead of the tech wondering where 2.6h went.
+   *
+   * The UI owes the tech a different sentence for each of those, and > 0 alone
+   * does not distinguish them — see the unmapped-note comment in
+   * DisputeOutcomeCard, which splits on `needsLineBreakdown` and the claim's own
+   * `lines.length`.
    */
   unmappedHours: number;
   /**
-   * True when the claim recovered hours but nothing could be mapped because no
-   * per-line recovery was recorded and the settlement wasn't full. The UI asks
-   * for the breakdown rather than guessing at a split.
+   * True when the claim recovered hours, HAS itemized lines, and nothing could
+   * be mapped because no per-line recovery was recorded and the settlement
+   * wasn't full. The UI asks for the breakdown rather than guessing at a split.
+   *
+   * False for a period-total claim (`lines.length === 0`) even though it is
+   * equally unmappable: there is no breakdown to go missing, so "the breakdown
+   * wasn't recorded" would be the wrong thing to tell the tech. That state is
+   * unmappedHours > 0 with needsLineBreakdown false and no lines, and the card
+   * gives it its own copy.
    */
   needsLineBreakdown: boolean;
 };

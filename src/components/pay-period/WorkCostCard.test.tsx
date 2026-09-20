@@ -557,6 +557,40 @@ describe("WorkCostCard — a shift still in progress", () => {
     expect(text).not.toMatch(AT_THE_SHOP_BASIS);
     expect(text).not.toMatch(SETTLED_SCOPE);
   });
+
+  // A lone spiff dated today, on a day with no RO and no shift. wage-check now
+  // reports that date as ongoing (work days UNION bonus dates), so the card has
+  // to caption the short figure honestly AND say something true: there is no
+  // shift on that day and no flagged work on it to leave out.
+  it("handles a day that is ongoing because of a spiff, not a shift", () => {
+    const text = renderCard(
+      result({
+        status: "ok",
+        hourly: 30,
+        flagPay: 240,
+        bonusTotal: 200,
+        totalPay: 440,
+        countedPay: 240,
+        flagHours: 8,
+        countedFlagHours: 8,
+        clockedHours: 8,
+        denomHours: 8,
+        denomSource: "clocked",
+        workDays: ["2026-07-20"],
+        clockDays: ["2026-07-20"],
+        ongoingDays: ["2026-07-22"],
+      }),
+    );
+
+    expect(text).toContain("Pay on the days counted $240");
+    expect(text).not.toContain("Total pay $240");
+    expect(text).toContain("Jul 22 isn't counted yet");
+    expect(text).toContain(
+      "that day is still in progress. Flagged work and spiffs on it are left out of the figures above",
+    );
+    // The wording that named a shift nobody worked.
+    expect(text).not.toContain("that shift is");
+  });
 });
 
 describe("WorkCostCard — a sub-resolution gap keeps its direction", () => {

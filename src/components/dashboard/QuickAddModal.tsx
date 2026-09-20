@@ -86,10 +86,25 @@ export function QuickAddModal({
   const [comebackKind, setComebackKind] = useState<ComebackKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startTransition] = useTransition();
-  // Same warn-but-allow duplicate flow as the full log form.
-  const [dupMatches, setDupMatches] = useState<RoMatch[] | null>(null);
+  // Same warn-but-allow duplicate flow as the full log form. The RO number that
+  // was actually CHECKED travels with the matches rather than being re-read from
+  // the field when the dialog renders: the two can disagree (see the guard in
+  // handleSave), and a dialog titled 222 listing matches for 111 is a lie in
+  // both directions — it names a number nobody looked up, and "Log as new entry"
+  // would then save a number nobody checked.
+  const [dup, setDup] = useState<{ ro: string; matches: RoMatch[] } | null>(null);
 
   const roInputRef = useRef<HTMLInputElement>(null);
+  // What the RO field reads RIGHT NOW. findDuplicateRos is async and nothing
+  // cancels it, so the closure awaiting it — and performSaveInner's read of
+  // `roNumber` — are both pinned to the render that clicked Save. A ref is the
+  // only way to ask "is this still the number the tech is looking at?". Kept in
+  // sync synchronously by the onChange below, not by an effect, so the answer is
+  // right even for a check that resolves before React commits the keystroke.
+  const roNumberRef = useRef("");
+  // Monotonic request id: only the newest check may act on its result, so two
+  // overlapping checks can't have the older one win the race.
+  const dupCheckRef = useRef(0);
   const pickerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -264,26 +279,59 @@ export function QuickAddModal({
     };
   }
 
+  // The sentence the stale-check abort puts in the shared error slot. Named so
+  // the test can assert on the same string the component renders.
+  const STALE_CHECK_MESSAGE =
+    "The RO number changed while FRT was checking it — tap Save RO again.";
+
   function handleSave() {
     setError(null);
     const ro = roNumber.trim();
+    // Bumped even on the empty-RO path: tapping Save again is the tech
+    // superseding whatever question was in flight, whatever they typed.
+    const checkId = ++dupCheckRef.current;
     if (!ro) {
-      performSave();
+      performSave(ro);
       return; // server surfaces the empty-RO# error
     }
     startTransition(async () => {
       // Warn-but-allow: a failed check never blocks saving.
       const matches = await findDuplicateRos(ro).catch(() => []);
-      if (matches.length > 0) setDupMatches(matches);
-      else await performSaveInner();
+      // ONE staleness check, ahead of BOTH branches — including the `catch`
+      // above, because "the check failed" is not permission to save a number
+      // the tech has since changed either.
+      //
+      // A late answer is inert: it describes an RO that is no longer on screen.
+      // But expiring is NOT permission to proceed — ask what a "proceeds" path
+      // would proceed WITH, and the answer is `ro`, the click-time number. On
+      // 2026-09-13 the same class of patch dropped the stale result and fell
+      // through to the save, which wrote the OLD number with the duplicate
+      // check skipped: worse than the bug it replaced. So: no save, no dialog,
+      // modal stays open, and one honest sentence saying why.
+      //
+      // A plain return is a safe abort here, unlike the open-ticket check in
+      // useLogRoForm where a bare return reads as success to performSave's
+      // onSave contract and the abort had to throw. Nothing observes this
+      // callback's completion — onClose, router.refresh and notifyDataChanged
+      // all live inside performSaveInner, which is exactly what we skip.
+      if (checkId !== dupCheckRef.current || roNumberRef.current.trim() !== ro) {
+        setError(STALE_CHECK_MESSAGE);
+        return;
+      }
+      if (matches.length > 0) setDup({ ro, matches });
+      else await performSaveInner(ro);
     });
   }
 
-  function performSave() {
-    startTransition(performSaveInner);
+  function performSave(ro: string) {
+    startTransition(() => performSaveInner(ro));
   }
 
-  async function performSaveInner() {
+  // Takes the RO number as an argument rather than reading `roNumber` off the
+  // closure: every caller has already decided WHICH number this save is for —
+  // the one that was duplicate-checked — and re-reading state here is how the
+  // click-time number and the on-screen number silently diverge.
+  async function performSaveInner(ro: string) {
     try {
       const input: NewEntry = {
         date: isoDate(),
@@ -291,7 +339,7 @@ export function QuickAddModal({
         ...(trackRoTime
           ? { loggedTime: loggedTime.trim() === "" ? null : loggedTime }
           : {}),
-        roNumber: roNumber.trim(),
+        roNumber: ro,
         vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
         notes: "",
         // Only meaningful when a line is actually marked — otherwise a normal
@@ -329,7 +377,7 @@ export function QuickAddModal({
   // While a child modal is stacked on top, the outer modal must ignore its
   // own close triggers (Escape fires both modals' window listeners).
   const childModalOpen =
-    customOpen || newLibraryOpen || subPickerOc !== null || dupMatches !== null;
+    customOpen || newLibraryOpen || subPickerOc !== null || dup !== null;
 
   return (
     <Modal
@@ -374,7 +422,13 @@ export function QuickAddModal({
               ref={roInputRef}
               type="text"
               value={roNumber}
-              onChange={(e) => setRoNumber(e.target.value)}
+              onChange={(e) => {
+                // Synchronously, ahead of the state update: a duplicate check
+                // that resolves before React commits must still see the new
+                // number when it asks whether it is stale.
+                roNumberRef.current = e.target.value;
+                setRoNumber(e.target.value);
+              }}
               inputMode="numeric"
               placeholder="12345"
               autoComplete="off"
@@ -692,20 +746,23 @@ export function QuickAddModal({
           onClose={() => setSubPickerOc(null)}
         />
       )}
-      {dupMatches && (
+      {dup && (
         <DuplicateRoDialog
-          roNumber={roNumber.trim()}
-          matches={dupMatches}
+          // The number that was checked, not the live field. The dialog now
+          // says what it saves and saves what it says — "Log as new entry" is
+          // the tech answering a question about THIS number.
+          roNumber={dup.ro}
+          matches={dup.matches}
           onEdit={(id) => {
-            setDupMatches(null);
+            setDup(null);
             onClose();
             router.push(`/log?edit=${id}`);
           }}
           onLogNew={() => {
-            setDupMatches(null);
-            performSave();
+            setDup(null);
+            performSave(dup.ro);
           }}
-          onClose={() => setDupMatches(null)}
+          onClose={() => setDup(null)}
         />
       )}
     </Modal>

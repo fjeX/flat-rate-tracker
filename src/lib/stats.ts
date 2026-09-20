@@ -441,9 +441,12 @@ const PLACEMENT: Record<UnpairedSurface, string> = {
  * tech with a schedule to "add them to your schedule" for a day that was
  * already on it, marked off. The corrections are three different actions.
  *
- * The in_progress cause is WorkCostCard's, unchanged: that card has printed
- * "that shift is still in progress" off wage-check's `ongoingDays` all along,
- * and one situation gets one sentence.
+ * The in_progress cause is WorkCostCard's sentence: that card prints "still in
+ * progress" off wage-check's `ongoingDays`, and one situation gets one
+ * sentence. The noun differs on purpose. Every day in THIS bucket carries
+ * flagged work, so "shift" is always true here; WorkCostCard says "that day"
+ * because its `ongoingDays` also holds a day with nothing on it but a spiff,
+ * where there is no shift to speak of.
  */
 type ClausePair = { one: string; many: string };
 const CAUSE: Record<UnpairedReason, ClausePair> = {

@@ -887,9 +887,14 @@ verify the saved hours before continuing to §6.
   - Only days with NEITHER a clock entry NOR a scheduled shift count as missing.
 - **Today is never "missing" (new 2026-07-30).** The current day's shift is
   still running, so it is excluded from BOTH sides of the average and the card
-  says "isn't counted yet — that shift is still in progress". If the card ever
-  reports TODAY as a day with no hours, report it as a FAIL — that is the exact
-  bug fixed on 2026-07-30.
+  says "isn't counted yet — that day is still in progress" ("day", not "shift",
+  since 2026-09-19: a spiff logged today with no RO also makes today ongoing,
+  and there is no shift to name). When today is ongoing the pay tile is
+  captioned **"Pay on the days counted"**, not "Total pay", and today's flagged
+  work AND spiffs are left out of it — so it reading lower than the Spiffs
+  card's "Total pay" on the same page is expected, not a mismatch. If the card
+  ever reports TODAY as a day with no hours, report it as a FAIL — that is the
+  exact bug fixed on 2026-07-30.
 - If it computes, sanity-check the effective hourly figure against the period's
   flag pay + bonuses.
 - **New 2026-07-28 — "What's in that Xh gap"**: when the period has unpaid time

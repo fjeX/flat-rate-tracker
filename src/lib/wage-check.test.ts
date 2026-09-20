@@ -618,6 +618,79 @@ describe("effectiveHourly — in-progress day", () => {
     );
     expect(r.hourly).toBeCloseTo(30, 6);
     expect(r.bonusTotal).toBe(100); // still reported in full
+    // …and SAYS SO. The exclusion above is what makes countedPay smaller than
+    // totalPay; ongoingDays is how WorkCostCard learns to caption the figure
+    // "Pay on the days counted" instead of "Total pay". Derived from work days
+    // alone this came back empty and the card printed a settled caption over a
+    // figure missing a spiff SpiffsCard was showing on the same page.
+    expect(r.ongoingDays).toEqual(["2026-07-22"]);
+  });
+
+  it("calls a day with only a spiff on it ongoing — there is no RO to find it by", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8)],
+      [clock("2026-07-20", 8)],
+      [bonus("2026-07-22", 200)],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.workDays).toEqual(["2026-07-20"]); // unchanged — no RO today
+    expect(r.ongoingDays).toEqual(["2026-07-22"]);
+    expect(r.totalPay).toBe(440);
+    expect(r.countedPay).toBe(240); // the $200 is out
+  });
+
+  it("counts a date carrying both an RO and a spiff once", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8), entry("2026-07-22", 5)],
+      [clock("2026-07-20", 8)],
+      [bonus("2026-07-22", 200)],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.ongoingDays).toEqual(["2026-07-22"]);
+  });
+
+  it("leaves a spiff on a finished, clocked day counted", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8), entry("2026-07-22", 5)],
+      [clock("2026-07-20", 8), clock("2026-07-22", 4)],
+      [bonus("2026-07-22", 200)],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.ongoingDays).toEqual([]);
+    expect(r.countedPay).toBe(r.totalPay);
+  });
+
+  it("leaves a spiff dated in the past out of the ongoing set", () => {
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8)],
+      [clock("2026-07-20", 8)],
+      [bonus("2026-07-18", 50)],
+      RATES,
+      RANGE,
+      fallback({ today: "2026-07-22" }),
+    );
+    expect(r.ongoingDays).toEqual([]);
+    expect(r.countedPay).toBe(290);
+  });
+
+  it("keeps the no-schedule case unchanged — a spiff today is still counted", () => {
+    // Without schedule context there is no "today", so nothing is in progress
+    // and nothing is excluded. Same as before the union.
+    const r = effectiveHourly(
+      [entry("2026-07-20", 8)],
+      [clock("2026-07-20", 8)],
+      [bonus("2026-07-22", 200)],
+      RATES,
+      RANGE,
+    );
+    expect(r.ongoingDays).toEqual([]);
+    expect(r.countedPay).toBe(440);
   });
 
   it("reports no_clock when the ONLY work day is today", () => {

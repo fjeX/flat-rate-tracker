@@ -688,20 +688,25 @@ export function WorkCostCard({
             </p>
           )}
 
-          {/* An in-progress shift is excluded from both sides of the average, so
+          {/* An in-progress day is excluded from both sides of the average, so
               say so. Without this the gap looks wrong all day and only settles
-              once the tech clocks out — which reads as a bug, not as design. */}
+              once the tech clocks out — which reads as a bug, not as design.
+
+              "that day", not "that shift": an ongoing day can be a lone spiff
+              dated today with no RO and no shift on it (wage-check derives
+              ongoingDays from work days UNION bonus dates), and the old wording
+              named a shift that doesn't exist and flagged work that is zero. */}
           {result.ongoingDays.length > 0 && (
             <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
               {result.ongoingDays.length === 1
                 ? `${formatDateShort(result.ongoingDays[0])} isn't counted yet`
                 : `${result.ongoingDays.map(formatDateShort).join(", ")} aren't counted yet`}
               {" — "}
-              {result.ongoingDays.length === 1 ? "that shift is" : "those shifts are"}{" "}
-              still in progress. Flagged work on{" "}
-              {result.ongoingDays.length === 1 ? "it" : "them"} is left out of the
-              figures above until there are hours to divide it by, so the gap will
-              move once you clock out.
+              {result.ongoingDays.length === 1 ? "that day is" : "those days are"}{" "}
+              still in progress. Flagged work and spiffs on{" "}
+              {result.ongoingDays.length === 1 ? "it" : "them"} are left out of
+              the figures above until there are hours to divide them by, so the
+              gap will move once you clock out.
             </p>
           )}
 

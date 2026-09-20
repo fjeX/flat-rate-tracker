@@ -139,11 +139,16 @@ export type EffectiveHourly = {
   // summed flag hours are positive, plus confirmed real-zero days (which have
   // no RO on them by definition and so are never "work days").
   scheduledDays: string[];
-  // Work days at or after "today" with no clock entry — the shift is still
-  // running, so they're excluded from BOTH sides of the average rather than
-  // counted as missing data. Counting their flagged hours against a denominator
-  // that has no hours for them yet would inflate the rate all day and settle
-  // only after the tech clocks out.
+  // Dates at or after "today" with no clock entry that this period has work or
+  // a spiff on — the day is still running, so they're excluded from BOTH sides
+  // of the average rather than counted as missing data. Counting their flagged
+  // hours or spiffs against a denominator that has no hours for them yet would
+  // inflate the rate all day and settle only after the tech clocks out.
+  //
+  // Work days UNION bonus dates, not work days alone: a spiff can sit on a day
+  // with no RO on it, and it is left out of `countedPay` just the same. A
+  // surface that captions `countedPay` or asks "is this period settled?" reads
+  // this field, so a day it omits is a day the caption lies about.
   ongoingDays: string[];
   // Days with FLAGGED WORK (summed flag hours > 0) and NEITHER a clock entry
   // nor a schedule to fall back on — the genuinely unknown set. A scheduled
@@ -290,7 +295,19 @@ export function effectiveHourly(
     schedule !== undefined &&
     date >= schedule.today &&
     !clockDaySet.has(date);
-  const ongoingDays = workDays.filter(isOngoing);
+  // The REPORTED set has to cover every date the exclusion actually removes
+  // money or hours from, which is work days UNION the dates of the bonuses this
+  // function considers. Filtering work days alone dropped a spiff logged today
+  // on a day with no RO on it: `countedBonuses` left the $200 out of the
+  // numerator (correctly — see below), `ongoingDays` came back empty, and so
+  // the card called the short figure "Total pay", called the period settled and
+  // never printed the "isn't counted yet" line, while SpiffsCard on the same
+  // page showed the spiff. distinctDates dedupes and sorts, so a date carrying
+  // both an RO and a spiff appears once, in the same order as workDays.
+  const ongoingDays = distinctDates([
+    ...workDays,
+    ...includedBonuses.map((b) => b.date),
+  ]).filter(isOngoing);
 
   // Only days with neither a clock entry nor a schedule are genuinely unknown —
   // and an in-progress day is never one of them.

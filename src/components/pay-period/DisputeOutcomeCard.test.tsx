@@ -27,7 +27,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { DisputeOutcomeCard } from "./DisputeOutcomeCard";
-import type { Dispute } from "@/lib/types";
+import type { Dispute, DisputeLine, Entry, EntryOpCode } from "@/lib/types";
 
 // Server actions: the module is "use server" and pulls the db client. Nothing
 // here taps a button, so a stub is enough to keep jsdom out of server code.
@@ -248,5 +248,240 @@ describe("DisputeOutcomeCard correcting a closed claim", () => {
     fireEvent.click(screen.getByRole("button", { name: "Correct outcome" }));
     const hours = screen.getByLabelText("Recovered hours") as HTMLInputElement;
     expect(hours.value).toBe("19.7");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Money came back and none of it can be applied" — the silent states
+// ---------------------------------------------------------------------------
+//
+// pendingRecoveryApplication can hand the card rows [] with unmappedHours > 0
+// and needsLineBreakdown false, and the card used to say NOTHING in that state:
+// the explanation paragraph lived inside the `rows.length > 0` panel, and the
+// only other paragraph was gated on needsLineBreakdown. The tech saw a Recovered
+// tile with a real number, a re-offer sentence still calling the period short,
+// and no sentence anywhere saying why or what to do next.
+//
+// There are two ways in and they need DIFFERENT words:
+//  A. a claim WITH lines whose lines no longer resolve (deleted RO, renamed op
+//     code) or that settled above the ask — goodwill / deleted RO.
+//  B. a claim with NO lines — the period-total claim, which is the normal shape
+//     of a non-itemized ask, not a fault. Calling it goodwill or a deleted RO
+//     would be false.
+//
+// EVERY case below asserts the SAME three locators as one object, including the
+// zeros. A negative assertion written against a selector that matches nothing
+// passes for free (memory/feedback_negative_assertions_go_vacuous.md); asserting
+// the whole triple means a broken locator reads {0,0,0} and fails loudly in the
+// cases that expect a 1.
+function disputeLine(over: Partial<DisputeLine> = {}): DisputeLine {
+  return {
+    id: "dl1",
+    disputeId: "d1",
+    entryId: "e1",
+    lineId: null,
+    roNumber: "1001",
+    code: "BRK-F",
+    description: "Front brakes",
+    workDate: "2026-07-20",
+    flaggedHours: 1.5,
+    paidHours: 1,
+    claimedHours: 0.5,
+    claimedDollars: null,
+    recoveredHours: 0,
+    recoveredDollars: null,
+    hadPhoto: false,
+    position: 0,
+    ...over,
+  };
+}
+
+function liveLine(over: Partial<EntryOpCode> = {}): EntryOpCode {
+  return {
+    id: "l1",
+    opCodeId: null,
+    custom: true,
+    customCode: "BRK-F",
+    customDescription: "Front brakes",
+    flagHours: 1.5,
+    actualHours: null,
+    notes: "",
+    position: 0,
+    subOpCodeId: null,
+    laborType: null,
+    paidHours: 1,
+    ...over,
+  };
+}
+
+function liveRO(lines: EntryOpCode[]): Entry {
+  return {
+    id: "e1",
+    userId: "u1",
+    createdAt: "",
+    updatedAt: "",
+    date: "2026-07-20",
+    roNumber: "1001",
+    vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
+    opCodes: lines,
+    flagHours: lines.reduce((s, l) => s + l.flagHours, 0),
+    notes: "",
+  };
+}
+
+/** An itemized closed claim — `closedRound` is the period-total shape. */
+function itemizedRound(
+  recovered: number,
+  lines: DisputeLine[],
+  claimed = 3,
+): Dispute {
+  return {
+    ...closedRound("d1", recovered),
+    scope: "lines",
+    claimedHours: claimed,
+    lines,
+  };
+}
+
+/** How many paragraphs of each kind the card rendered. */
+function noteCounts(container: HTMLElement) {
+  const paras = Array.from(container.querySelectorAll("p")).map(
+    (p) => p.textContent ?? "",
+  );
+  const count = (needle: string) =>
+    paras.filter((t) => t.includes(needle)).length;
+  return {
+    goodwill: count("goodwill above the ask"),
+    periodTotal: count("raised for the period total"),
+    breakdown: count("recorded against individual lines"),
+  };
+}
+
+function renderCard(over: {
+  allDisputes: Dispute[];
+  entries?: Entry[];
+  shortedHours?: number;
+}) {
+  const { container } = render(
+    <DisputeOutcomeCard
+      periodKey={PERIOD_KEY}
+      periodLabel={PERIOD_LABEL}
+      openDispute={null}
+      allDisputes={over.allDisputes}
+      entries={over.entries ?? []}
+      library={[]}
+      shortedHours={over.shortedHours ?? 12.5}
+      pendingCount={0}
+      pendingHours={0}
+      periodEnded
+    />,
+  );
+  return container;
+}
+
+describe("DisputeOutcomeCard unmapped-recovery explanations", () => {
+  it("explains a claim whose lines no longer exist, with no rows to show", () => {
+    // Case A at its emptiest: the claim named one line, the RO is gone, so
+    // nothing maps and there is no Apply panel for the footnote to live under.
+    // This is the state that rendered a bare Recovered tile and nothing else.
+    const container = renderCard({
+      allDisputes: [
+        itemizedRound(0.5, [
+          disputeLine({ entryId: "gone", roNumber: "9999", recoveredHours: 0.5 }),
+        ]),
+      ],
+      entries: [liveRO([liveLine()])],
+    });
+    expect(noteCounts(container)).toEqual({
+      goodwill: 1,
+      periodTotal: 0,
+      breakdown: 0,
+    });
+    // No rows means no offer to apply anything — the paragraph is the whole
+    // story, so a stray Apply button here would promise a write that has no
+    // rows behind it.
+    expect(screen.queryByRole("button", { name: /^Apply / })).toBeNull();
+  });
+
+  it("explains the leftover once, not twice, when some of it DID map", () => {
+    // Case A with a live panel: one line resolves and one doesn't. The footnote
+    // belongs under the rows it qualifies and must not also render standalone —
+    // two paragraphs about the same 0.5h is the failure mode of gating the
+    // standalone copy on `unmappedHours > 0` alone.
+    const container = renderCard({
+      allDisputes: [
+        itemizedRound(1, [
+          disputeLine({ id: "a", entryId: "e1", recoveredHours: 0.5 }),
+          disputeLine({
+            id: "b",
+            entryId: "gone",
+            roNumber: "9999",
+            recoveredHours: 0.5,
+          }),
+        ]),
+      ],
+      entries: [liveRO([liveLine()])],
+    });
+    expect(noteCounts(container)).toEqual({
+      goodwill: 1,
+      periodTotal: 0,
+      breakdown: 0,
+    });
+    // Control: the rows panel really is on screen, so the single goodwill
+    // paragraph above is the in-panel one and not the standalone one having
+    // silently replaced it.
+    expect(screen.getByRole("button", { name: /^Apply 0\.5h to 1 line$/ })).toBeTruthy();
+  });
+
+  it("gives a period-total claim its own copy, never the goodwill wording", () => {
+    // Case B. `closedRound` is scope "period" with no lines — the shape
+    // disputeFromPack stores for a non-itemized claim. Nothing here is goodwill
+    // and no RO was deleted; the claim simply never named a line.
+    const container = renderCard({ allDisputes: [closedRound("d1", 4)] });
+    expect(noteCounts(container)).toEqual({
+      goodwill: 0,
+      periodTotal: 1,
+      breakdown: 0,
+    });
+  });
+
+  it("stops asking once the period no longer reads short", () => {
+    // Same claim, shortfall reconciled by hand. The note's entire ask is "go
+    // type the paid hours in yourself"; once that's done it has to stop, or it
+    // becomes permanent furniture the tech scrolls past.
+    const container = renderCard({
+      allDisputes: [closedRound("d1", 4)],
+      shortedHours: 0,
+    });
+    expect(noteCounts(container)).toEqual({
+      goodwill: 0,
+      periodTotal: 0,
+      breakdown: 0,
+    });
+  });
+
+  it("leaves the missing-breakdown state showing only its own paragraph", () => {
+    // The pre-existing state, unchanged: an itemized claim, a partial
+    // settlement, no per-line recovery recorded. It already had a paragraph and
+    // must not now collect a second one — needsLineBreakdown also sets
+    // unmappedHours, which is exactly the trap.
+    const container = renderCard({
+      allDisputes: [
+        itemizedRound(
+          2,
+          [
+            disputeLine({ id: "a", entryId: "e1", claimedHours: 3 }),
+            disputeLine({ id: "b", entryId: "e1", code: "ALN", claimedHours: 3 }),
+          ],
+          6,
+        ),
+      ],
+      entries: [liveRO([liveLine(), liveLine({ id: "l2", customCode: "ALN" })])],
+    });
+    expect(noteCounts(container)).toEqual({
+      goodwill: 0,
+      periodTotal: 0,
+      breakdown: 1,
+    });
   });
 });

@@ -1090,4 +1090,90 @@ describe("pendingRecoveryApplication", () => {
     // likewise bounded to a single write.
     expect(tapUntilQuiet(d, 0, 2)).toEqual([1.5]);
   });
+
+  // -------------------------------------------------------------------------
+  // The "nothing to apply" shapes — pinned, not changed
+  // -------------------------------------------------------------------------
+  //
+  // Every case below already behaved exactly this way; none was covered. They
+  // are the states that return rows [] WITH unmappedHours > 0 and
+  // needsLineBreakdown FALSE, which is the combination the card reads to decide
+  // which explanation the tech gets. The card now depends on that combination
+  // being reachable two distinct ways — with claim lines and without — so the
+  // shapes are pinned here before anything is built on top of them.
+  it("leaves a period-total claim's partial recovery entirely unmapped", () => {
+    // The ordinary non-itemized claim: disputeFromPack stores scope "period"
+    // with NO lines whenever the tech only had the stub's period totals. There
+    // is nothing for the money to land on, and no per-line breakdown is missing
+    // — there was never one to record.
+    const d = dispute({
+      scope: "period",
+      status: "resolved",
+      claimedHours: 12,
+      recoveredHours: 4,
+      lines: [],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.applyHours).toBe(0);
+    expect(plan.unmappedHours).toBeCloseTo(4, 5);
+    // FALSE despite being just as unmappable as the needsLineBreakdown case:
+    // the early return keys on dispute.lines.length, which is 0 here.
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
+
+  it("leaves a period-total claim's FULL payback unmapped too", () => {
+    // fullSettlement cannot fire for a period-total claim at any recovery size:
+    // it is computed from the sum of the LINES' claimedHours, which is 0 with no
+    // lines, and the branch requires claimed > 0. So a 100% win lands in exactly
+    // the same state as the partial one above, with the whole recovery unmapped.
+    const d = dispute({
+      scope: "period",
+      status: "resolved",
+      claimedHours: 12,
+      recoveredHours: 12,
+      lines: [],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.unmappedHours).toBeCloseTo(12, 5);
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
+
+  it("leaves a single-line claim unmapped when its live line is gone", () => {
+    // The singleLineRecovery branch reaches the loop and then findLiveLine
+    // fails: the RO was deleted (dispute_lines' FKs are ON DELETE SET NULL, so
+    // the claim row survives pointing at nothing) or its code string was
+    // renamed, since the join matches on the CURRENT code.
+    const d = dispute({
+      status: "resolved",
+      claimedHours: 3,
+      recoveredHours: 1,
+      lines: [line({ entryId: "gone", roNumber: "9999", claimedHours: 3 })],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.applyHours).toBe(0);
+    expect(plan.unmappedHours).toBeCloseTo(1, 5);
+    // Not a missing breakdown: this claim has a line, it just has no LIVE line.
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
+
+  it("leaves a full settlement unmapped when every claimed line is gone", () => {
+    // Same dead end by the fullSettlement road: the whole ask came back, no
+    // per-line recovery was recorded, and neither claimed line still resolves.
+    const d = dispute({
+      status: "resolved",
+      claimedHours: 2,
+      recoveredHours: 2,
+      lines: [
+        line({ id: "a", entryId: "gone1", roNumber: "9998", claimedHours: 1 }),
+        line({ id: "b", entryId: "gone2", roNumber: "9999", claimedHours: 1 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.unmappedHours).toBeCloseTo(2, 5);
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
 });

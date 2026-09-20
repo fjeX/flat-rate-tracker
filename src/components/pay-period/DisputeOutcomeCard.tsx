@@ -291,8 +291,11 @@ export function DisputeOutcomeCard({
   // first closes (20260729000000_dispute_ledger.sql:107-112).
   const dispute = openDispute ?? closedForPeriod ?? null;
 
-  // What that closed claim's recovery would do to the live lines. Empty unless
-  // there is real, unapplied money to move — see pendingRecoveryApplication.
+  // What that closed claim's recovery would do to the live lines. `rows` is
+  // empty unless there is real, unapplied money to move — but the object itself
+  // is NOT empty in that case: a closed claim that recovered hours nothing can
+  // be applied to still reports them in unmappedHours, and that is precisely the
+  // state the tech needs a sentence for. See pendingRecoveryApplication.
   const recovery = useMemo(
     () => pendingRecoveryApplication(closedForPeriod ?? null, entries, library),
     [closedForPeriod, entries, library],
@@ -365,6 +368,71 @@ export function DisputeOutcomeCard({
   const waiting = dispute ? daysWaiting(dispute) : null;
   const next = dispute && !isClosed(dispute.status) ? nextStatus(dispute.status) : null;
 
+  // WHICH PARAGRAPH EXPLAINS THE UNMAPPED HOURS — and why it cannot be one
+  // paragraph.
+  //
+  // `recovery.unmappedHours > 0` is reached by three different roads, and they
+  // do not mean the same thing to the tech:
+  //
+  //  - ROWS PLUS LEFTOVERS — some of the money landed on live lines and the
+  //    rest didn't. The footnote under the rows.
+  //  - NO ROWS, THE CLAIM HAD LINES — every line it named failed to find a live
+  //    one (the RO was deleted: dispute_lines' FKs are ON DELETE SET NULL; or
+  //    the op code's string was renamed, since the join is by CURRENT code
+  //    string), or the settlement ran above the ask. Same explanation, nothing
+  //    to apply underneath it.
+  //  - NO ROWS, THE CLAIM HAD NO LINES — a period-total claim. This is the
+  //    NORMAL shape of a non-itemized claim, not an edge case: disputeFromPack
+  //    stores scope "period" with zero lines whenever the tech only had the
+  //    stub's period totals. `claimed` is 0 for it, so fullSettlement can never
+  //    fire — even a 100% payback lands here with the WHOLE recovery unmapped.
+  //
+  // All three rendered nothing at all unless rows existed, because the footnote
+  // lived inside the rows panel. The last two left the tech looking at a
+  // Recovered tile, a re-offer sentence still calling the period short, and not
+  // one sentence saying why or what to do about it.
+  //
+  // The goodwill/deleted-RO wording is FALSE on the third road — a routine
+  // payback of a period-total claim is neither of those things — so that road
+  // gets its own paragraph.
+  //
+  // The split is `lines.length`, read off closedForPeriod: the dispute `recovery`
+  // was actually computed from, NOT `dispute`, which may be a newer live round
+  // whose line count has nothing to do with these hours. It is exact rather than
+  // a heuristic, because every road into the loop tail needs at least one claim
+  // line (usePerLine needs a recorded per-line recovery, fullSettlement needs
+  // claimed > 0, singleLineRecovery needs exactly one line). So "no rows, no
+  // lines, needsLineBreakdown false" is only ever the period-total early return.
+  //
+  // Deliberately NOT gated on `unmappedHours > 0` alone: the needsLineBreakdown
+  // early return sets unmappedHours too, and that state already has its own
+  // paragraph below. A bare unmapped check would print two contradictory
+  // explanations of the same hours.
+  const claimLineCount = closedForPeriod?.lines.length ?? 0;
+  const unmappedIsUnplaceable =
+    recovery.unmappedHours > 0 && !recovery.needsLineBreakdown;
+  const showGoodwillNote = unmappedIsUnplaceable && claimLineCount > 0;
+  // Only while the period still READS short. The period-total note's whole ask
+  // is "go type the paid hours in yourself", so once that's done — shortedHours
+  // back to 0 — the note has to stop. A note that keeps asking for something
+  // already done is one the tech learns to scroll past, including the times it
+  // matters.
+  const showPeriodTotalNote =
+    unmappedIsUnplaceable && claimLineCount === 0 && shortedHours > 0;
+
+  // ONE copy, two homes, never both: inside the rows panel it is a footnote
+  // under the rows it qualifies; with no rows there is no panel, so it renders
+  // as its own inset alongside the other explanation paragraphs. The two sites
+  // are mutually exclusive on rows.length, so the same hours are explained
+  // exactly once.
+  const goodwillNote = (
+    <>
+      {fmtHours(recovery.unmappedHours)}h of the recovery maps to no line on this
+      period — goodwill above the ask, or an RO that&apos;s since been deleted.
+      It stays on the claim and is not written anywhere.
+    </>
+  );
+
   const Root = embedded ? "div" : "section";
 
   return (
@@ -416,12 +484,8 @@ export function DisputeOutcomeCard({
             )}
           </ul>
 
-          {recovery.unmappedHours > 0 && (
-            <p className="text-xs text-[var(--fg-3)]">
-              {fmtHours(recovery.unmappedHours)}h of the recovery maps to no line
-              on this period — goodwill above the ask, or an RO that&apos;s since
-              been deleted. It stays on the claim and is not written anywhere.
-            </p>
+          {showGoodwillNote && (
+            <p className="text-xs text-[var(--fg-3)]">{goodwillNote}</p>
           )}
 
           {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
@@ -439,6 +503,16 @@ export function DisputeOutcomeCard({
         </div>
       )}
 
+      {/* The same footnote, standing on its own because there is no rows panel
+          to sit under. Every hour of this recovery failed to find a live line,
+          so there is nothing to apply and no button below it — the paragraph IS
+          the whole story, which is why it gets card chrome here and none above. */}
+      {showGoodwillNote && recovery.rows.length === 0 && (
+        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+          {goodwillNote}
+        </p>
+      )}
+
       {/* No per-line breakdown and a partial settlement: which lines the shop
           paid is a fact the app does not have, and splitting the money evenly
           would be the app inventing the answer. Ask for it instead. */}
@@ -448,6 +522,25 @@ export function DisputeOutcomeCard({
           it isn&apos;t recorded against individual lines — so FRT can&apos;t
           tell which ROs to mark paid. Open &ldquo;Which lines came up
           short?&rdquo; and enter the paid hours on each line yourself.
+        </p>
+      )}
+
+      {/* The period-total claim. Same dead end as the paragraph above — FRT
+          cannot name the ROs — but a DIFFERENT reason, so it must not borrow
+          that one's words: nothing here is missing or unrecorded. The claim was
+          raised on the stub's period totals because that is all the tech had,
+          the shop paid some of it back, and a claim with no lines has nothing
+          for the money to land on. Calling that goodwill or a deleted RO would
+          be flatly false for the most ordinary close there is. The control name
+          is quoted exactly as PaidCheckCard renders it (title="Which lines came
+          up short?") — a paraphrase sends the tech looking for a heading that
+          isn't on the page. */}
+      {showPeriodTotalNote && (
+        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+          {fmtHours(recovery.unmappedHours)}h came back on the closed claim, but
+          it was raised for the period total rather than individual lines — so
+          FRT can&apos;t tell which ROs to mark paid. Open &ldquo;Which lines
+          came up short?&rdquo; and enter the paid hours on each line yourself.
         </p>
       )}
 
