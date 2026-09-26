@@ -1399,3 +1399,119 @@ describe("pendingRecoveryApplication", () => {
     expect(plan.needsLineBreakdown).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// One 3-minute boundary: the "full" label and the multi-line apply gate agree
+// ---------------------------------------------------------------------------
+//
+// The label had a float allowance at exactly 0.05h short and the multi-line
+// fullSettlement gate did not, so ~half of all exact-0.05h two-line claims
+// read "Paid in full" above a card saying the recovery "isn't recorded against
+// individual lines" (and the reverse, via header-vs-line-sum float drift).
+
+describe("full label and multi-line apply gate share one boundary", () => {
+  // numeric(5,2) round-trip: the nearest double to the 2-dp decimal.
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+
+  function twoLineClaim(a: number, b: number, recovered: number): Dispute {
+    return dispute({
+      status: "resolved",
+      // Stored header, as disputeFromPack + numeric(5,2) would leave it.
+      claimedHours: r2(a + b),
+      recoveredHours: recovered,
+      lines: [
+        line({ id: "a", entryId: "e1", code: "A", claimedHours: a }),
+        line({ id: "b", entryId: "e1", code: "B", claimedHours: b }),
+      ],
+    });
+  }
+  const live = [
+    ro([
+      roLine({ id: "la", customCode: "A" }),
+      roLine({ id: "lb", customCode: "B" }),
+    ]),
+  ];
+
+  function assertAgrees(a: number, b: number, recovered: number) {
+    const d = twoLineClaim(a, b, recovered);
+    const label = disputeOutcome(d);
+    const plan = pendingRecoveryApplication(d, live, []);
+    const applied = plan.rows.length === 2 && !plan.needsLineBreakdown;
+    // "Paid in full" <=> the card can place it on the lines; never both
+    // "full" and "enter the paid hours on each line yourself".
+    expect({ a, b, recovered, full: label === "full" }).toEqual({
+      a,
+      b,
+      recovered,
+      full: applied,
+    });
+    expect(label === "full" && plan.needsLineBreakdown).toBe(false);
+    return label;
+  }
+
+  it("lines 0.01 + 0.33, 0.29 back (exactly 0.05h short) is full AND applied", () => {
+    expect(assertAgrees(0.01, 0.33, 0.29)).toBe("full");
+    const plan = pendingRecoveryApplication(twoLineClaim(0.01, 0.33, 0.29), live, []);
+    expect(plan.applyHours).toBeCloseTo(0.34, 5); // each line gets its ask
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
+
+  it("lines 0.07 + 0.10, 0.12 back (exactly 0.05h short) is full AND applied", () => {
+    expect(assertAgrees(0.07, 0.1, 0.12)).toBe("full");
+  });
+
+  it("0.06h short stays partial and asks for the breakdown", () => {
+    expect(assertAgrees(0.07, 0.1, 0.11)).toBe("partial");
+    const plan = pendingRecoveryApplication(twoLineClaim(0.07, 0.1, 0.11), live, []);
+    expect(plan.needsLineBreakdown).toBe(true);
+  });
+
+  it("sweep: every 2-line claim on the 0.01h grid, 0.04/0.05/0.06h short", () => {
+    let fullAtBoundary = 0;
+    let checked = 0;
+    for (let i = 1; i <= 60; i++) {
+      for (let j = 1; j <= 60; j++) {
+        const a = i / 100;
+        const b = j / 100;
+        const claimed = r2(a + b);
+        for (const gap of [0.04, 0.05, 0.06]) {
+          const recovered = r2(claimed - gap);
+          if (recovered <= 0) continue;
+          const label = assertAgrees(a, b, recovered);
+          checked++;
+          if (gap <= 0.05) {
+            expect({ a, b, gap, label }).toEqual({ a, b, gap, label: "full" });
+            if (gap === 0.05) fullAtBoundary++;
+          } else {
+            expect({ a, b, gap, label }).toEqual({ a, b, gap, label: "partial" });
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(9000);
+    expect(fullAtBoundary).toBeGreaterThan(3000);
+  });
+
+  it("sweep: goodwill exactly 0.05h over the ask is never reported; 0.06h always is", () => {
+    for (let i = 1; i <= 500; i++) {
+      const ask = i / 100;
+      for (const over of [0.05, 0.06]) {
+        const recovered = r2(ask + over);
+        const d = dispute({
+          status: "resolved",
+          claimedHours: ask,
+          recoveredHours: recovered,
+          lines: [line({ entryId: "e1", claimedHours: ask })],
+        });
+        const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+        expect(plan.rows).toHaveLength(1);
+        expect(plan.applyHours).toBeCloseTo(ask, 9); // capped at the ask
+        expect({ ask, over, shown: plan.unmappedHours > 0 }).toEqual({
+          ask,
+          over,
+          shown: over > 0.05,
+        });
+      }
+    }
+  });
+});

@@ -149,6 +149,37 @@ export function LogRoForm({
   // The alternative (force-checking "move" for any non-keep date) would put a
   // radio labelled "Move to today (Sep 16)" next to a pill reading Sep 12.
   const [dateChoice, setDateChoice] = useState<"keep" | "move" | "custom">("keep");
+  // --- close: have the defaults landed? ------------------------------------
+  // Everything above (reopened, the flag date and time, the prefill) arrives
+  // from ONE async fetch, and until it lands the form is showing a FIRST
+  // close's defaults: today, and now. On a reopened ticket that is precisely
+  // the silent move of paid hours decision 11 exists to prevent — and it used
+  // to be one fast tap (or one swallowed fetch error) away. So a close cannot
+  // be saved until the fetch has answered for THIS ticket. A first close waits
+  // too, because "it's a first close" is itself part of the answer; the fetch
+  // is one round trip, and the tech still has op codes to add before Close
+  // means anything, so the wait is invisible in practice.
+  //
+  // Stored WITH the id it describes, so "ready" can never be read off a
+  // different ticket's fetch. No result for this id ⇒ still loading.
+  const closeEntryId = closing && existingEntry ? existingEntry.id : null;
+  const [closeDefaultsResult, setCloseDefaultsResult] = useState<{
+    id: string;
+    status: "ready" | "failed";
+  } | null>(null);
+  // Bumped by "Try again": the fetch effect's only trigger besides the id.
+  const [closeDefaultsAttempt, setCloseDefaultsAttempt] = useState(0);
+  const closeDefaultsState: "idle" | "loading" | "ready" | "failed" =
+    closeEntryId === null
+      ? "idle"
+      : closeDefaultsResult?.id === closeEntryId
+        ? closeDefaultsResult.status
+        : "loading";
+  const closeBlocked = closing && closeDefaultsState !== "ready";
+  // The entry id the defaults were last APPLIED for. The seeding (keep the
+  // flag date, restore the stored time) is a starting point, not a rule: once
+  // it has run, everything on screen is the tech's. See the fetch effect.
+  const closeSeededForRef = useRef<string | null>(null);
 
   // What the hook persists with, per mode. Declared before the hook so the
   // closure reads the CURRENT mode on every save — performSave is rebuilt each
@@ -199,6 +230,14 @@ export function LogRoForm({
         }
         if (!existingEntry) return;
         if (closing) {
+          // Belt and braces with the disabled button: never close on the
+          // placeholder defaults (see closeDefaultsState). A throw, not a
+          // return — performSave treats a return as success and navigates away.
+          if (closeDefaultsState !== "ready") {
+            throw new Error(
+              "This ticket's close details haven't loaded yet — nothing was saved.",
+            );
+          }
           // Put the timeline's hours on the chosen line — unless the tech
           // already typed an actual on it, which wins.
           const hours = prefillHours.trim() === "" ? null : Number(prefillHours);
@@ -276,13 +315,22 @@ export function LogRoForm({
     roNumberRef.current = roNumber;
   }, [roNumber]);
 
+  // Keyed on the entry ID, not the existingEntry object. The page hands this
+  // component a fresh object on every server re-render (adding a new library
+  // op code revalidates /log mid-close), and keying on identity re-ran the
+  // seeding each time — snapping the date, the radio and a hand-typed time
+  // back to the defaults under the tech's fingers. The ref makes "once per
+  // ticket" hold even if some other dep here ever changes; a FAILED fetch
+  // never sets it, so "Try again" still seeds.
   useEffect(() => {
-    if (!closing || !existingEntry) return;
+    if (closeEntryId === null) return;
+    if (closeSeededForRef.current === closeEntryId) return;
     let cancelled = false;
     (async () => {
       try {
-        const d = await getCloseDefaultsAction(existingEntry.id);
+        const d = await getCloseDefaultsAction(closeEntryId);
         if (cancelled) return;
+        closeSeededForRef.current = closeEntryId;
         setPrefill(d.prefill);
         setPrefillHours(d.prefill.actualHours > 0 ? String(d.prefill.actualHours) : "");
         setReopened(d.reopened);
@@ -303,14 +351,20 @@ export function LogRoForm({
           setCurrentFlagTime(stored);
           if (timeFieldShown) setLoggedTime(stored);
         }
+        setCloseDefaultsResult({ id: closeEntryId, status: "ready" });
       } catch {
-        // Non-fatal: the tech can still close and type actuals by hand.
+        // NOT silent any more. Without this answer the form can't know whether
+        // the ticket was reopened, so saving would fall back to today + now —
+        // the silent move. Block the close, say so, offer a retry (which
+        // re-runs this whole seeding, prefill included).
+        if (cancelled) return;
+        setCloseDefaultsResult({ id: closeEntryId, status: "failed" });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [closing, existingEntry, setDate, setLoggedTime, timeFieldShown]);
+  }, [closeEntryId, closeDefaultsAttempt, setDate, setLoggedTime, timeFieldShown]);
 
   const title = openCreate
     ? "Open a ticket"
@@ -354,7 +408,9 @@ export function LogRoForm({
     ? "Checking…"
     : isSubmitting
       ? "Saving…"
-      : openCreate
+      : closing && closeDefaultsState === "loading"
+        ? "Loading ticket…"
+        : openCreate
         ? "Open ticket"
         : closing
           ? "Close ticket"
@@ -402,15 +458,34 @@ export function LogRoForm({
                 // used to leave a radio checked that contradicted the saved
                 // date ("Keep flag date Sep 12" ticked over a pill reading Sep
                 // 16). Keep the radios honest about the date instead.
-                setDateChoice(
-                  // Keep wins a tie: if the ticket was reopened and closed again
-                  // the same day, "keep" is the default and the safer reading.
+                // Keep wins a tie: if the ticket was reopened and closed again
+                // the same day, "keep" is the default and the safer reading.
+                const next =
                   e.target.value === currentFlagDate
                     ? "keep"
                     : e.target.value === today
                       ? "move"
-                      : "custom",
-                );
+                      : "custom";
+                // Typing a date that lands on one of the radios IS choosing
+                // that radio, so it carries that radio's time too. Otherwise
+                // Move (time = now) then typing the flag date back by hand
+                // ticked Keep while saving the flag day at NOW — the original
+                // half-a-keep bug through a side door.
+                //
+                // Only when the choice actually CHANGES: re-typing the date the
+                // choice already describes must not wipe a time the tech typed.
+                // And "custom" leaves the time alone: neither the stored time
+                // (a moment on the flag day) nor now (a moment on today) is
+                // known to belong to an arbitrary third day, and the tech is
+                // looking at the time pill right beside the date they just
+                // typed — whatever it reads is the least surprising thing to
+                // save. Reopened only: on a first close the radios aren't
+                // shown and currentFlagTime was never loaded.
+                if (reopened && timeFieldShown && next !== dateChoice) {
+                  if (next === "keep") setLoggedTime(currentFlagTime);
+                  else if (next === "move") setLoggedTime(defaultLoggedTime);
+                }
+                setDateChoice(next);
               }}
               required
               aria-required="true"
@@ -507,7 +582,36 @@ export function LogRoForm({
                 </label>
               </div>
             )}
-            {prefill && prefill.actualHours > 0 ? (
+            {closeDefaultsState === "failed" ? (
+              // Replaces the prefill text, which would otherwise claim "no
+              // hours were logged" — the fetch that failed is the one that
+              // carries the hours, so the honest statement is "unknown".
+              <div
+                id="close-defaults-error"
+                role="alert"
+                style={{ marginTop: 8, fontSize: 13, color: "var(--bad)" }}
+              >
+                Couldn&apos;t load this ticket&apos;s close details, so closing is
+                paused — FRT can&apos;t tell yet whether it was reopened.
+                <div style={{ marginTop: 6 }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => {
+                      // No result for this id ⇒ "loading" again; then refetch.
+                      setCloseDefaultsResult(null);
+                      setCloseDefaultsAttempt((n) => n + 1);
+                    }}
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            ) : closeDefaultsState === "loading" ? (
+              <p role="status" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 6 }}>
+                Loading this ticket&apos;s timeline…
+              </p>
+            ) : prefill && prefill.actualHours > 0 ? (
               <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
                 <div style={{ fontSize: 13 }}>
                   Timeline says <b>{fmtHours(prefill.actualHours)}h</b> worked
@@ -836,7 +940,14 @@ export function LogRoForm({
           <button
             type="button"
             onClick={() => handleSave()}
-            disabled={isSubmitting || isChecking}
+            // closeBlocked: see closeDefaultsState. Same `disabled` idiom as
+            // the in-flight states, plus aria-busy while the fetch runs and a
+            // pointer to the reason when it failed.
+            disabled={isSubmitting || isChecking || closeBlocked}
+            aria-busy={closing && closeDefaultsState === "loading" ? true : undefined}
+            aria-describedby={
+              closing && closeDefaultsState === "failed" ? "close-defaults-error" : undefined
+            }
             className="btn btn-primary btn-sm"
             data-testid="ro-save"
           >

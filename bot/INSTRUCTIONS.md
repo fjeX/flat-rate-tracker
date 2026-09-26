@@ -2042,18 +2042,30 @@ and the date pill now means the CLOSE date, defaulting to today.
   that silently moves the date, or a second close that drops a line you added,
   is a real bug. An ordinary RO that was never a ticket has no Reopen button —
   correct, do not report it.
+- **A briefly disabled or pending Close button is expected** right after the
+  form opens, while the keep-or-move defaults are fetched — on a REOPENED
+  ticket wait for the "Keep flag date" radios to appear before clicking
+  Close; on a first close there are no radios, so just wait for the button to
+  enable. Only a Close
+  button that stays disabled for more than ~10 seconds, or an inline error
+  that doesn't clear on retry, is a finding.
 - **New 2026-09-26 — Keep flag date now keeps the time too (with "Time of day
   on each RO" turned ON, §8k).** Liem's ruling: Keep keeps the WHOLE
-  timestamp, not just the date. Do this re-close with the time-of-day switch
-  ON: note the RO's time before reopening, reopen, then re-close choosing
-  **Keep flag date <old date>** — the Time pill must pre-fill with that SAME
-  stored time (not the current time), and after saving the RO's time must
-  still equal its pre-reopen time. PASS. A time that moved to "now" under Keep
-  is a FAIL. Reopen again and re-close choosing **Move to today** instead: the
-  Time pill should now show the current time, and the saved time should be
-  whenever you actually saved (current time at close), not the old one. If
-  the RO had no time stored to begin with (switch was off, or time was
-  cleared), Keep must leave it with no time — not invent one.
+  timestamp, not just the date. Turn the time-of-day switch ON for this check.
+  Open (or start) a fresh open ticket and close it once with any op code — a
+  time gets stored on that close; note it. Reopen the ticket, then re-close
+  choosing **Keep flag date <old date>** — the Time pill must pre-fill with
+  that SAME stored time (not the current time), and after saving the RO's
+  time must still equal the noted time. PASS. A time that moved to "now"
+  under Keep is a FAIL. Optionally, reopen again and re-close choosing
+  **Move to today** instead: the Time pill should now show the current time,
+  and the saved time should be whenever you actually saved (current time at
+  close), not the old one. As a secondary, optional check: if a ticket has no
+  time stored to begin with (switch was off, or time was cleared), Keep must
+  leave it with no time — not invent one. Close or delete the fresh ticket
+  per this section's end-of-run rule below, then turn the time-of-day switch
+  back OFF — leaving it ON is exactly the leftover §8k's own end-of-run rule
+  exists to catch.
 
 **The timer on an open ticket (Phase 2).** /timer → Add timer → pick the open
 ticket from the RO picker. It attaches with NO "Pick a line" prompt and the

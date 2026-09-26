@@ -466,3 +466,233 @@ describe("LogRoForm — a reopened close keeps the whole flag timestamp", () => 
     expect(sent.loggedTime).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wave 2 of keep-flag-date-restamps-time. Three more ways to save a reopened
+// ticket's flag somewhere the tech didn't choose. Every case asserts the SAVED
+// payload — the pills are only a description of it.
+
+/** Set a controlled input's value the way a user edit does (React's onChange). */
+function setInput(el: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    "value",
+  )!.set!;
+  act(() => {
+    setter.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+const saveButton = () => screen.getByTestId("ro-save") as HTMLButtonElement;
+
+async function clickClose() {
+  await act(async () => {
+    saveButton().click();
+  });
+}
+
+function sentPayload() {
+  expect(closeTicketAction).toHaveBeenCalledTimes(1);
+  return closeTicketAction.mock.calls[0][0] as {
+    date: string;
+    loggedTime?: string | null;
+    opCodes: { actualHours: number | null }[];
+  };
+}
+
+/** A promise the test settles by hand: "the fetch is still in flight". */
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+describe("LogRoForm — typing the date by hand carries the radio's time", () => {
+  beforeEach(() => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+  });
+
+  it("Move, then typing the flag date back, restores the stored time and saves it", async () => {
+    await renderClose();
+    act(() => radio(/Move to today/).click());
+    expect(timePill()!.value).toBe(NOW);
+
+    setInput(datePill(), FLAG_DATE);
+    expect(radio(/Keep flag date/).checked).toBe(true);
+    expect(timePill()!.value).toBe(STORED);
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
+  });
+
+  it("typing today's date is Move: the now time comes with it", async () => {
+    await renderClose();
+    setInput(datePill(), TODAY);
+    expect(radio(/Move to today/).checked).toBe(true);
+    expect(timePill()!.value).toBe(NOW);
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: TODAY, loggedTime: NOW });
+  });
+
+  it("a third date leaves the time pill alone, hand-typed time included", async () => {
+    await renderClose();
+    setInput(timePill()!, "05:00");
+    setInput(datePill(), "2026-09-14");
+    // Neither radio describes Sep 14, and the time is the tech's.
+    expect(radio(/Keep flag date/).checked).toBe(false);
+    expect(radio(/Move to today/).checked).toBe(false);
+    expect(timePill()!.value).toBe("05:00");
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: "2026-09-14", loggedTime: "05:00" });
+  });
+
+  it("custom back to the flag date is a real change of choice: the stored time returns", async () => {
+    await renderClose();
+    setInput(datePill(), "2026-09-14");
+    setInput(timePill()!, "05:00");
+    setInput(datePill(), FLAG_DATE);
+    expect(timePill()!.value).toBe(STORED);
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
+  });
+
+  it("a FIRST close is untouched: typing the opened-day date doesn't blank the time", async () => {
+    // currentFlagDate is loaded on a first close too (the opened-day
+    // placeholder); the radios aren't shown and no stored time was loaded.
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: false, currentTime: STORED }),
+    );
+    await renderClose();
+    // Via a third date first, so the hidden choice really changes to "keep".
+    setInput(datePill(), "2026-09-14");
+    setInput(datePill(), FLAG_DATE);
+    expect(timePill()!.value).toBe(NOW);
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: NOW });
+  });
+});
+
+describe("LogRoForm — a server re-render doesn't reseed the close", () => {
+  it("keeps Move + a hand-typed time when existingEntry arrives as a new, equal object", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    const props = {
+      initialOpCodes: [],
+      roTemplates: [],
+      closeMode: true,
+      today: TODAY,
+      trackRoTime: true,
+      timeZone: "America/Los_Angeles",
+    };
+    let rerender!: (ui: React.ReactElement) => void;
+    await act(async () => {
+      ({ rerender } = render(
+        <LogRoForm {...props} existingEntry={openTicket()} defaultLoggedTime={NOW} />,
+      ));
+    });
+
+    act(() => radio(/Move to today/).click());
+    setInput(timePill()!, "06:45");
+
+    // What the /log revalidate after createLibraryOpCode hands the form: the
+    // same ticket as a brand-new object, and a fresh now.
+    await act(async () => {
+      rerender(<LogRoForm {...props} existingEntry={openTicket()} defaultLoggedTime="03:40" />);
+    });
+
+    expect(getCloseDefaultsAction).toHaveBeenCalledTimes(1);
+    expect(radio(/Move to today/).checked).toBe(true);
+    expect(datePill().value).toBe(TODAY);
+    expect(timePill()!.value).toBe("06:45");
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: TODAY, loggedTime: "06:45" });
+  });
+});
+
+describe("LogRoForm — no close until the close defaults have loaded", () => {
+  it("holds Close while the fetch is in flight, then saves the reopened defaults", async () => {
+    const d = deferred<unknown>();
+    getCloseDefaultsAction.mockReturnValue(d.promise);
+    await renderClose();
+
+    // The placeholder defaults a reopened ticket must never be saved with.
+    expect(datePill().value).toBe(TODAY);
+    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute("aria-busy")).toBe("true");
+    expect(saveButton().textContent).toBe("Loading ticket…");
+    expect(screen.getByRole("status").textContent).toMatch(/Loading this ticket/);
+    await clickClose();
+    expect(closeTicketAction).not.toHaveBeenCalled();
+
+    await act(async () => {
+      d.resolve(closeDefaults({ reopened: true, currentTime: STORED }));
+    });
+    expect(saveButton().disabled).toBe(false);
+    expect(saveButton().getAttribute("aria-busy")).toBeNull();
+    expect(saveButton().textContent).toBe("Close ticket");
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
+  });
+
+  it("holds a FIRST close too, since 'first' is part of the answer", async () => {
+    const d = deferred<unknown>();
+    getCloseDefaultsAction.mockReturnValue(d.promise);
+    await renderClose();
+    expect(saveButton().disabled).toBe(true);
+    await clickClose();
+    expect(closeTicketAction).not.toHaveBeenCalled();
+
+    await act(async () => {
+      d.resolve(closeDefaults({ reopened: false, currentTime: STORED }));
+    });
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: TODAY, loggedTime: NOW });
+  });
+
+  it("a failed fetch blocks the close with a retry; the retry restores dates AND the prefill", async () => {
+    getCloseDefaultsAction
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({
+        ...closeDefaults({ reopened: true, currentTime: STORED }),
+        prefill: { actualHours: 2.5, actualSource: "timer", excludedHoldHours: 0 },
+      });
+    await renderClose();
+
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/Couldn.t load this ticket.s close details/);
+    expect(alert.id).toBe("close-defaults-error");
+    // The failed fetch is the one carrying the hours: "no hours were logged"
+    // would be a confident lie.
+    expect(screen.queryByText(/No hours were logged/)).toBeNull();
+    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute("aria-describedby")).toBe("close-defaults-error");
+    await clickClose();
+    expect(closeTicketAction).not.toHaveBeenCalled();
+
+    await act(async () => {
+      clickButton("Try again").click();
+    });
+
+    expect(getCloseDefaultsAction).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(radio(/Keep flag date/).checked).toBe(true);
+    expect(screen.getByText(/Timeline says/).textContent).toMatch(/2\.5h/);
+
+    await clickClose();
+    const sent = sentPayload();
+    expect(sent).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
+    expect(sent.opCodes[0].actualHours).toBe(2.5);
+  });
+});

@@ -74,24 +74,41 @@ export function nextStatus(status: DisputeStatus): DisputeStatus | null {
 export type DisputeOutcome = "open" | "full" | "partial" | "denied";
 
 /**
- * Does this recovery count as the whole ask, for LABELLING purposes?
+ * Is this gap bigger than rounding? THE one 3-minute boundary for disputes.
  *
  * The app-wide 3-minute (0.05h) rounding tolerance, same as reconcile.ts
- * PAY_EPS: shops round flag hours, so a claim that came back 0.05h light is a
- * win, not a shortfall worth a second round.
+ * PAY_EPS: shops round flag hours, so a gap of 0.05h or less either way is
+ * rounding, not a shortfall worth a second round and not goodwill worth a note.
  *
  * The SAME_VALUE_EPS slack is not a second tolerance, it is float hygiene. Both
- * figures are numeric(5,2), but `claimed - recovered` in IEEE-754 lands a hair
- * ABOVE 0.05 for more than half of all exactly-3-minute gaps (0.14 - 0.09 is
- * 0.05000000000000002), so a bare `<= RECOVERY_EPS` called those "partial" on
- * a coin flip of the claim's value.
+ * figures are numeric(5,2), but a difference of two of them in IEEE-754 lands a
+ * hair ABOVE 0.05 for more than half of all exactly-3-minute gaps (0.14 - 0.09
+ * is 0.05000000000000002), so a bare `> RECOVERY_EPS` decided the exact
+ * boundary on a coin flip of the values involved. It also absorbs the ~1e-16
+ * drift between a claim's stored header total and a float re-sum of its lines.
  *
- * LABELS ONLY. Never use this to decide how many hours get WRITTEN to a line:
- * money follows what was actually recovered, not what rounds to the claim. See
- * the single-line branch of pendingRecoveryApplication.
+ * Every 3-minute decision in this module goes through here — the outcome
+ * label, the multi-line full-settlement gate, and the goodwill threshold — so
+ * they cannot disagree at the boundary. They did once: the label had the float
+ * allowance and the gate did not, and ~half of all exact-0.05h multi-line
+ * claims read "Paid in full" above a card saying the recovery couldn't be
+ * placed on individual lines.
  */
-function coversClaimForLabel(claimedHours: number, recoveredHours: number): boolean {
-  return claimedHours - recoveredHours <= RECOVERY_EPS + SAME_VALUE_EPS;
+function exceedsRounding(gapHours: number): boolean {
+  return gapHours > RECOVERY_EPS + SAME_VALUE_EPS;
+}
+
+/**
+ * Does this recovery count as the whole ask? True when the shortfall is within
+ * rounding (see exceedsRounding).
+ *
+ * Drives the outcome LABEL and the multi-line full-settlement GATE — whether
+ * each line may be credited its ask. It never sizes a write on its own: a
+ * one-line claim always writes what was actually recovered, whatever this
+ * says. See the single-line branch of pendingRecoveryApplication.
+ */
+function coversClaim(claimedHours: number, recoveredHours: number): boolean {
+  return !exceedsRounding(claimedHours - recoveredHours);
 }
 
 /**
@@ -112,7 +129,7 @@ function coversClaimForLabel(claimedHours: number, recoveredHours: number): bool
  */
 export function disputeOutcome(dispute: Dispute): DisputeOutcome {
   if (!isClosed(dispute.status)) return "open";
-  if (coversClaimForLabel(dispute.claimedHours, dispute.recoveredHours)) {
+  if (coversClaim(dispute.claimedHours, dispute.recoveredHours)) {
     return "full";
   }
   // Withdrawn with nothing recovered is a denial in substance: the tech asked
@@ -459,11 +476,17 @@ export function pendingRecoveryApplication(
   // and only here: with several lines and no per-line breakdown there is no
   // honest way to say which line the missing 3 minutes belong to without a
   // schema change, and the overshoot is bounded at 0.05h per claim.
+  //
+  // Same predicate as the "full" label (coversClaim), so a claim the card calls
+  // "Paid in full" is always one it can apply, and vice versa. `claimed` is the
+  // re-summed lines rather than dispute.claimedHours because it is the lines'
+  // asks that get written; the two agree to float noise, which coversClaim
+  // absorbs.
   const fullSettlement =
     !usePerLine &&
     !singleLineRecovery &&
     claimed > 0 &&
-    dispute.recoveredHours + RECOVERY_EPS >= claimed;
+    coversClaim(claimed, dispute.recoveredHours);
 
   // THE ONE-LINE CLAIM — not a guess, an identity.
   //
@@ -602,7 +625,10 @@ export function pendingRecoveryApplication(
   return {
     rows,
     applyHours,
-    unmappedHours: unmapped > RECOVERY_EPS ? unmapped : 0,
+    // Goodwill of 3 minutes or less is rounding, the same boundary as the
+    // label's shortfall — including at exactly 0.05h over, which a bare
+    // `> RECOVERY_EPS` showed or hid on float noise.
+    unmappedHours: exceedsRounding(unmapped) ? unmapped : 0,
     needsLineBreakdown: false,
   };
 }
