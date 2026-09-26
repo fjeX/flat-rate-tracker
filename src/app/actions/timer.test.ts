@@ -19,7 +19,13 @@ const state = {
   slots: [] as TimerSlot[],
   entry: null as EntryType | null,
   ledger: [] as { entryId: string | null; kind: string; hours: number; source: string }[],
-  events: [] as { entryId: string; kind: string; date: string }[],
+  events: [] as { entryId: string; kind: string; date: string; time?: string | null }[],
+  /** frt_timezone cookie value; undefined = cookie never written. */
+  tz: undefined as string | undefined,
+  /** When set, getEntry moves the system clock here — simulates wall time
+   *  passing (e.g. across midnight) between the action's `now` and its
+   *  event write. */
+  advanceClockOnGetEntry: null as number | null,
   failCreateUnpaidTime: false,
   failCreateRoEvent: false,
   deletedSlotIds: [] as string[],
@@ -62,9 +68,13 @@ function makeEntry(overrides: Partial<EntryType> = {}): EntryType {
 
 vi.mock("next/cache", () => ({ revalidatePath: (p: string) => revalidatePath(p) }));
 vi.mock("next/headers", () => ({
-  // No timezone cookie set: actions fall back to the server's own clock
-  // (isoDate()), same as a machine with frt_timezone never written.
-  cookies: async () => ({ get: () => undefined }),
+  // By default no timezone cookie is set: actions fall back to the server's
+  // own clock (isoDate()), same as a machine with frt_timezone never written.
+  // state.tz opts a test into a real zone.
+  cookies: async () => ({
+    get: (name: string) =>
+      name === "frt_timezone" && state.tz !== undefined ? { value: state.tz } : undefined,
+  }),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ __fake: true }),
@@ -75,7 +85,10 @@ vi.mock("@/lib/report-error-server", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   listTimerSlots: async () => state.slots,
-  getEntry: async () => state.entry,
+  getEntry: async () => {
+    if (state.advanceClockOnGetEntry !== null) vi.setSystemTime(state.advanceClockOnGetEntry);
+    return state.entry;
+  },
   listWorkSchedulesSafe: async () => null,
   listShiftOverridesSafe: async () => ({}),
   listUnpaidTimeForEntry: async (_c: unknown, entryId: string) =>
@@ -111,7 +124,7 @@ vi.mock("@/lib/db", () => ({
   },
   createRoEvent: async (
     _c: unknown,
-    input: { entryId: string; kind: string; date: string },
+    input: { entryId: string; kind: string; date: string; time?: string | null },
   ) => {
     calls.push(`createRoEvent:${input.kind}`);
     if (state.failCreateRoEvent) throw new Error("boom ro event");
@@ -121,6 +134,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 const { saveTimerAction, setTimerStatusAction } = await import("./timer");
+const { hhmmInTz, isoDate } = await import("@/lib/periods");
 
 beforeEach(() => {
   calls.length = 0;
@@ -132,6 +146,9 @@ beforeEach(() => {
   state.events = [];
   state.failCreateUnpaidTime = false;
   state.failCreateRoEvent = false;
+  state.tz = undefined;
+  state.advanceClockOnGetEntry = null;
+  vi.useRealTimers();
   state.deletedSlotIds = [];
   state.updatedSlots = [];
 });
@@ -283,6 +300,48 @@ describe("setTimerStatusAction — hold flips write ro_events on open tickets", 
       entryId: "eeeeeeee-0000-4000-8000-000000000001",
       kind: "hold_parts",
     });
+  });
+
+  // timeline-timer-event-untimed: the hold starts NOW, so it carries a time like
+  // the opened/reopened/closed transitions do. An untimed row sorts after every
+  // timed event that day (sortRoEvents, nulls last).
+  it("stamps the hold event with date AND HH:MM from the flip's own instant (no tz cookie)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const at = new Date(2026, 8, 15, 8, 5, 42); // local 08:05:42
+    vi.setSystemTime(at);
+    state.slots = [makeSlot({ status: "working", startTime: 1 })];
+    state.entry = makeEntry({ status: "open" });
+
+    await setTimerStatusAction("aaaaaaaa-1111-4111-8111-111111111111", "hold_parts");
+
+    expect(state.events).toHaveLength(1);
+    expect(state.events[0].time).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/);
+    expect(state.events[0]).toMatchObject({ date: isoDate(at), time: hhmmInTz("", at) });
+    expect(state.events[0].time).toBe("08:05");
+  });
+
+  it("takes date and time from ONE instant — a flip at 23:59 whose write lands after midnight stays on the flip's day", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    state.tz = "America/Los_Angeles";
+    // 2026-09-15T06:59:30Z = 23:59:30 PDT on Sep 14. By the time the event is
+    // written (after the updateTimerSlot + getEntry awaits) the wall clock has
+    // crossed midnight: 07:00:30Z = 00:00:30 PDT Sep 15.
+    const flipAt = Date.UTC(2026, 8, 15, 6, 59, 30);
+    vi.setSystemTime(flipAt);
+    state.advanceClockOnGetEntry = Date.UTC(2026, 8, 15, 7, 0, 30);
+    state.slots = [makeSlot({ status: "working", startTime: 1 })];
+    state.entry = makeEntry({ status: "open" });
+
+    await setTimerStatusAction("aaaaaaaa-1111-4111-8111-111111111111", "hold_approval");
+
+    expect(state.events).toHaveLength(1);
+    expect(state.events[0]).toMatchObject({
+      kind: "hold_approval",
+      date: "2026-09-14",
+      time: "23:59",
+    });
+    // Same instant the slot's hold clock restarted at.
+    expect(state.updatedSlots.at(-1)?.patch.startTime).toBe(flipAt);
   });
 
   it("writes nothing when the status doesn't actually change", async () => {

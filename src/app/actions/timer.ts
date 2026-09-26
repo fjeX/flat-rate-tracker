@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import type { DbClient } from "@/lib/db";
-import { isoDate, isoDateInTz } from "@/lib/periods";
+import { hhmmInTz, isoDate, isoDateInTz } from "@/lib/periods";
 import { openWorkRows, ticketOpenWorkHours } from "@/lib/open-tickets";
 import { reportServerError } from "@/lib/report-error-server";
 import {
@@ -235,6 +235,15 @@ export async function setTimerStatusAction(
   // Only fetch the entry when the new status is a hold, and only when it's
   // genuinely a change — a read on every flip (including working <-> paused,
   // which happens far more often) would be a query this feature doesn't need.
+  //
+  // The event is TIMED, like the opened/reopened/closed transitions in
+  // open-tickets.ts (nowInUserTz). The hold starts right now, so it knows its
+  // own time; left null, sortRoEvents puts it after every timed event that day
+  // (nulls mean "sometime that day"), so a hold flipped at 8 AM rendered below
+  // a note logged at 3 PM (timeline-timer-event-untimed). Date AND time come
+  // from `now` — the same instant the slot's clock was restarted at above — not
+  // from fresh clock reads: two reads could straddle midnight across the awaits
+  // in between and stamp yesterday's hold with today's date.
   const flippedToHold =
     (status === "hold_parts" || status === "hold_approval") &&
     slot.status !== status;
@@ -242,10 +251,11 @@ export async function setTimerStatusAction(
     try {
       const entry = await db.getEntry(supabase, slot.entryId);
       if (entry?.status === "open") {
-        const today = ctx.timeZone ? isoDateInTz(ctx.timeZone) : isoDate();
+        const at = new Date(now);
         await db.createRoEvent(supabase, {
           entryId: slot.entryId,
-          date: today,
+          date: ctx.timeZone ? isoDateInTz(ctx.timeZone, at) : isoDate(at),
+          time: hhmmInTz(ctx.timeZone ?? "", at),
           kind: status,
         });
       }

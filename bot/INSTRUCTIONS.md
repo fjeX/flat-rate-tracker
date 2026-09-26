@@ -917,6 +917,26 @@ verify the saved hours before continuing to §6.
   - No dollar figure may appear in this block, and no wage/minimum-wage number
     may appear anywhere in the card except the reference rate *you* typed in
     Settings.
+  - **New 2026-09-26 — "Difference" is not a Gap; no breakdown under it is
+    correct (NOT A BUG — this got re-filed 7 nights running as "breakdown
+    missing").** The breakdown only ever sits under a tile labelled **Gap**.
+    When flagged hours exceed hours at the shop AND the shop hours are an
+    incomplete set for the period, the tile is labelled **Difference** (never
+    Gap, never Ahead), the value prints with no sign, and a refusal sentence
+    takes the breakdown's place: "<N> days here have flagged work but no
+    hours on them, so this is flagged time against an incomplete set of shop
+    hours. It isn't a gap, and it isn't a lead — add the hours and it will
+    mean something." — singular "1 day here has flagged work but no hours on
+    it" for N=1, and "No hours at the shop are on record for this period" in
+    place of the day-count clause when N=0. That is the ahead branch with
+    incomplete hours, never a gap, and having no breakdown there is correct.
+    Below half a display step the tile still reads **Gap**, not
+    Difference/Ahead, regardless of sign — also correct, not this case.
+    **File ONLY if:** (a) the day-count in that sentence doesn't match the
+    actual number of days with flagged work and no hours on record, or (b) a
+    tile actually labelled **Gap** shows a positive, non-sub-resolution value
+    AND there is unpaid time on record for the period, and still no breakdown
+    block appears underneath it.
 
 ### 7b. Unpaid Time surfaces (new 2026-07-28 — Phase 3)
 
@@ -1941,7 +1961,15 @@ Instead a **Timeline** section:
   **Closed** dated today also gets a time; a close backdated to an earlier day
   stays untimed and sorts by its date, so it can list above a later Reopened.
   None of that is a bug. Tickets opened before 2026-09-16 keep an untimed
-  Opened. **Add event** → pick a kind (Diagnosis done, Teardown approved,
+  Opened. **New 2026-09-26:** a timer flip to **Waiting on parts** or
+  **Waiting on approval** on an open ticket now ALSO writes its timeline event
+  with a clock time (HH:MM, your timezone) instead of a bare date, and it
+  sorts among that day's other timed events by that time exactly like
+  Opened/Reopened/Closed do. PASS = the hold event shows a time within a
+  minute or two of when you flipped the timer. A hold event created AFTER
+  tonight's deploy with no time on it (bare date only) is a FAIL. A hold event
+  that already existed from before the deploy legitimately has no time — do
+  not file those. **Add event** → pick a kind (Diagnosis done, Teardown approved,
   Parts ordered, Waiting on parts, Waiting on approval, … , Custom), a date
   (defaults to today), optional time, note. A **Custom** event shows its note
   as its label and needs one. Add two or three. The dashboard chip must now
@@ -2014,6 +2042,18 @@ and the date pill now means the CLOSE date, defaulting to today.
   that silently moves the date, or a second close that drops a line you added,
   is a real bug. An ordinary RO that was never a ticket has no Reopen button —
   correct, do not report it.
+- **New 2026-09-26 — Keep flag date now keeps the time too (with "Time of day
+  on each RO" turned ON, §8k).** Liem's ruling: Keep keeps the WHOLE
+  timestamp, not just the date. Do this re-close with the time-of-day switch
+  ON: note the RO's time before reopening, reopen, then re-close choosing
+  **Keep flag date <old date>** — the Time pill must pre-fill with that SAME
+  stored time (not the current time), and after saving the RO's time must
+  still equal its pre-reopen time. PASS. A time that moved to "now" under Keep
+  is a FAIL. Reopen again and re-close choosing **Move to today** instead: the
+  Time pill should now show the current time, and the saved time should be
+  whenever you actually saved (current time at close), not the old one. If
+  the RO had no time stored to begin with (switch was off, or time was
+  cleared), Keep must leave it with no time — not invent one.
 
 **The timer on an open ticket (Phase 2).** /timer → Add timer → pick the open
 ticket from the RO picker. It attaches with NO "Pick a line" prompt and the
@@ -2026,8 +2066,10 @@ to **Parts** and back to **Working**, then Save:
   has a new row for today, and the dashboard card's hours-so-far grew by the
   same amount. That row is source `timer`; it sits next to hand-typed rows.
 - The **Parts** flip wrote a **Waiting on parts** event on the timeline by
-  itself, once. Flipping back to Working wrote nothing. Flip to Parts twice in
-  one run and you should see exactly two events, not one per second.
+  itself, once, and (new 2026-09-26) it carries a clock time matching when you
+  flipped it — a bare date here is a FAIL, see the timeline bullet above.
+  Flipping back to Working wrote nothing. Flip to Parts twice in one run and
+  you should see exactly two events, not one per second.
 - The waiting time itself (if it crossed 30s) is a normal unpaid hold row on
   /pay-period — that half is unchanged and still counts as unpaid.
 - A second timer on the same open ticket is refused with "already on a timer".

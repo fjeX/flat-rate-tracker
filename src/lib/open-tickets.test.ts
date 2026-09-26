@@ -228,13 +228,35 @@ describe("aggregateStats with open tickets", () => {
   it("a row whose entry is missing from `entries` is COUNTED, not dropped", () => {
     // `entries` is date-clipped by every caller; an open ticket older than the
     // fetch window is exactly the one worth showing. Unknown ⇒ still open.
-    const ledger = [
-      row(MON, 8, "open_work", { entryId: "GONE" }),
-      row(TUE, 1, "open_work", { entryId: undefined }),
-    ];
+    const ledger = [row(MON, 8, "open_work", { entryId: "GONE" })];
     const s = aggregateStats([entry(MON, 4, { id: "OTHER" })], [], range, ledger);
-    expect(s.openTicketHours).toBe(9);
-    expect(s.openTicketCount).toBe(2);
+    expect(s.openTicketHours).toBe(8);
+    expect(s.openTicketCount).toBe(1);
+  });
+
+  it("an ORPHAN row (ticket deleted, entry_id SET NULL) is NOT an open ticket (dashboard-open-ticket-count-stale)", () => {
+    // No id can never be a live ticket — unlike an unknown id, which might be
+    // one outside the fetch window. Counting orphans left the tiles reading
+    // "<0.1h on 1 open ticket" with no open tickets at all.
+    for (const entryId of [null, undefined]) {
+      const ledger = [
+        row(MON, 8, "open_work", { entryId }),
+        row(TUE, 1, "open_work", { entryId }),
+      ];
+      const s = aggregateStats([entry(MON, 4, { id: "OTHER" })], [], range, ledger);
+      expect(s.openTicketHours, String(entryId)).toBe(0);
+      expect(s.openTicketCount, String(entryId)).toBe(0);
+    }
+  });
+
+  it("orphans drop out while a live open ticket beside them still counts", () => {
+    const ledger = [
+      row(MON, 2, "open_work", { entryId: null }),
+      row(TUE, 3, "open_work", { entryId: "T1" }),
+    ];
+    const s = aggregateStats([entry(MON, 0, { id: "T1", status: "open" })], [], range, ledger);
+    expect(s.openTicketHours).toBe(3);
+    expect(s.openTicketCount).toBe(1);
   });
 
   it("mixes open, closed and unknown in one range", () => {
@@ -351,6 +373,19 @@ describe("openWorkDates / openWorkByDate", () => {
     const by = openWorkByDate(ledger, MON, FRI);
     expect(by.get(MON)).toEqual({ hours: 9, tickets: 2 });
     expect(by.has(TUE)).toBe(false);
+  });
+  it("a day's orphaned rows (ticket deleted) still count, so hours never read as on 0 tickets", () => {
+    // Deliberately diverges from aggregateStats' open-ticket tiles, which drop
+    // orphans: the day card records where a past day went, it does not claim
+    // a ticket is open now.
+    const by = openWorkByDate(
+      [row(MON, 2, "open_work", { entryId: null }), row(MON, 1, "open_work", { entryId: "T1" })],
+      MON,
+      FRI,
+    );
+    expect(by.get(MON)).toEqual({ hours: 3, tickets: 2 });
+    const onlyOrphan = openWorkByDate([row(TUE, 2, "open_work", { entryId: null })], MON, FRI);
+    expect(onlyOrphan.get(TUE)).toEqual({ hours: 2, tickets: 1 });
   });
 });
 

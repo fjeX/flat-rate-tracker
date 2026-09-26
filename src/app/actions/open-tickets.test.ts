@@ -135,9 +135,11 @@ vi.mock("@/lib/db", () => ({
   getSettings: async () => ({ shareLaborTimes: false }),
   listOpCodes: async () => [],
   syncEntryLaborTimeObservations: async () => {},
+  // getCloseDefaultsAction's prefill ledger — empty is enough here.
+  listUnpaidTimeForEntry: async () => [],
 }));
 
-const { closeTicketAction, createOpenEntryAction, reopenTicketAction } =
+const { closeTicketAction, createOpenEntryAction, reopenTicketAction, getCloseDefaultsAction } =
   await import("./open-tickets");
 
 /** Today as the action sees it — the cookie mock above pins the zone. */
@@ -378,5 +380,29 @@ describe("reopenTicketAction", () => {
     expect(calls).toEqual(["status:open"]);
     expect(state.events.filter((e) => e.kind === "reopened")).toHaveLength(1);
     expect(state.entry?.status).toBe("open");
+  });
+});
+
+// keep-flag-date-restamps-time: a KEEP on a second close keeps the whole flag
+// timestamp, so the defaults must hand the form the stored time, not just the
+// stored date.
+describe("getCloseDefaultsAction — the stored flag timestamp", () => {
+  beforeEach(() => {
+    state.events = [];
+  });
+
+  it("returns the entry's stored logged time beside its date", async () => {
+    state.entry = { ...openEntry(1), date: "2026-09-12", loggedTime: "03:28" };
+    state.events = [ev("opened"), ev("closed"), ev("reopened")];
+    const d = await getCloseDefaultsAction(state.entry.id);
+    expect(d.reopened).toBe(true);
+    expect(d.currentDate).toBe("2026-09-12");
+    expect(d.currentTime).toBe("03:28");
+  });
+
+  it("returns null, not a stand-in, when no time was stored", async () => {
+    state.entry = { ...openEntry(1), date: "2026-09-12", loggedTime: null };
+    const d = await getCloseDefaultsAction(state.entry.id);
+    expect(d.currentTime).toBeNull();
   });
 });

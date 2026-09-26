@@ -74,23 +74,52 @@ export function nextStatus(status: DisputeStatus): DisputeStatus | null {
 export type DisputeOutcome = "open" | "full" | "partial" | "denied";
 
 /**
+ * Does this recovery count as the whole ask, for LABELLING purposes?
+ *
+ * The app-wide 3-minute (0.05h) rounding tolerance, same as reconcile.ts
+ * PAY_EPS: shops round flag hours, so a claim that came back 0.05h light is a
+ * win, not a shortfall worth a second round.
+ *
+ * The SAME_VALUE_EPS slack is not a second tolerance, it is float hygiene. Both
+ * figures are numeric(5,2), but `claimed - recovered` in IEEE-754 lands a hair
+ * ABOVE 0.05 for more than half of all exactly-3-minute gaps (0.14 - 0.09 is
+ * 0.05000000000000002), so a bare `<= RECOVERY_EPS` called those "partial" on
+ * a coin flip of the claim's value.
+ *
+ * LABELS ONLY. Never use this to decide how many hours get WRITTEN to a line:
+ * money follows what was actually recovered, not what rounds to the claim. See
+ * the single-line branch of pendingRecoveryApplication.
+ */
+function coversClaimForLabel(claimedHours: number, recoveredHours: number): boolean {
+  return claimedHours - recoveredHours <= RECOVERY_EPS + SAME_VALUE_EPS;
+}
+
+/**
  * What actually happened to one claim.
  *
  * Judged on HOURS, not dollars, because hours are always known and dollars
  * aren't (an unpriced period has null dollars but real hours). A zero-hour claim
  * that somehow got resolved counts as "full" — there was nothing to recover, so
  * it can't be a denial.
+ *
+ * ORDER MATTERS: "full" is checked FIRST, "denied" second. The old code asked
+ * "was the recovery within RECOVERY_EPS of zero?" first, and an absolute 0.05h
+ * tolerance measured from zero swallows a tiny claim whole: 0.05h recovered on
+ * a 0.10h ask is a full win by the rounding rule, but it read "Denied" — and
+ * 0.03h recovered on a 3.0h ask read "Denied" too, when money did arrive. The
+ * zero test exists to mean "nothing came back", so it is now a true zero test
+ * (SAME_VALUE_EPS, float noise only), not a rounding tolerance.
  */
 export function disputeOutcome(dispute: Dispute): DisputeOutcome {
   if (!isClosed(dispute.status)) return "open";
+  if (coversClaimForLabel(dispute.claimedHours, dispute.recoveredHours)) {
+    return "full";
+  }
   // Withdrawn with nothing recovered is a denial in substance: the tech asked
   // and walked away with nothing. Withdrawn AFTER a partial payment still counts
-  // as partial — the money arrived.
-  if (dispute.recoveredHours <= RECOVERY_EPS) {
-    return dispute.claimedHours <= RECOVERY_EPS ? "full" : "denied";
-  }
-  const remaining = dispute.claimedHours - dispute.recoveredHours;
-  return remaining <= RECOVERY_EPS ? "full" : "partial";
+  // as partial — the money arrived, however little of it.
+  if (dispute.recoveredHours <= SAME_VALUE_EPS) return "denied";
+  return "partial";
 }
 
 export type LifetimeRecovery = {
@@ -406,6 +435,10 @@ const EMPTY_APPLICATION: RecoveryApplication = {
  * anything above the ask is goodwill. A partial settlement with no breakdown is
  * left alone: which lines the shop paid is a fact the app does not have —
  * UNLESS the claim has exactly one line, where there is no "which" to know.
+ *
+ * THE INVARIANT: never write more than was actually recovered. The one-line
+ * claim meets it exactly; the multi-line full settlement can exceed it by at
+ * most RECOVERY_EPS, a known, bounded limit of having no per-line breakdown.
  */
 export function pendingRecoveryApplication(
   dispute: Dispute | null,
@@ -418,8 +451,19 @@ export function pendingRecoveryApplication(
   const perLine = sumLineRecovery(dispute.lines);
   const claimed = dispute.lines.reduce((s, l) => s + l.claimedHours, 0);
   const usePerLine = perLine > 0;
+  const singleLineRecovery = !usePerLine && dispute.lines.length === 1;
+  // Multi-line only. The one-line claim never takes this road — see below.
+  //
+  // This branch writes each line's ASK, so with the rounding tolerance it can
+  // write up to RECOVERY_EPS more than came back, in aggregate. Accepted here
+  // and only here: with several lines and no per-line breakdown there is no
+  // honest way to say which line the missing 3 minutes belong to without a
+  // schema change, and the overshoot is bounded at 0.05h per claim.
   const fullSettlement =
-    !usePerLine && claimed > 0 && dispute.recoveredHours + RECOVERY_EPS >= claimed;
+    !usePerLine &&
+    !singleLineRecovery &&
+    claimed > 0 &&
+    dispute.recoveredHours + RECOVERY_EPS >= claimed;
 
   // THE ONE-LINE CLAIM — not a guess, an identity.
   //
@@ -441,11 +485,25 @@ export function pendingRecoveryApplication(
   // back. Here it did not, so applying the ask would write hours the shop
   // never paid — the exact failure this module exists to prevent.
   //
-  // Anything above the ask is left alone the way the other branches leave it:
-  // nothing is clamped against the line's claim or flag hours, and whatever
-  // fails to map falls out in `unmapped` below.
-  const singleLineRecovery =
-    !usePerLine && !fullSettlement && dispute.lines.length === 1;
+  // WHY THIS BRANCH NOW OWNS EVERY ONE-LINE CLAIM, full settlements included.
+  // It used to fire only when `!fullSettlement`, so a one-line claim whose
+  // recovery was within RECOVERY_EPS of the ask went down the fullSettlement
+  // road and got its ASK written instead. An absolute 0.05h tolerance swallows
+  // a tiny claim: 0.10h asked, 0.05h recovered, and 0.05 + 0.05 >= 0.10 called
+  // it "full", so paid went 3.30 -> 3.40 when only 3.35 was ever paid. Half the
+  // write was hours nobody recovered. The tolerance is fine for a LABEL (see
+  // disputeOutcome); it is never a licence to write money. With one line there
+  // is nothing to apportion, so the exact recovered figure is always available
+  // and always what gets written: 2.96h back on a 3.0h ask writes 2.96.
+  //
+  // Capped at the line's ask, and ONLY at the ask. Recovery above what this
+  // line claimed is goodwill, which every other road reports as unmapped
+  // rather than writing onto a line (the fullSettlement branch always did this
+  // for one-line claims, and the card's goodwill note depends on it). The cap
+  // can only ever LOWER the write, so it cannot break the invariant. A line
+  // with no recorded ask (claimedHours 0) has nothing to cap against, and the
+  // whole recovery is written as before. Nothing is clamped against flag hours.
+  // Whatever fails to map falls out in `unmapped` below.
 
   if (!usePerLine && !fullSettlement && !singleLineRecovery) {
     return {
@@ -468,7 +526,9 @@ export function pendingRecoveryApplication(
     const hours = usePerLine
       ? dl.recoveredHours
       : singleLineRecovery
-        ? dispute.recoveredHours
+        ? dl.claimedHours > 0
+          ? Math.min(dispute.recoveredHours, dl.claimedHours)
+          : dispute.recoveredHours
         : dl.claimedHours;
     if (hours <= 0) continue;
 

@@ -153,9 +153,19 @@ export function aggregateStats(
    * the hours are never shown as on 0 tickets") already settled this the same
    * way, and the pinned decision-10 test passes entries = [] with live rows.
    * Over-reporting a stale unknown is recoverable; hiding live work is not.
+   *
+   * An ORPHAN row (entryId null) is the opposite case and is NOT counted.
+   * unpaid_time.entry_id is ON DELETE SET NULL, so a null id means the ticket
+   * was deleted — no writer (timer save, addOpenWorkAction, import remap)
+   * creates a live open_work row without one. "Unknown id" might be a live
+   * ticket outside the window; "no id" can never be a live ticket, and
+   * counting it left the tiles reading "N h on 1 open ticket" forever after a
+   * delete (dashboard-open-ticket-count-stale, 3rd occurrence). The day-card
+   * line in openWorkByDate still counts orphans on purpose: that is a record
+   * of where a past day's hours went, not a claim that a ticket is open now.
    */
-  const countsAsOpen = (u: UnpaidTime): boolean => {
-    if (!u.entryId) return true; // orphan row — no ticket to ask
+  const countsAsOpen = (u: UnpaidTime): u is UnpaidTime & { entryId: string } => {
+    if (!u.entryId) return false; // orphan — its ticket was deleted
     const status = statusById.get(u.entryId);
     return status === undefined || status === "open";
   };
@@ -180,7 +190,7 @@ export function aggregateStats(
         // only while the ticket is still open (see countsAsOpen).
         if (countsAsOpen(u)) {
           openTicketHours += u.hours;
-          openTickets.add(u.entryId ?? "");
+          openTickets.add(u.entryId);
         }
         break;
     }

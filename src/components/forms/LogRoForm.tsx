@@ -132,6 +132,13 @@ export function LogRoForm({
   // the ticket already carries, and the tech has to actively choose "move".
   const [reopened, setReopened] = useState(false);
   const [currentFlagDate, setCurrentFlagDate] = useState<string | null>(null);
+  // The other half of the flag timestamp (keep-flag-date-restamps-time). A
+  // KEEP keeps the date AND the time the first close stored — the time is a
+  // wall clock read relative to the date, so keeping one and re-stamping the
+  // other to "now" writes a moment that never happened. "" when the first
+  // close recorded no time: an empty pill honestly says "no time recorded",
+  // where filling in now would invent one (and on the OLD flag day, at that).
+  const [currentFlagTime, setCurrentFlagTime] = useState("");
   // Client-only (grep: it is read nowhere but the two radios' `checked` below —
   // closeTicketAction is handed `input.date` and nothing else). So it is a
   // DESCRIPTION of the date pill, never a second source of truth for it, and it
@@ -255,7 +262,8 @@ export function LogRoForm({
     onSave: ticketSave, onCreateOpCode, redirectTo,
     defaultLaborType, laborTypeEnabled, checkDuplicates,
     // The close form re-defaults the time from the setting like a fresh RO
-    // (seeded through the existingEntry override above — plan risk #3).
+    // (seeded through the existingEntry override above — plan risk #3). A
+    // REOPENED close then swaps in the stored time once the defaults land.
     trackRoTime, defaultLoggedTime, timeZone,
   });
 
@@ -284,6 +292,16 @@ export function LogRoForm({
           // overriding the today the hook otherwise seeds a close with.
           setDateChoice("keep");
           setDate(d.currentDate);
+          // Same override for the time the hook seeded with now — but only
+          // when the time field is on screen. With the setting off the hook
+          // never sends a time at all, so there is nothing to restore.
+          //
+          // Race, same as the date's: this lands after the form mounts, so a
+          // time typed in the few ms before it would be overwritten. Not
+          // guarded — the date isn't either, and the tech sees the pill change.
+          const stored = d.currentTime ?? "";
+          setCurrentFlagTime(stored);
+          if (timeFieldShown) setLoggedTime(stored);
         }
       } catch {
         // Non-fatal: the tech can still close and type actuals by hand.
@@ -292,7 +310,7 @@ export function LogRoForm({
     return () => {
       cancelled = true;
     };
-  }, [closing, existingEntry, setDate]);
+  }, [closing, existingEntry, setDate, setLoggedTime, timeFieldShown]);
 
   const title = openCreate
     ? "Open a ticket"
@@ -466,6 +484,8 @@ export function LogRoForm({
                     onChange={() => {
                       setDateChoice("keep");
                       setDate(currentFlagDate);
+                      // The whole flag timestamp, not just its day.
+                      if (timeFieldShown) setLoggedTime(currentFlagTime);
                     }}
                   />
                   Keep flag date {formatDateLong(currentFlagDate)}
@@ -478,6 +498,9 @@ export function LogRoForm({
                     onChange={() => {
                       setDateChoice("move");
                       setDate(today);
+                      // A moved flag is a fresh close: the same now-time a
+                      // first close opens with.
+                      if (timeFieldShown) setLoggedTime(defaultLoggedTime);
                     }}
                   />
                   Move to today ({formatDateLong(today)})

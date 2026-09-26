@@ -382,6 +382,14 @@ export async function getCloseDefaultsAction(entryId: string): Promise<{
    * silently defaulting the date to today the way a first close does.
    */
   reopened: boolean;
+  /**
+   * entries.logged_time as it stands right now — the other half of the flag
+   * TIMESTAMP a KEEP leaves alone. The date and the time are one fact (the
+   * time is a wall clock read relative to `date`), so a keep that kept the
+   * date but re-stamped the time to now would be half a keep. null when the
+   * first close recorded no time (setting off then, or the tech cleared it).
+   */
+  currentTime: string | null;
   defaultLoggedTime: string;
   trackRoTime: boolean;
   prefill: ReturnType<typeof closePrefill>;
@@ -398,6 +406,7 @@ export async function getCloseDefaultsAction(entryId: string): Promise<{
   return {
     today,
     currentDate: entry?.date ?? today,
+    currentTime: entry?.loggedTime ?? null,
     reopened: isReopened(events),
     defaultLoggedTime: settings.trackRoTime ? await nowHhmmInUserTz() : "",
     trackRoTime: settings.trackRoTime,
@@ -411,7 +420,8 @@ export async function getCloseDefaultsAction(entryId: string): Promise<{
  * One sequence, in this order, on purpose:
  *   1. lines inserted (first close) or patched (second close, decision 11) —
  *      the recompute trigger sets entries.flag_hours either way
- *   2. date moved       — to the close day; logged_time re-defaulted
+ *   2. date moved       — to the close day (or kept, on a second close);
+ *                         logged_time is whatever the form sent with it
  *   3. `closed` event   — dated the close day
  *   4. status = closed  — LAST
  *

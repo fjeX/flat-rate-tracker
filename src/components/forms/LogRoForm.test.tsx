@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import React from "react";
 import { LogRoForm } from "./LogRoForm";
-import type { RoMatch } from "@/lib/types";
+import type { Entry, RoMatch } from "@/lib/types";
 
 // One stable spy, not a fresh vi.fn() per render: "did the form navigate away
 // as though the save worked?" is an assertion, and a throwaway mock can't be
@@ -34,14 +34,18 @@ vi.mock("@/app/actions/entries", () => ({
 vi.mock("@/app/actions/op-codes", () => ({ createLibraryOpCode: vi.fn() }));
 const findOpenRoAction = vi.fn(async (): Promise<unknown[]> => []);
 const createOpenEntryAction = vi.fn(async (): Promise<{ error?: string }> => ({}));
+const closeTicketAction = vi.fn<(input: unknown) => Promise<{ error?: string }>>(
+  async () => ({}),
+);
+const getCloseDefaultsAction = vi.fn<(id: string) => Promise<unknown>>(async () => {
+  throw new Error("not used");
+});
 vi.mock("@/app/actions/open-tickets", () => ({
   findOpenRoAction: (...a: unknown[]) => findOpenRoAction(...(a as [])),
   createOpenEntryAction: (...a: unknown[]) => createOpenEntryAction(...(a as [])),
   updateOpenEntryAction: vi.fn(async () => ({})),
-  closeTicketAction: vi.fn(async () => ({})),
-  getCloseDefaultsAction: vi.fn(async () => {
-    throw new Error("not used");
-  }),
+  closeTicketAction: (input: unknown) => closeTicketAction(input),
+  getCloseDefaultsAction: (id: string) => getCloseDefaultsAction(id),
 }));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));
 vi.mock("@/lib/retro-capture", () => ({ retroCandidates: () => [] }));
@@ -51,6 +55,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   findOpenRoAction.mockResolvedValue([]);
   createOpenEntryAction.mockResolvedValue({});
+  closeTicketAction.mockResolvedValue({});
+  getCloseDefaultsAction.mockRejectedValue(new Error("not used"));
 });
 
 function typeRo(value: string) {
@@ -300,5 +306,163 @@ describe("LogRoForm — step numbers count the steps that actually render", () =
     renderOpenTicketForm();
     // Not 1, 3, 4: a missing step must not leave a hole in the numbering.
     expect(stepNumbers()).toEqual(["1", "2", "3"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// keep-flag-date-restamps-time: "Keep flag date" on a REOPENED close keeps the
+// whole flag timestamp — date AND time — not the date with the time re-stamped
+// to now. Only visible with trackRoTime on, so every case but the last has it on.
+
+const TODAY = "2026-09-16";
+const FLAG_DATE = "2026-09-12";
+const NOW = "03:31"; // what the page computed at render — the first-close default
+const STORED = "03:28"; // what the first close wrote
+
+function openTicket(): Entry {
+  return {
+    id: "aaaaaaaa-0000-4000-8000-000000000001",
+    userId: "u",
+    createdAt: "2026-09-10T09:00:00Z",
+    updatedAt: "2026-09-12T03:28:00Z",
+    date: FLAG_DATE,
+    loggedTime: STORED,
+    roNumber: "4410",
+    vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
+    opCodes: [
+      {
+        id: "l0",
+        opCodeId: null,
+        custom: true,
+        customCode: "BRK",
+        customDescription: "Brakes",
+        flagHours: 1.5,
+        actualHours: null,
+        notes: "",
+        position: 0,
+        subOpCodeId: null,
+        laborType: null,
+      },
+    ],
+    flagHours: 1.5,
+    notes: "",
+    status: "open",
+  } as Entry;
+}
+
+function closeDefaults(over: { reopened: boolean; currentTime: string | null }) {
+  return {
+    today: TODAY,
+    currentDate: FLAG_DATE,
+    defaultLoggedTime: NOW,
+    trackRoTime: true,
+    prefill: { actualHours: 0, actualSource: "estimate" },
+    ...over,
+  };
+}
+
+async function renderClose(trackRoTime = true) {
+  await act(async () => {
+    render(
+      <LogRoForm
+        initialOpCodes={[]}
+        roTemplates={[]}
+        existingEntry={openTicket()}
+        closeMode
+        today={TODAY}
+        trackRoTime={trackRoTime}
+        defaultLoggedTime={trackRoTime ? NOW : ""}
+        timeZone="America/Los_Angeles"
+      />,
+    );
+  });
+}
+
+const timePill = () => document.getElementById("ro-time") as HTMLInputElement | null;
+const datePill = () => document.getElementById("ro-date") as HTMLInputElement;
+const radio = (label: RegExp) =>
+  screen.getByLabelText(label, { selector: "input[type=radio]" }) as HTMLInputElement;
+
+describe("LogRoForm — a reopened close keeps the whole flag timestamp", () => {
+  it("seeds the stored time, not now, alongside the kept date", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    await renderClose();
+
+    expect(datePill().value).toBe(FLAG_DATE);
+    expect(radio(/Keep flag date/).checked).toBe(true);
+    expect(timePill()!.value).toBe(STORED);
+
+    // And the pill is what gets persisted.
+    await act(async () => {
+      clickButton("Close ticket").click();
+    });
+    expect(closeTicketAction).toHaveBeenCalledTimes(1);
+    expect(closeTicketAction.mock.calls[0][0]).toMatchObject({
+      date: FLAG_DATE,
+      loggedTime: STORED,
+    });
+  });
+
+  it("Move to today takes the fresh now time; Keep puts the stored one back", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    await renderClose();
+
+    act(() => radio(/Move to today/).click());
+    expect(datePill().value).toBe(TODAY);
+    expect(timePill()!.value).toBe(NOW);
+
+    act(() => radio(/Keep flag date/).click());
+    expect(datePill().value).toBe(FLAG_DATE);
+    expect(timePill()!.value).toBe(STORED);
+  });
+
+  it("leaves the pill empty when the first close recorded no time", async () => {
+    // Not now: now on the OLD flag day is a moment that never happened.
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: null }),
+    );
+    await renderClose();
+
+    expect(timePill()!.value).toBe("");
+    act(() => radio(/Move to today/).click());
+    expect(timePill()!.value).toBe(NOW);
+    act(() => radio(/Keep flag date/).click());
+    expect(timePill()!.value).toBe("");
+  });
+
+  it("leaves a FIRST close exactly as it was: today, and the now time", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      // currentTime present on purpose: a first close must ignore it.
+      closeDefaults({ reopened: false, currentTime: STORED }),
+    );
+    await renderClose();
+
+    expect(screen.queryByTestId("reopen-date-choice")).toBeNull();
+    expect(datePill().value).toBe(TODAY);
+    expect(timePill()!.value).toBe(NOW);
+  });
+
+  it("injects no time with the setting off, on either radio", async () => {
+    getCloseDefaultsAction.mockResolvedValue({
+      ...closeDefaults({ reopened: true, currentTime: STORED }),
+      defaultLoggedTime: "",
+      trackRoTime: false,
+    });
+    await renderClose(false);
+
+    expect(timePill()).toBeNull();
+    act(() => radio(/Move to today/).click());
+    act(() => radio(/Keep flag date/).click());
+
+    await act(async () => {
+      clickButton("Close ticket").click();
+    });
+    expect(closeTicketAction).toHaveBeenCalledTimes(1);
+    const sent = closeTicketAction.mock.calls[0][0] as { loggedTime?: string | null };
+    expect(sent.loggedTime).toBeUndefined();
   });
 });

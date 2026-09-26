@@ -152,6 +152,64 @@ describe("disputeOutcome", () => {
       ),
     ).toBe("full");
   });
+
+  // Label policy: the app-wide absolute 3-minute (0.05h) rounding tolerance,
+  // same as reconcile.ts PAY_EPS. "full" is decided FIRST; "denied" means
+  // literally nothing came back. The old order tested "recovered within 0.05 of
+  // zero" first, which swallowed a 0.10h claim that got 0.05h back and called
+  // it Denied, and called 0.03h back on a 3.0h ask Denied though money arrived.
+  it.each([
+    // [claimed, recovered, expected]
+    [0.1, 0.05, "full"], // exactly 3 min light: a win by the rounding rule
+    [0.1, 0.1, "full"],
+    [0.1, 0.08, "full"],
+    [0.1, 0, "denied"],
+    [0.1, 0.01, "partial"], // a real 0.01h arrived: not a denial
+    [3, 0.03, "partial"], // was "denied" under the old zero-tolerance branch
+    [3, 2.96, "full"],
+    [3, 1.5, "partial"],
+    [0.05, 0, "full"], // nothing meaningful was owed: unchanged from before
+    [0.05, 0.05, "full"],
+    [0, 0, "full"],
+  ] as const)(
+    "labels claimed %s / recovered %s as %s",
+    (claimedHours, recoveredHours, expected) => {
+      for (const status of ["resolved", "withdrawn"] as const) {
+        expect(
+          disputeOutcome(dispute({ status, claimedHours, recoveredHours })),
+        ).toBe(expected);
+      }
+    },
+  );
+
+  // Float hygiene at the boundary. Every numeric(5,2) pair exactly 0.05h apart
+  // is a full win, but `claimed - recovered` in IEEE-754 overshoots 0.05 for
+  // most of them (0.14 - 0.09 = 0.05000000000000002) and the bare comparison
+  // called those "partial" depending on the claim's value.
+  it("labels every exactly-3-minute-light claim full, whatever its size", () => {
+    const misses: number[] = [];
+    for (let cents = 5; cents <= 2000; cents += 1) {
+      const claimedHours = cents / 100;
+      const recoveredHours = (cents - 5) / 100;
+      const out = disputeOutcome(
+        dispute({ status: "resolved", claimedHours, recoveredHours }),
+      );
+      if (out !== "full") misses.push(claimedHours);
+    }
+    expect(misses).toEqual([]);
+  });
+
+  it("counts a tiny fully-recovered claim as a win in the lifetime ledger", () => {
+    const ledger = lifetimeRecovery([
+      dispute({ status: "resolved", claimedHours: 0.1, recoveredHours: 0.05 }),
+      dispute({ status: "resolved", claimedHours: 3, recoveredHours: 0.03 }),
+      dispute({ status: "resolved", claimedHours: 3, recoveredHours: 0 }),
+    ]);
+    expect(ledger.fullCount).toBe(1);
+    expect(ledger.partialCount).toBe(1);
+    expect(ledger.deniedCount).toBe(1);
+    expect(ledger.winRate).toBeCloseTo(2 / 3, 5);
+  });
 });
 
 describe("lifetimeRecovery", () => {
@@ -1174,6 +1232,170 @@ describe("pendingRecoveryApplication", () => {
     const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
     expect(plan.rows).toEqual([]);
     expect(plan.unmappedHours).toBeCloseTo(2, 5);
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // The tolerance that wrote money: a one-line claim within RECOVERY_EPS
+  // -------------------------------------------------------------------------
+  //
+  // A one-line claim within 0.05h of its ask used to take the fullSettlement
+  // road and write the ASK. 0.10h asked, 0.05h back: 0.05 + 0.05 >= 0.10 read
+  // as "full", and paid went 3.30 -> 3.40 when only 3.35 was paid. The rule
+  // now: a one-line claim writes exactly what came back, capped at its ask
+  // (anything above the ask is goodwill and stays unmapped).
+
+  function oneLineClaim(
+    claimedHours: number,
+    recoveredHours: number,
+    paidAtClaim: number,
+    flag = 10,
+  ): Dispute {
+    return dispute({
+      status: "resolved",
+      claimedHours,
+      recoveredHours,
+      lines: [
+        line({
+          entryId: "e1",
+          flaggedHours: flag,
+          paidHours: paidAtClaim,
+          claimedHours,
+          // recoveredHours on the LINE left at 0: the normal close flow never
+          // writes dispute_lines.recovered_hours, so usePerLine is false.
+        }),
+      ],
+    });
+  }
+
+  it.each([
+    // [claimed, recovered, paid at claim, expected apply, expected unmapped]
+    [0.1, 0.05, 3.3, 0.05, 0], // the repro: 3.35, not 3.40
+    [3, 2.96, 2, 2.96, 0], // within tolerance, still the exact recovery
+    [0.1, 0.1, 3.3, 0.1, 0], // true full settlement: same as before
+    [3, 1.5, 2, 1.5, 0], // ordinary partial: same as before
+    [0.1, 0.01, 3.3, 0.01, 0],
+    [0.5, 2, 1, 0.5, 1.5], // goodwill above the ask stays unmapped, as before
+    [0.1, 0.12, 3.3, 0.1, 0], // sub-tolerance goodwill: unmapped, not reported
+  ] as const)(
+    "one-line claim %s asked / %s back on paid %s writes %s (unmapped %s)",
+    (claimed, recovered, paid, apply, unmapped) => {
+      const d = oneLineClaim(claimed, recovered, paid);
+      const plan = pendingRecoveryApplication(
+        d,
+        [ro([roLine({ flagHours: 10, paidHours: paid })])],
+        [],
+      );
+      expect(plan.rows).toHaveLength(1);
+      expect(plan.applyHours).toBeCloseTo(apply, 5);
+      expect(plan.rows[0].recoveredHours).toBeCloseTo(apply, 5);
+      expect(plan.rows[0].paidAfter).toBeCloseTo(paid + apply, 5);
+      expect(plan.unmappedHours).toBeCloseTo(unmapped, 5);
+      expect(plan.needsLineBreakdown).toBe(false);
+      // THE INVARIANT, stated directly.
+      expect(plan.applyHours).toBeLessThanOrEqual(recovered + 1e-9);
+    },
+  );
+
+  it("writes 3.35 not 3.40 for 0.05h back on a 0.10h one-line ask, and only once", () => {
+    const d = oneLineClaim(0.1, 0.05, 3.3, 3.4);
+    expect(tapUntilQuiet(d, 3.3, 3.4)).toEqual([3.35]);
+    // Nothing left to explain: every recovered hour landed, so neither the
+    // goodwill note nor the breakdown request can render beside the rows.
+    const plan = pendingRecoveryApplication(
+      d,
+      [ro([roLine({ flagHours: 3.4, paidHours: 3.3 })])],
+      [],
+    );
+    expect(plan.unmappedHours).toBe(0);
+    expect(plan.needsLineBreakdown).toBe(false);
+  });
+
+  it("lets a second claim round recover the rest after a tiny one-line recovery", () => {
+    // Round 1 applied: line now 3.35. Round 1 must stay quiet on it.
+    const round1 = oneLineClaim(0.1, 0.05, 3.3, 3.4);
+    const at335 = [ro([roLine({ flagHours: 3.4, paidHours: 3.35 })])];
+    const quiet = pendingRecoveryApplication(round1, at335, []);
+    expect(quiet.rows).toEqual([]);
+    expect(quiet.unmappedHours).toBe(0);
+    // Round 2 claims the remaining 0.05 against the 3.35 it froze, gets it,
+    // and writes exactly one rung to 3.40.
+    const round2 = oneLineClaim(0.05, 0.05, 3.35, 3.4);
+    expect(tapUntilQuiet(round2, 3.35, 3.4)).toEqual([3.4]);
+    // Round 1 is still quiet at 3.40 too: neither round re-arms the other.
+    expect(
+      pendingRecoveryApplication(
+        round1,
+        [ro([roLine({ flagHours: 3.4, paidHours: 3.4 })])],
+        [],
+      ).rows,
+    ).toEqual([]);
+  });
+
+  it("still uses the per-line figure when a one-line claim has one recorded", () => {
+    const d = dispute({
+      status: "resolved",
+      claimedHours: 0.1,
+      recoveredHours: 0.05,
+      lines: [
+        line({ entryId: "e1", paidHours: 3.3, claimedHours: 0.1, recoveredHours: 0.05 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(
+      d,
+      [ro([roLine({ paidHours: 3.3 })])],
+      [],
+    );
+    expect(plan.applyHours).toBeCloseTo(0.05, 5);
+    expect(plan.rows[0].paidAfter).toBeCloseTo(3.35, 5);
+  });
+
+  // Multi-line with no breakdown is deliberately NOT changed: within tolerance
+  // it still writes every line's ask (a bounded <= 0.05h aggregate overshoot
+  // that cannot be split without a schema change); outside it, it still asks.
+  it("leaves the multi-line sub-tolerance behaviour exactly as it was", () => {
+    const lines = [
+      line({ id: "a", entryId: "e1", code: "BRK-F", claimedHours: 0.1 }),
+      line({ id: "b", entryId: "e1", code: "ALN", claimedHours: 0.1 }),
+    ];
+    const entries = [
+      ro([
+        roLine({ id: "l1", customCode: "BRK-F" }),
+        roLine({ id: "l2", customCode: "ALN" }),
+      ]),
+    ];
+    const within = pendingRecoveryApplication(
+      dispute({ status: "resolved", claimedHours: 0.2, recoveredHours: 0.16, lines }),
+      entries,
+      [],
+    );
+    expect(within.rows.map((r) => r.recoveredHours)).toEqual([0.1, 0.1]);
+    expect(within.applyHours).toBeCloseTo(0.2, 5);
+    expect(within.needsLineBreakdown).toBe(false);
+
+    const outside = pendingRecoveryApplication(
+      dispute({ status: "resolved", claimedHours: 0.2, recoveredHours: 0.1, lines }),
+      entries,
+      [],
+    );
+    expect(outside.rows).toEqual([]);
+    expect(outside.needsLineBreakdown).toBe(true);
+    expect(outside.unmappedHours).toBeCloseTo(0.1, 5);
+  });
+
+  it("leaves a within-tolerance one-line claim unmapped when its live line is gone", () => {
+    const d = dispute({
+      status: "resolved",
+      claimedHours: 0.1,
+      recoveredHours: 0.08,
+      lines: [line({ entryId: "gone", roNumber: "9999", claimedHours: 0.1 })],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine()])], []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.applyHours).toBe(0);
+    // 0.08 is above the 0.05 reporting floor, so the goodwill/deleted-RO note
+    // shows it; needsLineBreakdown stays false, so the two notes never both fire.
+    expect(plan.unmappedHours).toBeCloseTo(0.08, 5);
     expect(plan.needsLineBreakdown).toBe(false);
   });
 });
