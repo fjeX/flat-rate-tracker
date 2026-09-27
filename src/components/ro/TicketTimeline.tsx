@@ -166,7 +166,7 @@ export function TicketTimeline({
           entryId={entry.id}
           today={today}
           busy={busy}
-          onError={setError}
+          onClearTop={() => setError(null)}
           onSaved={afterWrite}
         />
       )}
@@ -226,7 +226,7 @@ export function TicketTimeline({
               entryId={entry.id}
               today={today}
               busy={busy}
-              onError={setError}
+              onClearTop={() => setError(null)}
               onSaved={afterWrite}
             />
           )}
@@ -289,9 +289,29 @@ type AddFormProps = {
   entryId: string;
   today: string;
   busy: boolean;
-  onError: (msg: string | null) => void;
+  /**
+   * Clears the card's TOP alert — the renderer for delete-event, delete-work
+   * and reopen. The add forms do NOT report their own refusals through it
+   * (open-work-hours-refusal-unseen, 2026-09-27): that alert sits above the
+   * event list, the add forms sit at the bottom, and on a long timeline a
+   * server refusal ("Hours can't exceed 24 in a day.") landed off-screen and
+   * Save looked dead. Each add body owns its own error, rendered next to its
+   * Save button. This prop only keeps the old clearing: a stale banner from
+   * another write is not about the form the tech is opening or submitting.
+   */
+  onClearTop: () => void;
   onSaved: () => void;
 };
+
+/** An add form's own refusal line, rendered beside its Save button. */
+function FormAlert({ error, testId }: { error: string | null; testId: string }) {
+  if (!error) return null;
+  return (
+    <p role="alert" className="text-xs text-[var(--bad)]" data-testid={testId}>
+      {error}
+    </p>
+  );
+}
 
 /**
  * The collapsed/open shell. It owns NOTHING but `open` — every field lives in
@@ -319,7 +339,7 @@ function AddEventForm(props: AddFormProps) {
         onClick={() => {
           // A stale banner from the last failed write is not about the form the
           // tech is opening now.
-          props.onError(null);
+          props.onClearTop();
           setOpen(true);
         }}
         className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
@@ -338,10 +358,13 @@ function AddEventFields({
   entryId,
   today,
   busy,
-  onError,
+  onClearTop,
   onSaved,
   onDone,
 }: AddFormProps & { onDone: () => void }) {
+  // This body's own refusal. It unmounts with the body, so Cancel/close
+  // clears it for free — same reset-by-unmount as the fields.
+  const [error, setError] = useState<string | null>(null);
   // First-mount values ARE the defaults, and this component only ever exists
   // while the form is open — so there is no second open to carry them into.
   const [kind, setKind] = useState<RoEventKind>("diag_done");
@@ -361,7 +384,8 @@ function AddEventFields({
   function submit() {
     if (sending.current || pending) return;
     sending.current = true;
-    onError(null);
+    setError(null);
+    onClearTop();
     startTransition(async () => {
       try {
         const res = await addRoEventAction({
@@ -372,13 +396,13 @@ function AddEventFields({
           note,
         });
         if (res.error) {
-          onError(res.error);
+          setError(res.error);
           return;
         }
         onDone();
         onSaved();
       } catch (e) {
-        onError(actionErrorMessage(e, "Couldn't add that event."));
+        setError(actionErrorMessage(e, "Couldn't add that event."));
       } finally {
         // On success this component is unmounting anyway; on failure the form
         // stays open with the tech's typing, so it must be retryable.
@@ -388,7 +412,7 @@ function AddEventFields({
   }
 
   return (
-    <div className="mt-2 space-y-2 rounded-[var(--radius-sm)] border border-[var(--line)] p-2">
+    <div className="mt-2 space-y-2 rounded-[var(--radius-sm)] border border-[var(--line)] p-2" data-testid="add-event-form">
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs text-[var(--fg-3)]">
           What happened
@@ -432,6 +456,7 @@ function AddEventFields({
           />
         </label>
       </div>
+      <FormAlert error={error} testId="add-event-error" />
       <div className="flex justify-end gap-2">
         {/* Cancel is disabled mid-write too: unmounting the body does not
             cancel the write, so letting it close would leave the tech asking
@@ -469,7 +494,7 @@ function AddHoursForm(props: AddFormProps) {
       <button
         type="button"
         onClick={() => {
-          props.onError(null);
+          props.onClearTop();
           setOpen(true);
         }}
         className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
@@ -488,10 +513,13 @@ function AddHoursFields({
   entryId,
   today,
   busy,
-  onError,
+  onClearTop,
   onSaved,
   onDone,
 }: AddFormProps & { onDone: () => void }) {
+  // This body's own refusal. It unmounts with the body, so Cancel/close
+  // clears it for free — same reset-by-unmount as the fields.
+  const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState(today);
   const [hours, setHours] = useState("");
   const [note, setNote] = useState("");
@@ -504,18 +532,19 @@ function AddHoursFields({
     if (sending.current || pending) return;
     sending.current = true;
     const parsed = Number(hours);
-    onError(null);
+    setError(null);
+    onClearTop();
     startTransition(async () => {
       try {
         const res = await addOpenWorkAction({ entryId, date, hours: parsed, note });
         if (res.error) {
-          onError(res.error);
+          setError(res.error);
           return;
         }
         onDone();
         onSaved();
       } catch (e) {
-        onError(actionErrorMessage(e, "Couldn't add those hours."));
+        setError(actionErrorMessage(e, "Couldn't add those hours."));
       } finally {
         sending.current = false;
       }
@@ -523,7 +552,7 @@ function AddHoursFields({
   }
 
   return (
-    <div className="mt-2 space-y-2 rounded-[var(--radius-sm)] border border-[var(--line)] p-2">
+    <div className="mt-2 space-y-2 rounded-[var(--radius-sm)] border border-[var(--line)] p-2" data-testid="add-hours-form">
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs text-[var(--fg-3)]">
           Day
@@ -566,6 +595,7 @@ function AddHoursFields({
       <p className="text-[11px] text-[var(--fg-3)]">
         Hours you worked on it. Waiting on parts or approval is logged as unpaid time, not here.
       </p>
+      <FormAlert error={error} testId="add-hours-error" />
       <div className="flex justify-end gap-2">
         <button
           type="button"

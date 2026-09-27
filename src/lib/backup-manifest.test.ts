@@ -127,8 +127,10 @@ function fullBundle(): ImportBundle {
         periodLabel: "Jan A",
         scope: "period",
         status: "submitted",
-        claimedHours: 3,
-        claimedDollars: 96,
+        // Header == sum of the line asks, as the app always writes it:
+        // buildImportPayload refuses a claim that disagrees with its lines.
+        claimedHours: 1,
+        claimedDollars: 32,
         recoveredHours: 0,
         recoveredDollars: 0,
         generatedAt: ts,

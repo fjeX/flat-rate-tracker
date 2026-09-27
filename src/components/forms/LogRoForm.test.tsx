@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import React from "react";
 import { LogRoForm } from "./LogRoForm";
+import { logRoFormKey } from "./logRoFormKey";
 import type { Entry, RoMatch } from "@/lib/types";
 
 // One stable spy, not a fresh vi.fn() per render: "did the form navigate away
@@ -694,5 +695,180 @@ describe("LogRoForm — no close until the close defaults have loaded", () => {
     const sent = sentPayload();
     expect(sent).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
     expect(sent.opCodes[0].actualHours).toBe(2.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// close-form-edit-during-load-polish.
+
+describe("LogRoForm — date and time are locked until the close defaults land", () => {
+  it("disables both pills while loading, then hands them to the tech", async () => {
+    const d = deferred<unknown>();
+    getCloseDefaultsAction.mockReturnValue(d.promise);
+    await renderClose();
+
+    // Anything typed now would be overwritten by the reopened seeding.
+    expect(datePill().disabled).toBe(true);
+    expect(timePill()!.disabled).toBe(true);
+    expect(datePill().getAttribute("aria-describedby")).toBe("close-defaults-loading");
+    expect(document.getElementById("close-defaults-loading")?.textContent).toMatch(
+      /Loading this ticket/,
+    );
+
+    await act(async () => {
+      d.resolve(closeDefaults({ reopened: true, currentTime: STORED }));
+    });
+    expect(datePill().disabled).toBe(false);
+    expect(timePill()!.disabled).toBe(false);
+    expect(datePill().getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("a failed fetch unlocks the pills (Close stays blocked behind Try again)", async () => {
+    getCloseDefaultsAction.mockRejectedValue(new Error("network"));
+    await renderClose();
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(datePill().disabled).toBe(false);
+    expect(timePill()!.disabled).toBe(false);
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it("never locks a new RO or an ordinary edit", () => {
+    const { unmount } = render(
+      <LogRoForm initialOpCodes={[]} roTemplates={[]} trackRoTime defaultLoggedTime={NOW} />,
+    );
+    expect(datePill().disabled).toBe(false);
+    expect(timePill()!.disabled).toBe(false);
+    unmount();
+
+    render(
+      <LogRoForm
+        initialOpCodes={[]}
+        roTemplates={[]}
+        existingEntry={{ ...openTicket(), status: "closed" } as Entry}
+        closeMode
+        trackRoTime
+        today={TODAY}
+      />,
+    );
+    // closeMode on a CLOSED RO is ignored — no fetch, no lock.
+    expect(getCloseDefaultsAction).not.toHaveBeenCalled();
+    expect(datePill().disabled).toBe(false);
+    expect(timePill()!.disabled).toBe(false);
+  });
+});
+
+describe("LogRoForm — clearing the date is not a change of choice", () => {
+  it("clear, then retype the flag date: the hand-typed time survives", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    await renderClose();
+    expect(radio(/Keep flag date/).checked).toBe(true);
+
+    setInput(timePill()!, "05:00");
+    // What a date input reports while cleared or half-typed.
+    setInput(datePill(), "");
+    // Still Keep: an empty pill describes no day at all.
+    expect(radio(/Keep flag date/).checked).toBe(true);
+    expect(timePill()!.value).toBe("05:00");
+
+    setInput(datePill(), FLAG_DATE);
+    expect(radio(/Keep flag date/).checked).toBe(true);
+    expect(timePill()!.value).toBe("05:00");
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: "05:00" });
+  });
+
+  it("clear after Move, retype today: still Move, the typed time survives", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    await renderClose();
+    act(() => radio(/Move to today/).click());
+    setInput(timePill()!, "06:10");
+    setInput(datePill(), "");
+    setInput(datePill(), TODAY);
+    expect(radio(/Move to today/).checked).toBe(true);
+    expect(timePill()!.value).toBe("06:10");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// logroform-no-key-carryover. The authed /log page is a Server Component, so
+// these render the element pattern it returns — <LogRoForm key={logRoFormKey(
+// existingEntry?.id, closeMode)} …/> — and re-render it the way a
+// searchParams-only soft nav does.
+
+describe("LogRoForm — each /log target gets a fresh form", () => {
+  const roField = () => document.getElementById("ro-number") as HTMLInputElement;
+  const editEntry = (id: string, roNumber: string): Entry =>
+    ({ ...openTicket(), id, roNumber, status: "closed" }) as Entry;
+  const page = (entry: Entry | undefined, closeMode = false) => (
+    <LogRoForm
+      key={logRoFormKey(entry?.id, closeMode)}
+      initialOpCodes={[]}
+      roTemplates={[]}
+      existingEntry={entry}
+      closeMode={closeMode}
+      today={TODAY}
+      trackRoTime
+      defaultLoggedTime={NOW}
+      timeZone="America/Los_Angeles"
+      openTicketEnabled
+    />
+  );
+
+  it("the key rule", () => {
+    expect(logRoFormKey(undefined, false)).toBe("new");
+    expect(logRoFormKey(undefined, true)).toBe("new");
+    expect(logRoFormKey("x", false)).toBe("x:edit");
+    expect(logRoFormKey("x", true)).toBe("x:close");
+  });
+
+  it("new → ticket: the half-typed new RO does not ride into the ticket's form", async () => {
+    const { rerender } = render(page(undefined));
+    typeRo("99999");
+    setInput(datePill(), "2026-09-01");
+
+    await act(async () => {
+      rerender(page(openTicket()));
+    });
+    expect(roField().value).toBe("4410");
+  });
+
+  it("edit A → edit B reseeds from B", async () => {
+    const { rerender } = render(page(editEntry("aaaaaaaa-0000-4000-8000-00000000000a", "111")));
+    typeRo("111-typed");
+    await act(async () => {
+      rerender(page(editEntry("aaaaaaaa-0000-4000-8000-00000000000b", "222")));
+    });
+    expect(roField().value).toBe("222");
+  });
+
+  it("edit X → close X reseeds with the close defaults (date = today)", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: false, currentTime: STORED }),
+    );
+    const { rerender } = render(page(openTicket(), false));
+    await act(async () => {
+      rerender(page(openTicket(), true));
+    });
+    expect(getCloseDefaultsAction).toHaveBeenCalledTimes(1);
+    // Not the opened-day date the edit form was seeded with.
+    expect(datePill().value).toBe(TODAY);
+    expect(timePill()!.value).toBe(NOW);
+  });
+
+  it("control: WITHOUT the key the typed RO survives the soft nav (the bug)", async () => {
+    const unkeyed = (entry: Entry | undefined) => (
+      <LogRoForm initialOpCodes={[]} roTemplates={[]} existingEntry={entry} openTicketEnabled />
+    );
+    const { rerender } = render(unkeyed(undefined));
+    typeRo("99999");
+    await act(async () => {
+      rerender(unkeyed(openTicket()));
+    });
+    expect(roField().value).toBe("99999");
   });
 });

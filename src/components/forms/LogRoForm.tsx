@@ -176,6 +176,14 @@ export function LogRoForm({
         ? closeDefaultsResult.status
         : "loading";
   const closeBlocked = closing && closeDefaultsState !== "ready";
+  // The date/time pills are read-only until the defaults land. On a reopened
+  // close the fetch below REPLACES both (keep the flag date, restore its
+  // stored time), so anything typed before it answered was silently thrown
+  // away — Save was already blocked, but the typing wasn't. Every close waits,
+  // not just a reopened one, because "reopened?" is what the fetch answers.
+  // Never stuck: a failed fetch is "failed", not "loading", and unlocks the
+  // pills (Save stays blocked behind "Try again"). Idle outside close mode.
+  const dateTimeLocked = closing && closeDefaultsState === "loading";
   // The entry id the defaults were last APPLIED for. The seeding (keep the
   // flag date, restore the stored time) is a starting point, not a rule: once
   // it has run, everything on screen is the tech's. See the fetch effect.
@@ -344,9 +352,10 @@ export function LogRoForm({
           // when the time field is on screen. With the setting off the hook
           // never sends a time at all, so there is nothing to restore.
           //
-          // Race, same as the date's: this lands after the form mounts, so a
-          // time typed in the few ms before it would be overwritten. Not
-          // guarded — the date isn't either, and the tech sees the pill change.
+          // This lands after the form mounts, and it overwrites both pills.
+          // That is safe only because the date and time pills are DISABLED
+          // while closeDefaultsState is "loading" (see dateTimeLocked below):
+          // nothing the tech could have typed exists yet to be overwritten.
           const stored = d.currentTime ?? "";
           setCurrentFlagTime(stored);
           if (timeFieldShown) setLoggedTime(stored);
@@ -451,8 +460,17 @@ export function LogRoForm({
               id="ro-date"
               type="date"
               value={date}
+              disabled={dateTimeLocked}
+              aria-describedby={dateTimeLocked ? "close-defaults-loading" : undefined}
               onChange={(e) => {
                 setDate(e.target.value);
+                // An empty value is not a choice. A date input reports "" both
+                // when cleared and while a typed date is incomplete, and
+                // reading that as "custom" meant clear-then-retype the flag
+                // date went custom → keep: a "change" of choice that restamped
+                // the stored time over one the tech had typed by hand. Leave
+                // the choice (and the time) where it was until there's a date.
+                if (e.target.value === "") return;
                 // On a reopened close the radios are on screen beside this
                 // pill, and the pill is what actually gets saved. Editing it
                 // used to leave a radio checked that contradicted the saved
@@ -503,6 +521,8 @@ export function LogRoForm({
               id="ro-time"
               type="time"
               value={loggedTime}
+              disabled={dateTimeLocked}
+              aria-describedby={dateTimeLocked ? "close-defaults-loading" : undefined}
               onChange={(e) => setLoggedTime(e.target.value)}
             />
           </>
@@ -608,7 +628,7 @@ export function LogRoForm({
                 </div>
               </div>
             ) : closeDefaultsState === "loading" ? (
-              <p role="status" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 6 }}>
+              <p id="close-defaults-loading" role="status" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 6 }}>
                 Loading this ticket&apos;s timeline…
               </p>
             ) : prefill && prefill.actualHours > 0 ? (

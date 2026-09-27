@@ -491,11 +491,24 @@ export async function closeTicketAction(input: {
   // Step 2 — the flag day. `undefined` loggedTime means the setting is off and
   // the form never asked: clear the opened-day time (plan risk #3) rather than
   // leave it describing a time on the wrong day.
+  //
+  // EXCEPT a second close that KEEPS the flag day
+  // (keep-close-trackrotime-off-wipes-time). There the stored time is not an
+  // opened-day time — it was written by the FIRST close (or a later edit) for
+  // this very date, so risk #3 doesn't apply, and "the form never asked" must
+  // mean "leave it alone", the same `!== undefined` contract updateEntry uses.
+  // Clearing it made the History row fall back to createdAt: a plausible,
+  // wrong time. A MOVED second close still clears (the old time describes the
+  // old day), and an explicit null from the form still clears.
+  const keepStoredTime =
+    clean.loggedTime === undefined &&
+    isSecondClose &&
+    clean.date === existing.date;
   await db.setEntryCloseDate(
     supabase,
     clean.entryId,
     clean.date,
-    clean.loggedTime ?? null,
+    keepStoredTime ? (existing.loggedTime ?? null) : (clean.loggedTime ?? null),
   );
 
   // Step 3 — the event. Skipped only when the latest TRANSITION is already

@@ -11,7 +11,8 @@ import {
   isClosed,
   lifetimeRecovery,
   nextStatus,
-  pendingRecoveryApplication,
+  periodRecoveryPlan,
+  type RecoveryApplication,
 } from "@/lib/disputes";
 import {
   DISPUTE_SCOPE_LABELS,
@@ -36,6 +37,21 @@ const STATUS_TONE: Record<Dispute["status"], string> = {
   answered: "warn",
   resolved: "good",
   withdrawn: "",
+};
+
+// "A closed claim round on this period." The ONE definition of the predicate:
+// the card reads it for the latest round, the sum over every round, the round
+// count, and the per-round recovery plan. A second copy is exactly how the sum
+// and the round under it once stopped describing the same thing.
+const closedIn = (periodKey: string) => (d: Dispute) =>
+  d.periodKey === periodKey && isClosed(d.status);
+
+const EMPTY_PLAN: RecoveryApplication = {
+  rows: [],
+  applyHours: 0,
+  unmappedHours: 0,
+  needsLineBreakdown: false,
+  moved: [],
 };
 
 function OutcomeForm({
@@ -275,8 +291,7 @@ export function DisputeOutcomeCard({
   // below — the latest round, the sum over every round, and how many rounds
   // that sum covers. A second copy of the predicate is exactly how the sum and
   // the round under it stopped describing the same thing.
-  const isClosedHere = (d: Dispute) =>
-    d.periodKey === periodKey && isClosed(d.status);
+  const isClosedHere = closedIn(periodKey);
   // The closed claim for this period, if the live one is already gone. Lets a
   // finished period still show its outcome. Deliberately still a find over the
   // prop rather than the head of the filtered array below: indexing a locally
@@ -291,15 +306,32 @@ export function DisputeOutcomeCard({
   // first closes (20260729000000_dispute_ledger.sql:107-112).
   const dispute = openDispute ?? closedForPeriod ?? null;
 
-  // What that closed claim's recovery would do to the live lines. `rows` is
-  // empty unless there is real, unapplied money to move — but the object itself
-  // is NOT empty in that case: a closed claim that recovered hours nothing can
-  // be applied to still reports them in unmappedHours, and that is precisely the
-  // state the tech needs a sentence for. See pendingRecoveryApplication.
-  const recovery = useMemo(
-    () => pendingRecoveryApplication(closedForPeriod ?? null, entries, library),
-    [closedForPeriod, entries, library],
+  // What EVERY closed round's recovery would do to the live lines. It used to
+  // be the newest closed round only (closedForPeriod), so closing a second
+  // round hid the first round's still-unapplied Apply forever — its money was
+  // never offered again and nothing said so. See periodRecoveryPlan.
+  const periodRecovery = useMemo(
+    () =>
+      periodRecoveryPlan(
+        allDisputes.filter(closedIn(periodKey)),
+        entries,
+        library,
+      ),
+    [allDisputes, periodKey, entries, library],
   );
+  // The one round whose Apply is on screen — never two at once (see
+  // PeriodRecovery.applyRound for why a second button is a double write).
+  const applyRound = periodRecovery.applyRound;
+  // The NEWEST closed round's plan, which the explanation paragraphs below
+  // describe exactly as they always did. `rows` is empty unless there is real,
+  // unapplied money to move — but the object itself is NOT empty in that case:
+  // a closed claim that recovered hours nothing can be applied to still
+  // reports them in unmappedHours, and that is precisely the state the tech
+  // needs a sentence for. See pendingRecoveryApplication.
+  const recovery = periodRecovery.rounds[0]?.plan ?? EMPTY_PLAN;
+  // The rows panel's own plan. The same object as `recovery` whenever the
+  // newest round is the one with something to apply.
+  const applyPlan = applyRound?.plan ?? EMPTY_PLAN;
   // Hours already back from closed claims on THIS period. The re-offer used to
   // state the shortfall and nothing else, so a period that had recovered 34.0h
   // against a 31.4h short read as though nothing had ever been paid.
@@ -351,11 +383,14 @@ export function DisputeOutcomeCard({
   }
 
   function applyRecovery() {
-    if (!closedForPeriod) return;
+    // The round the panel is showing, which is not necessarily the newest. The
+    // action recomputes that one dispute server-side from its own id.
+    const round = applyRound?.dispute;
+    if (!round) return;
     setError(null);
     startTransition(async () => {
       try {
-        const result = await applyDisputeRecoveryAction(closedForPeriod!.id);
+        const result = await applyDisputeRecoveryAction(round.id);
         setApplied(result.appliedLines);
         router.refresh();
       } catch (e) {
@@ -419,15 +454,29 @@ export function DisputeOutcomeCard({
   // matters.
   const showPeriodTotalNote =
     unmappedIsUnplaceable && claimLineCount === 0 && shortedHours > 0;
+  // The rows panel's footnote qualifies the rows ABOVE it, so it is judged on
+  // the round those rows came from. When that is the newest round this is
+  // exactly showGoodwillNote; when an older round is on the lift, it is that
+  // round's leftovers, and the newest round's (if any) render standalone below.
+  const applyLineCount = applyRound?.dispute.lines.length ?? 0;
+  const showApplyFootnote =
+    applyPlan.unmappedHours > 0 &&
+    !applyPlan.needsLineBreakdown &&
+    applyLineCount > 0;
+  // Hours one round's write stranded in another (see
+  // PeriodRecovery.disarmedHours). Same "only while the period still reads
+  // short" rule as the period-total note: its whole ask is "type it in
+  // yourself", so it stops once the shortfall is gone.
+  const showDisarmedNote = periodRecovery.disarmedHours > 0 && shortedHours > 0;
 
   // ONE copy, two homes, never both: inside the rows panel it is a footnote
   // under the rows it qualifies; with no rows there is no panel, so it renders
   // as its own inset alongside the other explanation paragraphs. The two sites
   // are mutually exclusive on rows.length, so the same hours are explained
   // exactly once.
-  const goodwillNote = (
+  const goodwillNote = (hours: number) => (
     <>
-      {fmtHours(recovery.unmappedHours)}h of the recovery maps to no line on this
+      {fmtHours(hours)}h of the recovery maps to no line on this
       period — goodwill above the ask, or an RO that&apos;s since been deleted.
       It stays on the claim and is not written anywhere.
     </>
@@ -449,11 +498,11 @@ export function DisputeOutcomeCard({
       {/* Recovery lands here first. Above the second-round offer on purpose:
           the money that already came back is the thing to record before asking
           for more, and the offer's shortfall figure is the one this fixes. */}
-      {recovery.rows.length > 0 && (
+      {applyPlan.rows.length > 0 && (
         <div className="card-inset space-y-2 px-3 py-3">
           <p className="text-sm">
             <span className="font-medium text-[var(--fg-1)]">
-              {fmtHours(recovery.applyHours)}h came back and isn&apos;t on your
+              {fmtHours(applyPlan.applyHours)}h came back and isn&apos;t on your
               lines yet.
             </span>{" "}
             <span className="text-[var(--fg-2)]">
@@ -464,7 +513,7 @@ export function DisputeOutcomeCard({
           </p>
 
           <ul className="space-y-1 text-xs text-[var(--fg-2)]">
-            {recovery.rows.slice(0, 5).map((row) => (
+            {applyPlan.rows.slice(0, 5).map((row) => (
               <li key={row.lineId} className="flex flex-wrap gap-x-1">
                 <span className="font-medium text-[var(--fg-1)]">
                   RO {row.roNumber}
@@ -479,13 +528,15 @@ export function DisputeOutcomeCard({
                 </span>
               </li>
             ))}
-            {recovery.rows.length > 5 && (
-              <li>+ {recovery.rows.length - 5} more lines</li>
+            {applyPlan.rows.length > 5 && (
+              <li>+ {applyPlan.rows.length - 5} more lines</li>
             )}
           </ul>
 
-          {showGoodwillNote && (
-            <p className="text-xs text-[var(--fg-3)]">{goodwillNote}</p>
+          {showApplyFootnote && (
+            <p className="text-xs text-[var(--fg-3)]">
+              {goodwillNote(applyPlan.unmappedHours)}
+            </p>
           )}
 
           {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
@@ -498,7 +549,7 @@ export function DisputeOutcomeCard({
           >
             {isPending
               ? "Applying…"
-              : `Apply ${fmtHours(recovery.applyHours)}h to ${recovery.rows.length} line${recovery.rows.length === 1 ? "" : "s"}`}
+              : `Apply ${fmtHours(applyPlan.applyHours)}h to ${applyPlan.rows.length} line${applyPlan.rows.length === 1 ? "" : "s"}`}
           </button>
         </div>
       )}
@@ -509,7 +560,27 @@ export function DisputeOutcomeCard({
           the whole story, which is why it gets card chrome here and none above. */}
       {showGoodwillNote && recovery.rows.length === 0 && (
         <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-          {goodwillNote}
+          {goodwillNote(recovery.unmappedHours)}
+        </p>
+      )}
+
+      {/* Two closed rounds named the same line, and one round's recovery has
+          already landed on it — so the other round's hours on that line no
+          longer match what that claim froze and can never be applied by FRT.
+          Not goodwill (these hours DID map to a line) and not a missing
+          breakdown (the lines are recorded), so it borrows neither paragraph's
+          words. The app genuinely cannot tell whether the shop paid both
+          rounds or the second round re-asked for the first round's money, so
+          it hands the call to the tech instead of guessing in either
+          direction. */}
+      {showDisarmedNote && (
+        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+          {fmtHours(periodRecovery.disarmedHours)}h recovered on your claims for{" "}
+          {periodLabel} can&apos;t be applied automatically: more than one
+          claim asked for the same line, and another claim&apos;s recovery has
+          already landed on it. If those hours aren&apos;t on your lines yet,
+          open &ldquo;Which lines came up short?&rdquo; and enter the paid hours
+          on each line yourself.
         </p>
       )}
 
@@ -544,7 +615,7 @@ export function DisputeOutcomeCard({
         </p>
       )}
 
-      {applied !== null && recovery.rows.length === 0 && (
+      {applied !== null && applyPlan.rows.length === 0 && (
         <p className="text-xs text-[var(--good)]">
           Recovery applied to {applied} line{applied === 1 ? "" : "s"}.
         </p>

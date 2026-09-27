@@ -285,27 +285,6 @@ export async function updateDispute(
   if (error) throw error;
 }
 
-/** Per-line outcome: a shop paying 3 of 4 disputed lines is the normal result. */
-export async function updateDisputeLine(
-  supabase: DbClient,
-  id: string,
-  patch: { recoveredHours?: number; recoveredDollars?: number | null },
-): Promise<void> {
-  const update: Database["public"]["Tables"]["dispute_lines"]["Update"] = {
-    updated_at: new Date().toISOString(),
-  };
-  if (patch.recoveredHours !== undefined)
-    update.recovered_hours = patch.recoveredHours;
-  if (patch.recoveredDollars !== undefined)
-    update.recovered_dollars = patch.recoveredDollars;
-
-  const { error } = await supabase
-    .from("dispute_lines")
-    .update(update)
-    .eq("id", id);
-  if (error) throw error;
-}
-
 /** Lines cascade via the FK. */
 export async function deleteDispute(
   supabase: DbClient,

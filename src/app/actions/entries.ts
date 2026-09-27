@@ -244,9 +244,11 @@ export async function setLineActualHoursAction(
   lineId: string,
   actualHours: number | null,
   // Defaults to "timer" rather than null so every EXISTING caller (the RO detail
-  // modal's blur-to-save, the timer's own write) keeps contributing to the
-  // shared True Time pool exactly as it did before. Only retro capture passes
-  // "estimate", and only it is held back from the pool.
+  // modal's blur-to-save) keeps contributing to the shared True Time pool
+  // exactly as it did before. Only retro capture passes "estimate", and only it
+  // is held back from the pool. (The timer's own save does NOT come through
+  // here — saveTimerAction adds via db.addLineActualHours, which stamps
+  // "timer" itself when the line has no source yet.)
   actualSource: ActualSource | null = "timer",
 ): Promise<{ error?: string }> {
   const parsed = check(setLineActualHoursSchema, {

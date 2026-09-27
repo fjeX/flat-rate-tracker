@@ -654,6 +654,15 @@ export async function setLineActualHours(
 // Reads the current value and writes the sum. Returns both halves so the caller
 // can show the running total. A null existing value is treated as 0 — an
 // unmeasured line, not a zero-length one.
+//
+// Also stamps actual_source = 'timer' — but ONLY when the line has no source
+// yet. Its only caller is saveTimerAction, so a clock really did run; before
+// this, the timer's own writes left actual_source NULL (readers treat NULL as
+// measured, so no figure was wrong — the provenance was just missing). An
+// existing 'estimate' is never overwritten: a line whose hours were partly
+// guessed stays marked as guessed after timed minutes are added to it, which
+// is the conservative reading True Time's "held back from the pool" rule wants
+// (and keeps the 09-13 estimate-source-dropped-on-edit-save fix intact).
 export async function addLineActualHours(
   supabase: DbClient,
   lineId: string,
@@ -661,7 +670,7 @@ export async function addLineActualHours(
 ): Promise<{ previous: number | null; total: number }> {
   const { data, error } = await supabase
     .from("entry_op_codes")
-    .select("actual_hours")
+    .select("actual_hours, actual_source")
     .eq("id", lineId)
     .single();
   if (error) throw error;
@@ -673,7 +682,11 @@ export async function addLineActualHours(
 
   const { error: updateError } = await supabase
     .from("entry_op_codes")
-    .update({ actual_hours: total })
+    .update(
+      data.actual_source === null
+        ? { actual_hours: total, actual_source: "timer" }
+        : { actual_hours: total },
+    )
     .eq("id", lineId);
   if (updateError) throw updateError;
 

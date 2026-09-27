@@ -6,6 +6,7 @@ import { entryIdSchema } from "@/lib/validation/actions";
 import { hasAnyRate, ratesToMap } from "@/lib/earnings";
 import { hhmmInTz, isoDate, isoDateInTz } from "@/lib/periods";
 import { LogRoForm } from "@/components/forms/LogRoForm";
+import { logRoFormKey } from "@/components/forms/logRoFormKey";
 
 export default async function LogPage({
   searchParams,
@@ -61,6 +62,9 @@ export default async function LogPage({
 
   return (
     <LogRoForm
+      // One form per target: a soft nav between /log targets must remount, or
+      // the old target's typed state carries over. See logRoFormKey.
+      key={logRoFormKey(existingEntry?.id, closeMode)}
       initialOpCodes={opCodes}
       existingEntry={existingEntry}
       roTemplates={settings.roTemplates}

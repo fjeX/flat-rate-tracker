@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   RECOVERY_EPS,
   MIN_INSIGHT_SAMPLE,
+  claimTotal,
   daysWaiting,
   disputeFromPack,
   disputeOutcome,
@@ -10,6 +11,7 @@ import {
   nextStatus,
   outcomeInsights,
   pendingRecoveryApplication,
+  periodRecoveryPlan,
   sumLineRecovery,
 } from "./disputes";
 import type { DisputePack } from "./dispute-pack";
@@ -1513,5 +1515,243 @@ describe("full label and multi-line apply gate share one boundary", () => {
         });
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The claim total the label is judged against (claimTotal)
+// ---------------------------------------------------------------------------
+//
+// The label used to read the HEADER while the Apply gate re-summed the LINES.
+// They only diverge on a hand-edited backup, but when they did, the two
+// answered "paid in full?" about different numbers. Every branch of
+// disputeOutcome is walked here on the divergent reproducer, not just the one
+// that moved — the 09-26 run found an epsilon change flipping "denied" to
+// "full" in a branch nobody re-checked.
+describe("claimTotal / disputeOutcome on a header that disagrees with its lines", () => {
+  // Header says 4h; the one line asks for 3h.
+  const divergent = (over: Partial<Dispute> = {}) =>
+    dispute({
+      status: "resolved",
+      claimedHours: 4,
+      lines: [line({ entryId: "e1", claimedHours: 3 })],
+      ...over,
+    });
+
+  it("uses the line re-sum when there are lines", () => {
+    expect(claimTotal(divergent())).toBe(3);
+  });
+
+  it("uses the header for a period-total claim (no lines)", () => {
+    expect(claimTotal(dispute({ scope: "period", claimedHours: 12.4, lines: [] }))).toBe(12.4);
+  });
+
+  it("falls back to the header when no line recorded an ask", () => {
+    expect(
+      claimTotal(dispute({ claimedHours: 4, lines: [line({ claimedHours: 0 })] })),
+    ).toBe(4);
+  });
+
+  it("full: 3h back on lines asking 3h is paid in full (it read 'partial' against the 4h header)", () => {
+    expect(disputeOutcome(divergent({ recoveredHours: 3 }))).toBe("full");
+    // And the Apply gate agrees: the one line gets its 3h.
+    const plan = pendingRecoveryApplication(
+      divergent({ recoveredHours: 3 }),
+      [ro([roLine({ flagHours: 4, paidHours: 1 })])],
+      [],
+    );
+    expect(plan.applyHours).toBeCloseTo(3, 9);
+  });
+
+  it("partial: some back, less than the lines asked", () => {
+    expect(disputeOutcome(divergent({ recoveredHours: 1.5 }))).toBe("partial");
+  });
+
+  it("denied: nothing back stays denied", () => {
+    expect(disputeOutcome(divergent({ recoveredHours: 0 }))).toBe("denied");
+  });
+
+  it("open: still open whatever the totals say", () => {
+    expect(disputeOutcome(divergent({ status: "submitted", recoveredHours: 3 }))).toBe("open");
+  });
+
+  it("does not turn a denial into 'full' when every line's ask is zero", () => {
+    // Re-summing to 0 would make coversClaim(0, 0) true — "Paid in full" on a
+    // claim that got nothing. The header fallback keeps it a denial.
+    expect(
+      disputeOutcome(
+        dispute({
+          status: "resolved",
+          claimedHours: 4,
+          recoveredHours: 0,
+          lines: [line({ claimedHours: 0 }), line({ id: "dl2", claimedHours: 0 })],
+        }),
+      ),
+    ).toBe("denied");
+  });
+
+  it("changes nothing for an app-shaped claim (header == lines to float noise)", () => {
+    // 0.1 + 0.2 = 0.30000000000000004 against a 0.3 header.
+    const d = (recoveredHours: number) =>
+      dispute({
+        status: "resolved",
+        claimedHours: 0.3,
+        recoveredHours,
+        lines: [line({ claimedHours: 0.1 }), line({ id: "dl2", claimedHours: 0.2 })],
+      });
+    expect(disputeOutcome(d(0.3))).toBe("full");
+    expect(disputeOutcome(d(0.25))).toBe("full"); // exactly 3 minutes short
+    expect(disputeOutcome(d(0.2))).toBe("partial");
+    expect(disputeOutcome(d(0))).toBe("denied");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Same-code tie-break at exactly 3 minutes (findLiveLine)
+// ---------------------------------------------------------------------------
+describe("findLiveLine tie-break between two lines of the same code", () => {
+  it("still finds a line whose flag hours were edited by exactly 0.05h after the claim", () => {
+    // The claim froze line B at 0.09h flagged. B was since bumped to 0.14h;
+    // 0.14 - 0.09 is 0.05000000000000002, which a bare `<= RECOVERY_EPS` threw
+    // out, so the claim fell through to candidates[0] — line A, a different
+    // line — and the Apply panel offered to pay the wrong row.
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.05,
+      lines: [
+        line({ entryId: "e1", flaggedHours: 0.09, paidHours: 0.04, claimedHours: 0.05 }),
+      ],
+    });
+    const entries = [
+      ro([
+        roLine({ id: "A", flagHours: 3, paidHours: 0.04 }),
+        roLine({ id: "B", flagHours: 0.14, paidHours: 0.04 }),
+      ]),
+    ];
+    expect(0.14 - 0.09).toBeGreaterThan(RECOVERY_EPS); // the float trap is real
+    expect(pendingRecoveryApplication(d, entries, []).rows[0].lineId).toBe("B");
+  });
+
+  it("prefers the CLOSEST line when two are within 3 minutes, not the first", () => {
+    // With exact-0.05h counted as a match, 1.00 and 1.05 both qualify for a
+    // claim frozen at 1.05. First-match would hand it to 1.00.
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.5,
+      lines: [line({ entryId: "e1", flaggedHours: 1.05, recoveredHours: 0.5 })],
+    });
+    const entries = [
+      ro([
+        roLine({ id: "A", flagHours: 1 }),
+        roLine({ id: "B", flagHours: 1.05 }),
+      ]),
+    ];
+    expect(pendingRecoveryApplication(d, entries, []).rows[0].lineId).toBe("B");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Several closed rounds on one period (periodRecoveryPlan)
+// ---------------------------------------------------------------------------
+//
+// The card used to plan the NEWEST closed round only, so closing a second
+// round hid the first round's unapplied Apply forever.
+describe("periodRecoveryPlan", () => {
+  // Line X: flagged 5, paid 2 at claim time. Each round is a one-line claim.
+  const roundOn = (
+    id: string,
+    recoveredHours: number,
+    over: Partial<DisputeLine> = {},
+  ) =>
+    dispute({
+      id,
+      status: "resolved",
+      claimedHours: 3,
+      recoveredHours,
+      lines: [
+        line({
+          disputeId: id,
+          entryId: "e1",
+          flaggedHours: 5,
+          paidHours: 2,
+          claimedHours: 3,
+          ...over,
+        }),
+      ],
+    });
+  const liveX = (paidHours: number | null) =>
+    roLine({ id: "X", flagHours: 5, paidHours });
+  const liveY = (paidHours: number | null) =>
+    roLine({ id: "Y", customCode: "ALN", flagHours: 4, paidHours });
+
+  describe("same line in both rounds", () => {
+    // R1 (older) and R2 (newer) both claim X with the same frozen paid (2):
+    // R2 was raised before R1's recovery was applied.
+    const r1 = roundOn("r1", 1);
+    const r2 = roundOn("r2", 1);
+
+    it("offers only the newest round while both are armed", () => {
+      const plan = periodRecoveryPlan([r2, r1], [ro([liveX(2)])], []);
+      // Both rounds are individually armed on X...
+      expect(plan.rounds.map((r) => r.plan.rows.length)).toEqual([1, 1]);
+      // ...but exactly one is offered.
+      expect(plan.applyRound?.dispute.id).toBe("r2");
+      expect(plan.disarmedHours).toBe(0);
+    });
+
+    it("applying one disarms the other, and says how much it stranded", () => {
+      // The write R2's Apply makes: 2 + 1.
+      const plan = periodRecoveryPlan([r2, r1], [ro([liveX(3)])], []);
+      expect(plan.rounds.map((r) => r.plan.rows.length)).toEqual([0, 0]);
+      expect(plan.applyRound).toBeNull(); // never offered as a second apply
+      // R1's 1h matched a line and was NOT unmapped — without this field it
+      // vanished from every figure the card shows.
+      expect(plan.rounds[1].plan.unmappedHours).toBe(0);
+      expect(plan.disarmedHours).toBeCloseTo(1, 9);
+    });
+
+    it("counts the stranded round's own hours when the amounts differ", () => {
+      const r1b = roundOn("r1", 1.5);
+      const plan = periodRecoveryPlan([r2, r1b], [ro([liveX(3)])], []);
+      expect(plan.applyRound).toBeNull();
+      expect(plan.disarmedHours).toBeCloseTo(1.5, 9);
+    });
+
+    it("counts both rounds when the line was edited by hand to neither value", () => {
+      const plan = periodRecoveryPlan([r2, r1], [ro([liveX(4)])], []);
+      expect(plan.applyRound).toBeNull();
+      expect(plan.disarmedHours).toBeCloseTo(2, 9);
+    });
+  });
+
+  describe("different lines", () => {
+    const r1 = roundOn("r1", 1); // X
+    const r2 = roundOn("r2", 1, { code: "ALN", flaggedHours: 4, claimedHours: 2 }); // Y
+
+    it("offers the newest round first", () => {
+      const plan = periodRecoveryPlan([r2, r1], [ro([liveX(2), liveY(2)])], []);
+      expect(plan.applyRound?.dispute.id).toBe("r2");
+      expect(plan.applyRound?.plan.rows.map((r) => r.lineId)).toEqual(["Y"]);
+    });
+
+    it("offers the older round once the newer one is applied", () => {
+      const plan = periodRecoveryPlan([r2, r1], [ro([liveX(2), liveY(3)])], []);
+      expect(plan.applyRound?.dispute.id).toBe("r1");
+      expect(plan.applyRound?.plan.rows.map((r) => r.lineId)).toEqual(["X"]);
+      // Y moved, but only R2 ever claimed it: that is R2's own apply.
+      expect(plan.disarmedHours).toBe(0);
+    });
+
+    it("offers nothing and strands nothing once both are applied", () => {
+      const plan = periodRecoveryPlan([r2, r1], [ro([liveX(3), liveY(3)])], []);
+      expect(plan.applyRound).toBeNull();
+      expect(plan.disarmedHours).toBe(0);
+    });
+  });
+
+  it("a single applied round strands nothing (its own write, or the tech's)", () => {
+    const r = roundOn("r1", 1);
+    expect(periodRecoveryPlan([r], [ro([liveX(3)])], []).disarmedHours).toBe(0);
+    expect(periodRecoveryPlan([r], [ro([liveX(4)])], []).disarmedHours).toBe(0);
   });
 });

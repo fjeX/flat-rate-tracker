@@ -18,7 +18,13 @@ const reportServerError = vi.fn<(err: unknown, ctx?: { url?: string | null }) =>
 const state = {
   slots: [] as TimerSlot[],
   entry: null as EntryType | null,
-  ledger: [] as { entryId: string | null; kind: string; hours: number; source: string }[],
+  ledger: [] as {
+    entryId: string | null;
+    kind: string;
+    hours: number;
+    source: string;
+    date?: string;
+  }[],
   events: [] as { entryId: string; kind: string; date: string; time?: string | null }[],
   /** frt_timezone cookie value; undefined = cookie never written. */
   tz: undefined as string | undefined,
@@ -26,6 +32,9 @@ const state = {
    *  passing (e.g. across midnight) between the action's `now` and its
    *  event write. */
   advanceClockOnGetEntry: null as number | null,
+  /** Same idea, fired from loadCapContext's schedule read — the await that
+   *  sits between saveTimerAction's `now` and its ledger-date computation. */
+  advanceClockOnSchedules: null as number | null,
   failCreateUnpaidTime: false,
   failCreateRoEvent: false,
   deletedSlotIds: [] as string[],
@@ -89,7 +98,10 @@ vi.mock("@/lib/db", () => ({
     if (state.advanceClockOnGetEntry !== null) vi.setSystemTime(state.advanceClockOnGetEntry);
     return state.entry;
   },
-  listWorkSchedulesSafe: async () => null,
+  listWorkSchedulesSafe: async () => {
+    if (state.advanceClockOnSchedules !== null) vi.setSystemTime(state.advanceClockOnSchedules);
+    return null;
+  },
   listShiftOverridesSafe: async () => ({}),
   listUnpaidTimeForEntry: async (_c: unknown, entryId: string) =>
     state.ledger.filter((r) => r.entryId === entryId),
@@ -148,6 +160,7 @@ beforeEach(() => {
   state.failCreateRoEvent = false;
   state.tz = undefined;
   state.advanceClockOnGetEntry = null;
+  state.advanceClockOnSchedules = null;
   vi.useRealTimers();
   state.deletedSlotIds = [];
   state.updatedSlots = [];
@@ -284,6 +297,35 @@ describe("saveTimerAction — entries with lines (unchanged path)", () => {
     expect(res.previousHours).toBe(2);
     expect(res.totalHours).toBe(3);
     expect(state.ledger).toHaveLength(0);
+  });
+});
+
+describe("saveTimerAction — ledger date comes from one clock read", () => {
+  // timer-save-midnight-two-clock-reads: a PAUSED slot (startTime null) dates
+  // its ledger rows by `today` alone. `today` used to be a fresh clock read
+  // after the loadCapContext round-trip, so a save at 23:59:30 whose context
+  // read finished after midnight banked the time on tomorrow.
+  it("a paused-slot save at 23:59 whose context read lands after midnight stays on the save's day", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    state.tz = "America/Los_Angeles";
+    // 06:59:30Z = 23:59:30 PDT Sep 14; 07:00:30Z = 00:00:30 PDT Sep 15.
+    vi.setSystemTime(Date.UTC(2026, 8, 15, 6, 59, 30));
+    state.advanceClockOnSchedules = Date.UTC(2026, 8, 15, 7, 0, 30);
+    state.slots = [
+      makeSlot({
+        status: "paused",
+        startTime: null,
+        workAccumulated: ONE_HOUR_MS,
+        holdPartsAccumulated: ONE_HOUR_MS,
+      }),
+    ];
+    state.entry = makeEntry({ status: "open", opCodes: [] });
+
+    await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null);
+
+    const rows = state.ledger.filter((r) => r.source === "timer");
+    expect(rows.map((r) => r.kind).sort()).toEqual(["open_work", "wait_parts"]);
+    for (const r of rows) expect(r.date).toBe("2026-09-14");
   });
 });
 

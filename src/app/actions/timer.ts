@@ -414,7 +414,14 @@ export async function saveTimerAction(
 
   // Attribute the time to the day it was earned, not the day it was saved —
   // otherwise a timer left running overnight lands its hours on tomorrow.
-  const today = ctx.timeZone ? isoDateInTz(ctx.timeZone) : isoDate();
+  //
+  // `today` comes from `now` — the instant the accumulators were flushed at —
+  // not a fresh clock read after the loadCapContext round-trip. Two reads could
+  // straddle midnight, and for a paused slot (startTime null) ledgerDate is
+  // `today` alone, so yesterday's banked time would land on tomorrow's date.
+  // Same fix as setTimerStatusAction's hold event.
+  const at = new Date(now);
+  const today = ctx.timeZone ? isoDateInTz(ctx.timeZone, at) : isoDate(at);
   const startedOn =
     slot.startTime !== null
       ? ctx.timeZone

@@ -485,3 +485,96 @@ describe("DisputeOutcomeCard unmapped-recovery explanations", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Several closed rounds, one Apply at a time
+// ---------------------------------------------------------------------------
+//
+// The panel used to be planned from the NEWEST closed round only, so closing a
+// second round hid the first round's still-unapplied Apply forever. It must
+// now offer each round in turn — and never two buttons at once, because
+// setLinePaidHours is an absolute SET and two applies in flight on a shared
+// line both pass the frozen-vs-live guard.
+describe("DisputeOutcomeCard recovery across claim rounds", () => {
+  /** A one-line closed round claiming `code` at frozen paid 2. */
+  function round(id: string, recovered: number, code: string): Dispute {
+    return {
+      ...closedRound(id, recovered),
+      scope: "lines",
+      claimedHours: 3,
+      lines: [
+        disputeLine({
+          id: `${id}-l`,
+          disputeId: id,
+          code,
+          flaggedHours: 5,
+          paidHours: 2,
+          claimedHours: 3,
+        }),
+      ],
+    };
+  }
+  const X = (paid: number) =>
+    liveLine({ id: "X", customCode: "BRK-F", flagHours: 5, paidHours: paid });
+  const Y = (paid: number) =>
+    liveLine({ id: "Y", customCode: "ALN", flagHours: 5, paidHours: paid });
+
+  const applyButtons = () => screen.queryAllByRole("button", { name: /^Apply / });
+  const disarmedNotes = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll("p")).filter((p) =>
+      (p.textContent ?? "").includes("can't be applied automatically"),
+    );
+
+  it("offers exactly one Apply while two rounds on different lines are both armed", () => {
+    renderCard({
+      // Newest first, as listDisputes returns them.
+      allDisputes: [round("r2", 1, "ALN"), round("r1", 0.5, "BRK-F")],
+      entries: [liveRO([X(2), Y(2)])],
+    });
+    expect(applyButtons().map((b) => b.textContent)).toEqual([
+      "Apply 1.0h to 1 line",
+    ]);
+  });
+
+  it("offers the OLDER round once the newer one is applied, and applies that round's id", async () => {
+    const actions = await import("@/app/actions/disputes");
+    const apply = vi.mocked(actions.applyDisputeRecoveryAction);
+    apply.mockResolvedValue({ appliedLines: 1, appliedHours: 0.5 });
+    renderCard({
+      allDisputes: [round("r2", 1, "ALN"), round("r1", 0.5, "BRK-F")],
+      // R2's write landed on Y: 2 + 1.
+      entries: [liveRO([X(2), Y(3)])],
+    });
+    const buttons = applyButtons();
+    expect(buttons.map((b) => b.textContent)).toEqual(["Apply 0.5h to 1 line"]);
+    fireEvent.click(buttons[0]);
+    expect(apply).toHaveBeenCalledWith("r1");
+  });
+
+  it("same line in both rounds: one Apply before, none after, and the stranded hours are explained once", () => {
+    const rounds = [round("r2", 1, "BRK-F"), round("r1", 1, "BRK-F")];
+    renderCard({ allDisputes: rounds, entries: [liveRO([X(2)])] });
+    expect(applyButtons()).toHaveLength(1);
+    cleanup();
+
+    const container = renderCard({ allDisputes: rounds, entries: [liveRO([X(3)])] });
+    expect(applyButtons()).toHaveLength(0);
+    const notes = disarmedNotes(container);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toMatchInlineSnapshot(
+      `"1.0h recovered on your claims for Jul 16 – Jul 31 can't be applied automatically: more than one claim asked for the same line, and another claim's recovery has already landed on it. If those hours aren't on your lines yet, open “Which lines came up short?” and enter the paid hours on each line yourself."`,
+    );
+    // Not goodwill, not a missing breakdown — those paragraphs stay out.
+    expect(noteCounts(container)).toEqual({ goodwill: 0, periodTotal: 0, breakdown: 0 });
+  });
+
+  it("stops explaining stranded hours once the period no longer reads short", () => {
+    const container = renderCard({
+      allDisputes: [round("r2", 1, "BRK-F"), round("r1", 1, "BRK-F")],
+      entries: [liveRO([X(3)])],
+      shortedHours: 0,
+    });
+    // Same data as the previous case, which shows the note while short.
+    expect(disarmedNotes(container)).toHaveLength(0);
+  });
+});

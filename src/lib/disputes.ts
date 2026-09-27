@@ -45,7 +45,7 @@ export const RECOVERY_EPS = 0.05;
 // real thing) did not move the live value far enough to trip a 0.05 mismatch, so
 // the offer re-armed and the same hours were written up to
 // floor(RECOVERY_EPS / hours) + 1 times.
-const SAME_VALUE_EPS = 1e-9;
+export const SAME_VALUE_EPS = 1e-9;
 
 /** Terminal states — a dispute in one of these is closed and off the queue. */
 export function isClosed(status: DisputeStatus): boolean {
@@ -111,6 +111,40 @@ function coversClaim(claimedHours: number, recoveredHours: number): boolean {
   return !exceedsRounding(claimedHours - recoveredHours);
 }
 
+/** Sum of the per-line asks. The lines' side of the header cross-check. */
+export function sumLineClaims(lines: DisputeLine[]): number {
+  return lines.reduce((s, l) => s + l.claimedHours, 0);
+}
+
+/**
+ * The claim total every outcome DECISION is judged against.
+ *
+ * An itemized claim stores its ask twice: the header (claimedHours) and the
+ * per-line asks. App-made claims agree to float noise — the header is
+ * pack.totalShortHours, the same reduce over the same deltas (dispute-pack.ts)
+ * — but a hand-edited or corrupt backup can make them disagree, and then the
+ * label (which read the header) and the Apply gate in
+ * pendingRecoveryApplication (which re-sums the lines, because the lines' asks
+ * are what it writes) answered "was this paid in full?" about two different
+ * numbers. The lines win whenever there are lines, so both read the same one.
+ *
+ * The header is used when:
+ *  - there are no lines: a PERIOD-TOTAL claim is lines: [] with a real,
+ *    nonzero header, and the header is the only figure it has;
+ *  - the lines sum to zero: no line recorded an ask (pendingRecoveryApplication
+ *    treats claimedHours 0 as "no recorded ask" too), so the lines carry no
+ *    claim total at all. Re-summing there would turn a 4h claim that got
+ *    nothing back into a 0h claim — which disputeOutcome calls "full".
+ *
+ * Display figures (the Claimed tile, lifetime sums) still show the header;
+ * this is only for decisions.
+ */
+export function claimTotal(dispute: Dispute): number {
+  if (dispute.lines.length === 0) return dispute.claimedHours;
+  const lines = sumLineClaims(dispute.lines);
+  return lines > 0 ? lines : dispute.claimedHours;
+}
+
 /**
  * What actually happened to one claim.
  *
@@ -129,7 +163,10 @@ function coversClaim(claimedHours: number, recoveredHours: number): boolean {
  */
 export function disputeOutcome(dispute: Dispute): DisputeOutcome {
   if (!isClosed(dispute.status)) return "open";
-  if (coversClaim(dispute.claimedHours, dispute.recoveredHours)) {
+  // claimTotal, not the header: see claimTotal. The label and the Apply gate
+  // must judge the same total or "Paid in full" can sit above a card that
+  // says the recovery couldn't be placed.
+  if (coversClaim(claimTotal(dispute), dispute.recoveredHours)) {
     return "full";
   }
   // Withdrawn with nothing recovered is a denial in substance: the tech asked
@@ -431,6 +468,28 @@ export type RecoveryApplication = {
    * gives it its own copy.
    */
   needsLineBreakdown: boolean;
+  /**
+   * Claim lines that found their live line but were NOT offered, because the
+   * live line no longer reads what this claim froze (see the ALREADY APPLIED
+   * guard). These hours are neither in `rows` nor in `unmappedHours`.
+   *
+   * On its own that is the normal "already applied" state and says nothing to
+   * the tech. It matters across ROUNDS: two closed claims on one period can
+   * name the same live line with the same frozen paid hours, and once either
+   * one's recovery lands, the other is disarmed for good. A per-round hours
+   * total cannot tell that apart from the round's own apply (with equal
+   * amounts the numbers are identical), so this carries the live line id —
+   * periodRecoveryPlan joins rounds on it. `looksApplied` is true when the live
+   * value is exactly frozen + this row's hours, i.e. consistent with THIS
+   * claim's own apply having landed.
+   */
+  moved: MovedRecoveryLine[];
+};
+
+export type MovedRecoveryLine = {
+  lineId: string;
+  hours: number;
+  looksApplied: boolean;
 };
 
 const EMPTY_APPLICATION: RecoveryApplication = {
@@ -438,6 +497,7 @@ const EMPTY_APPLICATION: RecoveryApplication = {
   applyHours: 0,
   unmappedHours: 0,
   needsLineBreakdown: false,
+  moved: [],
 };
 
 /**
@@ -466,7 +526,11 @@ export function pendingRecoveryApplication(
   if (dispute.recoveredHours <= 0) return EMPTY_APPLICATION;
 
   const perLine = sumLineRecovery(dispute.lines);
-  const claimed = dispute.lines.reduce((s, l) => s + l.claimedHours, 0);
+  // The raw line re-sum, deliberately NOT claimTotal(): for a period-total
+  // claim (no lines) this must stay 0 so fullSettlement cannot fire on a claim
+  // with nothing to write. Where lines exist and sum above zero it is the same
+  // number the label uses (claimTotal), so the two cannot disagree.
+  const claimed = sumLineClaims(dispute.lines);
   const usePerLine = perLine > 0;
   const singleLineRecovery = !usePerLine && dispute.lines.length === 1;
   // Multi-line only. The one-line claim never takes this road — see below.
@@ -544,6 +608,7 @@ export function pendingRecoveryApplication(
   // same RO and code (the shop's own duplicate, or a re-claim) would both land
   // on it and pay it twice.
   const taken = new Set<string>();
+  const moved: MovedRecoveryLine[] = [];
 
   for (const dl of dispute.lines) {
     const hours = usePerLine
@@ -605,7 +670,14 @@ export function pendingRecoveryApplication(
     // much. 0.01 > SAME_VALUE_EPS, so the very next render sees a mismatch and
     // skips. Re-arming again takes a deliberate manual edit of the line back to
     // the frozen value, and each such edit buys exactly one more offer.
-    if (!sameAsClaimTime(paidNow, dl.paidHours)) continue;
+    if (!sameAsClaimTime(paidNow, dl.paidHours)) {
+      moved.push({
+        lineId: live.line.id,
+        hours,
+        looksApplied: sameAsClaimTime(paidNow, (dl.paidHours ?? 0) + hours),
+      });
+      continue;
+    }
 
     taken.add(live.line.id);
     rows.push({
@@ -630,7 +702,106 @@ export function pendingRecoveryApplication(
     // `> RECOVERY_EPS` showed or hid on float noise.
     unmappedHours: exceedsRounding(unmapped) ? unmapped : 0,
     needsLineBreakdown: false,
+    moved,
   };
+}
+
+export type RoundRecovery = {
+  dispute: Dispute;
+  plan: RecoveryApplication;
+};
+
+export type PeriodRecovery = {
+  /** Every closed round on the period, in the order given (newest first). */
+  rounds: RoundRecovery[];
+  /**
+   * The ONE round whose Apply is offered: the newest with anything to apply.
+   * Never more than one. setLinePaidHours is an absolute SET, so two applies
+   * for rounds that share a line, in flight together, could both read the line
+   * before either write lands, both pass the frozen-vs-live guard, and both
+   * write — the second SET silently replacing the first. One button at a time
+   * means the next round is only evaluated against the line AFTER the previous
+   * write, where the guard disarms it.
+   */
+  applyRound: RoundRecovery | null;
+  /**
+   * Recovered hours stranded by ANOTHER round: a live line claimed by two or
+   * more closed rounds has moved, and at most one of those rounds can be the
+   * write that moved it. Every other round's hours on that line can no longer
+   * be applied by FRT, and without this they vanished silently — they are not
+   * in any round's rows and not in its unmappedHours.
+   *
+   * Only lines shared between rounds count. A line claimed by ONE round that
+   * has moved is that round's own apply, or the tech typing the paid hours in
+   * by hand; either way they did it and nothing is stranded.
+   *
+   * Attribution on a shared line: the newest round whose frozen value + hours
+   * equals the live value is taken to be the one that landed (the card offers
+   * newest first, so that is the likely order); if none match, the line was
+   * edited by hand and every round's hours on it are counted.
+   */
+  disarmedHours: number;
+};
+
+/**
+ * Recovery across every closed claim round on one period.
+ *
+ * pendingRecoveryApplication answers for ONE claim. The card used to ask it
+ * about the newest closed round only, so closing a second round hid the first
+ * round's still-unapplied Apply forever. This walks every round, offers the
+ * newest round that has something to apply, and reports what one round's
+ * write has stranded in another.
+ *
+ * `closedRounds` must be the period's closed disputes, newest first — the
+ * order listDisputes returns (generated_at DESC).
+ */
+export function periodRecoveryPlan(
+  closedRounds: Dispute[],
+  entries: Entry[],
+  library: OpCode[],
+): PeriodRecovery {
+  const rounds = closedRounds.map((dispute) => ({
+    dispute,
+    plan: pendingRecoveryApplication(dispute, entries, library),
+  }));
+  const applyRound = rounds.find((r) => r.plan.rows.length > 0) ?? null;
+
+  // lineId -> which rounds name it (armed or moved), in round order.
+  const byLine = new Map<
+    string,
+    { round: number; hours: number; moved: boolean; looksApplied: boolean }[]
+  >();
+  const note = (
+    lineId: string,
+    v: { round: number; hours: number; moved: boolean; looksApplied: boolean },
+  ) => {
+    const list = byLine.get(lineId) ?? [];
+    list.push(v);
+    byLine.set(lineId, list);
+  };
+  rounds.forEach((r, round) => {
+    for (const row of r.plan.rows) {
+      note(row.lineId, { round, hours: row.recoveredHours, moved: false, looksApplied: false });
+    }
+    for (const m of r.plan.moved) {
+      note(m.lineId, { round, hours: m.hours, moved: true, looksApplied: m.looksApplied });
+    }
+  });
+
+  let disarmedHours = 0;
+  for (const claims of byLine.values()) {
+    const movedClaims = claims.filter((c) => c.moved);
+    if (movedClaims.length === 0) continue;
+    // Shared with another round, armed or not. An armed claim on the same line
+    // stays armed and is offered in its turn; only the moved ones are stranded.
+    if (new Set(claims.map((c) => c.round)).size < 2) continue;
+    const landed = movedClaims.find((c) => c.looksApplied);
+    for (const c of movedClaims) {
+      if (c !== landed) disarmedHours += c.hours;
+    }
+  }
+
+  return { rounds, applyRound, disarmedHours };
 }
 
 /**
@@ -689,8 +860,26 @@ function findLiveLine(
     (l) => !taken.has(l.id) && lineCode(l, libraryById) === dl.code,
   );
   if (candidates.length === 0) return null;
-  const exact = candidates.find(
-    (l) => Math.abs(l.flagHours - dl.flaggedHours) <= RECOVERY_EPS,
-  );
+  // The tie-break is "within rounding of the frozen flag hours", decided by the
+  // module's one 3-minute boundary (exceedsRounding) rather than a bare
+  // `<= RECOVERY_EPS`. The bare compare lost an exactly-0.05h edit on float
+  // noise (0.14 - 0.09 is 0.05000000000000002), so a line whose flag hours were
+  // bumped by exactly 3 minutes after the claim stopped matching and the claim
+  // fell through to candidates[0] — a DIFFERENT line of the same code.
+  //
+  // Within that tolerance the CLOSEST line wins, not the first. Once exactly
+  // 0.05h counts as a match, two same-code lines 0.05h apart (1.00 and 1.05)
+  // can both qualify, and "first in row order" would hand a claim frozen at
+  // 1.05 to the 1.00 line. Ties on distance keep row order (strict `<`).
+  let exact: EntryOpCode | null = null;
+  let bestGap = Infinity;
+  for (const l of candidates) {
+    const gap = Math.abs(l.flagHours - dl.flaggedHours);
+    if (exceedsRounding(gap)) continue;
+    if (gap < bestGap) {
+      exact = l;
+      bestGap = gap;
+    }
+  }
   return { entry, line: exact ?? candidates[0] };
 }

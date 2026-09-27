@@ -329,6 +329,46 @@ describe("closeTicketAction", () => {
     expect(res.error).toBeUndefined();
     expect(state.entry?.date).toBe("2026-06-08");
   });
+
+  // keep-close-trackrotime-off-wipes-time: with "Time of day on each RO" OFF
+  // the close form omits loggedTime entirely. A KEEP second close must not read
+  // that absence as "clear" — the stored time was written for this very date.
+  describe("second close, logged time", () => {
+    function reopenedWithTime() {
+      state.entry = { ...openEntry(1), date: "2026-06-08", loggedTime: "09:15" };
+      state.events = [ev("opened"), ev("closed"), ev("reopened")];
+    }
+
+    it("setting OFF + KEEP: the stored time survives", async () => {
+      reopenedWithTime();
+      await closeTicketAction({ ...INPUT, date: "2026-06-08" });
+      expect(state.lastClose).toEqual({ date: "2026-06-08", loggedTime: "09:15" });
+    });
+
+    it("setting OFF + MOVE: the time is cleared (it described the old day)", async () => {
+      reopenedWithTime();
+      await closeTicketAction({ ...INPUT, date: "2026-06-12" });
+      expect(state.lastClose).toEqual({ date: "2026-06-12", loggedTime: null });
+    });
+
+    it("setting ON + KEEP: the form's time wins", async () => {
+      reopenedWithTime();
+      await closeTicketAction({ ...INPUT, date: "2026-06-08", loggedTime: "14:30" });
+      expect(state.lastClose).toEqual({ date: "2026-06-08", loggedTime: "14:30" });
+    });
+
+    it("setting ON + KEEP with the time cleared: explicit null still clears", async () => {
+      reopenedWithTime();
+      await closeTicketAction({ ...INPUT, date: "2026-06-08", loggedTime: null });
+      expect(state.lastClose).toEqual({ date: "2026-06-08", loggedTime: null });
+    });
+
+    it("FIRST close on the opened day still clears the opened-day time (plan risk #3)", async () => {
+      state.entry = { ...openEntry(0), date: "2026-06-08", loggedTime: "07:00" };
+      await closeTicketAction({ ...INPUT, date: "2026-06-08" });
+      expect(state.lastClose).toEqual({ date: "2026-06-08", loggedTime: null });
+    });
+  });
 });
 
 describe("reopenTicketAction", () => {

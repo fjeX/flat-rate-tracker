@@ -11,7 +11,6 @@ import { type Dispute, type DisputeStatus } from "@/lib/types";
 import { validate } from "@/lib/validation/core";
 import {
   disputeIdSchema,
-  disputeLineRecoverySchema,
   disputeOutcomeSchema,
   openDisputeSchema,
   setDisputeStatusSchema,
@@ -138,25 +137,6 @@ export async function recordDisputeOutcomeAction(
     recoveredDollars: clean.input.recoveredDollars ?? null,
     note: clean.input.note?.trim() ?? undefined,
     status: clean.input.status,
-  });
-  revalidateDisputeScreens();
-}
-
-/** Per-line outcome: a shop paying 3 of 4 disputed lines is the normal result. */
-export async function setDisputeLineRecoveryAction(
-  lineId: string,
-  recoveredHours: number,
-  recoveredDollars?: number | null,
-): Promise<void> {
-  const clean = validate(disputeLineRecoverySchema, {
-    lineId,
-    recoveredHours,
-    recoveredDollars,
-  });
-  const supabase = await createClient();
-  await db.updateDisputeLine(supabase, clean.lineId, {
-    recoveredHours: clean.recoveredHours,
-    recoveredDollars: clean.recoveredDollars ?? null,
   });
   revalidateDisputeScreens();
 }

@@ -43,9 +43,23 @@ full attempt's worth of testing evaporated (fingerprint `bot-runner-timeout`).
 
 So budget deliberately:
 
+- **Before touching §1, record the run's start time: `date -u` in one Bash
+  call.** This is a separate timestamp from §3a/§3b's `date -u` calls, which
+  measure the timer's elapsed time, not the run's — don't conflate them.
 - Work the checklist **in order** — it is ordered by value, not by convenience.
-- From the halfway mark on, prefer **finishing the report** over starting another
-  section.
+- **Stop STARTING new sections once 55 minutes have elapsed since that start
+  timestamp** — check `date -u` again before opening any section and diff it
+  against the start. Once you're at or past 55 minutes, write the report with
+  whatever you have instead of starting another section. This replaces the old
+  "halfway mark" rule, which was really a self-imposed ~45-minute cutoff no run
+  has ever needed to protect: every completed run so far ended between 46 and
+  67 minutes, nowhere near the real 90-minute kill. 55 comes from that same
+  data — the slowest report-writing tail on record is a run that stopped
+  starting sections around 45m and still took until 67m to finish (~22 more
+  minutes); 55 + 22 = 77, still 13 minutes inside the 90-minute hard kill. If
+  you ever find yourself still writing the report well past that 22-minute
+  margin, treat 55 as too late for next time and say so in the report so the
+  number can be revised down.
 - **Two tiers when you are behind, and every section is in one of them.**
   Load-bearing — the money paths and the newest code, must run: §1, §1b, §2,
   §2b, §2d, §3, §3z–§5, §6, §7, §7b, §7c, §7e, §8, §8h, §8i, §8k, §8l, plus §10
@@ -190,8 +204,18 @@ sends you there.
     (the visible digits are a RollingNumber odometer and `innerText` returns
     garbage), and §8's pace ring reads the real percent off `aria-label`
     rather than trusting what's displayed — same idiom, different surface.
-- Delete one RO you created **tonight only** and verify it's gone. Never delete
-  entries from previous nights — they are accumulated test data.
+- **This delete needs its own scratch RO — don't wait for one to become
+  disposable elsewhere.** Right now, log one extra throwaway RO solely to
+  delete it in this same step: realistic RO number, one line, plausible
+  hours (e.g. 1.5h), any vehicle. It exists only to be deleted a few lines
+  below — don't count it toward tonight's 2–5 real ROs for §9's rotation,
+  don't reuse it for any other section's setup, and don't leave it around
+  hoping another section (§8h's Quick Add probe, or anything else) will
+  delete it for you. That dependency is why this check used to go
+  `SKIPPED — no disposable RO left` two nights running.
+- Delete **the scratch RO from the bullet above** and verify it's gone. Never
+  delete entries from previous nights, and never one of tonight's real
+  logged ROs — they are accumulated test data.
   - **Identify the row before you touch it — this list re-sorts (date desc,
     then created_at desc), so a row's on-screen position shifts as you add
     entries and is never a safe handle.** Find the RO by its **number *and*
@@ -309,18 +333,42 @@ one most nights.
 ### 2c. "Worked — unpaid" empty days (new 2026-07-27)
 If the dashboard shows the "scheduled day looks empty" card, it now offers a
 **third** button, "Worked — unpaid", alongside "Day off" and "Worked, zero flag".
-- **This section is often unexercisable — but the card's absence proves nothing
-  on its own.** The bot account usually resolves its own amber days: you log
-  real ROs against today, so by the next night that day already has clocked
-  hours. It is **not** structurally unreachable, though — on 2026-08-18 it WAS
-  exercisable, because the previous night's run had crashed and left a day with
-  nothing logged, and the harness has failed twice in two weeks, so expect the
-  card back roughly monthly. The card also renders nothing at all when it finds
-  no unresolved days, so a real regression in the amber-day derivation looks
-  exactly like a quiet night. **Before writing `SKIPPED — no empty day on this
-  account`, confirm on the §8c calendar that no amber day exists anywhere** —
-  last night's run volunteered exactly that corroboration unprompted, so it is
-  cheap.
+- **Self-serve setup, checked first (added 2026-09-27) — Liem approved manufacturing
+  this scenario on the bot's own account, as long as nothing gets deleted.**
+  §8c's "One-day shift override" control (`setShiftOverrideAction`) accepts
+  **any date, past or future** — that's not a new capability, it's the exact
+  control §8c already exercises on a future date, just pointed backward:
+  1. On the §8c calendar, find a **past** date that is currently **off-pattern**
+     (not a scheduled day — e.g. a weekend under a Mon–Fri pattern) with **no**
+     RO/clock entries and **no** existing day-off or confirmed-zero-day marker
+     on it. Pick one at least a few days old so tonight's own ROs can't have
+     touched it.
+  2. Give that date a one-day shift override (e.g. 8h from 08:00, 60min lunch)
+     — the same action §8c already documents, just on a date in the past. It
+     is now a completed, scheduled day with nothing logged, so it should
+     render "empty?" on the next load.
+  3. Run the checks below against that day.
+  4. **Restore fully, in this order, before moving on** — this setup must
+     leave zero residue:
+     a. Delete the "Worked — unpaid" ledger row you created (§7b's delete
+        control — identify it by reason/hours/date).
+     b. **Undo zero day** (§8c's control) to un-confirm the day — the code
+        comment on `deleteConfirmedZeroDayAction` confirms this un-confirms
+        the marker regardless of which of the three resolutions created it.
+     c. **Reset to pattern** on the shift override (§8c's control), so the
+        date goes back to off-pattern with no schedule, no ledger row, and no
+        confirmed-zero-day marker — byte-identical to how you found it.
+  5. **If any restore step is missing or fails partway, stop and say so
+     explicitly under "Data created tonight"** — name the date and exactly
+     what's still sitting on it (override / ledger row / zero-day marker).
+     Do not let it pass silently; a half-restored day here is precisely the
+     kind of residue tomorrow's run needs to be warned about, since it would
+     otherwise look like a second real empty day.
+- **Only fall back to `SKIPPED — no empty day on this account`** if step 1
+  above finds no qualifying date at all (e.g. every day of the week is on the
+  schedule) — and even then, confirm on the §8c calendar that no amber day
+  exists anywhere first, the same corroboration this check has always asked
+  for.
 - Click it: an hours field, a "Where the time went" reason dropdown (comeback /
   waiting on parts / waiting on approval / shop time), and an optional note.
 - Saving with hours **0 or blank must be refused** with a visible error.
@@ -1154,6 +1202,15 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     live `paid_hours` already sits above its frozen claim-time value — so the
     panel can resurface for reasons that touch nothing (a reload, a line
     re-entering "short" some other way) without any hours moving.
+  - **More than one closed claim on the period (2026-09-27,
+    `recovery-apply-panel-latest-claim-only`).** The card offers Apply for ONE
+    claim at a time — the newest closed claim that still has lines to apply.
+    After you apply it, a panel for an OLDER claim appearing next is correct
+    (its recovery was waiting behind the newer one). **Two Apply buttons on
+    screen at once is a FAIL.** When two claims asked for the SAME line and
+    one claim's recovery already landed on it, the other is not offered;
+    instead a note says the hours "can't be applied automatically" and points
+    at "Which lines came up short?". That note is correct, not a bug.
   - **What IS a FAIL: a targeted line's `paid_hours` increasing by the
     recovery amount more than once**, i.e. ending up above claim-time paid +
     recovered. Judge this from the before/after numbers you recorded, never
@@ -1653,7 +1710,16 @@ The save always worked — only the screen was wrong, which makes it easy to mis
 
 This is a **race that gets more likely the longer the tab sits idle** (near
 certain at ~45s), and it **self-heals after ~15–40s** — so the check only means
-something if you idle first and read fast:
+something if you idle first and read fast.
+
+**This section has two independent halves — Part A (RO Quick Add, steps 1–4)
+and Part B (Spiff, step 5) — and they must alternate which one runs first,
+so a time cut never drops the same half every night.** Compute
+`date -u +%d`: on an **odd** day-of-month, run Part A then Part B (as
+numbered below); on an **even** day-of-month, run Part B first, then Part A.
+Do not just describe this — actually compute the parity and act on it.
+
+**Part A — RO Quick Add:**
 
 1. On `/dashboard`, note the **Pay Period Pace** flag-hours figure and the top RO
    in the RO list.
@@ -1671,6 +1737,8 @@ something if you idle first and read fast:
    - If either still shows the old value, the mitigation has regressed —
      report it as **HIGH**, and say explicitly whether a manual reload then
      shows the correct number (it will).
+**Part B — Spiff:**
+
 5. Do the same check once for a **spiff**, which goes through `BonusForm` and
    had the identical defect — but do it **on `/pay-period`, not the dashboard**,
    and read a **different** observable, because the pace figure structurally
@@ -1785,7 +1853,12 @@ Notes that matter for how you run:
 
 ### 8k. RO time of day + upsell marking (shipped 2026-08-15 — newest code, hunt it hard)
 
-Two new things, both brand new tonight.
+Two new things, both brand new tonight. **These two halves — "Time of day on
+an RO" and "Upsell marking" — must alternate which one runs first, so a time
+cut never drops the same half every night.** Compute `date -u +%d`: on an
+**odd** day-of-month, do Time of day first, then Upsell marking (the order
+below); on an **even** day-of-month, do Upsell marking first, then Time of
+day. Do not just describe this — actually compute the parity and act on it.
 
 **Time of day on an RO.** Settings → Logging → "Time of day on each RO" is a
 switch, **off by default** — this is verified (migration default is
@@ -1982,7 +2055,12 @@ Instead a **Timeline** section:
   shows one row per day with a trash icon; the total updates; the dashboard
   card's hours-so-far shows 10.5h. Delete one — the confirm must name the
   hours and the date. Try 0, negative, 25: refused with a sentence, not a
-  crash.
+  crash. **The sentence renders INSIDE the Add-hours form, directly above its
+  Cancel / Add hours buttons** (2026-09-27, `open-work-hours-refusal-unseen`)
+  — not at the top of the Timeline card. Look there first; a refusal that
+  only appears at the top of the card, or nowhere near the form, is a FAIL.
+  Same for an Add-event refusal. Delete / reopen failures still render at
+  the top of the card, by design.
 - **Close ticket** button at the bottom of the timeline (and in the footer).
   Don't press it yet.
 
@@ -2093,6 +2171,22 @@ to **Parts** and back to **Working**, then Save:
 there is no op-code step; the save button reads **Save ticket**. Delete ticket
 from that form works and takes the timeline with it; hours you logged on it
 stay on the calendar as worked days (that is correct — the hours happened).
+
+**Focus rotation (folded in 2026-09-27 from the retired `bot/FOCUS.md`) — one
+edge case a night, by date, so all five get real coverage instead of sitting
+in a file nobody re-reads.** Compute `date -u +%d`, then `day % 5`:
+
+| `day % 5` | Edge case |
+|---|---|
+| 0 | Save a timer with **0 worked time** (hold time only) on an open ticket. |
+| 1 | Attach the open ticket to a timer, then **close the ticket from /log while the timer is still running**, then save the timer. |
+| 2 | **Reopen a ticket that is on a timer.** |
+| 3 | **Reopen a ticket, then delete it.** |
+| 4 | **Two tabs:** reopen the ticket in one tab, close it in the other. |
+
+Run only tonight's matching case. Report it in its own subsection under §8m
+("Focus rotation — case N"), **including if it behaved correctly** — a clean
+result on one of these is real coverage, not a null finding to omit.
 
 **Do NOT report:**
 - 0.0h flag on an open ticket, or on the day it was opened. Flag lands at close.

@@ -244,8 +244,11 @@ export function useLogRoForm({
     // `alive` covers exactly one case and no more: the component unmounted
     // before the lookup came back. It does NOT protect against the user, and an
     // earlier version of this comment claimed it did — originalId is derived
-    // from the existingEntry PROP, which never changes for the life of the
-    // page, so this cleanup only ever fires on unmount.
+    // from the existingEntry PROP, whose id is fixed for the life of this
+    // component: the authed /log page keys the form on the target entry (see
+    // src/app/(app)/log/page.tsx), so a different RO is a fresh mount, and a
+    // same-RO server re-render carries the same comebackOfEntryId. In practice
+    // this cleanup only fires on unmount.
     //
     // The user is the real race. Between the fetch starting and resolving, they
     // can hit X and pick a DIFFERENT original (chooseOriginalRo) or clear the

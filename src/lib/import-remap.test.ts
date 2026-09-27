@@ -390,8 +390,8 @@ describe("buildImportPayload — every NOT NULL column is emitted", () => {
             lines: [
               {
                 id: "DL1", disputeId: "D1", entryId: null, lineId: null, roNumber: "1",
-                code: "X", description: "", workDate: null, flaggedHours: 0, paidHours: null,
-                claimedHours: 0, claimedDollars: null, recoveredHours: 0,
+                code: "X", description: "", workDate: null, flaggedHours: 1, paidHours: null,
+                claimedHours: 1, claimedDollars: null, recoveredHours: 0,
                 recoveredDollars: null, hadPhoto: false, position: 0,
               },
             ],
@@ -437,8 +437,8 @@ describe("buildImportPayload — every NOT NULL column is emitted", () => {
             lines: [
               {
                 id: "DL1", disputeId: "D1", entryId: null, lineId: null, roNumber: "1",
-                code: "X", description: "", workDate: null, flaggedHours: 0, paidHours: null,
-                claimedHours: 0, claimedDollars: null, recoveredHours: 0,
+                code: "X", description: "", workDate: null, flaggedHours: 1, paidHours: null,
+                claimedHours: 1, claimedDollars: null, recoveredHours: 0,
                 recoveredDollars: null, hadPhoto: false, position: 0,
               },
             ],
@@ -587,9 +587,9 @@ describe("buildImportPayload — frozen dispute claims", () => {
                 code: "X",
                 description: "",
                 workDate: null,
-                flaggedHours: 0,
+                flaggedHours: 3,
                 paidHours: null,
-                claimedHours: 0,
+                claimedHours: 3,
                 claimedDollars: null,
                 recoveredHours: 0,
                 recoveredDollars: null,
@@ -604,6 +604,91 @@ describe("buildImportPayload — frozen dispute claims", () => {
     );
 
     expect(payload.dispute_lines?.[0].dispute_id).toBe(payload.disputes?.[0].id);
+  });
+
+  // The header and the line asks describe the same claim twice. The app always
+  // writes them equal (the header is the same reduce as the lines), so a
+  // disagreement means a hand-edited or damaged file — refused, not imported.
+  describe("claim header vs line total", () => {
+    function claimLine(id: string, claimedHours: number) {
+      return {
+        id, disputeId: "D1", entryId: null, lineId: null, roNumber: "1",
+        code: "X", description: "", workDate: null, flaggedHours: claimedHours,
+        paidHours: null, claimedHours, claimedDollars: null, recoveredHours: 0,
+        recoveredDollars: null, hadPhoto: false, position: 0,
+      };
+    }
+
+    it("accepts an app-shaped claim whose float re-sum is a hair off the header", () => {
+      // 0.1 + 0.2 is 0.30000000000000004 — float noise, not a disagreement.
+      const payload = buildImportPayload(
+        bundle({
+          disputes: [
+            dispute({
+              claimedHours: 0.3,
+              lines: [claimLine("DL1", 0.1), claimLine("DL2", 0.2)],
+            }),
+          ],
+        }),
+        { newId: counter() },
+      );
+      expect(payload.dispute_lines).toHaveLength(2);
+      expect(payload.disputes?.[0].claimed_hours).toBe(0.3);
+    });
+
+    it("accepts a period-total claim: no lines, nonzero header", () => {
+      const payload = buildImportPayload(
+        bundle({ disputes: [dispute({ scope: "period", claimedHours: 12.4, lines: [] })] }),
+        { newId: counter() },
+      );
+      expect(payload.disputes?.[0].claimed_hours).toBe(12.4);
+      expect(payload.dispute_lines).toEqual([]);
+    });
+
+    it("refuses a claim whose header disagrees with its lines, naming the claim", () => {
+      expect(() =>
+        buildImportPayload(
+          bundle({
+            disputes: [
+              dispute({
+                claimedHours: 5,
+                lines: [claimLine("DL1", 1), claimLine("DL2", 2)],
+              }),
+            ],
+          }),
+          { newId: counter() },
+        ),
+      ).toThrow(
+        /dispute claim for Aug 1–15 says 5\.00h but its lines add up to 3\.00h.*Nothing was imported/,
+      );
+    });
+
+    // Tighter than the 0.05h rounding tolerance on purpose: an integrity check,
+    // not a rounding judgement.
+    it("refuses a disagreement smaller than the 3-minute rounding tolerance", () => {
+      expect(() =>
+        buildImportPayload(
+          bundle({ disputes: [dispute({ claimedHours: 3.04, lines: [claimLine("DL1", 3)] })] }),
+          { newId: counter() },
+        ),
+      ).toThrow(/can't be restored/);
+    });
+
+    it("refuses a non-numeric header rather than letting NaN slip past", () => {
+      expect(() =>
+        buildImportPayload(
+          bundle({
+            disputes: [
+              dispute({
+                claimedHours: "lots" as unknown as number,
+                lines: [claimLine("DL1", 3)],
+              }),
+            ],
+          }),
+          { newId: counter() },
+        ),
+      ).toThrow(/says an invalid number/);
+    });
   });
 });
 

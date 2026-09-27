@@ -567,12 +567,6 @@ export const disputeOutcomeSchema = z.object({
   }),
 });
 
-export const disputeLineRecoverySchema = z.object({
-  lineId: uuidField("Line ID"),
-  recoveredHours: disputeHours("Recovered hours"),
-  recoveredDollars: disputeDollars("Recovered dollars").nullable().optional(),
-});
-
 // ---------------------------------------------------------------------------
 // entry-photos.ts
 // ---------------------------------------------------------------------------

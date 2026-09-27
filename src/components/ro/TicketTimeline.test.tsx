@@ -10,7 +10,7 @@
 // A test that re-rendered a fresh TicketTimeline would pass against the broken
 // code and prove nothing.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import type { Entry, RoEvent } from "@/lib/types";
 
@@ -32,13 +32,16 @@ const EVENTS: RoEvent[] = [
 
 const addRoEventAction = vi.fn(async (_input: unknown) => ({}) as { error?: string });
 const addOpenWorkAction = vi.fn(async (_input: unknown) => ({}) as { error?: string });
-const getTicketTimelineAction = vi.fn(async () => ({ events: EVENTS, ledger: [] }));
+const getTicketTimelineAction = vi.fn(
+  async () => ({ events: EVENTS, ledger: [] }) as { events: RoEvent[]; ledger: unknown[] },
+);
+const deleteRoEventAction = vi.fn(async (_id: string) => ({}) as { error?: string });
 
 vi.mock("@/app/actions/open-tickets", () => ({
   addOpenWorkAction: (input: unknown) => addOpenWorkAction(input),
   addRoEventAction: (input: unknown) => addRoEventAction(input),
   deleteOpenWorkAction: vi.fn(),
-  deleteRoEventAction: vi.fn(),
+  deleteRoEventAction: (id: string) => deleteRoEventAction(id),
   getTicketTimelineAction: () => getTicketTimelineAction(),
   reopenTicketAction: vi.fn(),
 }));
@@ -352,5 +355,94 @@ describe("TicketTimeline — a slow write cannot be submitted twice", () => {
 
     await click(screen.getByTestId("add-event-save"));
     await waitFor(() => expect(addRoEventAction).toHaveBeenCalledTimes(2));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// open-work-hours-refusal-unseen (2026-09-27): the add forms reported server
+// refusals through the card's ONE alert, which renders at the TOP of the card,
+// above the event list. The add-hours form is at the BOTTOM, so on a long
+// timeline "Hours can't exceed 24 in a day." landed off-screen and Save looked
+// dead. Each add form now renders its own refusal beside its Save button; the
+// top alert stays for delete-event / delete-work / reopen.
+describe("TicketTimeline — an add form's refusal renders inside that form", () => {
+  it("add-hours: the 24h refusal renders in the add-hours form, and only there", async () => {
+    addOpenWorkAction.mockResolvedValueOnce({ error: "Hours can't exceed 24 in a day." });
+    await mountTimeline();
+
+    await click(screen.getByTestId("add-hours-open"));
+    set(screen.getByTestId("add-hours-input"), "25");
+    await click(screen.getByTestId("add-hours-save"));
+
+    const form = screen.getByTestId("add-hours-form");
+    await waitFor(() =>
+      expect(within(form).getByRole("alert").textContent).toBe("Hours can't exceed 24 in a day."),
+    );
+    // Not double-rendered at the top of the card.
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    // The form stays open with the typing, and Save is live for a retry.
+    expect((screen.getByTestId("add-hours-input") as HTMLInputElement).value).toBe("25");
+    expect((screen.getByTestId("add-hours-save") as HTMLButtonElement).disabled).toBe(false);
+
+    // Next attempt clears it; a success closes the form with no alert left.
+    set(screen.getByTestId("add-hours-input"), "8");
+    await click(screen.getByTestId("add-hours-save"));
+    await waitFor(() => expect(screen.getByTestId("add-hours-open")).toBeTruthy());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("add-hours: Cancel takes the refusal away with the form", async () => {
+    addOpenWorkAction.mockResolvedValueOnce({ error: "Hours must be greater than zero." });
+    await mountTimeline();
+
+    await click(screen.getByTestId("add-hours-open"));
+    set(screen.getByTestId("add-hours-input"), "0");
+    await click(screen.getByTestId("add-hours-save"));
+    await waitFor(() =>
+      expect(within(screen.getByTestId("add-hours-form")).getByRole("alert")).toBeTruthy(),
+    );
+
+    await click(button("Cancel"));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("add-event: the refusal renders in the add-event form, and only there", async () => {
+    addRoEventAction.mockResolvedValueOnce({ error: "That date is outside the ticket." });
+    await mountTimeline();
+
+    await click(screen.getByTestId("add-event-open"));
+    await click(screen.getByTestId("add-event-save"));
+
+    const form = screen.getByTestId("add-event-form");
+    await waitFor(() =>
+      expect(within(form).getByRole("alert").textContent).toBe("That date is outside the ticket."),
+    );
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
+  it("delete-event: a failure still renders at the top of the card", async () => {
+    const custom: RoEvent = {
+      ...EVENTS[0],
+      id: "ev-2",
+      kind: "custom",
+      note: "Claim #4471 filed",
+      date: "2026-09-11",
+    };
+    getTicketTimelineAction.mockResolvedValueOnce({ events: [...EVENTS, custom], ledger: [] });
+    deleteRoEventAction.mockResolvedValueOnce({ error: "Couldn't find that event." });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await mountTimeline();
+
+    await click(screen.getByLabelText(/Remove event Claim #4471 filed/));
+    const card = screen.getByTestId("ticket-timeline");
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toBe("Couldn't find that event."),
+    );
+    // It is the card-level alert: first child block after the header, not in a form.
+    const alert = screen.getByRole("alert");
+    expect(alert.parentElement).toBe(card);
+    expect(screen.queryByTestId("add-event-form")).toBeNull();
+    expect(screen.queryByTestId("add-hours-form")).toBeNull();
+    confirm.mockRestore();
   });
 });

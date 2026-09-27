@@ -39,6 +39,7 @@ import type {
   UnpaidTime,
 } from "@/lib/types";
 import type { ShiftOverrideMap, WorkSchedule } from "@/lib/schedule";
+import { SAME_VALUE_EPS, sumLineClaims } from "@/lib/disputes";
 
 export type ImportBundle = {
   version: number;
@@ -235,10 +236,61 @@ function isRestorableUnpaidTime(u: UnpaidTime): boolean {
   return !(hours <= 0);
 }
 
+/**
+ * Refuse a backup whose itemized claim disagrees with its own lines.
+ *
+ * WHY THIS EXISTS
+ * An itemized claim stores its ask twice — the header (claimed_hours) and the
+ * per-line asks — and nothing downstream re-checks one against the other. The
+ * outcome label and the Apply gate both judge the line re-sum when there are
+ * lines (claimTotal in @/lib/disputes), so a header that disagrees would put a
+ * figure on the Claimed tile that the label was never judged against. The app
+ * never writes such a claim: the header is pack.totalShortHours, the same
+ * reduce over the same deltas as the lines (dispute-pack.ts). So a mismatch
+ * means the file was hand-edited or damaged, and importing it would plant a
+ * claim that contradicts itself in the one ledger meant to prove what the tech
+ * was owed.
+ *
+ * WHY SAME_VALUE_EPS AND NOT THE 0.05h ROUNDING TOLERANCE
+ * Both sides are exact hundredths (numeric), so an app-made backup matches to
+ * IEEE-754 noise (~1e-15 for a float re-sum). This is an integrity check, not a
+ * rounding judgement: a 0.04h disagreement is just as much a corrupt file as a
+ * 4h one, and RECOVERY_EPS would wave it through.
+ *
+ * SCOPE: only claims WITH lines. A period-total claim is legitimately
+ * lines: [] with a nonzero header — the header is all it has.
+ *
+ * Written as `!(gap <= eps)` so a NaN (a hand-typed string that isn't a
+ * number) is refused too rather than slipping past every comparison.
+ */
+function assertDisputeClaimTotals(disputes: Dispute[]): void {
+  for (const d of disputes) {
+    const lines = d.lines ?? [];
+    if (lines.length === 0) continue;
+    const header = Number(d.claimedHours);
+    const sum = sumLineClaims(
+      lines.map((l) => ({ ...l, claimedHours: Number(l.claimedHours) })),
+    );
+    if (!(Math.abs(header - sum) <= SAME_VALUE_EPS)) {
+      const label = d.periodLabel || d.periodKey || "a period";
+      const hrs = (v: number) =>
+        Number.isFinite(v) ? `${v.toFixed(2)}h` : "an invalid number";
+      throw new Error(
+        `This backup can't be restored: the dispute claim for ${label} says ` +
+          `${hrs(header)} but its lines add up to ${hrs(sum)}. ` +
+          `The file looks edited or damaged. Nothing was imported.`,
+      );
+    }
+  }
+}
+
 export function buildImportPayload(
   bundle: ImportBundle,
   opts: BuildPayloadOptions = {},
 ): ImportPayload {
+  // Before a single id is minted: a refused file must build nothing.
+  if (bundle.disputes) assertDisputeClaimTotals(bundle.disputes);
+
   const newId = opts.newId ?? (() => crypto.randomUUID());
   const now = opts.now ?? new Date().toISOString();
 

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { createEntry, updateEntry, getEntry, setLinePaidHours } from "./entries";
+import {
+  createEntry,
+  updateEntry,
+  getEntry,
+  setLinePaidHours,
+  addLineActualHours,
+} from "./entries";
 import type { DbClient } from "./_client";
 import type { NewEntry } from "@/lib/types";
 
@@ -541,5 +547,52 @@ describe("updateEntry (diff-based line reconciliation)", () => {
     const cleared = await getEntry(supabase, created.id);
     expect(cleared!.opCodes[0].paidHours).toBeNull();
     expect(cleared!.opCodes[0].id).toBe(line.id); // same row, not replaced
+  });
+});
+
+// timer-actual-source-never-written: the timer banks through
+// addLineActualHours, which used to write actual_hours only and left
+// actual_source NULL. It now stamps 'timer' — but only onto a line with no
+// source yet, never over an 'estimate'.
+describe("addLineActualHours (timer save) — actual_source", () => {
+  function seed(store: FakeStore, over: Row): string {
+    const id = nextId();
+    store.entry_op_codes.push({
+      ...LINE_DEFAULTS,
+      entry_id: "e-1",
+      actual_source: null,
+      ...over,
+      id,
+    });
+    return id;
+  }
+
+  it("stamps 'timer' on an unmeasured line", async () => {
+    const store = new FakeStore();
+    const id = seed(store, { actual_hours: null });
+    const res = await addLineActualHours(makeFakeDb(store), id, 1.25);
+    expect(res).toEqual({ previous: null, total: 1.25 });
+    expect(store.entry_op_codes[0]).toMatchObject({ actual_hours: 1.25, actual_source: "timer" });
+  });
+
+  it("stamps 'timer' on a legacy line with hours but a NULL source (additive)", async () => {
+    const store = new FakeStore();
+    const id = seed(store, { actual_hours: 2, actual_source: null });
+    await addLineActualHours(makeFakeDb(store), id, 0.5);
+    expect(store.entry_op_codes[0]).toMatchObject({ actual_hours: 2.5, actual_source: "timer" });
+  });
+
+  it("never overwrites an 'estimate' source", async () => {
+    const store = new FakeStore();
+    const id = seed(store, { actual_hours: 1.5, actual_source: "estimate" });
+    await addLineActualHours(makeFakeDb(store), id, 1);
+    expect(store.entry_op_codes[0]).toMatchObject({ actual_hours: 2.5, actual_source: "estimate" });
+  });
+
+  it("leaves an existing 'timer' source as-is", async () => {
+    const store = new FakeStore();
+    const id = seed(store, { actual_hours: 1, actual_source: "timer" });
+    await addLineActualHours(makeFakeDb(store), id, 1);
+    expect(store.entry_op_codes[0]).toMatchObject({ actual_hours: 2, actual_source: "timer" });
   });
 });
