@@ -216,7 +216,12 @@ run_attempt() {
   start_epoch="$(date -u +%s)"
   echo "$start_epoch" >"/tmp/frt-bot-start-epoch-$RUN_DATE-attempt$n" 2>/dev/null || true
   echo "=== attempt $n started $(date +%T) (epoch $start_epoch, budget ${budget}m, $CAP_NOTE) ===" >>"$LOG_FILE"
-  timeout "${budget}m" "${CAP[@]}" claude -p "RUN_START_EPOCH=$start_epoch (UTC epoch seconds this attempt began -- also mirrored to /tmp/frt-bot-start-epoch-$RUN_DATE-attempt$n if you need to recover it). Elapsed minutes = ( \$(date -u +%s) - $start_epoch ) / 60.
+  # env (not just a shell prefix) sits directly in front of claude so the
+  # var reaches it even through systemd-run's --scope wrapper, which does not
+  # reliably pass the invoking shell's environment through to its command
+  # unless told to. The prompt-text line and /tmp file below are belt-and-
+  # braces for the same value, not the primary path -- see INSTRUCTIONS.md.
+  timeout "${budget}m" "${CAP[@]}" env RUN_START_EPOCH="$start_epoch" claude -p "RUN_START_EPOCH=$start_epoch (UTC epoch seconds this attempt began -- also exported into this process's own environment, and mirrored to /tmp/frt-bot-start-epoch-$RUN_DATE-attempt$n if neither survives). Elapsed minutes = ( \$(date -u +%s) - $start_epoch ) / 60.
 
 $prompt" \
       --dangerously-skip-permissions \

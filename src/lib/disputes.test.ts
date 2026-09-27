@@ -480,6 +480,7 @@ describe("disputeFromPack", () => {
         lines: [
           {
             entryId: "e1",
+            lineId: "L-brk",
             roNumber: "1001",
             date: "2026-07-20",
             code: "BRK-F",
@@ -507,6 +508,9 @@ describe("disputeFromPack", () => {
     // Every displayed value is copied, not referenced.
     expect(result.lines![0]).toMatchObject({
       entryId: "e1",
+      // The live row id is stored, so the recovery can be written back onto
+      // exactly this row later (resolveLiveLines pass 0).
+      lineId: "L-brk",
       roNumber: "1001",
       code: "BRK-F",
       description: "Front brakes",
@@ -542,6 +546,7 @@ describe("disputeFromPack", () => {
         lines: [
           {
             entryId: "e2",
+            lineId: "L-lof",
             roNumber: "1002",
             date: "2026-07-21",
             code: "LOF",
@@ -1534,7 +1539,7 @@ describe("claimTotal / disputeOutcome on a header that disagrees with its lines"
     dispute({
       status: "resolved",
       claimedHours: 4,
-      lines: [line({ entryId: "e1", claimedHours: 3 })],
+      lines: [line({ entryId: "e1", flaggedHours: 4, paidHours: 1, claimedHours: 3 })],
       ...over,
     });
 
@@ -1610,11 +1615,16 @@ describe("claimTotal / disputeOutcome on a header that disagrees with its lines"
 // Same-code tie-break at exactly 3 minutes (findLiveLine)
 // ---------------------------------------------------------------------------
 describe("findLiveLine tie-break between two lines of the same code", () => {
-  it("still finds a line whose flag hours were edited by exactly 0.05h after the claim", () => {
+  it("never offers the wrong line when the claimed line's flag was edited by exactly 0.05h", () => {
     // The claim froze line B at 0.09h flagged. B was since bumped to 0.14h;
     // 0.14 - 0.09 is 0.05000000000000002, which a bare `<= RECOVERY_EPS` threw
     // out, so the claim fell through to candidates[0] — line A, a different
     // line — and the Apply panel offered to pay the wrong row.
+    //
+    // Since 09-27 wave 3 a flag-only match is report-only (resolveLiveLines
+    // PASS 2): B is recognised within rounding, so A is never considered, and
+    // B is not written either — without a stored line id "B's flag moved" and
+    // "B is gone and this is a neighbour" look the same.
     const d = dispute({
       status: "resolved",
       recoveredHours: 0.05,
@@ -1629,7 +1639,12 @@ describe("findLiveLine tie-break between two lines of the same code", () => {
       ]),
     ];
     expect(0.14 - 0.09).toBeGreaterThan(RECOVERY_EPS); // the float trap is real
-    expect(pendingRecoveryApplication(d, entries, []).rows[0].lineId).toBe("B");
+    const plan = pendingRecoveryApplication(d, entries, []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.moved).toEqual([]);
+    // With the line id stored (every claim raised since), it is simply B.
+    const withId = { ...d, lines: [{ ...d.lines[0], lineId: "B" }] };
+    expect(pendingRecoveryApplication(withId, entries, []).rows.map((r) => r.lineId)).toEqual(["B"]);
   });
 
   it("prefers the CLOSEST line when two are within 3 minutes, not the first", () => {
@@ -1725,10 +1740,13 @@ describe("live-line resolution across a claim's rows", () => {
     const B = live("B", 1.02, 0.6);
     for (const order of [[A, B], [B, A]]) {
       const plan = pendingRecoveryApplication(d, [ro(order)], []);
+      // dl2 keeps its own exact line. dl1's line was found by flag alone,
+      // which is report-only since wave 3: not written, and NOT silently lost
+      // either — its 0.3h reads as unmapped, so the card says so.
       expect(plan.rows.map((r) => [r.lineId, r.recoveredHours])).toEqual([
-        ["A", 0.3],
         ["B", 0.2],
       ]);
+      expect(plan.unmappedHours).toBeCloseTo(0.3, 9);
       expect(plan.moved).toEqual([]);
     }
   });
@@ -1801,7 +1819,10 @@ describe("live-line resolution across a claim's rows", () => {
       [ro([live("B", 1.01, 0.5), live("A", 1.03, 0.5)])],
       [],
     );
-    expect(plan.rows.map((r) => r.lineId)).toEqual(["A"]);
+    // B is never offered. A (flag-only) is report-only since wave 3, so the
+    // 0.4h stays unmapped rather than being written anywhere.
+    expect(plan.rows).toEqual([]);
+    expect(plan.unmappedHours).toBeCloseTo(0.4, 9);
   });
 
   it("still honours a stored line id first, whatever the other rows want", () => {
@@ -1818,10 +1839,13 @@ describe("live-line resolution across a claim's rows", () => {
       [ro([live("B", 1, 0.5), live("A", 1, 0.5)])],
       [],
     );
+    // A claim that stores ids stores one on EVERY row (disputeFromPack), so
+    // dl1's null is a line deleted since (FK ON DELETE SET NULL) — it is not
+    // handed to the heuristic, which would pick A, a line it never named.
     expect(plan.rows.map((r) => [r.lineId, r.recoveredHours])).toEqual([
-      ["A", 0.3],
       ["B", 0.4],
     ]);
+    expect(plan.unmappedHours).toBeCloseTo(0.3, 9);
   });
 
   // THE GRID. Two rows × two same-code lines over a small value grid, both
@@ -2173,6 +2197,65 @@ describe("periodRecoveryPlan stranded hours", () => {
     expect(periodRecoveryPlan([r2, r1], X(5, 3), []).disarmedHours).toBeCloseTo(2, 9);
   });
 
+  it("a later flag RAISE invents nothing: D2, then flag 3 -> 4", () => {
+    const r1 = roundX("r1", { flag: 3, frozen: 2, ask: 1, got: 1 });
+    const r2 = roundX("r2", { flag: 3, frozen: 2, ask: 1, got: 1 });
+    const plan = periodRecoveryPlan([r2, r1], X(4, 3), []);
+    expect(plan.applyRound).toBeNull();
+    expect(plan.disarmedLines).toEqual([]);
+  });
+
+  it("nothing at or under the 3-minute boundary, and nothing on a line that reads paid", () => {
+    // Both froze 1 on a 5.0 flag and asked 4; r1 got 1, r2 got 2, r2 applied
+    // (3). Then the tech types the line up by hand.
+    const r1 = roundX("r1", { flag: 5, frozen: 1, ask: 4, got: 1 });
+    const r2 = roundX("r2", { flag: 5, frozen: 1, ask: 4, got: 2 });
+    for (const paid of [4.95, 4.96, 4.99, 5]) {
+      expect(periodRecoveryPlan([r2, r1], X(5, paid), []).disarmedLines, String(paid)).toEqual([]);
+    }
+    expect(periodRecoveryPlan([r2, r1], X(5, 4.94), []).disarmedHours).toBeCloseTo(0.06, 9);
+    // Cleared back to pending is not "short" either: the tech un-reconciled it.
+    expect(periodRecoveryPlan([r2, r1], X(5, null), []).disarmedLines).toEqual([]);
+  });
+
+  it("leaves out the line the offered Apply is about to write, then recomputes after it", () => {
+    const r1 = roundX("r1", { flag: 5, frozen: 1, ask: 4, got: 2 });
+    const r2 = roundX("r2", { flag: 5, frozen: 2, ask: 3, got: 1 });
+    const before = periodRecoveryPlan([r2, r1], X(5, 2), []);
+    expect(before.applyRound?.dispute.id).toBe("r2");
+    expect(before.disarmedLines).toEqual([]);
+    const after = periodRecoveryPlan([r2, r1], X(5, 3), []);
+    expect(after.applyRound).toBeNull();
+    expect(after.disarmedHours).toBeLessThanOrEqual(5 - 3 + 1e-9);
+  });
+
+  it("grid: never above (lowest frozen or live flag) − paid, never at or under 3 minutes, never beside its own Apply", () => {
+    let shown = 0;
+    let checked = 0;
+    for (const f1 of [0, 1, 2])
+      for (const f2 of [0, 1, 2, 2.5])
+        for (const g1 of [0.5, 1, 2])
+          for (const g2 of [0.5, 1, 2])
+            for (const flagNow of [2.9, 3, 3.01, 3.06, 4])
+              for (const paid of [null, 0, 1, 2, 2.5, 2.94, 2.95, 2.96, 3, 3.5, 4]) {
+                const r1 = roundX("r1", { flag: 3, frozen: f1, ask: 3 - f1, got: Math.min(g1, 3 - f1) });
+                const r2 = roundX("r2", { flag: 3, frozen: f2, ask: 3 - f2, got: Math.min(g2, 3 - f2) });
+                const plan = periodRecoveryPlan([r2, r1], X(flagNow, paid), []);
+                const ctx = JSON.stringify({ f1, f2, g1, g2, flagNow, paid });
+                const cap = Math.max(0, Math.min(3, flagNow) - (paid ?? 0));
+                expect(plan.disarmedHours, ctx).toBeLessThanOrEqual(cap + 1e-9);
+                for (const l of plan.disarmedLines) {
+                  expect(l.hours, ctx).toBeGreaterThan(RECOVERY_EPS + 1e-9);
+                  shown++;
+                }
+                const offered = new Set(plan.applyRound?.plan.rows.map((r) => r.lineId) ?? []);
+                expect(plan.disarmedLines.some((l) => offered.has(l.lineId)), ctx).toBe(false);
+                checked++;
+              }
+    expect(checked).toBeGreaterThan(1000);
+    expect(shown).toBeGreaterThan(20);
+  });
+
   // The invariant under every sequence: the stranded figure plus what's on
   // the line never exceeds flag (the note can never talk the tech past flag),
   // and it is never negative.
@@ -2197,5 +2280,275 @@ describe("periodRecoveryPlan stranded hours", () => {
                 checked++;
               }
     expect(checked).toBeGreaterThan(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 09-27 wave 3: stored line ids, settled rows, report-only pass 2
+// ---------------------------------------------------------------------------
+describe("resolving claim rows after the RO is edited (wave 3)", () => {
+  // RO 5000, three custom MISC lines: A (flag 1.0, paid 0.5), B (flag 1.0,
+  // pending), C (flag 0.3, pending, never claimed). The claim names A and B
+  // and is settled in full: 1.5h back.
+  const misc = (id: string, flag: number, paid: number | null) =>
+    roLine({ id, customCode: "MISC", flagHours: flag, paidHours: paid });
+  const claimAB = (ids: boolean) =>
+    dispute({
+      status: "resolved",
+      claimedHours: 1.5,
+      recoveredHours: 1.5,
+      lines: [
+        line({ id: "dA", entryId: "e1", lineId: ids ? "A" : null, roNumber: "5000", code: "MISC", flaggedHours: 1, paidHours: 0.5, claimedHours: 0.5 }),
+        line({ id: "dB", entryId: "e1", lineId: ids ? "B" : null, roNumber: "5000", code: "MISC", flaggedHours: 1, paidHours: null, claimedHours: 1, position: 1 }),
+      ],
+    });
+  const RO = (lines: EntryOpCode[]) => [ro(lines, { roNumber: "5000" })];
+  const write = (entries: Entry[], rows: { lineId: string; paidAfter: number }[]) =>
+    entries.map((e) => ({
+      ...e,
+      opCodes: e.opCodes.map((l) => {
+        const r = rows.find((x) => x.lineId === l.id);
+        return r ? { ...l, paidHours: r.paidAfter } : l;
+      }),
+    }));
+
+  for (const ids of [false, true]) {
+    const tag = ids ? "with stored line ids" : "without line ids";
+
+    it(`${tag}: deleting A after the apply never re-offers onto C (was: C null -> 1.0, 2.5h written of 1.5h)`, () => {
+      const d = claimAB(ids);
+      const before = RO([misc("A", 1, 0.5), misc("B", 1, null), misc("C", 0.3, null)]);
+      const first = pendingRecoveryApplication(d, before, []);
+      expect(first.rows.map((r) => [r.lineId, r.paidAfter])).toEqual([["A", 1], ["B", 1]]);
+      const applied = write(before, first.rows);
+      // The tech deletes line A. (A stored id reads back null: FK SET NULL.)
+      const dGone = ids
+        ? { ...d, lines: d.lines.map((l) => (l.lineId === "A" ? { ...l, lineId: null } : l)) }
+        : d;
+      const afterDelete = RO(applied[0].opCodes.filter((l) => l.id !== "A"));
+      const again = pendingRecoveryApplication(dGone, afterDelete, []);
+      expect(again.rows).toEqual([]);
+      // Without ids A's row is settled (its money visibly landed); with ids
+      // it is a deleted line, reported unmapped.
+      expect(again.unmappedHours).toBe(ids ? 0.5 : 0);
+    });
+
+    it(`${tag}: A recoded before the apply never writes C`, () => {
+      const d = claimAB(ids);
+      const now = RO([
+        roLine({ id: "A", customCode: "OTHER", flagHours: 1, paidHours: 0.5 }),
+        misc("B", 1, null),
+        misc("C", 0.3, null),
+      ]);
+      const plan = pendingRecoveryApplication(d, now, []);
+      expect(plan.rows.some((r) => r.lineId === "C")).toBe(false);
+      // A recoded line IS still that line when the claim knows its id.
+      expect(plan.rows.map((r) => r.lineId)).toEqual(ids ? ["A", "B"] : ["B"]);
+    });
+  }
+
+  it("a row whose APPLIED evidence another row took is settled: matched, never written, not moved twice", () => {
+    // Both rows applied (A 1.0, B 1.0), then A deleted: both rows read as
+    // applied off B. One takes B; the other is settled. C is a same-flag
+    // pending line that reads exactly like B's frozen state.
+    const d = claimAB(false);
+    const plan = pendingRecoveryApplication(d, RO([misc("B", 1, 1), misc("C", 1, null)]), []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.unmappedHours).toBe(0);
+    expect(plan.moved.map((m) => m.lineId)).toEqual(["B"]);
+  });
+
+  it("a stored line id wins after the line's flag AND code were edited", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.5,
+      lines: [line({ entryId: "e1", lineId: "B", flaggedHours: 1.5, paidHours: 1, claimedHours: 0.5 })],
+    });
+    const now = [
+      ro([
+        roLine({ id: "A", flagHours: 1.5, paidHours: 1 }),
+        roLine({ id: "B", customCode: "BRK-R", flagHours: 2.5, paidHours: 1 }),
+      ]),
+    ];
+    const plan = pendingRecoveryApplication(d, now, []);
+    expect(plan.rows.map((r) => [r.lineId, r.paidAfter])).toEqual([["B", 1.5]]);
+    // ...and only once.
+    expect(pendingRecoveryApplication(d, write(now, plan.rows), []).rows).toEqual([]);
+  });
+
+  it("a stored line id not among the live lines resolves to nothing, never to a look-alike", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.5,
+      lines: [line({ entryId: "e1", lineId: "GONE", flaggedHours: 1.5, paidHours: 1, claimedHours: 0.5 })],
+    });
+    const plan = pendingRecoveryApplication(d, [ro([roLine({ id: "A", flagHours: 1.5, paidHours: 1 })])], []);
+    expect(plan.rows).toEqual([]);
+    expect(plan.unmappedHours).toBe(0.5);
+  });
+
+  it("the heuristic writes only an exact-flag match; a near or far flag is never written", () => {
+    for (const flag of [0.3, 0.9, 0.95, 0.96, 0.99, 1, 1.01, 1.04, 1.05, 1.06, 1.5]) {
+      const d = dispute({
+        status: "resolved",
+        recoveredHours: 0.5,
+        lines: [line({ entryId: "e1", flaggedHours: 1, paidHours: 0.5, claimedHours: 0.5 })],
+      });
+      const plan = pendingRecoveryApplication(d, [ro([roLine({ id: "A", flagHours: flag, paidHours: 0.5 })])], []);
+      expect(plan.rows.length, String(flag)).toBe(flag === 1 ? 1 : 0);
+      if (flag !== 1) expect(plan.unmappedHours, String(flag)).toBe(0.5);
+      // Paid moved: reported as moved only when the flag is within rounding.
+      const moved = pendingRecoveryApplication(d, [ro([roLine({ id: "A", flagHours: flag, paidHours: 0.7 })])], []);
+      expect(moved.rows).toEqual([]);
+      expect(moved.moved.length, String(flag)).toBe(Math.abs(flag - 1) <= RECOVERY_EPS + 1e-9 ? 1 : 0);
+    }
+  });
+
+  // THE SIMULATOR, cut down. Seeded random claims on one RO with 1-3 same-code
+  // lines (plus sometimes a distinct one), three recovery modes, an optional
+  // second round, and random tech edits between taps (flag +-0.01..0.1, paid
+  // typed, line added, deleted, recoded). Tap the offered Apply until quiet.
+  describe("apply-until-quiet simulator", () => {
+    type SimLine = { id: string; code: string; flag: number; paid: number | null; born: number; typedBy: Set<string> };
+    type Round = { idx: number; d: Dispute; own: Set<string>; mode: string };
+    const run = (ids: boolean, n: number, seed0: number) => {
+      let seed = seed0;
+      const rnd = () => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return seed / 2147483648;
+      };
+      const pick = <T,>(xs: T[]): T => xs[Math.floor(rnd() * xs.length)];
+      const r2 = (x: number) => Math.round(x * 100) / 100;
+      const out = { overRecovered: 0, lineTwice: 0, wrongLine: 0, wrongOverFlag: 0, newLine: 0, writes: 0 };
+      for (let s = 0; s < n; s++) {
+        let seq = 0;
+        const mk = (code: string, born: number): SimLine => {
+          const flag = pick([0.3, 1, 1, 1.02, 1.05, 1.1, 2]);
+          let paid = pick<number | null>([null, null, 0, 0.5, 1]);
+          if (paid !== null && paid > flag) paid = r2(flag / 2);
+          return { id: `L${seq++}`, code, flag, paid, born, typedBy: new Set() };
+        };
+        const lines: SimLine[] = [];
+        for (let k = pick([1, 2, 2, 3, 3]); k > 0; k--) lines.push(mk("MISC", -1));
+        if (rnd() < 0.3) lines.push(mk("BRK", -1));
+        const rounds: Round[] = [];
+        const raise = (idx: number) => {
+          const pend = rnd() < 0.6;
+          const claimed = lines.filter((l) => (l.paid === null ? pend : l.flag - l.paid > 0.05 + 1e-9));
+          if (claimed.length === 0) return;
+          const mode =
+            claimed.length === 1
+              ? pick(["perLine", "full", "single"])
+              : pick(["perLine", "full", "full", "partial"]);
+          const dls = claimed.map((l, k) => {
+            const ask = r2(l.flag - (l.paid ?? 0));
+            return line({
+              id: `dl${idx}-${k}`, disputeId: `d${idx}`, entryId: "e1", lineId: ids ? l.id : null,
+              roNumber: "1001", code: l.code, flaggedHours: l.flag, paidHours: l.paid, claimedHours: ask,
+              recoveredHours: mode === "perLine" ? pick([0, ask, r2(ask / 2)]) : 0, position: k,
+            });
+          });
+          const ask = dls.reduce((t, l) => t + l.claimedHours, 0);
+          let rec =
+            mode === "perLine"
+              ? r2(dls.reduce((t, l) => t + l.recoveredHours, 0) + pick([0, 0, 0.5]))
+              : mode === "full"
+                ? r2(ask + pick([-0.05, -0.03, 0, 0, 0.02, 0.5]))
+                : mode === "single"
+                  ? r2(pick([0.5, 1, 0.01]) * ask)
+                  : r2(ask / 2);
+          if (rec <= 0) rec = 0.01;
+          rounds.push({
+            idx,
+            mode,
+            own: new Set(claimed.map((l) => l.id)),
+            d: dispute({ id: `d${idx}`, status: "resolved", claimedHours: ask, recoveredHours: rec, lines: dls }),
+          });
+        };
+        const edit = () => {
+          const kind = pick(["flag", "flag", "paid", "add", "del", "recode"]);
+          if (kind === "add") {
+            lines.push(mk("MISC", rounds.length));
+            return;
+          }
+          if (lines.length === 0) return;
+          const l = pick(lines);
+          if (kind === "flag") {
+            l.flag = Math.max(0.1, r2(l.flag + pick([-0.1, -0.05, -0.01, 0.01, 0.02, 0.05, 0.06, 0.1])));
+          } else if (kind === "paid") {
+            l.paid = pick<number | null>([null, 0, 0.5, 1, l.flag, r2(l.flag / 2)]);
+            l.typedBy = new Set(rounds.map((r) => r.d.id));
+          } else if (kind === "recode") {
+            l.code = "OTHER";
+          } else {
+            lines.splice(lines.indexOf(l), 1);
+            for (const r of rounds) {
+              r.d = { ...r.d, lines: r.d.lines.map((x) => (x.lineId === l.id ? { ...x, lineId: null } : x)) };
+            }
+          }
+        };
+        const entries = () => [
+          ro(lines.map((l, k) => roLine({ id: l.id, customCode: l.code, flagHours: l.flag, paidHours: l.paid, position: k }))),
+        ];
+
+        raise(0);
+        if (rounds.length === 0) continue;
+        for (let e = pick([0, 1, 1, 2, 3]); e > 0; e--) edit();
+        if (rnd() < 0.35) raise(1);
+        const wrote = new Map<string, Set<string>>();
+        const hours = new Map<string, number>();
+        for (let step = 0; step < 10; step++) {
+          const plan = periodRecoveryPlan([...rounds].reverse().map((r) => r.d), entries(), []);
+          if (!plan.applyRound) {
+            if (rnd() < 0.4) {
+              edit();
+              continue;
+            }
+            break;
+          }
+          const round = rounds.find((r) => r.d.id === plan.applyRound!.dispute.id)!;
+          const w = wrote.get(round.d.id) ?? new Set<string>();
+          wrote.set(round.d.id, w);
+          for (const row of plan.applyRound.plan.rows) {
+            const l = lines.find((x) => x.id === row.lineId)!;
+            out.writes++;
+            // Re-arming by typing the frozen figure back is the documented
+            // KNOWN LIMIT (one re-offer per hand edit), not the matcher.
+            const known = w.has(l.id) && l.typedBy.has(round.d.id);
+            if (w.has(l.id) && !known) out.lineTwice++;
+            if (l.born > round.idx) out.newLine++;
+            if (!round.own.has(l.id)) {
+              out.wrongLine++;
+              if (row.paidAfter > l.flag + RECOVERY_EPS + 1e-9) out.wrongOverFlag++;
+            }
+            l.paid = row.paidAfter;
+            l.typedBy.delete(round.d.id);
+            w.add(l.id);
+            if (!known) hours.set(round.d.id, (hours.get(round.d.id) ?? 0) + row.recoveredHours);
+          }
+          if (rnd() < 0.5) edit();
+        }
+        for (const r of rounds) {
+          const slack = r.mode === "full" ? RECOVERY_EPS : 0;
+          if ((hours.get(r.d.id) ?? 0) > r.d.recoveredHours + slack + 1e-9) out.overRecovered++;
+        }
+      }
+      return out;
+    };
+
+    it("never writes over flag onto a line the claim didn't name, with or without ids", () => {
+      expect(run(false, 3000, 7).wrongOverFlag).toBe(0);
+      expect(run(true, 3000, 7).wrongOverFlag).toBe(0);
+    });
+
+    it("with stored ids: no line written twice, and wrong-line writes only from the all-deleted residue", () => {
+      // The residue with ids is the claim whose EVERY claimed line was
+      // deleted: every row reads back null and the claim is
+      // indistinguishable from a pre-id one, so the heuristic runs.
+      const r = run(true, 3000, 11);
+      expect(r.writes).toBeGreaterThan(1000);
+      expect(r.lineTwice).toBe(0);
+      expect(r.wrongLine).toBeLessThanOrEqual(r.writes * 0.01);
+    });
   });
 });

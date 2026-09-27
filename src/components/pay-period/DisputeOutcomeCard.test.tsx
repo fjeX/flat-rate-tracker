@@ -597,6 +597,53 @@ describe("DisputeOutcomeCard recovery across claim rounds", () => {
     expect(disarmedNotes(container)).toHaveLength(0);
   });
 
+  it("says nothing after D2 when the tech later RAISES the flag (3 -> 4): no claim asked for that hour", () => {
+    const r = (id: string): Dispute => ({
+      ...round(id, 1, "BRK-F"),
+      claimedHours: 1,
+      lines: [
+        disputeLine({ id: `${id}-l`, disputeId: id, code: "BRK-F", flaggedHours: 3, paidHours: 2, claimedHours: 1 }),
+      ],
+    });
+    const container = renderCard({
+      allDisputes: [r("r2"), r("r1")],
+      entries: [liveRO([liveLine({ id: "X", customCode: "BRK-F", flagHours: 4, paidHours: 3 })])],
+    });
+    expect(disarmedNotes(container)).toHaveLength(0);
+  });
+
+  it("says nothing when the shared line is within rounding of flag (4.99 / 4.96 on 5.0 read PAID)", () => {
+    for (const paid of [4.99, 4.96, 4.95]) {
+      const container = renderCard({
+        allDisputes: [round("r2", 1, "BRK-F"), round("r1", 1, "BRK-F")],
+        entries: [liveRO([X(paid)])],
+      });
+      expect(disarmedNotes(container), String(paid)).toHaveLength(0);
+      cleanup();
+    }
+    // 4.94 is short by the card's own rule; 0.06h may be missing.
+    const container = renderCard({
+      allDisputes: [round("r2", 1, "BRK-F"), round("r1", 1, "BRK-F")],
+      entries: [liveRO([X(4.94)])],
+    });
+    expect(disarmedNotes(container)).toHaveLength(1);
+  });
+
+  it("never shows the stranded note for the line the offered Apply is about to write", () => {
+    // r1 froze X at 1 and got 2; the tech typed X to 2. r2 froze 2, asked 3,
+    // got 1 — armed on X. The Apply and a "possibly missing" note for the same
+    // line used to sit side by side.
+    const r1: Dispute = {
+      ...round("r1", 2, "BRK-F"),
+      lines: [disputeLine({ id: "r1-l", disputeId: "r1", code: "BRK-F", flaggedHours: 5, paidHours: 1, claimedHours: 4 })],
+      claimedHours: 4,
+    };
+    const r2 = round("r2", 1, "BRK-F");
+    const container = renderCard({ allDisputes: [r2, r1], entries: [liveRO([X(2)])] });
+    expect(applyButtons().map((b) => b.textContent)).toEqual(["Apply 1.0h to 1 line"]);
+    expect(disarmedNotes(container)).toHaveLength(0);
+  });
+
   it("stops explaining stranded hours once the period no longer reads short", () => {
     const container = renderCard({
       allDisputes: [round("r2", 1, "BRK-F"), round("r1", 1, "BRK-F")],

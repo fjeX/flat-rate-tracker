@@ -606,6 +606,59 @@ describe("buildImportPayload — frozen dispute claims", () => {
     expect(payload.dispute_lines?.[0].dispute_id).toBe(payload.disputes?.[0].id);
   });
 
+  // Claims raised since 2026-09-27 store the entry_op_codes id each row was
+  // built from, and the recovery Apply writes through it. Import mints new
+  // line ids, so the stored one must follow its line — an unmapped old id
+  // would fail the FK, and one that hit a different row would be a
+  // wrong-line money write.
+  it("remaps a dispute line's line_id to the NEW id of the same RO line", () => {
+    const payload = buildImportPayload(
+      bundle({
+        entries: [
+          entry({
+            id: "E1",
+            opCodes: [line({ id: "L1" }), line({ id: "L2", position: 1 })],
+          }),
+        ],
+        disputes: [
+          dispute({
+            lines: [
+              {
+                id: "DL1", disputeId: "D1", entryId: "E1", lineId: "L2", roNumber: "12345",
+                code: "X", description: "", workDate: null, flaggedHours: 3, paidHours: 0,
+                claimedHours: 3, claimedDollars: 96, recoveredHours: 3, recoveredDollars: 96,
+                hadPhoto: false, position: 0,
+              },
+            ],
+          }),
+        ],
+      }),
+      { newId: counter() },
+    );
+    const l2 = payload.entry_op_codes.find((r) => r.position === 1)!;
+    expect(l2.id).not.toBe("L2");
+    expect(payload.dispute_lines?.[0].line_id).toBe(l2.id);
+    expect(payload.dispute_lines?.[0].entry_id).toBe(payload.entries[0].id);
+  });
+
+  it("imports an older backup whose dispute lines carry no lineId key at all", () => {
+    const old = {
+      id: "DL1", disputeId: "D1", entryId: "E1", roNumber: "12345",
+      code: "X", description: "", workDate: null, flaggedHours: 3, paidHours: 0,
+      claimedHours: 3, claimedDollars: 96, recoveredHours: 3, recoveredDollars: 96,
+      hadPhoto: false, position: 0,
+    } as unknown as Dispute["lines"][number];
+    const payload = buildImportPayload(
+      bundle({
+        entries: [entry({ id: "E1", opCodes: [line({ id: "L1" })] })],
+        disputes: [dispute({ lines: [old] })],
+      }),
+      { newId: counter() },
+    );
+    expect(payload.dispute_lines?.[0].line_id).toBeNull();
+    expect(payload.dispute_lines?.[0].claimed_hours).toBe(3);
+  });
+
   // The header and the line asks describe the same claim twice. The app always
   // writes them equal (the header is the same reduce as the lines), so a
   // disagreement means a hand-edited or damaged file — refused, not imported.

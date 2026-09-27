@@ -29,6 +29,7 @@ import type {
 } from "./types";
 import type { DisputePack } from "./dispute-pack";
 import { lineCode } from "./line-label";
+import { payStatus } from "./reconcile";
 
 // Tolerance for calling a claim fully recovered. Matches reconcile.ts PAY_EPS:
 // shops round flag hours, so a 0.05h (3 min) gap isn't a real shortfall.
@@ -376,7 +377,13 @@ export function disputeFromPack(
 ): NewDispute {
   const lines: NewDisputeLine[] = pack.lines.map((l) => ({
     entryId: l.entryId,
-    lineId: null, // pack lines identify the RO + code, not the line row id
+    // The live row the pack line was built from. Line ids are stable across RO
+    // edits (updateEntry diffs lines, it never re-inserts them), so this is the
+    // one identity that survives a flag edit, a recode, or a same-code twin —
+    // resolveLiveLines honours it before any heuristic. The FK is ON DELETE SET
+    // NULL, so a deleted line reads back null; see resolveLiveLines for why a
+    // null row on an id-carrying claim is not handed to the heuristic.
+    lineId: l.lineId,
     roNumber: l.roNumber,
     code: l.code,
     description: l.description,
@@ -437,6 +444,8 @@ export type RecoveryApplicationRow = {
   recoveredHours: number;
   /** What paidHours becomes: (paidNow ?? 0) + recoveredHours. */
   paidAfter: number;
+  /** The line's flag hours as this claim froze them (periodRecoveryPlan). */
+  frozenFlag: number;
 };
 
 export type RecoveryApplication = {
@@ -445,7 +454,9 @@ export type RecoveryApplication = {
   applyHours: number;
   /**
    * Recovered hours that land on no live line: goodwill above the claim, a
-   * deleted or renamed RO line, a claim whose per-line breakdown was never
+   * deleted or renamed RO line, a line found only by flag hours (edited since
+   * the claim, on a claim with no stored line id — see PASS 2 in
+   * resolveLiveLines), a claim whose per-line breakdown was never
    * recorded, or a PERIOD-TOTAL claim, which has no lines for money to land on
    * at all. Stays on the claim only. Reported so the two figures visibly
    * reconcile instead of the tech wondering where 2.6h went.
@@ -497,6 +508,10 @@ export type MovedRecoveryLine = {
   /** The live line's flag and paid hours now (paid null read as 0). */
   flagNow: number;
   paidNow: number;
+  /** The live paid hours as stored: null = pending. */
+  livePaid: number | null;
+  /** The line's flag hours as this claim froze them. */
+  frozenFlag: number;
   looksApplied: boolean;
 };
 
@@ -639,6 +654,20 @@ export function pendingRecoveryApplication(
     const live = resolved[k];
     if (!live) continue;
 
+    // Already applied, but another row of this claim reads the same way off
+    // the same line — see SETTLED in resolveLiveLines. Its hours found their
+    // line (they are not goodwill), and it must never write again.
+    if (live === SETTLED) {
+      matchedRecovery += hours;
+      continue;
+    }
+    // A report-only pass-2 pick that still reads the frozen figure: the app
+    // does not know this is the claimed line, so the hours stay unmapped and
+    // the card says so. (One whose paid hours moved is reported below.)
+    if (live.reportOnly && sameAsClaimTime(live.line.paidHours ?? null, dl.paidHours)) {
+      continue;
+    }
+
     matchedRecovery += hours;
     const paidNow = live.line.paidHours ?? null;
     const paidAfter = (paidNow ?? 0) + hours;
@@ -700,6 +729,8 @@ export function pendingRecoveryApplication(
         frozenPaid: dl.paidHours ?? 0,
         flagNow: live.line.flagHours,
         paidNow: paidNow ?? 0,
+        livePaid: paidNow,
+        frozenFlag: dl.flaggedHours,
         looksApplied: sameAsClaimTime(paidNow, (dl.paidHours ?? 0) + hours),
       });
       continue;
@@ -714,6 +745,7 @@ export function pendingRecoveryApplication(
       paidNow,
       recoveredHours: hours,
       paidAfter,
+      frozenFlag: dl.flaggedHours,
     });
     applyHours += hours;
   }
@@ -779,6 +811,20 @@ export type PeriodRecovery = {
    * ARMED on the line (that one is on screen as an Apply and will close the
    * gap itself). A line paid to flag strands nothing, whatever the rounds say.
    *
+   * "Flag" there is the LOWEST of the live flag and every round's FROZEN flag
+   * on the line: the claims were about the flag they froze, so raising the
+   * flag afterwards (3 -> 4 on a line both rounds froze at 3 and the newer
+   * paid up to 3) must not conjure an hour of "possibly missing" recovery that
+   * no claim ever asked for. And a line counts only while it reads SHORT by the
+   * app's own rule (payStatus: more than 3 minutes under flag, not pending),
+   * and only for a figure above that same 3-minute boundary — paid 4.99 or
+   * 4.96 on a 5.0 flag reads PAID on the card, so the note may not call it
+   * "up to <0.1h" missing.
+   *
+   * A line the offered Apply (applyRound) is about to write is left out: the
+   * figure would describe the line before that write, beside a button that
+   * changes it. It is recomputed on the next render, after the write.
+   *
    * WHY "CHECK", NOT "ADD". Two rounds that froze a line at the same value
    * asked for the SAME shortage: the second pack re-claimed what the first
    * already asked for. Whether the shop's two answers are separate payments or
@@ -818,6 +864,7 @@ export function periodRecoveryPlan(
     round: number;
     hours: number;
     frozen: number;
+    frozenFlag: number;
     moved: boolean;
     looksApplied: boolean;
   };
@@ -826,6 +873,7 @@ export function periodRecoveryPlan(
     code: string;
     flagNow: number;
     paidNow: number;
+    livePaid: number | null;
     claims: Claim[];
   };
   const byLine = new Map<string, LineFacts>();
@@ -845,24 +893,32 @@ export function periodRecoveryPlan(
       const paidNow = row.paidNow ?? 0;
       note(
         row.lineId,
-        { roNumber: row.roNumber, code: row.code, flagNow: row.flaggedHours, paidNow },
-        { round, hours: row.recoveredHours, frozen: paidNow, moved: false, looksApplied: false },
+        { roNumber: row.roNumber, code: row.code, flagNow: row.flaggedHours, paidNow, livePaid: row.paidNow },
+        { round, hours: row.recoveredHours, frozen: paidNow, frozenFlag: row.frozenFlag, moved: false, looksApplied: false },
       );
     }
     for (const m of r.plan.moved) {
       note(
         m.lineId,
-        { roNumber: m.roNumber, code: m.code, flagNow: m.flagNow, paidNow: m.paidNow },
-        { round, hours: m.hours, frozen: m.frozenPaid, moved: true, looksApplied: m.looksApplied },
+        { roNumber: m.roNumber, code: m.code, flagNow: m.flagNow, paidNow: m.paidNow, livePaid: m.livePaid },
+        { round, hours: m.hours, frozen: m.frozenPaid, frozenFlag: m.frozenFlag, moved: true, looksApplied: m.looksApplied },
       );
     }
   });
+
+  // Lines the one offered Apply is about to write — see disarmedHours.
+  const offered = new Set(applyRound?.plan.rows.map((r) => r.lineId) ?? []);
 
   const disarmedLines: DisarmedLine[] = [];
   for (const [lineId, f] of byLine) {
     const movedClaims = f.claims.filter((c) => c.moved);
     if (movedClaims.length === 0) continue;
     if (new Set(f.claims.map((c) => c.round)).size < 2) continue;
+    if (offered.has(lineId)) continue;
+    // The flag the claims were about — never a later, higher edit of it.
+    const flag = Math.min(f.flagNow, ...f.claims.map((c) => c.frozenFlag));
+    // Short by the card's own rule, or nothing is possibly missing from it.
+    if (payStatus(flag, f.livePaid) !== "short") continue;
 
     // The newest moved round consistent with its own write having landed.
     const landed = movedClaims
@@ -881,9 +937,10 @@ export function periodRecoveryPlan(
     const armedMax = f.claims
       .filter((c) => !c.moved)
       .reduce((m, c) => Math.max(m, c.hours), 0);
-    const stillShort = Math.max(0, f.flagNow - f.paidNow - armedMax);
+    const stillShort = Math.max(0, flag - f.paidNow - armedMax);
     const hours = Math.min(raw, stillShort);
-    if (hours <= SAME_VALUE_EPS) continue;
+    // 3 minutes or less is rounding everywhere else on the card.
+    if (!exceedsRounding(hours)) continue;
     disarmedLines.push({ lineId, roNumber: f.roNumber, code: f.code, hours });
   }
 
@@ -918,6 +975,14 @@ function sameAsClaimTime(
   return Math.abs((paidNow ?? 0) - (paidAtClaim ?? 0)) <= SAME_VALUE_EPS;
 }
 
+/**
+ * resolveLiveLines' answer for a row that is ALREADY APPLIED but shares that
+ * evidence with another row: its hours are accounted for (not unmapped), it is
+ * never offered, and it names no line of its own (it would only duplicate the
+ * line the other row holds). See SETTLED in resolveLiveLines.
+ */
+const SETTLED = "settled" as const;
+
 type LiveMatch = {
   entry: Entry;
   line: EntryOpCode;
@@ -929,6 +994,12 @@ type LiveMatch = {
    * offered.
    */
   trusted: boolean;
+  /**
+   * A pass-2 pick: found by flag hours alone, never written. Reported in
+   * `moved` when its paid hours have moved; left unmapped when they have not
+   * (see PASS 2 in resolveLiveLines).
+   */
+  reportOnly?: boolean;
 };
 
 /** Is this literally the same hours figure? Float noise only, never rounding. */
@@ -940,9 +1011,11 @@ function sameHours(a: number, b: number): boolean {
  * The live line each frozen claim row points at — resolved for the WHOLE claim
  * at once, aligned by index with `lines`.
  *
- * disputeFromPack stores `lineId: null` — a pack row identifies the RO and the
- * code, not the row id — so the join is (entryId, code) against the live entry,
- * with the stored lineId honoured when a caller did record one.
+ * Claims raised since 2026-09-27 store the live line id (disputeFromPack), and
+ * that id is the answer — PASS 0. Everything after pass 0 is the heuristic for
+ * rows that have none: claims raised before then (stored `lineId: null`, joined
+ * by (entryId, code) against the live entry), and imported rows whose line
+ * wasn't in the backup.
  *
  * WHY ALL ROWS TOGETHER. This used to be a per-row lookup (first match, later
  * closest match, by flag hours within rounding), and a line was reserved only
@@ -960,7 +1033,19 @@ function sameHours(a: number, b: number): boolean {
  * draft of this function.)
  *
  * PASS 0 — stored lineId: authoritative, resolved first so no heuristic row can
- * take it. A duplicate stored id resolves once (as before).
+ * take it. A duplicate stored id resolves once (as before). It wins whatever the
+ * line reads now — a recoded or flag-edited line IS still that line — and a
+ * stored id that is not among the live lines (its RO moved out of the period)
+ * resolves to nothing rather than to a guess.
+ *
+ * A DELETED line reads back as a null lineId (the FK is ON DELETE SET NULL), so
+ * a null row on a claim whose OTHER rows carry ids is a deleted line, not a
+ * legacy row: it resolves to nothing and is never handed to the heuristic,
+ * which would go looking for a stand-in (typically the next same-code line on
+ * the RO) and write the deleted line's money onto it. A claim whose every
+ * claimed line was deleted is all-null and indistinguishable from a legacy
+ * claim; it takes the heuristic, whose write rules below are what keep it off
+ * the wrong line.
  *
  * PASS 1 — identity, per (entry, code) group, as a small maximum matching over
  * two kinds of evidence:
@@ -968,9 +1053,10 @@ function sameHours(a: number, b: number): boolean {
  *    the claim froze — the row's line, unapplied;
  *  - APPLIED: flag hours within rounding of the frozen flag hours, paid hours
  *    exactly frozen + this row's recovery — the row's line after this claim's
- *    own apply. Within rounding, not exact, because the row may have been
- *    written through pass 2 (below) onto a line whose flag was edited; the
- *    write must still be recognised as its own afterwards.
+ *    own apply. Within rounding, not exact: a line may have been written by
+ *    the old pass 2 (see below) onto a flag since edited, or had its flag
+ *    nudged after the apply, and the write must still be recognised as its
+ *    own — reading it as unapplied is how money gets written twice.
  * Scored: most rows matched, then FEWEST armed pairings (the no-write reading
  * wins every tie), then the first assignment in row order. So whenever every
  * row has its own exact line, every row gets it, whatever order the lines come
@@ -985,26 +1071,60 @@ function sameHours(a: number, b: number): boolean {
  * marked untrusted — reserved, reported as moved, never written. (Otherwise: round 2's apply lands twin B on exactly what
  * round 1 froze for twin A, and round 1 re-arms onto B.)
  *
- * PASS 2 — rows still unmatched (a flag edit, a hand-edited paid figure) take
+ * SETTLED — a row left unmatched by pass 1 that has APPLIED evidence on a line
+ * another row took. In a full settlement every row's frozen paid + recovery is
+ * its flag, so after one tap two same-flag rows read identically off the same
+ * line: when one of their lines is later deleted or recoded, both rows' only
+ * evidence is the survivor, one row wins it, and the loser used to fall to
+ * the old pass 2 and wrote its money a SECOND time onto whatever same-code
+ * line was left (a 0.3h pending line written to 1.0: 2.5h out of 1.5h
+ * recovered). A row whose recovery visibly reads as landed is done: it
+ * resolves as settled — counted as matched (not unmapped: the money found its
+ * line), never offered, and never reported as moved (it would only duplicate
+ * the line the other row holds).
+ *
+ * PASS 2 — REPORT-ONLY. Rows pass 1 leaves unmatched (and not settled) take
  * the CLOSEST remaining same-code line by flag hours within the 3-minute
- * boundary (exceedsRounding), ties in row order; else the first remaining
- * same-code line, as the old lookup did. Deliberately NOT paid-first: flag hours
- * are the one thing an apply never changes, so a flag-only pick is the same line
- * before and after the write, and after it the APPLIED evidence above claims it
- * for the same row. A paid-first pick jumps, after the write, to whichever other
- * line still reads the frozen figure: a second write of the same money. Rows
- * with nothing to write (hours <= 0) take part in pass 1 — they reserve their
- * exact line — but not in pass 2, where they could only take a line from a row
- * that pays.
+ * boundary (exceedsRounding), ties in row order, and NOTHING outside it (the
+ * old "else the first remaining same-code line" fallback is gone). A pass-2
+ * pick is never written. It exists so a line whose paid hours have moved is
+ * still reported in `moved` (periodRecoveryPlan joins rounds on it); a pick
+ * that still reads the frozen paid figure is left unmapped instead, so the
+ * card says the hours were not placed rather than going silent.
+ *
+ * Why it no longer writes: without a stored line id, "this line's flag was
+ * nudged after the claim" and "that line is gone and this is its same-code
+ * neighbour" look identical, and pass 2 wrote the recovery onto the neighbour
+ * either way — a 1.0h recovery onto a 0.3h pending line (the first-remaining
+ * fallback) and, within rounding, a second write of a recovery that had
+ * already landed on a line deleted since. An apply-until-quiet simulator (40k
+ * claims: flag nudges, typed paid hours, lines added/deleted/recoded, 1-3
+ * same-code lines, three recovery modes, two rounds) measured pass-2 writes as
+ * about half of all wrong-line writes and over-recovered rounds on id-less
+ * claims, and EVERY wrong-line write on id-carrying ones (pass 2 only runs
+ * there once every claimed line is deleted, so it can only pick a line the
+ * claim did not name). Skipping is the safe direction: a lost apply is a
+ * visible unmapped figure the tech types in; a wrong one is hours nobody
+ * earned, in the ledger that is supposed to prove pay. New claims carry line
+ * ids (pass 0), so the cost falls only on pre-id claims whose line's flag was
+ * edited after the claim.
+ *
+ * Flag-only, deliberately NOT paid-first, for the reason it always was: flag
+ * hours are the one thing an apply never changes, so the pick is the same line
+ * before and after any write. Rows with nothing to write (hours <= 0) take part
+ * in pass 1 — they reserve their exact line — but not in pass 2.
  */
 function resolveLiveLines(
   lines: DisputeLine[],
   hoursFor: (dl: DisputeLine) => number,
   entries: Entry[],
   libraryById: Map<string, OpCode>,
-): (LiveMatch | null)[] {
-  const out: (LiveMatch | null)[] = lines.map(() => null);
+): (LiveMatch | typeof SETTLED | null)[] {
+  const out: (LiveMatch | typeof SETTLED | null)[] = lines.map(() => null);
   const taken = new Set<string>();
+  // Any stored id means this claim was raised with ids, so a null row on it is
+  // a line deleted since (FK SET NULL) — see PASS 0.
+  const claimHasIds = lines.some((dl) => dl.lineId);
 
   // PASS 0 — stored line ids.
   lines.forEach((dl, i) => {
@@ -1023,7 +1143,7 @@ function resolveLiveLines(
   type Row = { i: number; dl: DisputeLine; hours: number };
   const groups = new Map<string, { entry: Entry; rows: Row[] }>();
   lines.forEach((dl, i) => {
-    if (dl.lineId) return;
+    if (dl.lineId || claimHasIds) return;
     const entry =
       entries.find((e) => e.id === dl.entryId) ??
       entries.find((e) => e.roNumber === dl.roNumber) ??
@@ -1054,7 +1174,7 @@ function resolveLiveLines(
     // ever demoted. "Unexplained" needs both halves: a row frozen at the twin
     // figure that found no line, AND a twin that no row claimed. A row left
     // over beside fully-claimed twins is just a row whose own line was edited
-    // (pass 2 finds it); the twins are all accounted for.
+    // or removed; the twins are all accounted for.
     pairs.forEach((p, k) => {
       if (!p || !p.armed) return;
       const flag = p.line.flagHours;
@@ -1064,17 +1184,23 @@ function resolveLiveLines(
         (r, m) => !pairs[m] && sameHours(r.dl.flaggedHours, flag),
       );
       const twinLeft = twins.some((l) => !used.has(l.id));
-      if (rowLeft && twinLeft) out[rows[k].i]!.trusted = false;
+      if (rowLeft && twinLeft) (out[rows[k].i] as LiveMatch).trusted = false;
     });
 
-    // PASS 2 — closest remaining flag hours; write-invariant.
+    // SETTLED — unmatched rows whose recovery already reads as applied on a
+    // line another row took. Never written.
+    rows.forEach((r, k) => {
+      if (pairs[k] || r.hours <= 0) return;
+      if (candidates.some((l) => appliedEvidence(r, l))) out[r.i] = SETTLED;
+    });
+
+    // PASS 2 — report-only; closest flag within rounding. Never written.
     for (const r of rows) {
       if (out[r.i] || r.hours <= 0) continue;
-      const left = candidates.filter((l) => !used.has(l.id));
-      if (left.length === 0) break;
       let pick: EntryOpCode | null = null;
       let bestGap = Infinity;
-      for (const l of left) {
+      for (const l of candidates) {
+        if (used.has(l.id)) continue;
         const gap = Math.abs(l.flagHours - r.dl.flaggedHours);
         if (exceedsRounding(gap)) continue;
         if (gap < bestGap) {
@@ -1082,9 +1208,9 @@ function resolveLiveLines(
           bestGap = gap;
         }
       }
-      const line = pick ?? left[0];
-      used.add(line.id);
-      out[r.i] = { entry, line, trusted: true };
+      if (!pick) continue;
+      used.add(pick.id);
+      out[r.i] = { entry, line: pick, trusted: false, reportOnly: true };
     }
 
     for (const id of used) taken.add(id);
@@ -1108,27 +1234,54 @@ type RowPair = { line: EntryOpCode; armed: boolean } | null;
  * group) it falls back to a greedy pass in row order that prefers applied
  * evidence.
  */
+/**
+ * APPLIED evidence: the line reads as this row's own write having landed —
+ * flag within rounding of the frozen flag, paid exactly frozen + recovery.
+ */
+function appliedEvidence(
+  r: { dl: DisputeLine; hours: number },
+  line: EntryOpCode,
+): boolean {
+  return (
+    r.hours > 0 &&
+    !exceedsRounding(Math.abs(line.flagHours - r.dl.flaggedHours)) &&
+    sameHours(line.paidHours ?? 0, (r.dl.paidHours ?? 0) + r.hours)
+  );
+}
+
 function matchRows(
   rows: { dl: DisputeLine; hours: number }[],
   pool: EntryOpCode[],
 ): RowPair[] {
   const edges: RowEdge[][] = rows.map((r) =>
     pool.flatMap((line, j): RowEdge[] => {
-      const paid = line.paidHours ?? 0;
-      const frozen = r.dl.paidHours ?? 0;
+      if (appliedEvidence(r, line)) return [{ j, armed: false }];
       if (
-        r.hours > 0 &&
-        !exceedsRounding(Math.abs(line.flagHours - r.dl.flaggedHours)) &&
-        sameHours(paid, frozen + r.hours)
+        sameHours(line.flagHours, r.dl.flaggedHours) &&
+        sameHours(line.paidHours ?? 0, r.dl.paidHours ?? 0)
       ) {
-        return [{ j, armed: false }];
-      }
-      if (sameHours(line.flagHours, r.dl.flaggedHours) && sameHours(paid, frozen)) {
         return [{ j, armed: true }];
       }
       return [];
     }),
   );
+  // SHARED APPLIED EVIDENCE. A line that reads as the landed write of two or
+  // more rows (in a full settlement, every same-flag row's frozen + recovery
+  // IS the flag) says those rows are applied — it cannot say which one it
+  // belongs to. None of them may then be ARMED anywhere else: the most-rows
+  // score would otherwise pair one row with the shared line and arm the other
+  // on any spare line that reads its frozen figure (a pending same-flag line
+  // reads every pending row's), writing the same money a second time. Such a
+  // row keeps only its applied edges; if it loses the line, resolveLiveLines
+  // settles it.
+  const appliedRows = pool.map((_, j) =>
+    edges.reduce((n, es) => n + (es.some((e) => e.j === j && !e.armed) ? 1 : 0), 0),
+  );
+  edges.forEach((es, k) => {
+    if (es.some((e) => !e.armed && appliedRows[e.j] >= 2)) {
+      edges[k] = es.filter((e) => !e.armed);
+    }
+  });
   const toPair = (e: RowEdge | null): RowPair =>
     e ? { line: pool[e.j], armed: e.armed } : null;
 

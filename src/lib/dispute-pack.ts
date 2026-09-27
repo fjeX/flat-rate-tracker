@@ -26,6 +26,11 @@ import { fmtHours2, fmtMoney2, roundToCents } from "./format";
 // without re-deriving anything.
 export type DisputePackLine = {
   entryId: string;
+  // The entry_op_codes row this line was built from. The claim ledger stores
+  // it (dispute_lines.line_id) so a recovery can later be written back onto
+  // exactly this row instead of re-finding it by RO + code + hours, which is
+  // ambiguous whenever an RO carries the same code twice. Never printed.
+  lineId: string;
   roNumber: string;
   date: string; // "YYYY-MM-DD"
   code: string; // library op code, sub-op variant, or custom code
@@ -128,6 +133,7 @@ export function buildDisputePack(input: BuildDisputePackInput): DisputePack {
 
       lines.push({
         entryId: entry.id,
+        lineId: line.id,
         roNumber: entry.roNumber,
         date: entry.date,
         code: lineCode(line, libraryById),

@@ -49,7 +49,24 @@ So budget deliberately:
   own, different value, never attempt 1's). Don't `date -u` once yourself and
   try to remember it: a run this long routinely compacts context, and a
   remembered number is exactly the kind of thing compaction drops. Compute
-  elapsed minutes at any point with `(( $(date -u +%s) - RUN_START_EPOCH ) / 60`.
+  elapsed minutes with this exact command — copy it verbatim, don't retype
+  it (a hand-written version that reads a bare `RUN_START_EPOCH` silently
+  treats a missing value as 0 and reports ~30 million minutes):
+
+  ```
+  start=${RUN_START_EPOCH:-$(cat /tmp/frt-bot-start-epoch-$(date +%F)-* 2>/dev/null | tail -1)}; echo $(( ($(date -u +%s) - start) / 60 ))
+  ```
+
+  The `${RUN_START_EPOCH:-...}` half is the fallback for if the variable
+  itself went missing from your context (e.g. after compaction) — it reads
+  the same value back out of the file run-bot.sh mirrors it to. You should
+  not normally need the fallback; prefer the `RUN_START_EPOCH` number printed
+  at the top of this prompt whenever you can still see it.
+  **Sanity-check the result before trusting it: if it prints negative or over
+  200, the start value is wrong (most likely both the env var and the file
+  were unavailable) — do not hard-stop on an implausible figure. Fall back to
+  the `RUN_START_EPOCH` number printed at the top of this prompt and compute
+  by hand instead.**
   This is a separate timestamp from §3a/§3b's `date -u` calls, which measure
   the timer's elapsed time, not the run's — don't conflate them.
 - Work the checklist **in order** — it is ordered by value, not by convenience.
@@ -93,9 +110,12 @@ So budget deliberately:
   treat it as load-bearing and say so in the report.
 - **A dropped section is sometimes another section's setup — say so, don't
   guess.** §2's "today's seeded scenario" IS §9: drop §9 and just log ordinary
-  ROs. §7b needs both a comeback line (§2b, load-bearing) and a ledger row
-  (§2c, droppable) — with §2c dropped, run §7b's comeback-only checks and
-  record the ledger-dependent ones as `SKIPPED — no ledger row`.
+  ROs. §7b needs both a comeback line (§2b, load-bearing) and a ledger row.
+  §2c never produces one on this account (permanently SKIPPED), so the ledger
+  row comes from §3's timer: a hold of a full minute or more ("Waiting on
+  parts" / "Waiting on approval") writes one — that is the row §7b's
+  delete check has always used. Only if §3 produced no ledger row either,
+  record the ledger-dependent checks as `SKIPPED — no ledger row`.
 - A section you never reach must be listed in the report as **untested**. That is
   a perfectly good outcome and the reader can act on it. A run killed with no
   report at all is the only true failure.
@@ -350,82 +370,25 @@ one most nights.
     total, never subtracted from it — if the flag total drops, that's a bug.
   - Same checks on the guest mirror's RO detail modal, which is a separate fork.
 
-### 2c. "Worked — unpaid" empty days (new 2026-07-27)
-If the dashboard shows the "scheduled day looks empty" card, it now offers a
-**third** button, "Worked — unpaid", alongside "Day off" and "Worked, zero flag".
-- **Self-serve setup, checked first (added 2026-09-27) — Liem approved manufacturing
-  this scenario on the bot's own account, as long as nothing gets deleted.**
-  §8c's "One-day shift override" control (`setShiftOverrideAction`) accepts
-  **any date, past or future** — that's not a new capability, it's the exact
-  control §8c already exercises on a future date, just pointed backward:
-  1. On the §8c calendar, find a **past** date that is currently **off-pattern**
-     (not a scheduled day — e.g. a weekend under a Mon–Fri pattern) with **no**
-     RO/clock entries and **no** existing day-off or confirmed-zero-day marker
-     on it. Pick one at least a few days old so tonight's own ROs can't have
-     touched it.
-  2. Give that date a one-day shift override (e.g. 8h from 08:00, 60min lunch)
-     — the same action §8c already documents, just on a date in the past. It
-     is now a completed, scheduled day with nothing logged, so it should
-     render "empty?" on the next load.
-  3. Run the checks below against that day.
-  4. **Restore fully, in this order, before moving on to §2d or anything
-     after it — this setup must leave zero residue, and it must be done
-     before you leave §2c, not deferred for time.** While the override and
-     resolution are live, the date counts toward whatever week/period/month
-     range it falls in — if that range is one §4–§9 later read for an exact
-     figure (pay discrepancy, reconciliation, CA wage math), an incomplete
-     restore is not just leftover data, it's a wrong number in a later
-     section that looks like an unrelated bug. Running §2c in its normal
-     checklist position (before §3–§9) and finishing the restore before
-     moving on is what keeps this invisible to everything downstream — don't
-     reorder the checklist to "do §2c last" thinking that's safer; it's the
-     opposite.
-     a. Delete the "Worked — unpaid" ledger row you created (§7b's delete
-        control — identify it by reason/hours/date).
-     b. **Undo zero day** (§8c's control) to un-confirm the day — the code
-        comment on `deleteConfirmedZeroDayAction` confirms this un-confirms
-        the marker regardless of which of the three resolutions created it.
-     c. **Reset to pattern** on the shift override. This button is NOT
-        standing controls on the calendar — it only appears inside the
-        expand panel you get by pressing **"Edit shift"** (the button reads
-        "Edit shift" once a day has an override, "Change shift" before it)
-        on that date, and only once `day.hasOverride` is true
-        (`ScheduleCalendar.tsx`). Press "Edit shift" first, THEN "Reset to
-        pattern" inside the panel that opens. Confirm the date goes back to
-        off-pattern with no schedule, no ledger row, and no
-        confirmed-zero-day marker — byte-identical to how you found it.
-  5. **If any restore step is missing or fails partway, stop and say so
-     explicitly under "Data created tonight"** — name the date and exactly
-     what's still sitting on it (override / ledger row / zero-day marker).
-     Do not let it pass silently; a half-restored day here is precisely the
-     kind of residue tomorrow's run needs to be warned about, since it would
-     otherwise look like a second real empty day, AND it would keep
-     perturbing whatever period range that date falls in until someone
-     manually cleans it up.
-- **Only fall back to `SKIPPED — no empty day on this account`** if step 1
-  above finds no qualifying date at all (e.g. every day of the week is on the
-  schedule) — and even then, confirm on the §8c calendar that no amber day
-  exists anywhere first, the same corroboration this check has always asked
-  for.
-- Click it: an hours field, a "Where the time went" reason dropdown (comeback /
-  waiting on parts / waiting on approval / shop time), and an optional note.
-- Saving with hours **0 or blank must be refused** with a visible error.
-- After a successful save the day leaves the list and does NOT come back on
-  reload.
-- **Efficiency is expected to move here — usually down — and that's correct.**
-  The invariant is narrower than it sounds: unpaid hours are never subtracted
-  from the *numerator* (flagged hours). But this day was previously EMPTY — it
-  had no clocked hours and hadn't been resolved, so it contributed to neither
-  side of efficiency at all. Resolving it as "Worked — unpaid" pulls the day's
-  full scheduled hours into the *denominator* for the first time (it's now a
-  "present" day, same as "Worked, zero flag"), while the numerator gets nothing
-  added. A drop in efficiency here is the day correctly counting against you
-  for the first time, not a bug.
-- What's still a bug: the **numerator** moving by anything other than the
-  day's real flag hours (should be nothing, since an empty day has none), or
-  the **denominator** figure for a day that was already counted (already had
-  clocked hours, or was already resolved) changing on this save — resolving
-  one empty day must not silently touch another day's contribution.
+### 2c. "Worked — unpaid" empty days — SKIPPED by decision (2026-09-27)
+A read-only prod query proved every one of the last 31 days has 3–7 closed
+ROs on the bot account, weekends included — no past day is ever empty, and a
+shift override cannot make a worked day empty either. So this scenario is not
+reachable on this account, full stop, and manufacturing it (the 2026-09-27
+self-seed via a backdated shift override, since reverted) was considered and
+**declined** the same day: it required touching a date's schedule across
+whatever week/period/month range it falls in, which is real risk to later
+pay-math sections for a check that can never fail here anyway. §2c's code
+path is covered by unit tests instead.
+- **Every night, record §2c as
+  `SKIPPED — no empty day (expected on this account; the bot logs every night)`
+  and move on.** Do not re-derive this, do not try another way to seed an
+  empty day, and do not spend time confirming the amber card is absent — it's
+  already established this account can't show it.
+- **This line must never appear under "Confirmed broken," "Questions," or
+  "Suggested tweaks."** It is not open, not a gap, and not something to
+  re-request — Liem has already seen and declined this once; asking again in
+  the report is noise, not diligence.
 
 ### 2d. "How long did that take?" retro-time prompt (undocumented surface, new)
 Right after a successful save on the full Log RO form — **any** successful
@@ -521,6 +484,11 @@ start and save in the same breath records ~0 and proves nothing.
   - So: a brief hold showing **"0m"** and producing **no** row in "Every unpaid
     record" is CORRECT. Do not file it. To exercise the ledger deliberately,
     hold for **at least a full minute**.
+  - **Required every night (2026-09-27):** put one timer on **Waiting on
+    parts for at least 2 minutes** before saving it. That hold's ledger row
+    is §7b's ledger row (the only source on this account now that §2c is
+    permanently SKIPPED) — without it every §7b ledger check, including the
+    delete, has nothing to run on.
   - The modal's "Waiting time is logged as unpaid time against this RO"
     sentence is gated on the same 30s rule. A sub-30s hold shows its duration
     but NOT that sentence — also correct.
@@ -760,7 +728,7 @@ already carry a figure. That does not make the window impossible, though: the
 *current* period flips into exactly this state the instant it closes, if it is
 still unpaid at that moment — so expect it back roughly twice a month (pay
 periods here are semi-monthly, not monthly — see src/lib/periods.ts), around
-period rollover, the same way §2c's card resurfaces. If every closed period already
+period rollover. If every closed period already
 carries a figure, record `SKIPPED — no unsaved period` and treat that as a
 clean, expected result — do not go looking for a workaround, and above all:
 never clear a real paid figure just to manufacture the window. That rule is
@@ -1026,14 +994,20 @@ verify the saved hours before continuing to §6.
 
 ### 7b. Unpaid Time surfaces (new 2026-07-28 — Phase 3)
 
-The hours captured in §2b/§2c now get reported back in three places. **This is
-the newest and least-exercised code in the app — hunt it hard.** All three are
-driven by one shared builder, so if two of them disagree about the same period's
-numbers, that is a real bug worth reporting loudly.
+The hours captured in §2b (and, historically, §2c) get reported back in three
+places. **This is the newest and least-exercised code in the app — hunt it
+hard.** All three are driven by one shared builder, so if two of them disagree
+about the same period's numbers, that is a real bug worth reporting loudly.
 
-**Setup:** make sure the current period has BOTH a comeback RO line (§2b) and a
-ledger row from a "Worked — unpaid" day (§2c). Several checks below only bite
-when both sources are present.
+**Setup:** make sure the current period has BOTH a comeback RO line (§2b) and
+a ledger row. §2c is permanently `SKIPPED` on this account (see §2c), so the
+ledger row comes from §3's timer hold (a "Waiting on parts" / "Waiting on
+approval" hold of at least a full minute — e.g. the 2026-09-25 run deleted
+`Waiting on parts, 0.14h`). **Every ledger check below still runs on that
+row, including the delete.** Only the one bullet that is specifically about a
+§2c "Worked — unpaid" row (the efficiency-drop mechanics) is `SKIPPED — §2c
+unreachable on this account` — that label covers that ONE bullet, not the
+ledger checks.
 
 - **Pay Period → "What did the work cost me?" → "Every unpaid record"**
   (was a standalone "Unpaid Time" card until 2026-07-30):
@@ -1126,18 +1100,20 @@ when both sources are present.
     numerator change) on a day that was already counted (no denominator
     change either). Any movement at all here is a real bug.
   - **§2c ledger row**, from resolving a previously-**empty** scheduled day:
-    efficiency is **expected to drop**, because that day's scheduled hours
-    enter the denominator for the first time (see §2c for the full mechanics).
-    Don't report that drop as a bug — the thing to verify instead is that the
-    move is *only* in the denominator: hand-check that the numerator only grew
-    by real flag hours logged that period (none, if the day was purely
+    **unreachable on this account (§2c is permanently `SKIPPED` — see §2c),
+    so record this bullet as `SKIPPED — §2c unreachable on this account`
+    rather than attempting it.** For reference only, if it were ever
+    exercisable: efficiency would be **expected to drop**, because that day's
+    scheduled hours enter the denominator for the first time, and the
+    thing to verify would be that the move is *only* in the denominator: hand-
+    check that the numerator only grew by real flag hours logged that period
+    (none, if the day was purely
     unpaid).
 
 **Edge cases worth trying here** (pick 1–2 a night, rotate, and invent your own
 — the point is to find what wasn't thought of):
 - A comeback line with **no actual hours** entered at all — does it render as
   0.0h without breaking the totals?
-- A **0-hour** ledger row, and a very large one (e.g. 12h) in a single day.
 - A comeback on an RO dated in a **different period** than the ledger row.
 - Unpaid time **greater than the clock-vs-flag gap** (log a big comeback on a
   day you also flagged a lot) — check the Pay Check-Up wording, not a negative.
@@ -1249,9 +1225,12 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     one claim's recovery already landed on it, the other is not offered.
     If that line is STILL short, a note names it ("RO … CODE (N.Nh)") and
     tells you to check it against the pay stub before entering more paid
-    hours — correct, not a bug. **The note appearing for a line that is
-    already paid up to its flag hours IS a FAIL**, as is any note telling
-    you to add hours rather than check them.
+    hours — correct, not a bug. **The conditional in that wording — "only
+    enter more paid hours … if the shop paid them separately" — is correct
+    as written and is not a FAIL**; it is telling you to check first, not
+    unconditionally add. **The note appearing for a line that is already
+    paid up to its flag hours IS a FAIL**, as is any note that tells you,
+    unconditionally, to add hours rather than check them.
   - **What IS a FAIL: a targeted line's `paid_hours` increasing by the
     recovery amount more than once**, i.e. ending up above claim-time paid +
     recovered. Judge this from the before/after numbers you recorded, never

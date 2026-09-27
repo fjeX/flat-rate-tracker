@@ -110,6 +110,28 @@ describe("buildDisputePack — line selection", () => {
     expect(pack.lines[0].deltaHours).toBeCloseTo(2, 5);
   });
 
+  it("carries each line's entry_op_codes id, including two lines sharing a code", () => {
+    // The claim ledger stores this (dispute_lines.line_id) so a recovery is
+    // written back onto exactly this row, not re-found by RO + code + hours.
+    const entries = [
+      entry(
+        [
+          line({ id: "x1", custom: true, customCode: "MISC", flagHours: 1, paidHours: 0.5 }),
+          line({ id: "x2", custom: true, customCode: "MISC", flagHours: 1, paidHours: null }),
+          line({ id: "x3", custom: true, customCode: "MISC", flagHours: 1, paidHours: 0.2 }),
+        ],
+        { id: "e1" },
+      ),
+    ];
+    const pack = build({ entries });
+    expect(pack.lines.map((l) => [l.lineId, l.code])).toEqual([
+      ["x1", "MISC"],
+      ["x3", "MISC"],
+    ]);
+    // Not printed: the external text never mentions internal ids.
+    expect(formatDisputePackText(pack)).not.toMatch(/x1|x3/);
+  });
+
   it("zero-short period produces an empty pack", () => {
     const entries = [entry([line({ flagHours: 2, paidHours: 2 })])];
     const pack = build({ entries });
