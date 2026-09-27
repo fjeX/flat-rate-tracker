@@ -48,6 +48,50 @@ export const RECOVERY_EPS = 0.05;
 // floor(RECOVERY_EPS / hours) + 1 times.
 export const SAME_VALUE_EPS = 1e-9;
 
+/**
+ * Claims created at or after this instant are LINE-ID ERA: disputeFromPack
+ * stored each claimed line's real id (bdef1ea). On such a claim a row whose
+ * lineId reads null can only be a line deleted since (the FK is ON DELETE SET
+ * NULL) — never a legacy row — so it is resolved to nothing and never handed
+ * to the (entry, code, flag, paid) heuristic, WHATEVER the claim's other rows
+ * hold. Before this, id-era was inferred per row-set ("does any row carry an
+ * id?"), which a claim whose every claimed line was deleted fails: all rows
+ * read null, the claim looked legacy, and the heuristic armed a never-claimed
+ * same-code, same-flag twin (a pending one, whose null paid read as the
+ * frozen 0) — the deleted line's recovery written onto a line nobody claimed.
+ *
+ * Deliberately set BEFORE the deploy that started storing ids. A claim created
+ * in the gap, by the old code, stored all-null ids; read as id-era it resolves
+ * every row to nothing — its recovery is reported unmapped and the tech types
+ * it in. That is the safe direction: the other error (an id-era claim read as
+ * legacy) is exactly the wrong-line write above. A cutoff set AFTER the deploy
+ * would open that hole for every claim raised in between.
+ *
+ * Imports: an imported claim keeps its original created_at (import-remap
+ * carries it), and its line ids are remapped onto the imported lines. An
+ * id-era claim whose lines didn't come with it imports with null ids — read
+ * as deleted, so unmapped. Safe, for the same reason.
+ *
+ * Compared against Dispute.createdAt, the disputes row's insert time. Today
+ * generated_at and created_at are both column defaults set by the same insert
+ * (createDispute passes neither), so they agree; created_at is the one that
+ * MEANS "when this row, and the ids disputeFromPack put in it, were written".
+ * generated_at is the claim's display/order date and could reasonably come to
+ * carry a pack's generation time from elsewhere, which says nothing about which
+ * code stored the lines.
+ */
+export const LINE_ID_ERA_START = "2026-09-27T20:00:00Z";
+
+/**
+ * Was this claim raised by code that stores line ids? See LINE_ID_ERA_START.
+ * An unreadable timestamp answers yes — the no-heuristic, no-guess direction.
+ */
+export function isLineIdEraClaim(dispute: Pick<Dispute, "createdAt">): boolean {
+  const at = Date.parse(dispute.createdAt);
+  if (Number.isNaN(at)) return true;
+  return at >= Date.parse(LINE_ID_ERA_START);
+}
+
 /** Terminal states — a dispute in one of these is closed and off the queue. */
 export function isClosed(status: DisputeStatus): boolean {
   return status === "resolved" || status === "withdrawn";
@@ -645,6 +689,7 @@ export function pendingRecoveryApplication(
     hoursFor,
     entries,
     libraryById,
+    isLineIdEraClaim(dispute),
   );
 
   for (const [k, dl] of dispute.lines.entries()) {
@@ -1043,9 +1088,10 @@ function sameHours(a: number, b: number): boolean {
  * legacy row: it resolves to nothing and is never handed to the heuristic,
  * which would go looking for a stand-in (typically the next same-code line on
  * the RO) and write the deleted line's money onto it. A claim whose every
- * claimed line was deleted is all-null and indistinguishable from a legacy
- * claim; it takes the heuristic, whose write rules below are what keep it off
- * the wrong line.
+ * claimed line was deleted is all-null, so "do other rows carry ids?" cannot
+ * tell it from a legacy claim — that is decided by the claim's creation time
+ * instead (LINE_ID_ERA_START): an id-era claim never reaches the heuristic,
+ * however many of its rows read null.
  *
  * PASS 1 — identity, per (entry, code) group, as a small maximum matching over
  * two kinds of evidence:
@@ -1119,12 +1165,16 @@ function resolveLiveLines(
   hoursFor: (dl: DisputeLine) => number,
   entries: Entry[],
   libraryById: Map<string, OpCode>,
+  idEra: boolean,
 ): (LiveMatch | typeof SETTLED | null)[] {
   const out: (LiveMatch | typeof SETTLED | null)[] = lines.map(() => null);
   const taken = new Set<string>();
-  // Any stored id means this claim was raised with ids, so a null row on it is
-  // a line deleted since (FK SET NULL) — see PASS 0.
-  const claimHasIds = lines.some((dl) => dl.lineId);
+  // A claim raised with ids (by its creation time — LINE_ID_ERA_START — or, as
+  // a belt for anything older that somehow carries one, by any stored id): a
+  // null row on it is a line deleted since (FK SET NULL), never a legacy row.
+  // The creation time is what covers the all-deleted claim, whose rows are
+  // all null and so carry no id to infer from — see PASS 0.
+  const claimHasIds = idEra || lines.some((dl) => dl.lineId);
 
   // PASS 0 — stored line ids.
   lines.forEach((dl, i) => {
@@ -1249,6 +1299,28 @@ function appliedEvidence(
   );
 }
 
+/**
+ * ARMED evidence's paid test: the live paid figure IS the frozen one, with
+ * pending (null) and reconciled-at-zero (0) kept apart. Deliberately stricter
+ * than sameAsClaimTime, which folds null into 0 for the different question
+ * "has this money landed on a line we already know is the claimed one?".
+ * Here the line is not known yet — this test is part of FINDING it — and
+ * folding made a pending same-code, same-flag twin read as a claimed line
+ * frozen at paid 0: once the claimed line was deleted, the twin was armed and
+ * the recovery written onto a line nobody claimed. Pending-at-claim rows
+ * freeze paid null (dispute-pack), so a still-pending claimed line matches
+ * itself (null = null). The cost — a pending-at-claim line since reconciled
+ * at exactly 0, on a claim with no stored id — is a report-only pass-2 pick,
+ * so its hours read unmapped instead of offered: the safe direction.
+ */
+function samePaidEvidence(
+  livePaid: number | null,
+  frozenPaid: number | null,
+): boolean {
+  if ((livePaid === null) !== (frozenPaid === null)) return false;
+  return sameHours(livePaid ?? 0, frozenPaid ?? 0);
+}
+
 function matchRows(
   rows: { dl: DisputeLine; hours: number }[],
   pool: EntryOpCode[],
@@ -1258,7 +1330,7 @@ function matchRows(
       if (appliedEvidence(r, line)) return [{ j, armed: false }];
       if (
         sameHours(line.flagHours, r.dl.flaggedHours) &&
-        sameHours(line.paidHours ?? 0, r.dl.paidHours ?? 0)
+        samePaidEvidence(line.paidHours ?? null, r.dl.paidHours)
       ) {
         return [{ j, armed: true }];
       }

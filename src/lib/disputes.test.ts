@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  LINE_ID_ERA_START,
   RECOVERY_EPS,
+  isLineIdEraClaim,
   MIN_INSIGHT_SAMPLE,
   claimTotal,
   daysWaiting,
@@ -775,18 +777,30 @@ describe("pendingRecoveryApplication", () => {
   });
 
   // Pending at claim time, later reconciled at zero: nothing has been paid on
-  // this line under either reading, so the recovery is still owed.
+  // this line under either reading, so the recovery is still owed — on a claim
+  // that KNOWS its line (stored id). Without an id, pending vs paid-0 is not
+  // evidence that this is the claimed line (wave 4: a pending twin read as a
+  // deleted paid-0 line's), so a pre-id claim leaves it unmapped instead.
   it("still offers when a line pending at claim time was later reconciled at zero", () => {
     const d = dispute({
       status: "resolved",
       recoveredHours: 1.5,
+      createdAt: LINE_ID_ERA_START,
       lines: [
-        line({ entryId: "e1", paidHours: null, claimedHours: 1.5, recoveredHours: 1.5 }),
+        line({ entryId: "e1", lineId: "l1", paidHours: null, claimedHours: 1.5, recoveredHours: 1.5 }),
       ],
     });
     const plan = pendingRecoveryApplication(d, [ro([roLine({ paidHours: 0 })])], []);
     expect(plan.rows).toHaveLength(1);
     expect(plan.rows[0].paidAfter).toBeCloseTo(1.5, 5);
+
+    const legacy = pendingRecoveryApplication(
+      { ...d, createdAt: "2026-07-29T10:00:00.000Z", lines: d.lines.map((l) => ({ ...l, lineId: null })) },
+      [ro([roLine({ paidHours: 0 })])],
+      [],
+    );
+    expect(legacy.rows).toEqual([]);
+    expect(legacy.unmappedHours).toBe(1.5);
   });
 
   it("treats a settlement covering the whole ask as every line getting its claim", () => {
@@ -1133,12 +1147,16 @@ describe("pendingRecoveryApplication", () => {
   // state the data genuinely cannot read, so it re-offers — but only once per
   // deliberate clear, never as a run-away ladder.
   it("re-offers a cleared zero/zero line exactly once per clear, never twice", () => {
+    // Stored id: the pending-vs-0 read below is about the claimed line itself
+    // (a pre-id claim can't use it to FIND the line — see wave 4).
     const d = dispute({
       status: "resolved",
       recoveredHours: 1.5,
+      createdAt: LINE_ID_ERA_START,
       lines: [
         line({
           entryId: "e1",
+          lineId: "l1",
           flaggedHours: 2,
           paidHours: null,
           claimedHours: 1.5,
@@ -2462,7 +2480,11 @@ describe("resolving claim rows after the RO is edited (wave 3)", () => {
             idx,
             mode,
             own: new Set(claimed.map((l) => l.id)),
-            d: dispute({ id: `d${idx}`, status: "resolved", claimedHours: ask, recoveredHours: rec, lines: dls }),
+            d: dispute({
+              id: `d${idx}`, status: "resolved", claimedHours: ask, recoveredHours: rec, lines: dls,
+              // An id-carrying claim is one raised since ids were stored.
+              ...(ids ? { createdAt: LINE_ID_ERA_START, generatedAt: LINE_ID_ERA_START } : {}),
+            }),
           });
         };
         const edit = () => {
@@ -2541,14 +2563,126 @@ describe("resolving claim rows after the RO is edited (wave 3)", () => {
       expect(run(true, 3000, 7).wrongOverFlag).toBe(0);
     });
 
-    it("with stored ids: no line written twice, and wrong-line writes only from the all-deleted residue", () => {
-      // The residue with ids is the claim whose EVERY claimed line was
-      // deleted: every row reads back null and the claim is
-      // indistinguishable from a pre-id one, so the heuristic runs.
-      const r = run(true, 3000, 11);
-      expect(r.writes).toBeGreaterThan(1000);
-      expect(r.lineTwice).toBe(0);
-      expect(r.wrongLine).toBeLessThanOrEqual(r.writes * 0.01);
+    it("with stored ids: no line written twice, and never a line the claim didn't name", () => {
+      // There used to be an "all-deleted residue" here: a claim whose EVERY
+      // claimed line was deleted read all-null, looked pre-id, and ran the
+      // heuristic. Id-era is now decided by the claim's creation time
+      // (LINE_ID_ERA_START), so that residue is gone.
+      for (const seed of [11, 19584, 2784, 1046, 795]) {
+        const r = run(true, 3000, seed);
+        expect(r.writes).toBeGreaterThan(1000);
+        expect(r.lineTwice).toBe(0);
+        expect(r.wrongLine).toBe(0);
+        expect(r.overRecovered).toBe(0);
+      }
     });
+  });
+});
+
+describe("id-era decided per claim, and pending never matches paid 0 (wave 4)", () => {
+  // RO 1001: L1 (code A, flag 0.3, paid 0 — short) and L2 (code A, flag 0.3,
+  // pending). The claim names L1 only; 0.3h comes back.
+  const A = (id: string, paid: number | null) =>
+    roLine({ id, customCode: "A", flagHours: 0.3, paidHours: paid });
+  const AFTER = "2026-09-28T09:00:00Z";
+  const BEFORE = "2026-09-27T19:59:59Z";
+  const claim = (createdAt: string, lineId: string | null) =>
+    dispute({
+      status: "resolved",
+      claimedHours: 0.3,
+      recoveredHours: 0.3,
+      createdAt,
+      generatedAt: createdAt,
+      lines: [line({ entryId: "e1", lineId, code: "A", flaggedHours: 0.3, paidHours: 0, claimedHours: 0.3 })],
+    });
+
+  it("the reproducer, after the apply: deleting L1 never offers onto L2 (was: Apply 0.3h onto L2, 0.6h written of 0.3h)", () => {
+    const d = claim(AFTER, "L1");
+    const first = pendingRecoveryApplication(d, [ro([A("L1", 0), A("L2", null)])], []);
+    expect(first.rows.map((r) => [r.lineId, r.paidAfter])).toEqual([["L1", 0.3]]);
+    // L1 applied to 0.3, then deleted: its stored id reads back null.
+    const gone = { ...d, lines: d.lines.map((l) => ({ ...l, lineId: null })) };
+    const again = pendingRecoveryApplication(gone, [ro([A("L2", null)])], []);
+    expect(again.rows).toEqual([]);
+    expect(again.applyHours).toBe(0);
+    expect(again.unmappedHours).toBe(0.3);
+  });
+
+  it("the reproducer, before any apply: a deleted claimed line's recovery never lands on its pending twin", () => {
+    const gone = claim(AFTER, null); // L1 deleted before the tap
+    for (const twinPaid of [null, 0]) {
+      const plan = pendingRecoveryApplication(gone, [ro([A("L2", twinPaid)])], []);
+      expect(plan.rows, String(twinPaid)).toEqual([]);
+      expect(plan.unmappedHours, String(twinPaid)).toBe(0.3);
+    }
+  });
+
+  it("the cutoff boundary: at LINE_ID_ERA_START is id-era, a millisecond before is not", () => {
+    expect(LINE_ID_ERA_START).toBe("2026-09-27T20:00:00Z");
+    const at = "2026-09-27T20:00:00Z";
+    const justBefore = "2026-09-27T19:59:59.999Z";
+    expect(isLineIdEraClaim({ createdAt: at })).toBe(true);
+    // Postgres timestamptz as PostgREST returns it: offset form, microseconds.
+    expect(isLineIdEraClaim({ createdAt: "2026-09-27T20:00:00.000001+00:00" })).toBe(true);
+    expect(isLineIdEraClaim({ createdAt: "2026-09-27T13:00:00-07:00" })).toBe(true);
+    expect(isLineIdEraClaim({ createdAt: justBefore })).toBe(false);
+    expect(isLineIdEraClaim({ createdAt: "2026-09-27T12:59:59-07:00" })).toBe(false);
+    // Unreadable -> id-era: the no-guess direction.
+    expect(isLineIdEraClaim({ createdAt: "" })).toBe(true);
+
+    // A legacy (pre-cutoff, all-null) claim whose line is still there and
+    // unedited keeps the heuristic: identity by (entry, code, flag, paid).
+    const legacyLive = pendingRecoveryApplication(claim(justBefore, null), [ro([A("L1", 0), A("L2", null)])], []);
+    expect(legacyLive.rows.map((r) => r.lineId)).toEqual(["L1"]);
+    // The same claim at the cutoff has no id to go on: unmapped, never a guess.
+    const eraNull = pendingRecoveryApplication(claim(at, null), [ro([A("L1", 0), A("L2", null)])], []);
+    expect(eraNull.rows).toEqual([]);
+    expect(eraNull.unmappedHours).toBe(0.3);
+    // With its id, at the cutoff, it finds L1 — and only L1.
+    const eraId = pendingRecoveryApplication(claim(at, "L1"), [ro([A("L1", 0), A("L2", null)])], []);
+    expect(eraId.rows.map((r) => r.lineId)).toEqual(["L1"]);
+  });
+
+  it("legacy claims: pending and paid-0 are different evidence — all four null/0 combos", () => {
+    // Frozen paid x live paid, on the ONLY same-code, same-flag line, no stored
+    // id, pre-cutoff. Equal kinds match (and arm); mixed kinds never arm.
+    const grid: [number | null, number | null, boolean][] = [
+      [null, null, true], // pending claimed line still pending: matches itself
+      [0, 0, true],
+      [0, null, false], // the reproducer: a pending twin is not "paid 0"
+      [null, 0, false], // and a paid-0 line is not a pending claim's line
+    ];
+    for (const [frozen, live, arms] of grid) {
+      const d = dispute({
+        status: "resolved",
+        claimedHours: 0.3,
+        recoveredHours: 0.3,
+        createdAt: BEFORE,
+        lines: [line({ entryId: "e1", code: "A", flaggedHours: 0.3, paidHours: frozen, claimedHours: 0.3 })],
+      });
+      const plan = pendingRecoveryApplication(d, [ro([A("X", live)])], []);
+      const tag = `frozen ${frozen} / live ${live}`;
+      expect(plan.rows.map((r) => [r.lineId, r.paidAfter]), tag).toEqual(arms ? [["X", 0.3]] : []);
+      expect(plan.unmappedHours, tag).toBe(arms ? 0 : 0.3);
+      // Never reported as moved either: nothing landed on it.
+      expect(plan.moved, tag).toEqual([]);
+    }
+  });
+
+  it("legacy claims, property: a deleted claimed line never hands its recovery to a same-flag twin of the other paid kind", () => {
+    for (const flag of [0.3, 1, 2.5])
+      for (const rec of [0.1, flag / 2, flag])
+        for (const [claimedPaid, twinPaid] of [[0, null], [null, 0]] as [number | null, number | null][]) {
+          const d = dispute({
+            status: "resolved",
+            claimedHours: rec,
+            recoveredHours: rec,
+            createdAt: BEFORE,
+            lines: [line({ entryId: "e1", code: "A", flaggedHours: flag, paidHours: claimedPaid, claimedHours: flag - (claimedPaid ?? 0) })],
+          });
+          const twin = roLine({ id: "T", customCode: "A", flagHours: flag, paidHours: twinPaid });
+          const plan = pendingRecoveryApplication(d, [ro([twin])], []);
+          expect(plan.rows, `${flag}/${rec}/${claimedPaid}/${twinPaid}`).toEqual([]);
+        }
   });
 });

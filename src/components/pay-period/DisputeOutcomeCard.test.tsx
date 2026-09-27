@@ -351,7 +351,7 @@ function noteCounts(container: HTMLElement) {
   const count = (needle: string) =>
     paras.filter((t) => t.includes(needle)).length;
   return {
-    goodwill: count("goodwill above the ask"),
+    goodwill: count("couldn't be matched to a line automatically"),
     periodTotal: count("raised for the period total"),
     breakdown: count("recorded against individual lines"),
   };
@@ -652,5 +652,76 @@ describe("DisputeOutcomeCard recovery across claim rounds", () => {
     });
     // Same data as the previous case, which shows the note while short.
     expect(disarmedNotes(container)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The unmapped paragraph never says "nothing is owed" (wave 4)
+// ---------------------------------------------------------------------------
+//
+// It used to read "maps to no line … goodwill above the ask, or an RO that's
+// since been deleted. It stays on the claim and is not written anywhere." — but
+// unmapped hours are also hours owed to a line the matcher refused to guess at,
+// or to a claimed LINE (not RO) deleted since. Worded as goodwill, the tech
+// reads "nothing to do". The copy now names the manual path, quoted exactly as
+// PaidCheckCard titles it, like its sibling paragraphs.
+describe("DisputeOutcomeCard unmapped copy", () => {
+  const unmappedPara = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll("p"))
+      .map((p) => (p.textContent ?? "").replace(/\s+/g, " ").trim())
+      .filter((t) => t.includes("couldn't be matched to a line automatically"));
+
+  it("reads as a to-do, not a dismissal, standalone and as the panel footnote", () => {
+    const standalone = renderCard({
+      allDisputes: [
+        itemizedRound(0.5, [
+          disputeLine({ entryId: "gone", roNumber: "9999", recoveredHours: 0.5 }),
+        ]),
+      ],
+      entries: [liveRO([liveLine()])],
+    });
+    expect(unmappedPara(standalone)).toEqual([
+      "0.5h of the recovery couldn't be matched to a line automatically — " +
+        "goodwill above what you asked for, or a line or RO that's since been " +
+        "deleted or changed. FRT won't write those hours anywhere, so if they " +
+        "belong on a line that's still here, enter them in “Which lines " +
+        "came up short?” yourself.",
+    ]);
+    const text = standalone.textContent ?? "";
+    expect(text).not.toContain("maps to no line");
+    expect(text).not.toContain("not written anywhere");
+    cleanup();
+
+    const footnote = renderCard({
+      allDisputes: [
+        itemizedRound(1, [
+          disputeLine({ id: "a", entryId: "e1", recoveredHours: 0.5 }),
+          disputeLine({ id: "b", entryId: "gone", roNumber: "9999", recoveredHours: 0.5 }),
+        ]),
+      ],
+      entries: [liveRO([liveLine()])],
+    });
+    expect(unmappedPara(footnote)).toHaveLength(1);
+    expect(unmappedPara(footnote)[0]).toContain("“Which lines came up short?”");
+  });
+
+  it("an id-era claim whose claimed line was deleted offers nothing onto its pending twin", () => {
+    // The wave-4 reproducer at card level: claim on l1 (paid 0, id stored),
+    // l1 deleted (FK SET NULL -> lineId null), l2 is a pending same-code,
+    // same-flag twin nobody claimed. No Apply button; the hours are explained.
+    const container = renderCard({
+      allDisputes: [
+        {
+          ...itemizedRound(0.3, [
+            disputeLine({ lineId: null, flaggedHours: 0.3, paidHours: 0, claimedHours: 0.3 }),
+          ], 0.3),
+          createdAt: "2026-09-28T00:00:00Z",
+          generatedAt: "2026-09-28T00:00:00Z",
+        },
+      ],
+      entries: [liveRO([liveLine({ id: "l2", flagHours: 0.3, paidHours: null })])],
+    });
+    expect(screen.queryByRole("button", { name: /^Apply / })).toBeNull();
+    expect(noteCounts(container)).toEqual({ goodwill: 1, periodTotal: 0, breakdown: 0 });
   });
 });

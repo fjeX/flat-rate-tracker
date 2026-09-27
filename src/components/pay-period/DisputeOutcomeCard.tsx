@@ -478,11 +478,21 @@ export function DisputeOutcomeCard({
   // as its own inset alongside the other explanation paragraphs. The two sites
   // are mutually exclusive on rows.length, so the same hours are explained
   // exactly once.
+  //
+  // It must never read as "nothing is owed here". Unmapped hours are goodwill
+  // only SOMETIMES: they are also a claimed line or RO deleted since, and hours
+  // owed to a line that is still on the period but that the matcher refused to
+  // guess at (a claim with no stored line id whose line's flag was edited — see
+  // PASS 2 in resolveLiveLines). So the copy names all three and points at the
+  // same control the sibling paragraphs do, quoted exactly as PaidCheckCard
+  // renders it.
   const goodwillNote = (hours: number) => (
     <>
-      {fmtHours(hours)}h of the recovery maps to no line on this
-      period — goodwill above the ask, or an RO that&apos;s since been deleted.
-      It stays on the claim and is not written anywhere.
+      {fmtHours(hours)}h of the recovery couldn&apos;t be matched to a line
+      automatically — goodwill above what you asked for, or a line or RO
+      that&apos;s since been deleted or changed. FRT won&apos;t write those
+      hours anywhere, so if they belong on a line that&apos;s still here, enter
+      them in &ldquo;Which lines came up short?&rdquo; yourself.
     </>
   );
 
