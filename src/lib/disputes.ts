@@ -1003,9 +1003,11 @@ export function periodRecoveryPlan(
  * null degrades to 0 FOR THIS COMPARISON ONLY. Everywhere else in the app
  * "pending, never reconciled" and "reconciled at zero" are deliberately
  * different facts, but the only question here is "has this money landed on the
- * line yet?", and both answer no. A line that was pending at claim time and has
- * since been reconciled at zero has had nothing applied to it, so it must still
- * be offered.
+ * line yet?", and both answer no. That is why this APPLY GUARD treats a line
+ * pending at claim time and since reconciled at zero as unmoved. Note it does
+ * not decide which line a row RESOLVES to: on a claim without stored line ids,
+ * matchRows' `samePaidEvidence` keeps null and 0 distinct (2026-09-27), so such
+ * a row resolves to nothing and its hours show as unmapped instead of offered.
  *
  * This is a genuine EQUALITY test, deliberately not a tolerance. Both sides are
  * numeric(5,2), so "unmoved" means unmoved to the cent-equivalent; anything the
