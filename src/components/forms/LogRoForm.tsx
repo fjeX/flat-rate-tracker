@@ -313,6 +313,13 @@ export function LogRoForm({
     // REOPENED close then swaps in the stored time once the defaults land.
     trackRoTime, defaultLoggedTime, timeZone,
   });
+  // A cleared date pill leaves dateChoice where it was (the date onChange
+  // returns early on ""), so retyping the same day doesn't restamp the time.
+  // But the radios must not SHOW that stale choice: Keep ticked beside an
+  // empty pill is a lie, and a click on an already-checked radio fires no
+  // onChange — so Keep couldn't restore the date. Render both unchecked while
+  // the pill is empty; either click then restores its date and time.
+  const dateCleared = date === "";
 
   // Fetches the close defaults (decision 6's prefill, decision 11's reopened
   // flag). Below the hook call, not above, because a reopened ticket's
@@ -575,7 +582,8 @@ export function LogRoForm({
                   <input
                     type="radio"
                     name="close-date-choice"
-                    checked={dateChoice === "keep"}
+                    // Unchecked while the date pill is empty (see dateCleared).
+                    checked={!dateCleared && dateChoice === "keep"}
                     onChange={() => {
                       setDateChoice("keep");
                       setDate(currentFlagDate);
@@ -589,7 +597,7 @@ export function LogRoForm({
                   <input
                     type="radio"
                     name="close-date-choice"
-                    checked={dateChoice === "move"}
+                    checked={!dateCleared && dateChoice === "move"}
                     onChange={() => {
                       setDateChoice("move");
                       setDate(today);

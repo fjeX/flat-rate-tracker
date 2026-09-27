@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildImportPayload, CURRENT_BACKUP_VERSION, type ImportBundle } from "./import-remap";
 import type { Dispute, Entry, EntryOpCode, OpCode, UnpaidTime } from "./types";
 import { MIN_LEDGERED_HOLD_MS, msToHours } from "./timer";
@@ -688,6 +688,57 @@ describe("buildImportPayload — frozen dispute claims", () => {
           { newId: counter() },
         ),
       ).toThrow(/says an invalid number/);
+    });
+
+    // Asks the app never writes. A negative ask can hide inside a header that
+    // still matches (the sum can't see -1 offsetting +1); an all-zero claim is
+    // the shape claimTotal falls back to the header for.
+    const build = (claimedHours: number, asks: number[]) => () =>
+      buildImportPayload(
+        bundle({
+          disputes: [
+            dispute({
+              claimedHours,
+              lines: asks.map((a, k) => claimLine(`DL${k}`, a)),
+            }),
+          ],
+        }),
+        { newId: counter() },
+      );
+
+    it.each([
+      { header: 2, asks: [3, -1], why: "negative line, header still matches" },
+      { header: 3, asks: [3, -1], why: "negative line, header mismatches too" },
+      { header: -0.5, asks: [-0.5], why: "single negative line" },
+    ])("refuses a line asking for negative hours ($why)", ({ header, asks }) => {
+      expect(build(header, asks)).toThrow(
+        /can't be restored: the dispute claim for Aug 1–15 has a line asking for -\d\.\d\dh.*Nothing was imported/,
+      );
+    });
+
+    it.each([
+      { header: 0, asks: [0] },
+      { header: 0, asks: [0, 0, 0] },
+      { header: 4, asks: [0, 0] },
+      { header: 0, asks: [-0] },
+    ])("refuses a lined claim whose asks are all zero (header $header, $asks.length lines)", ({ header, asks }) => {
+      expect(build(header, asks)).toThrow(/none of them asks for any hours.*Nothing was imported/);
+    });
+
+    it("still accepts a zero ask beside real ones (a pending line flagged 0)", () => {
+      const payload = build(2.5, [0, 2.5])();
+      expect(payload.dispute_lines).toHaveLength(2);
+    });
+
+    it("builds nothing when it refuses", () => {
+      const newId = vi.fn(counter());
+      expect(() =>
+        buildImportPayload(
+          bundle({ disputes: [dispute({ claimedHours: 2, lines: [claimLine("A", 3), claimLine("B", -1)] })] }),
+          { newId },
+        ),
+      ).toThrow(/negative hours/);
+      expect(newId).not.toHaveBeenCalled();
     });
   });
 });

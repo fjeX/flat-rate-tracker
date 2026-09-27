@@ -463,11 +463,15 @@ export function DisputeOutcomeCard({
     applyPlan.unmappedHours > 0 &&
     !applyPlan.needsLineBreakdown &&
     applyLineCount > 0;
-  // Hours one round's write stranded in another (see
-  // PeriodRecovery.disarmedHours). Same "only while the period still reads
-  // short" rule as the period-total note: its whole ask is "type it in
-  // yourself", so it stops once the shortfall is gone.
-  const showDisarmedNote = periodRecovery.disarmedHours > 0 && shortedHours > 0;
+  // Hours one round's write may have stranded in another (see
+  // PeriodRecovery.disarmedHours). Per-LINE meaningful by construction: each
+  // line's figure is already capped at what that line is still short (less
+  // any recovery still armed on it), so a line paid to flag contributes 0 and
+  // cannot raise the note on the strength of some OTHER line's shortfall.
+  // shortedHours > 0 stays as a belt: the note is about a short period.
+  const disarmed = periodRecovery.disarmedLines;
+  const showDisarmedNote =
+    periodRecovery.disarmedHours > 0 && disarmed.length > 0 && shortedHours > 0;
 
   // ONE copy, two homes, never both: inside the rows panel it is a footnote
   // under the rows it qualifies; with no rows there is no panel, so it renders
@@ -564,23 +568,34 @@ export function DisputeOutcomeCard({
         </p>
       )}
 
-      {/* Two closed rounds named the same line, and one round's recovery has
-          already landed on it — so the other round's hours on that line no
-          longer match what that claim froze and can never be applied by FRT.
-          Not goodwill (these hours DID map to a line) and not a missing
-          breakdown (the lines are recorded), so it borrows neither paragraph's
-          words. The app genuinely cannot tell whether the shop paid both
-          rounds or the second round re-asked for the first round's money, so
-          it hands the call to the tech instead of guessing in either
-          direction. */}
+      {/* Two or more closed rounds named the same line, and its paid hours
+          have moved since — so the other round's hours on that line no longer
+          match what that claim froze and can never be applied by FRT. Not
+          goodwill (these hours DID map to a line) and not a missing breakdown
+          (the lines are recorded), so it borrows neither paragraph's words.
+
+          It asks the tech to CHECK, never to ADD. Rounds that froze a line at
+          the same figure asked for the same shortage twice, and whether the
+          shop's answers are two payments or one restated is on the pay stub,
+          not in the data. "Enter the paid hours yourself" read as "add this"
+          and, where the second round re-asked for the first round's money,
+          walked the tech into paying the line twice. */}
       {showDisarmedNote && (
         <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-          {fmtHours(periodRecovery.disarmedHours)}h recovered on your claims for{" "}
-          {periodLabel} can&apos;t be applied automatically: more than one
-          claim asked for the same line, and another claim&apos;s recovery has
-          already landed on it. If those hours aren&apos;t on your lines yet,
-          open &ldquo;Which lines came up short?&rdquo; and enter the paid hours
-          on each line yourself.
+          Up to {fmtHours(periodRecovery.disarmedHours)}h recovered on your
+          claims for {periodLabel} can&apos;t be applied automatically and may
+          not be on your lines yet:{" "}
+          {disarmed
+            .slice(0, 3)
+            .map((l) => `RO ${l.roNumber} ${l.code} (${fmtHours(l.hours)}h)`)
+            .join(", ")}
+          {disarmed.length > 3 ? `, and ${disarmed.length - 3} more` : ""}.
+          More than one claim asked for the same line and its paid hours have
+          changed since, so FRT can&apos;t tell whether those hours came on top
+          of the other claim&apos;s or were the same shortage asked for twice.
+          Check each line against your pay stub, and only enter more paid hours
+          in &ldquo;Which lines came up short?&rdquo; if the shop paid them
+          separately.
         </p>
       )}
 

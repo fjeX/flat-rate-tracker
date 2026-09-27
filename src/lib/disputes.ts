@@ -488,7 +488,15 @@ export type RecoveryApplication = {
 
 export type MovedRecoveryLine = {
   lineId: string;
+  roNumber: string;
+  code: string;
+  /** This claim's recovery for the line. */
   hours: number;
+  /** What this claim froze as the line's paid hours (null read as 0). */
+  frozenPaid: number;
+  /** The live line's flag and paid hours now (paid null read as 0). */
+  flagNow: number;
+  paidNow: number;
   looksApplied: boolean;
 };
 
@@ -604,23 +612,31 @@ export function pendingRecoveryApplication(
   const rows: RecoveryApplicationRow[] = [];
   let applyHours = 0;
   let matchedRecovery = 0;
-  // One live line is claimable once. Without this, two dispute rows for the
-  // same RO and code (the shop's own duplicate, or a re-claim) would both land
-  // on it and pay it twice.
-  const taken = new Set<string>();
   const moved: MovedRecoveryLine[] = [];
-
-  for (const dl of dispute.lines) {
-    const hours = usePerLine
+  const hoursFor = (dl: DisputeLine) =>
+    usePerLine
       ? dl.recoveredHours
       : singleLineRecovery
         ? dl.claimedHours > 0
           ? Math.min(dispute.recoveredHours, dl.claimedHours)
           : dispute.recoveredHours
         : dl.claimedHours;
+  // Every claim row's live line, resolved together. One live line is claimable
+  // once — two dispute rows for the same RO and code (the shop's own duplicate,
+  // or a re-claim) can never both land on it — and a row can't take another
+  // row's exact line. See resolveLiveLines.
+  const resolved = resolveLiveLines(
+    dispute.lines,
+    hoursFor,
+    entries,
+    libraryById,
+  );
+
+  for (const [k, dl] of dispute.lines.entries()) {
+    const hours = hoursFor(dl);
     if (hours <= 0) continue;
 
-    const live = findLiveLine(dl, entries, libraryById, taken);
+    const live = resolved[k];
     if (!live) continue;
 
     matchedRecovery += hours;
@@ -670,16 +686,25 @@ export function pendingRecoveryApplication(
     // much. 0.01 > SAME_VALUE_EPS, so the very next render sees a mismatch and
     // skips. Re-arming again takes a deliberate manual edit of the line back to
     // the frozen value, and each such edit buys exactly one more offer.
-    if (!sameAsClaimTime(paidNow, dl.paidHours)) {
+    //
+    // An UNTRUSTED pairing (resolveLiveLines' twin-cluster rule) is treated as
+    // moved even when the numbers line up: the line it found may be a twin
+    // that another round's write happened to land on this claim's frozen
+    // figure. Skipping is the safe direction, as above.
+    if (!live.trusted || !sameAsClaimTime(paidNow, dl.paidHours)) {
       moved.push({
         lineId: live.line.id,
+        roNumber: live.entry.roNumber,
+        code: lineCode(live.line, libraryById),
         hours,
+        frozenPaid: dl.paidHours ?? 0,
+        flagNow: live.line.flagHours,
+        paidNow: paidNow ?? 0,
         looksApplied: sameAsClaimTime(paidNow, (dl.paidHours ?? 0) + hours),
       });
       continue;
     }
 
-    taken.add(live.line.id);
     rows.push({
       lineId: live.line.id,
       entryId: live.entry.id,
@@ -711,6 +736,15 @@ export type RoundRecovery = {
   plan: RecoveryApplication;
 };
 
+/** One live line where another round's write may have stranded recovery. */
+export type DisarmedLine = {
+  lineId: string;
+  roNumber: string;
+  code: string;
+  /** Hours that may still be missing from this line — see disarmedHours. */
+  hours: number;
+};
+
 export type PeriodRecovery = {
   /** Every closed round on the period, in the order given (newest first). */
   rounds: RoundRecovery[];
@@ -725,22 +759,35 @@ export type PeriodRecovery = {
    */
   applyRound: RoundRecovery | null;
   /**
-   * Recovered hours stranded by ANOTHER round: a live line claimed by two or
-   * more closed rounds has moved, and at most one of those rounds can be the
-   * write that moved it. Every other round's hours on that line can no longer
-   * be applied by FRT, and without this they vanished silently — they are not
-   * in any round's rows and not in its unmappedHours.
+   * Recovered hours that FRT can no longer apply because ANOTHER round moved
+   * the line, AND that the line is still short enough to be missing. Sum of
+   * `disarmedLines`. This is a "go and check" figure, never an "add this" one
+   * — see below.
    *
-   * Only lines shared between rounds count. A line claimed by ONE round that
-   * has moved is that round's own apply, or the tech typing the paid hours in
-   * by hand; either way they did it and nothing is stranded.
+   * Only lines claimed by two or more closed rounds count. A line claimed by
+   * ONE round that has moved is that round's own apply, or the tech typing
+   * the paid hours in by hand; either way they did it and nothing is stranded.
    *
-   * Attribution on a shared line: the newest round whose frozen value + hours
-   * equals the live value is taken to be the one that landed (the card offers
-   * newest first, so that is the likely order); if none match, the line was
-   * edited by hand and every round's hours on it are counted.
+   * On a shared line, a moved round's hours are NOT counted when:
+   *  - they look like the write that moved it: the newest moved round whose
+   *    frozen value + hours equals the live value;
+   *  - they had already landed before a newer round was raised: a newer round
+   *    froze the line at or above this round's frozen value + hours, so this
+   *    round's money was on the line when that claim was made.
+   * What is left is capped, per line, at what the line is actually still
+   * short — flag − paid now, less the largest recovery another round still has
+   * ARMED on the line (that one is on screen as an Apply and will close the
+   * gap itself). A line paid to flag strands nothing, whatever the rounds say.
+   *
+   * WHY "CHECK", NOT "ADD". Two rounds that froze a line at the same value
+   * asked for the SAME shortage: the second pack re-claimed what the first
+   * already asked for. Whether the shop's two answers are separate payments or
+   * the second restates the first is a fact on the tech's pay stub, not in the
+   * data. The cap removes every reading that would push the line past flag;
+   * within it the figure is "possibly missing", and the card words it that way.
    */
   disarmedHours: number;
+  disarmedLines: DisarmedLine[];
 };
 
 /**
@@ -750,7 +797,7 @@ export type PeriodRecovery = {
  * about the newest closed round only, so closing a second round hid the first
  * round's still-unapplied Apply forever. This walks every round, offers the
  * newest round that has something to apply, and reports what one round's
- * write has stranded in another.
+ * write may have stranded in another.
  *
  * `closedRounds` must be the period's closed disputes, newest first — the
  * order listDisputes returns (generated_at DESC).
@@ -766,42 +813,86 @@ export function periodRecoveryPlan(
   }));
   const applyRound = rounds.find((r) => r.plan.rows.length > 0) ?? null;
 
-  // lineId -> which rounds name it (armed or moved), in round order.
-  const byLine = new Map<
-    string,
-    { round: number; hours: number; moved: boolean; looksApplied: boolean }[]
-  >();
+  type Claim = {
+    /** Index into `rounds`: lower is newer. */
+    round: number;
+    hours: number;
+    frozen: number;
+    moved: boolean;
+    looksApplied: boolean;
+  };
+  type LineFacts = {
+    roNumber: string;
+    code: string;
+    flagNow: number;
+    paidNow: number;
+    claims: Claim[];
+  };
+  const byLine = new Map<string, LineFacts>();
   const note = (
     lineId: string,
-    v: { round: number; hours: number; moved: boolean; looksApplied: boolean },
+    facts: Omit<LineFacts, "claims">,
+    claim: Claim,
   ) => {
-    const list = byLine.get(lineId) ?? [];
-    list.push(v);
-    byLine.set(lineId, list);
+    const f = byLine.get(lineId) ?? { ...facts, claims: [] };
+    f.claims.push(claim);
+    byLine.set(lineId, f);
   };
   rounds.forEach((r, round) => {
     for (const row of r.plan.rows) {
-      note(row.lineId, { round, hours: row.recoveredHours, moved: false, looksApplied: false });
+      // An armed row reads exactly what its claim froze, so paidNow IS the
+      // frozen value.
+      const paidNow = row.paidNow ?? 0;
+      note(
+        row.lineId,
+        { roNumber: row.roNumber, code: row.code, flagNow: row.flaggedHours, paidNow },
+        { round, hours: row.recoveredHours, frozen: paidNow, moved: false, looksApplied: false },
+      );
     }
     for (const m of r.plan.moved) {
-      note(m.lineId, { round, hours: m.hours, moved: true, looksApplied: m.looksApplied });
+      note(
+        m.lineId,
+        { roNumber: m.roNumber, code: m.code, flagNow: m.flagNow, paidNow: m.paidNow },
+        { round, hours: m.hours, frozen: m.frozenPaid, moved: true, looksApplied: m.looksApplied },
+      );
     }
   });
 
-  let disarmedHours = 0;
-  for (const claims of byLine.values()) {
-    const movedClaims = claims.filter((c) => c.moved);
+  const disarmedLines: DisarmedLine[] = [];
+  for (const [lineId, f] of byLine) {
+    const movedClaims = f.claims.filter((c) => c.moved);
     if (movedClaims.length === 0) continue;
-    // Shared with another round, armed or not. An armed claim on the same line
-    // stays armed and is offered in its turn; only the moved ones are stranded.
-    if (new Set(claims.map((c) => c.round)).size < 2) continue;
-    const landed = movedClaims.find((c) => c.looksApplied);
-    for (const c of movedClaims) {
-      if (c !== landed) disarmedHours += c.hours;
-    }
+    if (new Set(f.claims.map((c) => c.round)).size < 2) continue;
+
+    // The newest moved round consistent with its own write having landed.
+    const landed = movedClaims
+      .filter((c) => c.looksApplied)
+      .sort((a, b) => a.round - b.round)[0];
+    // Already on the line before a newer round froze it.
+    const landedBefore = (c: Claim) =>
+      f.claims.some(
+        (s) => s.round < c.round && s.frozen >= c.frozen + c.hours - SAME_VALUE_EPS,
+      );
+    const raw = movedClaims
+      .filter((c) => c !== landed && !landedBefore(c))
+      .reduce((s, c) => s + c.hours, 0);
+    if (raw <= SAME_VALUE_EPS) continue;
+
+    const armedMax = f.claims
+      .filter((c) => !c.moved)
+      .reduce((m, c) => Math.max(m, c.hours), 0);
+    const stillShort = Math.max(0, f.flagNow - f.paidNow - armedMax);
+    const hours = Math.min(raw, stillShort);
+    if (hours <= SAME_VALUE_EPS) continue;
+    disarmedLines.push({ lineId, roNumber: f.roNumber, code: f.code, hours });
   }
 
-  return { rounds, applyRound, disarmedHours };
+  return {
+    rounds,
+    applyRound,
+    disarmedHours: disarmedLines.reduce((s, l) => s + l.hours, 0),
+    disarmedLines,
+  };
 }
 
 /**
@@ -827,59 +918,264 @@ function sameAsClaimTime(
   return Math.abs((paidNow ?? 0) - (paidAtClaim ?? 0)) <= SAME_VALUE_EPS;
 }
 
+type LiveMatch = {
+  entry: Entry;
+  line: EntryOpCode;
+  /**
+   * False when the pairing is too ambiguous to WRITE through, even though the
+   * line's paid hours happen to equal what the claim froze. See the twin rule
+   * in resolveLiveLines. An untrusted pairing still reserves its line (so no
+   * other claim row can take it) and is reported like a moved line — never
+   * offered.
+   */
+  trusted: boolean;
+};
+
+/** Is this literally the same hours figure? Float noise only, never rounding. */
+function sameHours(a: number, b: number): boolean {
+  return Math.abs(a - b) <= SAME_VALUE_EPS;
+}
+
 /**
- * The live line a frozen claim row points at.
+ * The live line each frozen claim row points at — resolved for the WHOLE claim
+ * at once, aligned by index with `lines`.
  *
  * disputeFromPack stores `lineId: null` — a pack row identifies the RO and the
  * code, not the row id — so the join is (entryId, code) against the live entry,
- * with the stored lineId honoured when a caller did record one. Flag hours
- * break a tie between two lines of the same code on one RO; without that, an RO
- * carrying the same code twice would always resolve to the first.
+ * with the stored lineId honoured when a caller did record one.
+ *
+ * WHY ALL ROWS TOGETHER. This used to be a per-row lookup (first match, later
+ * closest match, by flag hours within rounding), and a line was reserved only
+ * once it was OFFERED. So one claim row could pick another row's exact line:
+ * row 1 frozen 1.00 (its line since bumped to 1.04), row 2 frozen 1.02 on a
+ * line still at 1.02 — row 1 took row 2's line as "closer", failed the paid
+ * guard there without reserving it, and row 2 then took the same line. One row
+ * applied, the other silently lost. Every pick now reserves its line.
+ *
+ * THE PROPERTY THAT SHAPES EVERYTHING BELOW: the pairing must be the same
+ * before and after this claim's own write. The write changes paid hours, so any
+ * rule that reads paid hours can re-pair a row after it has been paid — onto a
+ * line that now happens to read the frozen figure — and offer the same money
+ * again. (A grid over two rows and two lines found exactly that in the first
+ * draft of this function.)
+ *
+ * PASS 0 — stored lineId: authoritative, resolved first so no heuristic row can
+ * take it. A duplicate stored id resolves once (as before).
+ *
+ * PASS 1 — identity, per (entry, code) group, as a small maximum matching over
+ * two kinds of evidence:
+ *  - ARMED: flag hours EXACTLY the frozen flag hours, paid hours exactly what
+ *    the claim froze — the row's line, unapplied;
+ *  - APPLIED: flag hours within rounding of the frozen flag hours, paid hours
+ *    exactly frozen + this row's recovery — the row's line after this claim's
+ *    own apply. Within rounding, not exact, because the row may have been
+ *    written through pass 2 (below) onto a line whose flag was edited; the
+ *    write must still be recognised as its own afterwards.
+ * Scored: most rows matched, then FEWEST armed pairings (the no-write reading
+ * wins every tie), then the first assignment in row order. So whenever every
+ * row has its own exact line, every row gets it, whatever order the lines come
+ * back in; and a written line, now reading frozen + recovery, stays with the
+ * row that wrote it rather than arming another row.
+ *
+ * TWIN RULE: when two or more lines share a flag figure, paid hours are the only
+ * thing telling them apart, and paid hours are exactly what other claim rounds'
+ * applies and hand edits move. If a row frozen at that figure finds no pass-1
+ * match WHILE a twin at that figure is left unclaimed, the twins have moved in
+ * a way this claim does not explain, and every armed pairing on those twins is
+ * marked untrusted — reserved, reported as moved, never written. (Otherwise: round 2's apply lands twin B on exactly what
+ * round 1 froze for twin A, and round 1 re-arms onto B.)
+ *
+ * PASS 2 — rows still unmatched (a flag edit, a hand-edited paid figure) take
+ * the CLOSEST remaining same-code line by flag hours within the 3-minute
+ * boundary (exceedsRounding), ties in row order; else the first remaining
+ * same-code line, as the old lookup did. Deliberately NOT paid-first: flag hours
+ * are the one thing an apply never changes, so a flag-only pick is the same line
+ * before and after the write, and after it the APPLIED evidence above claims it
+ * for the same row. A paid-first pick jumps, after the write, to whichever other
+ * line still reads the frozen figure: a second write of the same money. Rows
+ * with nothing to write (hours <= 0) take part in pass 1 — they reserve their
+ * exact line — but not in pass 2, where they could only take a line from a row
+ * that pays.
  */
-function findLiveLine(
-  dl: DisputeLine,
+function resolveLiveLines(
+  lines: DisputeLine[],
+  hoursFor: (dl: DisputeLine) => number,
   entries: Entry[],
   libraryById: Map<string, OpCode>,
-  taken: Set<string>,
-): { entry: Entry; line: EntryOpCode } | null {
-  if (dl.lineId) {
+): (LiveMatch | null)[] {
+  const out: (LiveMatch | null)[] = lines.map(() => null);
+  const taken = new Set<string>();
+
+  // PASS 0 — stored line ids.
+  lines.forEach((dl, i) => {
+    if (!dl.lineId) return;
     for (const entry of entries) {
       const line = entry.opCodes.find((l) => l.id === dl.lineId);
-      if (line && !taken.has(line.id)) return { entry, line };
+      if (line && !taken.has(line.id)) {
+        taken.add(line.id);
+        out[i] = { entry, line, trusted: true };
+        return;
+      }
     }
-    return null;
+  });
+
+  // The rest, grouped by the live entry they point at and their code.
+  type Row = { i: number; dl: DisputeLine; hours: number };
+  const groups = new Map<string, { entry: Entry; rows: Row[] }>();
+  lines.forEach((dl, i) => {
+    if (dl.lineId) return;
+    const entry =
+      entries.find((e) => e.id === dl.entryId) ??
+      entries.find((e) => e.roNumber === dl.roNumber) ??
+      null;
+    if (!entry) return;
+    const key = JSON.stringify([entry.id, dl.code]);
+    const g = groups.get(key) ?? { entry, rows: [] };
+    g.rows.push({ i, dl, hours: hoursFor(dl) });
+    groups.set(key, g);
+  });
+
+  for (const { entry, rows } of groups.values()) {
+    const code = rows[0].dl.code;
+    const candidates = entry.opCodes.filter(
+      (l) => !taken.has(l.id) && lineCode(l, libraryById) === code,
+    );
+    if (candidates.length === 0) continue;
+    const used = new Set<string>();
+
+    // PASS 1 — identity.
+    const pairs = matchRows(rows, candidates);
+    pairs.forEach((p, k) => {
+      if (!p) return;
+      used.add(p.line.id);
+      out[rows[k].i] = { entry, line: p.line, trusted: true };
+    });
+    // TWIN RULE — only armed pairings can lead to a write, so only they are
+    // ever demoted. "Unexplained" needs both halves: a row frozen at the twin
+    // figure that found no line, AND a twin that no row claimed. A row left
+    // over beside fully-claimed twins is just a row whose own line was edited
+    // (pass 2 finds it); the twins are all accounted for.
+    pairs.forEach((p, k) => {
+      if (!p || !p.armed) return;
+      const flag = p.line.flagHours;
+      const twins = candidates.filter((l) => sameHours(l.flagHours, flag));
+      if (twins.length < 2) return;
+      const rowLeft = rows.some(
+        (r, m) => !pairs[m] && sameHours(r.dl.flaggedHours, flag),
+      );
+      const twinLeft = twins.some((l) => !used.has(l.id));
+      if (rowLeft && twinLeft) out[rows[k].i]!.trusted = false;
+    });
+
+    // PASS 2 — closest remaining flag hours; write-invariant.
+    for (const r of rows) {
+      if (out[r.i] || r.hours <= 0) continue;
+      const left = candidates.filter((l) => !used.has(l.id));
+      if (left.length === 0) break;
+      let pick: EntryOpCode | null = null;
+      let bestGap = Infinity;
+      for (const l of left) {
+        const gap = Math.abs(l.flagHours - r.dl.flaggedHours);
+        if (exceedsRounding(gap)) continue;
+        if (gap < bestGap) {
+          pick = l;
+          bestGap = gap;
+        }
+      }
+      const line = pick ?? left[0];
+      used.add(line.id);
+      out[r.i] = { entry, line, trusted: true };
+    }
+
+    for (const id of used) taken.add(id);
   }
 
-  const entry =
-    entries.find((e) => e.id === dl.entryId) ??
-    entries.find((e) => e.roNumber === dl.roNumber) ??
-    null;
-  if (!entry) return null;
+  return out;
+}
 
-  const candidates = entry.opCodes.filter(
-    (l) => !taken.has(l.id) && lineCode(l, libraryById) === dl.code,
+type RowEdge = { j: number; armed: boolean };
+type RowPair = { line: EntryOpCode; armed: boolean } | null;
+
+/**
+ * Pass 1 of resolveLiveLines for one (entry, code) group: pair rows with lines
+ * on ARMED evidence (exact flag, paid = frozen) or APPLIED evidence (flag within
+ * rounding, paid = frozen + recovery). See resolveLiveLines for why the two
+ * differ in their flag test.
+ *
+ * Exhaustive — a group is one op code on ONE RO, so it is tiny — scored: most
+ * rows matched, then fewest armed pairings, then the first assignment in row
+ * order (rows in order, lines in order). Above a search budget (a pathological
+ * group) it falls back to a greedy pass in row order that prefers applied
+ * evidence.
+ */
+function matchRows(
+  rows: { dl: DisputeLine; hours: number }[],
+  pool: EntryOpCode[],
+): RowPair[] {
+  const edges: RowEdge[][] = rows.map((r) =>
+    pool.flatMap((line, j): RowEdge[] => {
+      const paid = line.paidHours ?? 0;
+      const frozen = r.dl.paidHours ?? 0;
+      if (
+        r.hours > 0 &&
+        !exceedsRounding(Math.abs(line.flagHours - r.dl.flaggedHours)) &&
+        sameHours(paid, frozen + r.hours)
+      ) {
+        return [{ j, armed: false }];
+      }
+      if (sameHours(line.flagHours, r.dl.flaggedHours) && sameHours(paid, frozen)) {
+        return [{ j, armed: true }];
+      }
+      return [];
+    }),
   );
-  if (candidates.length === 0) return null;
-  // The tie-break is "within rounding of the frozen flag hours", decided by the
-  // module's one 3-minute boundary (exceedsRounding) rather than a bare
-  // `<= RECOVERY_EPS`. The bare compare lost an exactly-0.05h edit on float
-  // noise (0.14 - 0.09 is 0.05000000000000002), so a line whose flag hours were
-  // bumped by exactly 3 minutes after the claim stopped matching and the claim
-  // fell through to candidates[0] — a DIFFERENT line of the same code.
-  //
-  // Within that tolerance the CLOSEST line wins, not the first. Once exactly
-  // 0.05h counts as a match, two same-code lines 0.05h apart (1.00 and 1.05)
-  // can both qualify, and "first in row order" would hand a claim frozen at
-  // 1.05 to the 1.00 line. Ties on distance keep row order (strict `<`).
-  let exact: EntryOpCode | null = null;
-  let bestGap = Infinity;
-  for (const l of candidates) {
-    const gap = Math.abs(l.flagHours - dl.flaggedHours);
-    if (exceedsRounding(gap)) continue;
-    if (gap < bestGap) {
-      exact = l;
-      bestGap = gap;
-    }
+  const toPair = (e: RowEdge | null): RowPair =>
+    e ? { line: pool[e.j], armed: e.armed } : null;
+
+  const budget = edges.reduce((n, e) => n * (e.length + 1), 1);
+  if (budget > 20000) {
+    const usedJ = new Set<number>();
+    return edges.map((es) => {
+      const e =
+        es.find((x) => !x.armed && !usedJ.has(x.j)) ??
+        es.find((x) => !usedJ.has(x.j)) ??
+        null;
+      if (e) usedJ.add(e.j);
+      return toPair(e);
+    });
   }
-  return { entry, line: exact ?? candidates[0] };
+
+  let best: (RowEdge | null)[] = rows.map(() => null);
+  let bestMatched = 0;
+  let bestArmed = 0;
+  const cur: (RowEdge | null)[] = [];
+  const usedJ = new Set<number>();
+  const walk = (k: number, matched: number, armed: number): void => {
+    if (k === rows.length) {
+      // Strict improvements only, so the first assignment found in row order
+      // wins every tie.
+      if (
+        matched > bestMatched ||
+        (matched === bestMatched && armed < bestArmed)
+      ) {
+        best = cur.slice();
+        bestMatched = matched;
+        bestArmed = armed;
+      }
+      return;
+    }
+    for (const e of edges[k]) {
+      if (usedJ.has(e.j)) continue;
+      usedJ.add(e.j);
+      cur.push(e);
+      walk(k + 1, matched + 1, armed + (e.armed ? 1 : 0));
+      cur.pop();
+      usedJ.delete(e.j);
+    }
+    cur.push(null);
+    walk(k + 1, matched, armed);
+    cur.pop();
+  };
+  walk(0, 0, 0);
+  return best.map(toPair);
 }

@@ -43,23 +43,41 @@ full attempt's worth of testing evaporated (fingerprint `bot-runner-timeout`).
 
 So budget deliberately:
 
-- **Before touching §1, record the run's start time: `date -u` in one Bash
-  call.** This is a separate timestamp from §3a/§3b's `date -u` calls, which
-  measure the timer's elapsed time, not the run's — don't conflate them.
+- **Before touching §1, get this attempt's start time from `RUN_START_EPOCH`,
+  given to you at the top of this prompt** (a UTC epoch-seconds number,
+  written in by run-bot.sh for THIS attempt specifically — a retry gets its
+  own, different value, never attempt 1's). Don't `date -u` once yourself and
+  try to remember it: a run this long routinely compacts context, and a
+  remembered number is exactly the kind of thing compaction drops. Compute
+  elapsed minutes at any point with `(( $(date -u +%s) - RUN_START_EPOCH ) / 60`.
+  This is a separate timestamp from §3a/§3b's `date -u` calls, which measure
+  the timer's elapsed time, not the run's — don't conflate them.
 - Work the checklist **in order** — it is ordered by value, not by convenience.
-- **Stop STARTING new sections once 55 minutes have elapsed since that start
-  timestamp** — check `date -u` again before opening any section and diff it
-  against the start. Once you're at or past 55 minutes, write the report with
-  whatever you have instead of starting another section. This replaces the old
-  "halfway mark" rule, which was really a self-imposed ~45-minute cutoff no run
-  has ever needed to protect: every completed run so far ended between 46 and
-  67 minutes, nowhere near the real 90-minute kill. 55 comes from that same
-  data — the slowest report-writing tail on record is a run that stopped
-  starting sections around 45m and still took until 67m to finish (~22 more
-  minutes); 55 + 22 = 77, still 13 minutes inside the 90-minute hard kill. If
-  you ever find yourself still writing the report well past that 22-minute
-  margin, treat 55 as too late for next time and say so in the report so the
-  number can be revised down.
+- **Stop STARTING new sections once 55 minutes have elapsed since
+  `RUN_START_EPOCH`** — check before opening any section. Once you're at or
+  past 55 minutes, write the report with whatever you have instead of
+  starting another section. This replaces the old "halfway mark" rule, which
+  was really a self-imposed ~45-minute cutoff no run has ever needed to
+  protect: every completed run so far ended between 40 and 67 minutes (VM
+  logs, attempt start/finish timestamps, checked 2026-09-27), nowhere near the
+  real 90-minute kill. 55 comes from that same data — the slowest
+  report-writing tail on record is a run that stopped starting sections
+  around 45m and still took until 67m to finish (~22 more minutes); 55 + 22 =
+  77, still 13 minutes inside the 90-minute hard kill. If you ever find
+  yourself still writing the report well past that 22-minute margin, treat 55
+  as too late for next time and say so in the report so the number can be
+  revised down.
+- **Hard stop at 75 minutes elapsed, mid-section or not.** The 55-minute rule
+  only stops you from STARTING a new section — it does nothing about a
+  section that was already running at minute 54 and takes another 15-20
+  minutes, which the "22-minute report tail" above never accounted for (that
+  number was inferred from start/finish timestamps alone; the logs don't
+  distinguish "finishing the last section" from "writing the report").  At 75
+  minutes, whatever you're doing, stop immediately: record that section as
+  `SKIPPED — time (stopped mid-section at step X)`, naming the step, and go
+  straight to writing the report — don't finish the section first. 75 leaves
+  a 15-minute margin to the 90-minute hard kill, which is more than enough
+  for a report written from partial notes instead of a completed section.
 - **Two tiers when you are behind, and every section is in one of them.**
   Load-bearing — the money paths and the newest code, must run: §1, §1b, §2,
   §2b, §2d, §3, §3z–§5, §6, §7, §7b, §7c, §7e, §8, §8h, §8i, §8k, §8l, plus §10
@@ -208,8 +226,10 @@ sends you there.
   disposable elsewhere.** Right now, log one extra throwaway RO solely to
   delete it in this same step: realistic RO number, one line, plausible
   hours (e.g. 1.5h), any vehicle. It exists only to be deleted a few lines
-  below — don't count it toward tonight's 2–5 real ROs for §9's rotation,
-  don't reuse it for any other section's setup, and don't leave it around
+  below — it does not count toward tonight's required 2–5 real ROs (§9's
+  scenario is picked by weekday, not by RO count, so it isn't affected
+  either way; this is about keeping this section's own quota honest), don't
+  reuse it for any other section's setup, and don't leave it around
   hoping another section (§8h's Quick Add probe, or anything else) will
   delete it for you. That dependency is why this check used to go
   `SKIPPED — no disposable RO left` two nights running.
@@ -348,22 +368,40 @@ If the dashboard shows the "scheduled day looks empty" card, it now offers a
      is now a completed, scheduled day with nothing logged, so it should
      render "empty?" on the next load.
   3. Run the checks below against that day.
-  4. **Restore fully, in this order, before moving on** — this setup must
-     leave zero residue:
+  4. **Restore fully, in this order, before moving on to §2d or anything
+     after it — this setup must leave zero residue, and it must be done
+     before you leave §2c, not deferred for time.** While the override and
+     resolution are live, the date counts toward whatever week/period/month
+     range it falls in — if that range is one §4–§9 later read for an exact
+     figure (pay discrepancy, reconciliation, CA wage math), an incomplete
+     restore is not just leftover data, it's a wrong number in a later
+     section that looks like an unrelated bug. Running §2c in its normal
+     checklist position (before §3–§9) and finishing the restore before
+     moving on is what keeps this invisible to everything downstream — don't
+     reorder the checklist to "do §2c last" thinking that's safer; it's the
+     opposite.
      a. Delete the "Worked — unpaid" ledger row you created (§7b's delete
         control — identify it by reason/hours/date).
      b. **Undo zero day** (§8c's control) to un-confirm the day — the code
         comment on `deleteConfirmedZeroDayAction` confirms this un-confirms
         the marker regardless of which of the three resolutions created it.
-     c. **Reset to pattern** on the shift override (§8c's control), so the
-        date goes back to off-pattern with no schedule, no ledger row, and no
+     c. **Reset to pattern** on the shift override. This button is NOT
+        standing controls on the calendar — it only appears inside the
+        expand panel you get by pressing **"Edit shift"** (the button reads
+        "Edit shift" once a day has an override, "Change shift" before it)
+        on that date, and only once `day.hasOverride` is true
+        (`ScheduleCalendar.tsx`). Press "Edit shift" first, THEN "Reset to
+        pattern" inside the panel that opens. Confirm the date goes back to
+        off-pattern with no schedule, no ledger row, and no
         confirmed-zero-day marker — byte-identical to how you found it.
   5. **If any restore step is missing or fails partway, stop and say so
      explicitly under "Data created tonight"** — name the date and exactly
      what's still sitting on it (override / ledger row / zero-day marker).
      Do not let it pass silently; a half-restored day here is precisely the
      kind of residue tomorrow's run needs to be warned about, since it would
-     otherwise look like a second real empty day.
+     otherwise look like a second real empty day, AND it would keep
+     perturbing whatever period range that date falls in until someone
+     manually cleans it up.
 - **Only fall back to `SKIPPED — no empty day on this account`** if step 1
   above finds no qualifying date at all (e.g. every day of the week is on the
   schedule) — and even then, confirm on the §8c calendar that no amber day
@@ -1208,9 +1246,12 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     After you apply it, a panel for an OLDER claim appearing next is correct
     (its recovery was waiting behind the newer one). **Two Apply buttons on
     screen at once is a FAIL.** When two claims asked for the SAME line and
-    one claim's recovery already landed on it, the other is not offered;
-    instead a note says the hours "can't be applied automatically" and points
-    at "Which lines came up short?". That note is correct, not a bug.
+    one claim's recovery already landed on it, the other is not offered.
+    If that line is STILL short, a note names it ("RO … CODE (N.Nh)") and
+    tells you to check it against the pay stub before entering more paid
+    hours — correct, not a bug. **The note appearing for a line that is
+    already paid up to its flag hours IS a FAIL**, as is any note telling
+    you to add hours rather than check them.
   - **What IS a FAIL: a targeted line's `paid_hours` increasing by the
     recovery amount more than once**, i.e. ending up above claim-time paid +
     recovered. Judge this from the before/after numbers you recorded, never
@@ -2187,6 +2228,9 @@ in a file nobody re-reads.** Compute `date -u +%d`, then `day % 5`:
 Run only tonight's matching case. Report it in its own subsection under §8m
 ("Focus rotation — case N"), **including if it behaved correctly** — a clean
 result on one of these is real coverage, not a null finding to omit.
+**Case 3 (`day % 5 == 3`, reopen then delete) removes the ticket it runs on
+— give it its own dedicated ticket, or run it last among §8m's checks, never
+on a ticket an earlier §8m step still needs.**
 
 **Do NOT report:**
 - 0.0h flag on an open ticket, or on the day it was opened. Flag lands at close.

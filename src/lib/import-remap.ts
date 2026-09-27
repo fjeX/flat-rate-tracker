@@ -267,14 +267,39 @@ function assertDisputeClaimTotals(disputes: Dispute[]): void {
   for (const d of disputes) {
     const lines = d.lines ?? [];
     if (lines.length === 0) continue;
+    const label = d.periodLabel || d.periodKey || "a period";
+    const hrs = (v: number) =>
+      Number.isFinite(v) ? `${v.toFixed(2)}h` : "an invalid number";
+    const asks = lines.map((l) => Number(l.claimedHours));
+    // Per-line asks the app can never write. Every line's ask is a pack delta:
+    // flag − paid on a short line (> 0 by definition of short), or the full
+    // flag on a pending one (>= 0). So a negative ask is corruption — and it
+    // could hide inside a header that still matches, since the sum can't see
+    // a -1 offsetting a +1. An itemized claim whose asks are ALL zero can't be
+    // app-made either (openDisputeAction refuses totalShortHours <= 0), and
+    // it is the one shape claimTotal quietly falls back to the header for, so
+    // letting it in would let the header alone decide "Paid in full".
+    const negative = asks.find((a) => a < 0);
+    if (negative !== undefined) {
+      throw new Error(
+        `This backup can't be restored: the dispute claim for ${label} has a ` +
+          `line asking for ${hrs(negative)}, and a claim line can't ask for ` +
+          `negative hours. The file looks edited or damaged. Nothing was imported.`,
+      );
+    }
+    if (asks.every((a) => a === 0)) {
+      throw new Error(
+        `This backup can't be restored: the dispute claim for ${label} lists ` +
+          `${lines.length} line${lines.length === 1 ? "" : "s"} but none of ` +
+          `them asks for any hours. The file looks edited or damaged. ` +
+          `Nothing was imported.`,
+      );
+    }
     const header = Number(d.claimedHours);
     const sum = sumLineClaims(
-      lines.map((l) => ({ ...l, claimedHours: Number(l.claimedHours) })),
+      lines.map((l, k) => ({ ...l, claimedHours: asks[k] })),
     );
     if (!(Math.abs(header - sum) <= SAME_VALUE_EPS)) {
-      const label = d.periodLabel || d.periodKey || "a period";
-      const hrs = (v: number) =>
-        Number.isFinite(v) ? `${v.toFixed(2)}h` : "an invalid number";
       throw new Error(
         `This backup can't be restored: the dispute claim for ${label} says ` +
           `${hrs(header)} but its lines add up to ${hrs(sum)}. ` +

@@ -265,9 +265,11 @@ export async function setLineActualHoursAction(
     clean.actualHours,
     clean.actualSource,
   );
-  // The single most important True Time hook: this is where a timed job's actual
-  // hours actually arrive (the timer saves through here), so it is where most
-  // observations are born — and where clearing the hours must retract one.
+  // True Time hook for hand-entered actual hours (the RO modal's blur-to-save and
+  // retro capture) — and where clearing the hours must retract an observation.
+  // NOTE: the timer does NOT save through here (saveTimerAction →
+  // db.addLineActualHours), and as of 2026-09-27 that path syncs no observation;
+  // see incident fingerprint `timer-save-skips-true-time-sync`.
   const owner = await db.getEntryIdForLine(supabase, clean.lineId);
   if (owner) await syncObservations(supabase, owner);
   revalidatePath("/");

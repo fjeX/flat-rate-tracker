@@ -1651,6 +1651,326 @@ describe("findLiveLine tie-break between two lines of the same code", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Resolving a whole claim's rows to live lines together (resolveLiveLines)
+// ---------------------------------------------------------------------------
+describe("live-line resolution across a claim's rows", () => {
+  /** A per-line-recovery claim over same-code rows on RO 1001. */
+  const claimOf = (
+    rows: { flag: number; paid: number | null; rec: number }[],
+  ) =>
+    dispute({
+      status: "resolved",
+      recoveredHours: rows.reduce((s, r) => s + r.rec, 0),
+      lines: rows.map((r, k) =>
+        line({
+          id: `dl${k + 1}`,
+          entryId: "e1",
+          flaggedHours: r.flag,
+          paidHours: r.paid,
+          claimedHours: r.rec,
+          recoveredHours: r.rec,
+          position: k,
+        }),
+      ),
+    });
+  const live = (id: string, flag: number, paid: number | null) =>
+    roLine({ id, flagHours: flag, paidHours: paid });
+  /** The write applyDisputeRecoveryAction makes: paidHours := paidAfter. */
+  const applyTo = (
+    entries: Entry[],
+    rows: { lineId: string; paidAfter: number }[],
+  ): Entry[] =>
+    entries.map((e) => ({
+      ...e,
+      opCodes: e.opCodes.map((l) => {
+        const r = rows.find((x) => x.lineId === l.id);
+        return r ? { ...l, paidHours: r.paidAfter } : l;
+      }),
+    }));
+
+  /**
+   * The money invariant, end to end: tap Apply until nothing is offered, and
+   * check no line is ever written twice and the claim never writes more hours
+   * than it recovered. (A staged offer — some rows now, the rest after — is
+   * allowed; paying anything twice is not.)
+   */
+  const applyUntilQuiet = (d: Dispute, entries: Entry[], ctx: string) => {
+    const written = new Set<string>();
+    let hours = 0;
+    let now = entries;
+    for (let tap = 0; tap < 6; tap++) {
+      const plan = pendingRecoveryApplication(d, now, []);
+      if (plan.rows.length === 0) break;
+      for (const r of plan.rows) {
+        expect(written.has(r.lineId), `${ctx} line ${r.lineId} written twice`).toBe(false);
+        written.add(r.lineId);
+        hours += r.recoveredHours;
+      }
+      now = applyTo(now, plan.rows);
+    }
+    expect(pendingRecoveryApplication(d, now, []).rows, ctx).toEqual([]);
+    expect(hours, ctx).toBeLessThanOrEqual(d.recoveredHours + 1e-9);
+  };
+
+  it("doesn't let one row take another row's exact line (the wave-1 reproducer)", () => {
+    // dl1 froze 1.00/0.5 — its line A has since had its flag bumped to 1.04.
+    // dl2 froze 1.02/0.6 on line B, untouched. Closest-flag alone sent dl1 to
+    // B (0.02 < 0.04), failed the paid guard there without reserving it, and
+    // dl2 took B too: one row applied, dl1's recovery silently lost.
+    const d = claimOf([
+      { flag: 1.0, paid: 0.5, rec: 0.3 },
+      { flag: 1.02, paid: 0.6, rec: 0.2 },
+    ]);
+    const A = live("A", 1.04, 0.5);
+    const B = live("B", 1.02, 0.6);
+    for (const order of [[A, B], [B, A]]) {
+      const plan = pendingRecoveryApplication(d, [ro(order)], []);
+      expect(plan.rows.map((r) => [r.lineId, r.recoveredHours])).toEqual([
+        ["A", 0.3],
+        ["B", 0.2],
+      ]);
+      expect(plan.moved).toEqual([]);
+    }
+  });
+
+  it("offers nothing a second time once the rows have been applied", () => {
+    const d = claimOf([
+      { flag: 1.0, paid: 0.5, rec: 0.3 },
+      { flag: 1.02, paid: 0.6, rec: 0.2 },
+    ]);
+    const before = [ro([live("A", 1.04, 0.5), live("B", 1.02, 0.6)])];
+    const plan = pendingRecoveryApplication(d, before, []);
+    const after = applyTo(before, plan.rows);
+    expect(pendingRecoveryApplication(d, after, []).rows).toEqual([]);
+  });
+
+  it("stays on its own twin after the write, even when the other twin lands on its frozen figure", () => {
+    // Two BRK-F lines flagged 2.0 on one RO, both claimed. A froze 1.0 and
+    // recovers 1.0; B froze 0.5 and recovers 0.5 — which puts B at exactly
+    // 1.0, A's frozen figure. A matcher that only recognised "still reads the
+    // frozen value" would, after the apply, pair A's row with B and offer
+    // A's 1.0h again onto B.
+    const d = claimOf([
+      { flag: 2, paid: 1, rec: 1 },
+      { flag: 2, paid: 0.5, rec: 0.5 },
+    ]);
+    const before = [ro([live("A", 2, 1), live("B", 2, 0.5)])];
+    const plan = pendingRecoveryApplication(d, before, []);
+    expect(plan.rows.map((r) => [r.lineId, r.paidAfter])).toEqual([
+      ["A", 2],
+      ["B", 1],
+    ]);
+    const after = applyTo(before, plan.rows);
+    const again = pendingRecoveryApplication(d, after, []);
+    expect(again.rows).toEqual([]);
+    expect(again.moved.map((m) => [m.lineId, m.looksApplied])).toEqual([
+      ["A", true],
+      ["B", true],
+    ]);
+  });
+
+  it("won't write through a twin cluster that another round has moved out from under it", () => {
+    // Round 1 claimed twins A (froze 1.0) and B (froze 0.5), recovered 0.5 and
+    // 0.3, applied: A 1.5, B 0.8. Round 2 claimed both again and its apply
+    // took A to 1.9 and B to 1.0 — exactly round 1's frozen figure for A.
+    // Round 1's A row now "matches" B with paid equal to what it froze, but A
+    // itself is unexplained: offering it would write 0.5h onto B.
+    const r1 = claimOf([
+      { flag: 2, paid: 1, rec: 0.5 },
+      { flag: 2, paid: 0.5, rec: 0.3 },
+    ]);
+    const now = [ro([live("A", 2, 1.9), live("B", 2, 1)])];
+    const plan = pendingRecoveryApplication(r1, now, []);
+    expect(plan.rows).toEqual([]);
+    // Reserved and reported, never offered — and no line named twice.
+    const ids = plan.moved.map((m) => m.lineId);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("a row with nothing to write still reserves its exact line", () => {
+    // dl1 recovered nothing; its exact line is B. dl2 (froze 1.00/0.5) lost
+    // its exact line to a flag edit (A, now 1.03). Without the reservation
+    // dl2's closest-flag pick is B (0.01 away), which reads dl2's frozen paid
+    // hours by coincidence — a write onto dl1's line.
+    const d = claimOf([
+      { flag: 1.01, paid: 0.5, rec: 0 },
+      { flag: 1.0, paid: 0.5, rec: 0.4 },
+    ]);
+    const plan = pendingRecoveryApplication(
+      d,
+      [ro([live("B", 1.01, 0.5), live("A", 1.03, 0.5)])],
+      [],
+    );
+    expect(plan.rows.map((r) => r.lineId)).toEqual(["A"]);
+  });
+
+  it("still honours a stored line id first, whatever the other rows want", () => {
+    const d = dispute({
+      status: "resolved",
+      recoveredHours: 0.7,
+      lines: [
+        line({ id: "dl1", entryId: "e1", flaggedHours: 1, paidHours: 0.5, recoveredHours: 0.3 }),
+        line({ id: "dl2", entryId: "e1", lineId: "B", flaggedHours: 1, paidHours: 0.5, recoveredHours: 0.4 }),
+      ],
+    });
+    const plan = pendingRecoveryApplication(
+      d,
+      [ro([live("B", 1, 0.5), live("A", 1, 0.5)])],
+      [],
+    );
+    expect(plan.rows.map((r) => [r.lineId, r.recoveredHours])).toEqual([
+      ["A", 0.3],
+      ["B", 0.4],
+    ]);
+  });
+
+  // THE GRID. Two rows × two same-code lines over a small value grid, both
+  // line orders, two recovery sizes (0.1 makes "frozen + recovery" collide
+  // with the other paid value, so applied/unapplied readings overlap).
+  describe("2 rows × 2 lines grid", () => {
+    const FLAGS = [1, 1.02, 1.04];
+    const PAIDS = [0.5, 0.6];
+    const PAIRS = FLAGS.flatMap((f) => PAIDS.map((p) => ({ f, p })));
+    const exact = (
+      a: { f: number; p: number },
+      b: { flagHours: number; paidHours?: number | null },
+    ) => Math.abs(a.f - b.flagHours) < 1e-9 && Math.abs(a.p - (b.paidHours ?? 0)) < 1e-9;
+
+    type Case = {
+      rows: { f: number; p: number }[];
+      lines: EntryOpCode[];
+      rec: number;
+    };
+    const cases: Case[] = [];
+    for (const rec of [0.3, 0.1])
+      for (const r1 of PAIRS)
+        for (const r2 of PAIRS)
+          for (const la of PAIRS)
+            for (const lb of PAIRS)
+              cases.push({
+                rows: [r1, r2],
+                lines: [live("A", la.f, la.p), live("B", lb.f, lb.p)],
+                rec,
+              });
+
+    const planFor = (c: Case, lines: EntryOpCode[]) =>
+      pendingRecoveryApplication(
+        claimOf(c.rows.map((r) => ({ flag: r.f, paid: r.p, rec: c.rec }))),
+        [ro(lines)],
+        [],
+      );
+    /** Every assignment giving each row its own exact (flag + paid) line. */
+    const perfectExact = (c: Case) =>
+      [
+        [c.lines[0], c.lines[1]],
+        [c.lines[1], c.lines[0]],
+      ].filter(([x, y]) => exact(c.rows[0], x) && exact(c.rows[1], y));
+
+    it(`covers ${2 * 36 * 36} cases`, () => {
+      expect(cases).toHaveLength(2 * 36 * 36);
+    });
+
+    it("(a) never resolves two rows to the same live line", () => {
+      for (const c of cases) {
+        for (const order of [c.lines, [...c.lines].reverse()]) {
+          const plan = planFor(c, order);
+          const ids = [...plan.rows.map((r) => r.lineId), ...plan.moved.map((m) => m.lineId)];
+          expect(new Set(ids).size, JSON.stringify(c)).toBe(ids.length);
+        }
+      }
+    });
+
+    it("(b) finds the all-exact assignment whenever one exists", () => {
+      let hit = 0;
+      for (const c of cases) {
+        const perfect = perfectExact(c);
+        if (perfect.length === 0) continue;
+        hit++;
+        for (const order of [c.lines, [...c.lines].reverse()]) {
+          const plan = planFor(c, order);
+          // Rows come out in claim-row order; each must be that row's exact line.
+          expect(plan.rows, JSON.stringify(c)).toHaveLength(2);
+          plan.rows.forEach((row, k) => {
+            const l = c.lines.find((x) => x.id === row.lineId)!;
+            expect(exact(c.rows[k], l), JSON.stringify(c)).toBe(true);
+          });
+        }
+      }
+      expect(hit).toBeGreaterThan(50); // the property was actually exercised
+    });
+
+    it("(c) the answer doesn't depend on line order when the exact assignment is unique", () => {
+      for (const c of cases) {
+        if (perfectExact(c).length !== 1) continue;
+        const fwd = planFor(c, c.lines).rows.map((r) => r.lineId);
+        const rev = planFor(c, [...c.lines].reverse()).rows.map((r) => r.lineId);
+        expect(rev, JSON.stringify(c)).toEqual(fwd);
+      }
+    });
+
+    it("(d) tapping Apply until quiet never writes a line twice or more than was recovered", () => {
+      for (const c of cases) {
+        for (const order of [c.lines, [...c.lines].reverse()]) {
+          applyUntilQuiet(
+            claimOf(c.rows.map((r) => ({ flag: r.f, paid: r.p, rec: c.rec }))),
+            [ro(order)],
+            JSON.stringify(c),
+          );
+        }
+      }
+    });
+  });
+
+  // Same properties, three rows × three lines, seeded random draws from a grid
+  // with more collisions (null paid, flags 0.05 apart, two recovery sizes).
+  it("3 rows × 3 lines fuzz: no line twice, all-exact found, never paid twice", () => {
+    let seed = 20260927;
+    const rnd = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    const FLAGS = [1, 1.02, 1.05, 1.1];
+    const PAIDS: (number | null)[] = [null, 0.4, 0.5, 0.6];
+    const RECS = [0.1, 0.2];
+    const pick = <T,>(xs: T[]) => xs[rnd(xs.length)];
+    const eqPaid = (a: number | null, b: number | null | undefined) =>
+      Math.abs((a ?? 0) - (b ?? 0)) < 1e-9;
+    const PERMS = [
+      [0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0],
+    ];
+    let exactCases = 0;
+    for (let n = 0; n < 4000; n++) {
+      const rows = [0, 1, 2].map(() => ({
+        flag: pick(FLAGS),
+        paid: pick(PAIDS),
+        rec: pick(RECS),
+      }));
+      const lines = ["A", "B", "C"].map((id) => live(id, pick(FLAGS), pick(PAIDS)));
+      const d = claimOf(rows);
+      const ctx = JSON.stringify({ rows, lines: lines.map((l) => [l.id, l.flagHours, l.paidHours]) });
+      const isExact = (k: number, l: EntryOpCode) =>
+        Math.abs(rows[k].flag - l.flagHours) < 1e-9 && eqPaid(rows[k].paid, l.paidHours);
+      const hasPerfect = PERMS.some((p) => p.every((j, k) => isExact(k, lines[j])));
+      if (hasPerfect) exactCases++;
+      for (const perm of [PERMS[0], PERMS[3], PERMS[5]]) {
+        const order = perm.map((j) => lines[j]);
+        const plan = pendingRecoveryApplication(d, [ro(order)], []);
+        const ids = [...plan.rows.map((r) => r.lineId), ...plan.moved.map((m) => m.lineId)];
+        expect(new Set(ids).size, ctx).toBe(ids.length); // (a)
+        if (hasPerfect) {
+          expect(plan.rows, ctx).toHaveLength(3); // (b)
+          plan.rows.forEach((row, k) =>
+            expect(isExact(k, lines.find((l) => l.id === row.lineId)!), ctx).toBe(true),
+          );
+        }
+        applyUntilQuiet(d, [ro(order)], ctx); // (d)
+      }
+    }
+    expect(exactCases).toBeGreaterThan(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Several closed rounds on one period (periodRecoveryPlan)
 // ---------------------------------------------------------------------------
 //
@@ -1717,10 +2037,15 @@ describe("periodRecoveryPlan", () => {
       expect(plan.disarmedHours).toBeCloseTo(1.5, 9);
     });
 
-    it("counts both rounds when the line was edited by hand to neither value", () => {
+    it("counts both rounds when the line was edited by hand to neither value — capped at what the line is still short", () => {
+      // Both rounds' 1h are unaccounted for (2h raw), but X reads 4 of 5
+      // flagged: at most 1h can possibly be missing from it.
       const plan = periodRecoveryPlan([r2, r1], [ro([liveX(4)])], []);
       expect(plan.applyRound).toBeNull();
-      expect(plan.disarmedHours).toBeCloseTo(2, 9);
+      expect(plan.disarmedHours).toBeCloseTo(1, 9);
+      expect(plan.disarmedLines).toEqual([
+        { lineId: "X", roNumber: "1001", code: "BRK-F", hours: expect.closeTo(1, 9) },
+      ]);
     });
   });
 
@@ -1753,5 +2078,124 @@ describe("periodRecoveryPlan", () => {
     const r = roundOn("r1", 1);
     expect(periodRecoveryPlan([r], [ro([liveX(3)])], []).disarmedHours).toBe(0);
     expect(periodRecoveryPlan([r], [ro([liveX(4)])], []).disarmedHours).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stranded ("disarmed") hours never ask for more than the line is short
+// ---------------------------------------------------------------------------
+//
+// The wave-1 figure summed every moved round's hours on a shared line, and the
+// note under it told the tech to enter them by hand — including hours that had
+// already landed, and hours that were the same shortage asked for twice. Each
+// case below is a sequence the card can really reach.
+describe("periodRecoveryPlan stranded hours", () => {
+  /** A closed one-line round on line X (BRK-F on RO 1001). */
+  const roundX = (
+    id: string,
+    o: { flag: number; frozen: number | null; ask: number; got: number },
+  ) =>
+    dispute({
+      id,
+      status: "resolved",
+      claimedHours: o.ask,
+      recoveredHours: o.got,
+      lines: [
+        line({
+          disputeId: id,
+          entryId: "e1",
+          flaggedHours: o.flag,
+          paidHours: o.frozen,
+          claimedHours: o.ask,
+        }),
+      ],
+    });
+  const X = (flag: number, paid: number | null) =>
+    [ro([roLine({ id: "X", flagHours: flag, paidHours: paid })])];
+
+  it("D1: a round applied BEFORE the next round opened strands nothing", () => {
+    // X flag 5 paid 1. R1 asks 4, gets 1, applied → 2. R2 then freezes 2,
+    // asks 3, gets 3, applied → 5.
+    const r1 = roundX("r1", { flag: 5, frozen: 1, ask: 4, got: 1 });
+    const r2 = roundX("r2", { flag: 5, frozen: 2, ask: 3, got: 3 });
+    const plan = periodRecoveryPlan([r2, r1], X(5, 5), []);
+    expect(plan.applyRound).toBeNull();
+    expect(plan.disarmedHours).toBe(0);
+    expect(plan.disarmedLines).toEqual([]);
+    // ...and before R2's apply, R2 is simply offered; R1 is still not stranded.
+    const mid = periodRecoveryPlan([r2, r1], X(5, 2), []);
+    expect(mid.applyRound?.dispute.id).toBe("r2");
+    expect(mid.disarmedHours).toBe(0);
+  });
+
+  it("D2: two rounds claiming the SAME shortage, one applied, line now at flag — nothing to enter", () => {
+    // X flag 3 paid 2. R1 and R2 both froze 2, asked 1, got 1; the newer was
+    // applied → 3. Wave 1 said "1h can't be applied, enter it yourself",
+    // which would take X to 4 on a 3h flag: a double-pay prompt.
+    const r1 = roundX("r1", { flag: 3, frozen: 2, ask: 1, got: 1 });
+    const r2 = roundX("r2", { flag: 3, frozen: 2, ask: 1, got: 1 });
+    const plan = periodRecoveryPlan([r2, r1], X(3, 3), []);
+    expect(plan.applyRound).toBeNull();
+    expect(plan.disarmedHours).toBe(0);
+  });
+
+  it("D3: a hand-typed partial, then a round for the rest — nothing stranded before or after its apply", () => {
+    // X flag 3, R1 froze 2 and got 1; the tech typed 2.5 by hand. R2 froze
+    // 2.5, asked 0.5, got 0.5.
+    const r1 = roundX("r1", { flag: 3, frozen: 2, ask: 1, got: 1 });
+    const r2 = roundX("r2", { flag: 3, frozen: 2.5, ask: 0.5, got: 0.5 });
+    const before = periodRecoveryPlan([r2, r1], X(3, 2.5), []);
+    expect(before.applyRound?.dispute.id).toBe("r2"); // R2's Apply closes the gap
+    expect(before.disarmedHours).toBe(0);
+    const after = periodRecoveryPlan([r2, r1], X(3, 3), []);
+    expect(after.applyRound).toBeNull();
+    expect(after.disarmedHours).toBe(0);
+  });
+
+  it("a genuinely possibly-missing figure still shows, capped at the line's shortfall", () => {
+    // X flag 5 paid 1. R1 and R2 both froze 1, each asked 4; R1 got 1, R2 got
+    // 2, R2 applied → 3. R1's 1h may be missing (or may be inside R2's 2) —
+    // X is 2h short, so the cap doesn't bite: 1h to CHECK.
+    const r1 = roundX("r1", { flag: 5, frozen: 1, ask: 4, got: 1 });
+    const r2 = roundX("r2", { flag: 5, frozen: 1, ask: 4, got: 2 });
+    const plan = periodRecoveryPlan([r2, r1], X(5, 3), []);
+    expect(plan.applyRound).toBeNull();
+    expect(plan.disarmedHours).toBeCloseTo(1, 9);
+    expect(plan.disarmedLines).toEqual([
+      { lineId: "X", roNumber: "1001", code: "BRK-F", hours: expect.closeTo(1, 9) },
+    ]);
+  });
+
+  it("caps the figure at the shortfall when the raw hours exceed it", () => {
+    // Same, but R1 got 3: raw 3h, X only 2h short.
+    const r1 = roundX("r1", { flag: 5, frozen: 1, ask: 4, got: 3 });
+    const r2 = roundX("r2", { flag: 5, frozen: 1, ask: 4, got: 2 });
+    expect(periodRecoveryPlan([r2, r1], X(5, 3), []).disarmedHours).toBeCloseTo(2, 9);
+  });
+
+  // The invariant under every sequence: the stranded figure plus what's on
+  // the line never exceeds flag (the note can never talk the tech past flag),
+  // and it is never negative.
+  it("never exceeds flag − paid on any shared line (grid)", () => {
+    const vals = [0, 0.5, 1, 2, 3];
+    let checked = 0;
+    for (const flag of [3, 5])
+      for (const f1 of vals)
+        for (const f2 of vals)
+          for (const g1 of [0.5, 1, 2])
+            for (const g2 of [0.5, 1, 2])
+              for (const paid of [...vals, 4, 5]) {
+                if (f1 >= flag || f2 >= flag) continue;
+                const r1 = roundX("r1", { flag, frozen: f1, ask: flag - f1, got: Math.min(g1, flag - f1) });
+                const r2 = roundX("r2", { flag, frozen: f2, ask: flag - f2, got: Math.min(g2, flag - f2) });
+                const plan = periodRecoveryPlan([r2, r1], X(flag, paid), []);
+                expect(plan.disarmedHours).toBeGreaterThanOrEqual(0);
+                expect(
+                  plan.disarmedHours,
+                  JSON.stringify({ flag, f1, f2, g1, g2, paid }),
+                ).toBeLessThanOrEqual(Math.max(0, flag - paid) + 1e-9);
+                checked++;
+              }
+    expect(checked).toBeGreaterThan(500);
   });
 });

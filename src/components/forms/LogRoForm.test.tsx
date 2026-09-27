@@ -768,8 +768,10 @@ describe("LogRoForm — clearing the date is not a change of choice", () => {
     setInput(timePill()!, "05:00");
     // What a date input reports while cleared or half-typed.
     setInput(datePill(), "");
-    // Still Keep: an empty pill describes no day at all.
-    expect(radio(/Keep flag date/).checked).toBe(true);
+    // An empty pill describes no day at all: neither radio is shown ticked,
+    // but the stored choice is still Keep, so nothing about the time moves.
+    expect(radio(/Keep flag date/).checked).toBe(false);
+    expect(radio(/Move to today/).checked).toBe(false);
     expect(timePill()!.value).toBe("05:00");
 
     setInput(datePill(), FLAG_DATE);
@@ -791,6 +793,55 @@ describe("LogRoForm — clearing the date is not a change of choice", () => {
     setInput(datePill(), TODAY);
     expect(radio(/Move to today/).checked).toBe(true);
     expect(timePill()!.value).toBe("06:10");
+  });
+
+  // A click on an already-checked radio fires no onChange, so a stale Keep
+  // tick beside an empty pill made Keep a dead button. Both render unchecked
+  // while the pill is empty, and a click does what a radio click always does.
+  it("keep, clear, click Keep: restores the flag date and the stored time", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    await renderClose();
+    setInput(timePill()!, "05:00");
+    setInput(datePill(), "");
+    expect(radio(/Keep flag date/).checked).toBe(false);
+
+    act(() => radio(/Keep flag date/).click());
+    expect(datePill().value).toBe(FLAG_DATE);
+    // Same as any Keep click: the whole flag timestamp, not the typed time.
+    expect(timePill()!.value).toBe(STORED);
+    expect(radio(/Keep flag date/).checked).toBe(true);
+    expect(radio(/Move to today/).checked).toBe(false);
+
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
+  });
+
+  it("keep, clear, click Move: today at the move time", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    await renderClose();
+    setInput(datePill(), "");
+    act(() => radio(/Move to today/).click());
+    expect(datePill().value).toBe(TODAY);
+    expect(timePill()!.value).toBe(NOW);
+    expect(radio(/Move to today/).checked).toBe(true);
+    expect(radio(/Keep flag date/).checked).toBe(false);
+  });
+
+  it("move, clear, click Move: the cleared Move radio works too", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    await renderClose();
+    act(() => radio(/Move to today/).click());
+    setInput(datePill(), "");
+    expect(radio(/Move to today/).checked).toBe(false);
+    act(() => radio(/Move to today/).click());
+    expect(datePill().value).toBe(TODAY);
+    expect(radio(/Move to today/).checked).toBe(true);
   });
 });
 

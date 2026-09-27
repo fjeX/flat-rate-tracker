@@ -135,11 +135,16 @@ time limit while still working; it did not hang and it did not end its turn earl
 already logged real test data before it died. You have __MINS__ minutes, and that is a hard
 kill, not a guideline.
 
-Budget accordingly: work the checklist in order, and from the halfway mark onward prefer
-finishing the report over starting another check. Any step you do not reach must be listed
-in the report as untested — an unreached check recorded as untested is a good outcome; a
-run killed with no report at all is the one true failure. Write bot/reports/$RUN_DATE.md
-before you run out of time, then keep testing and update it if time remains."
+Budget accordingly, scaled to THIS attempt's __MINS__-minute budget (this is the same
+55-of-90 / 75-of-90 rule INSTRUCTIONS.md uses for attempt 1, scaled down): work the
+checklist in order. Stop STARTING new sections once __STOP__ minutes have elapsed since
+this attempt began (RUN_START_EPOCH is given above). If you are still inside a section at
+__HARD__ minutes elapsed, stop mid-section, record it as \`SKIPPED — time (stopped
+mid-section at step X)\`, and go straight to writing the report. Any step you do not reach
+must be listed in the report as untested — an unreached check recorded as untested is a
+good outcome; a run killed with no report at all is the one true failure. Write
+bot/reports/$RUN_DATE.md before you run out of time, then keep testing and update it if
+time remains."
 
 RETRY_NOTE_CRASH="RETRY — READ THIS FIRST. A previous attempt tonight exited with an error
 before writing bot/reports/$RUN_DATE.md. If you hit the same failure, do not fight it —
@@ -201,8 +206,19 @@ fi
 
 run_attempt() {
   local n="$1" prompt="$2" budget="$3" rc=0
-  echo "=== attempt $n started $(date +%T) (budget ${budget}m, $CAP_NOTE) ===" >>"$LOG_FILE"
-  timeout "${budget}m" "${CAP[@]}" claude -p "$prompt" \
+  # Each attempt gets its OWN start epoch, baked directly into the top of its
+  # prompt text (not just logged here) -- a 60-90m headless run routinely
+  # compacts context, and a timestamp the model read once and is trusting
+  # itself to remember is exactly what compaction drops. Putting it in the
+  # prompt means it survives as long as the prompt itself does, with no step
+  # for the model to forget. A file fallback costs nothing extra.
+  local start_epoch
+  start_epoch="$(date -u +%s)"
+  echo "$start_epoch" >"/tmp/frt-bot-start-epoch-$RUN_DATE-attempt$n" 2>/dev/null || true
+  echo "=== attempt $n started $(date +%T) (epoch $start_epoch, budget ${budget}m, $CAP_NOTE) ===" >>"$LOG_FILE"
+  timeout "${budget}m" "${CAP[@]}" claude -p "RUN_START_EPOCH=$start_epoch (UTC epoch seconds this attempt began -- also mirrored to /tmp/frt-bot-start-epoch-$RUN_DATE-attempt$n if you need to recover it). Elapsed minutes = ( \$(date -u +%s) - $start_epoch ) / 60.
+
+$prompt" \
       --dangerously-skip-permissions \
       >>"$LOG_FILE" 2>&1 || rc=$?
   echo "=== attempt $n finished $(date +%T): claude exited $rc ===" >>"$LOG_FILE"
@@ -235,7 +251,17 @@ if [[ ! -f "$REPORT_FILE" ]]; then
   else
     RETRIED=1
     case "$CAUSE" in
-      timeout) RETRY_NOTE="${RETRY_NOTE_TIMEOUT_TMPL//__MINS__/$RETRY_BUDGET}" ;;
+      timeout)
+        # Same margins as the attempt-1 rule (stop starting at budget-35,
+        # hard-stop at budget-15), scaled down and floored so a short retry
+        # (minimum 15m -- see the LEFT<15 skip above) still gets sane, positive
+        # numbers instead of stop-starting-in-the-past nonsense.
+        STOP_MINS=$(( RETRY_BUDGET - 35 > 5 ? RETRY_BUDGET - 35 : 5 ))
+        HARD_MINS=$(( RETRY_BUDGET - 15 > STOP_MINS + 2 ? RETRY_BUDGET - 15 : STOP_MINS + 2 ))
+        RETRY_NOTE="${RETRY_NOTE_TIMEOUT_TMPL//__MINS__/$RETRY_BUDGET}"
+        RETRY_NOTE="${RETRY_NOTE//__STOP__/$STOP_MINS}"
+        RETRY_NOTE="${RETRY_NOTE//__HARD__/$HARD_MINS}"
+        ;;
       yield)   RETRY_NOTE="$RETRY_NOTE_YIELD" ;;
       *)       RETRY_NOTE="$RETRY_NOTE_CRASH" ;;
     esac

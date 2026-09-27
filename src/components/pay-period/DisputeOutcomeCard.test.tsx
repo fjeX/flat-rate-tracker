@@ -562,10 +562,39 @@ describe("DisputeOutcomeCard recovery across claim rounds", () => {
     const notes = disarmedNotes(container);
     expect(notes).toHaveLength(1);
     expect(notes[0].textContent).toMatchInlineSnapshot(
-      `"1.0h recovered on your claims for Jul 16 – Jul 31 can't be applied automatically: more than one claim asked for the same line, and another claim's recovery has already landed on it. If those hours aren't on your lines yet, open “Which lines came up short?” and enter the paid hours on each line yourself."`,
+      `"Up to 1.0h recovered on your claims for Jul 16 – Jul 31 can't be applied automatically and may not be on your lines yet: RO 1001 BRK-F (1.0h). More than one claim asked for the same line and its paid hours have changed since, so FRT can't tell whether those hours came on top of the other claim's or were the same shortage asked for twice. Check each line against your pay stub, and only enter more paid hours in “Which lines came up short?” if the shop paid them separately."`,
     );
     // Not goodwill, not a missing breakdown — those paragraphs stay out.
     expect(noteCounts(container)).toEqual({ goodwill: 0, periodTotal: 0, breakdown: 0 });
+  });
+
+  it("says nothing when the shared line is paid to flag, even while ANOTHER line keeps the period short", () => {
+    // Both rounds claimed X (flag 5) and X now reads 5. The period is still
+    // 12.5h short on other lines, which the old period-wide gate let through
+    // — telling the tech to enter hours onto a line already paid in full.
+    const container = renderCard({
+      allDisputes: [round("r2", 1, "BRK-F"), round("r1", 1, "BRK-F")],
+      entries: [liveRO([X(5), Y(2)])],
+      shortedHours: 12.5,
+    });
+    expect(disarmedNotes(container)).toHaveLength(0);
+  });
+
+  it("says nothing when both rounds re-claimed the same shortage and the line is now at flag (D2)", () => {
+    // X flag 3 frozen 2; both rounds asked 1 and got 1; the newer applied.
+    const r = (id: string): Dispute => ({
+      ...round(id, 1, "BRK-F"),
+      claimedHours: 1,
+      lines: [
+        disputeLine({ id: `${id}-l`, disputeId: id, code: "BRK-F", flaggedHours: 3, paidHours: 2, claimedHours: 1 }),
+      ],
+    });
+    const container = renderCard({
+      allDisputes: [r("r2"), r("r1")],
+      entries: [liveRO([liveLine({ id: "X", customCode: "BRK-F", flagHours: 3, paidHours: 3 })])],
+    });
+    expect(applyButtons()).toHaveLength(0);
+    expect(disarmedNotes(container)).toHaveLength(0);
   });
 
   it("stops explaining stranded hours once the period no longer reads short", () => {
