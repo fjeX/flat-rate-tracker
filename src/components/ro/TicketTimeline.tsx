@@ -492,15 +492,8 @@ function AddEventFields({
             required
           />
         </label>
-        <label className="text-xs text-[var(--fg-3)]">
-          Time <span className="text-[var(--fg-3)]">(optional)</span>
-          <input
-            type="time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            className="input mt-1 w-full"
-          />
-        </label>
+        {/* Note/Label sits directly under "What happened" so picking Custom
+            points straight at the field it turns into the label. */}
         <label className="text-xs text-[var(--fg-3)]">
           {kind === "custom" ? "Label" : "Note"}
           <input
@@ -508,6 +501,15 @@ function AddEventFields({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={kind === "custom" ? "e.g. Claim #4471 filed" : "optional"}
+            className="input mt-1 w-full"
+          />
+        </label>
+        <label className="text-xs text-[var(--fg-3)]">
+          Time <span className="text-[var(--fg-3)]">(optional)</span>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
             className="input mt-1 w-full"
           />
         </label>
