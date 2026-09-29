@@ -67,3 +67,9 @@ tests/smoke/.results/
 # directory is the normal way to test import. Six were found loose on the VM.
 # Untracked is not the same as ignored: `git add -A` would have published them.
 flat-rate-backup-*.json
+
+# Planning docs and design mockups. These are plans for the app, not part of
+# it, and they stay on the machine they were written on. Files under docs/
+# that were committed before 2026-09-29 are still tracked: an ignore rule does
+# not untrack anything.
+/docs/
