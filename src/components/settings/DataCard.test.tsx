@@ -77,4 +77,23 @@ describe("DataCard import result handling", () => {
     expect(alert.textContent).toBe("network down");
     expect(screen.queryByText(/Import complete/)).toBeNull();
   });
+
+  it("clears a previous refusal when a new file is picked", async () => {
+    importDataAction.mockResolvedValue({ error: "Invalid date in clock record." });
+    const confirm = await openConfirmDialog();
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+    expect((await screen.findByRole("alert")).textContent).toBe("Invalid date in clock record.");
+
+    // Pick a different file without closing the dialog.
+    const input = screen.getByLabelText("Import backup file") as HTMLInputElement;
+    const next = new File([BACKUP], "other.json", { type: "application/json" });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [next] } });
+    });
+
+    await waitFor(() => expect(screen.queryByText("Invalid date in clock record.")).toBeNull());
+    expect(screen.getByText("Replace all data?")).toBeTruthy();
+  });
 });

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildImportPayload, CURRENT_BACKUP_VERSION, type ImportBundle } from "./import-remap";
+import {
+  buildImportPayload,
+  CURRENT_BACKUP_VERSION,
+  ImportRefusal,
+  type ImportBundle,
+} from "./import-remap";
 import type { Dispute, Entry, EntryOpCode, OpCode, UnpaidTime } from "./types";
 import { MIN_LEDGERED_HOLD_MS, msToHours } from "./timer";
 
@@ -792,6 +797,16 @@ describe("buildImportPayload — frozen dispute claims", () => {
         ),
       ).toThrow(/negative hours/);
       expect(newId).not.toHaveBeenCalled();
+    });
+
+    // importDataAction returns ONLY this class as data; anything else it lets
+    // throw as a bug. So every claim-total refusal must be an ImportRefusal.
+    it.each([
+      { what: "negative ask", header: 2, asks: [3, -1] },
+      { what: "all-zero asks", header: 0, asks: [0, 0] },
+      { what: "header mismatch", header: 5, asks: [1, 2] },
+    ])("throws its refusal as an ImportRefusal ($what)", ({ header, asks }) => {
+      expect(build(header, asks)).toThrow(ImportRefusal);
     });
   });
 });

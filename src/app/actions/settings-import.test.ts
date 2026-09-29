@@ -39,6 +39,20 @@ vi.mock("@/lib/rate-limit", async (orig) => {
   };
 });
 
+// Passthrough to the real builder by default; one test swaps in a genuine
+// bug to prove only ImportRefusal is converted to data.
+let buildOverride: ((...a: unknown[]) => unknown) | null = null;
+vi.mock("@/lib/import-remap", async (orig) => {
+  const real = await orig<typeof import("@/lib/import-remap")>();
+  return {
+    ...real,
+    buildImportPayload: (...a: unknown[]) =>
+      buildOverride
+        ? buildOverride(...a)
+        : (real.buildImportPayload as (...x: unknown[]) => unknown)(...a),
+  };
+});
+
 const { importDataAction } = await import("./settings");
 const { RateLimitError } = await import("@/lib/rate-limit");
 type Bundle = Parameters<typeof importDataAction>[0];
@@ -57,6 +71,7 @@ function bundle(over: Record<string, unknown> = {}): Bundle {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  buildOverride = null;
   rpc.mockResolvedValue({ error: null });
   storageRemove.mockResolvedValue({ error: null });
   enforceRateLimit.mockResolvedValue(undefined);
@@ -144,5 +159,87 @@ describe("importDataAction refusals come back as data", () => {
     await expect(importDataAction(bundle())).resolves.toEqual({});
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(revalidatePath).toHaveBeenCalled();
+  });
+});
+
+// The dispute claim-total checks live in buildImportPayload (import-remap), one
+// layer below the action. They are refusals of the FILE, so they must cross the
+// boundary as data too — before this they were thrown and reached the tech as
+// the masked production error.
+describe("importDataAction — dispute claim-total refusals come back as data", () => {
+  const line = (id: string, claimedHours: number) => ({
+    id,
+    entryId: null,
+    lineId: null,
+    roNumber: "4411",
+    code: "A1",
+    workDate: "2026-08-03",
+    flaggedHours: 3,
+    paidHours: 0,
+    claimedHours,
+    recoveredHours: 0,
+    hadPhoto: false,
+    position: 0,
+  });
+  const claim = (claimedHours: number, asks: number[]) =>
+    bundle({
+      disputes: [
+        {
+          id: "D1",
+          periodKey: "2026-08-01",
+          periodLabel: "Aug 1–15",
+          scope: "period",
+          status: "open",
+          claimedHours,
+          recoveredHours: 0,
+          lines: asks.map((a, k) => line(`L${k}`, a)),
+        },
+      ],
+    });
+
+  it.each<[string, Bundle, string]>([
+    [
+      "a negative claim-line ask",
+      claim(2, [3, -1]),
+      "This backup can't be restored: the dispute claim for Aug 1–15 has a line asking for -1.00h, and a claim line can't ask for negative hours. The file looks edited or damaged. Nothing was imported.",
+    ],
+    [
+      "an itemized claim whose asks are all zero",
+      claim(0, [0, 0]),
+      "This backup can't be restored: the dispute claim for Aug 1–15 lists 2 lines but none of them asks for any hours. The file looks edited or damaged. Nothing was imported.",
+    ],
+    [
+      "a header that disagrees with its lines",
+      claim(5, [1, 2]),
+      "This backup can't be restored: the dispute claim for Aug 1–15 says 5.00h but its lines add up to 3.00h. The file looks edited or damaged. Nothing was imported.",
+    ],
+  ])("refuses %s with its sentence and never calls the RPC", async (_l, b, msg) => {
+    await expect(importDataAction(b)).resolves.toEqual({ error: msg });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("imports a claim whose lines agree with its header", async () => {
+    await expect(importDataAction(claim(3, [1, 2]))).resolves.toEqual({});
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("still throws a genuine bug from payload building (only ImportRefusal becomes data)", async () => {
+    buildOverride = () => {
+      throw new TypeError("x is undefined");
+    };
+    await expect(importDataAction(bundle())).rejects.toThrow("x is undefined");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("importDataAction — optional sections", () => {
+  it("imports a bundle with no dailyClocks key, sending no clock rows", async () => {
+    const b = bundle();
+    delete (b as { dailyClocks?: unknown }).dailyClocks;
+    await expect(importDataAction(b)).resolves.toEqual({});
+    expect(rpc).toHaveBeenCalledTimes(1);
+    const [, args] = rpc.mock.calls[0] as [string, { payload: { daily_clock_hours: unknown[] } }];
+    expect(args.payload.daily_clock_hours).toEqual([]);
   });
 });

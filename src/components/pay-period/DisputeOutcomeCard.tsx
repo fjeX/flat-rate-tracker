@@ -508,12 +508,54 @@ export function DisputeOutcomeCard({
   };
   // Same three roads as the newest round's paragraphs, in their own words so
   // the existing paragraphs' phrases stay unique to them.
+  //
+  // The third road (the loop tail in pendingRecoveryApplication) is NOT only
+  // "no live line": a claim line's write is capped at what it asked for, so
+  // recovery ABOVE the ask lands here too — on a line that is still on the
+  // period. "It didn't match any line still here" was false for that case
+  // (asked 0.5h, got 1.0h, line alive). The plan cannot tell the two apart:
+  // it carries unmappedHours as one figure, and splitting it would mean
+  // re-deriving pendingRecoveryApplication's per-line write rule (hoursFor) in
+  // the card — a second copy of a money rule, which is how the two drift. So
+  // it names both, exactly as goodwillNote does for the newest round.
   const unplacedReason = (r: (typeof olderUnplaced)[number]["r"]) =>
     r.plan.needsLineBreakdown
-      ? "no per-line split was recorded"
+      ? "because no per-line split was recorded"
       : r.dispute.lines.length === 0
-        ? "it was a period-total claim"
-        : "it didn't match any line still here";
+        ? "because it was a period-total claim"
+        : "which may be goodwill above what it asked for, or belong to a line that's since been deleted or changed";
+  // Each claim shows what came back AND how much of that is unplaced. The
+  // unplaced figure alone ("asked 0.5h — 0.5h") read as the whole recovery
+  // when the claim actually got 1.0h and half of it was placed or is goodwill.
+  // Compared at display precision, so "all of it" is exactly when the two
+  // printed figures would be the same number.
+  const unplacedPart = (r: (typeof olderUnplaced)[number]["r"]) =>
+    fmtHours(r.plan.unmappedHours) === fmtHours(r.dispute.recoveredHours)
+      ? "all of it"
+      : `${fmtHours(r.plan.unmappedHours)}h of it`;
+
+  // TWO OR MORE CLOSED CLAIMS: the newest round's notes stop saying "enter".
+  //
+  // Same count as the offer sentence's "across N closed claims". The
+  // newest-round paragraphs (missing breakdown, period total, goodwill) each
+  // ended in an instruction to type the hours in. With a single claim that is
+  // right. With several, a newer claim usually re-asks for the shortage an
+  // older one left, so "Xh came back — enter it" can be the same payment the
+  // tech already entered from the other round, and the card was printing that
+  // beside the older-claims note's "may be one payment counted twice… check
+  // your pay stub". The paragraphs keep their own REASON (see the comment on
+  // the period-total note — they must not borrow each other's words); only
+  // the instruction at the end changes, from enter to check-then-maybe-enter.
+  const multiClaim = closedRounds >= 2;
+  const multiClaimCheck = (
+    <>
+      You have {closedRounds} closed claims on {periodLabel}, and another one
+      may have asked for the same shortage, so these hours may already be on
+      your lines. Check your pay stub first, and only enter paid hours in
+      &ldquo;Which lines came up short?&rdquo; if your stub shows hours not
+      already on a line.
+    </>
+  );
 
   // ONE copy, two homes, never both: inside the rows panel it is a footnote
   // under the rows it qualifies; with no rows there is no panel, so it renders
@@ -532,9 +574,22 @@ export function DisputeOutcomeCard({
     <>
       {fmtHours(hours)}h of the recovery couldn&apos;t be matched to a line
       automatically — goodwill above what you asked for, or a line or RO
-      that&apos;s since been deleted or changed. FRT won&apos;t write those
-      hours anywhere, so if they belong on a line that&apos;s still here, enter
-      them in &ldquo;Which lines came up short?&rdquo; yourself.
+      that&apos;s since been deleted or changed.{" "}
+      {multiClaim ? (
+        <>
+          FRT won&apos;t write those hours anywhere. Another claim on{" "}
+          {periodLabel} may have asked for the same hours, so check your pay
+          stub first, and only enter them in &ldquo;Which lines came up
+          short?&rdquo; if they belong on a line that&apos;s still here and your
+          stub shows hours not already on a line.
+        </>
+      ) : (
+        <>
+          FRT won&apos;t write those hours anywhere, so if they belong on a line
+          that&apos;s still here, enter them in &ldquo;Which lines came up
+          short?&rdquo; yourself.
+        </>
+      )}
     </>
   );
 
@@ -665,7 +720,7 @@ export function DisputeOutcomeCard({
             .slice(0, 3)
             .map(
               ({ r, nth }) =>
-                `your ${ordinal(nth)} claim (asked ${fmtHours(r.dispute.claimedHours)}h) — ${fmtHours(r.plan.unmappedHours)}h, ${unplacedReason(r)}`,
+                `your ${ordinal(nth)} claim (asked ${fmtHours(r.dispute.claimedHours)}h, got ${fmtHours(r.dispute.recoveredHours)}h back) — ${unplacedPart(r)}, ${unplacedReason(r)}`,
             )
             .join("; ")}
           {olderUnplaced.length > 3
@@ -683,10 +738,22 @@ export function DisputeOutcomeCard({
           would be the app inventing the answer. Ask for it instead. */}
       {recovery.needsLineBreakdown && (
         <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-          {fmtHours(recovery.unmappedHours)}h came back on the closed claim, but
-          it isn&apos;t recorded against individual lines — so FRT can&apos;t
-          tell which ROs to mark paid. Open &ldquo;Which lines came up
-          short?&rdquo; and enter the paid hours on each line yourself.
+          {multiClaim ? (
+            <>
+              {fmtHours(recovery.unmappedHours)}h came back on your latest
+              closed claim, but it isn&apos;t recorded against individual lines
+              — so FRT can&apos;t tell which ROs to mark paid.{" "}
+              {multiClaimCheck}
+            </>
+          ) : (
+            <>
+              {fmtHours(recovery.unmappedHours)}h came back on the closed claim,
+              but it isn&apos;t recorded against individual lines — so FRT
+              can&apos;t tell which ROs to mark paid. Open &ldquo;Which lines
+              came up short?&rdquo; and enter the paid hours on each line
+              yourself.
+            </>
+          )}
         </p>
       )}
 
@@ -702,10 +769,22 @@ export function DisputeOutcomeCard({
           isn't on the page. */}
       {showPeriodTotalNote && (
         <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-          {fmtHours(recovery.unmappedHours)}h came back on the closed claim, but
-          it was raised for the period total rather than individual lines — so
-          FRT can&apos;t tell which ROs to mark paid. Open &ldquo;Which lines
-          came up short?&rdquo; and enter the paid hours on each line yourself.
+          {multiClaim ? (
+            <>
+              {fmtHours(recovery.unmappedHours)}h came back on your latest
+              closed claim, but it was raised for the period total rather than
+              individual lines — so FRT can&apos;t tell which ROs to mark
+              paid. {multiClaimCheck}
+            </>
+          ) : (
+            <>
+              {fmtHours(recovery.unmappedHours)}h came back on the closed claim,
+              but it was raised for the period total rather than individual
+              lines — so FRT can&apos;t tell which ROs to mark paid. Open
+              &ldquo;Which lines came up short?&rdquo; and enter the paid hours
+              on each line yourself.
+            </>
+          )}
         </p>
       )}
 

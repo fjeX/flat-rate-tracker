@@ -759,8 +759,8 @@ describe("DisputeOutcomeCard older rounds with unplaced recovery", () => {
     });
     expect(olderNotes(container)).toEqual([
       "An older claim for Jul 16 – Jul 31 also got hours back that FRT can't " +
-        "place on a line: your 1st claim (asked 4.0h) — 2.3h, it was a " +
-        "period-total claim. A later claim may have asked for the same " +
+        "place on a line: your 1st claim (asked 4.0h, got 2.3h back) — all of " +
+        "it, because it was a period-total claim. A later claim may have asked for the same " +
         "shortage again, so these hours may already be on your lines, or be " +
         "one payment counted twice. FRT won't write them anywhere. Before " +
         "changing any line, check your pay stub.",
@@ -793,8 +793,9 @@ describe("DisputeOutcomeCard older rounds with unplaced recovery", () => {
     expect(notes).toHaveLength(1);
     expect(notes[0]).toContain("2 older claims for Jul 16 – Jul 31");
     expect(notes[0]).toContain(
-      "your 2nd claim (asked 6.0h) — 3.6h, no per-line split was recorded; " +
-        "your 1st claim (asked 4.0h) — 2.3h, it was a period-total claim.",
+      "your 2nd claim (asked 6.0h, got 3.6h back) — all of it, because no " +
+        "per-line split was recorded; your 1st claim (asked 4.0h, got 2.3h " +
+        "back) — all of it, because it was a period-total claim.",
     );
   });
 
@@ -848,11 +849,151 @@ describe("DisputeOutcomeCard older rounds with unplaced recovery", () => {
     const notes = olderNotes(container);
     expect(notes).toHaveLength(1);
     expect(notes[0]).toContain("5 older claims");
-    expect(notes[0]).toContain("your 3rd claim (asked 10.0h) — 3.0h, it was a period-total claim; and 2 more.");
+    expect(notes[0]).toContain("your 3rd claim (asked 10.0h, got 3.0h back) — all of it, because it was a period-total claim; and 2 more.");
     expect(notes[0]).not.toContain("1st claim");
     for (const banned of ["enter the paid hours", "enter them", "add ", "yourself"]) {
       expect(notes[0].toLowerCase()).not.toContain(banned);
     }
     expect(notes[0]).toMatch(/check your pay stub\.$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Older-round goodwill reason, and no "enter" on a multi-claim period
+// ---------------------------------------------------------------------------
+//
+// Two claims on one period can be two answers to the SAME shortage. With 2+
+// closed claims the newest round's notes must send the tech to the pay stub,
+// never tell them to enter the hours — the older-claims note beside them says
+// "may be one payment counted twice", and the card used to contradict itself.
+// Single-claim periods keep their wording exactly (asserted verbatim below).
+describe("DisputeOutcomeCard multi-claim wording", () => {
+  const flat = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll("p")).map((p) =>
+      (p.textContent ?? "").replace(/\s+/g, " ").trim(),
+    );
+  /** Newer closed round, one line, armed on the live line (rows > 0). */
+  const armedRound = (id: string): Dispute => ({
+    ...closedRound(id, 0.5),
+    scope: "lines",
+    claimedHours: 0.5,
+    lines: [disputeLine({ id: `${id}-l`, disputeId: id, recoveredHours: 0.5 })],
+  });
+
+  it("an older one-line claim that got goodwill on a live line is not called unmatched", () => {
+    // Older claim asked 0.5h, got 1.0h; its line is still here. The write is
+    // capped at the ask, so 0.5h is unplaced — goodwill, not a missing line.
+    const older: Dispute = {
+      ...itemizedRound(1, [disputeLine({ id: "o-l", disputeId: "d1", claimedHours: 0.5 })], 0.5),
+      id: "d1",
+    };
+    const container = renderCard({
+      allDisputes: [armedRound("d2"), older],
+      entries: [liveRO([liveLine()])],
+    });
+    const notes = flat(container).filter((t) => t.includes("can't place on a line"));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain(
+      "your 1st claim (asked 0.5h, got 1.0h back) — 0.5h of it, which may be " +
+        "goodwill above what it asked for, or belong to a line that's since " +
+        "been deleted or changed.",
+    );
+    expect(notes[0]).not.toContain("didn't match any line still here");
+  });
+
+  it("two period-total rounds: no 'enter the paid hours' anywhere, check-stub instead", () => {
+    const container = renderCard({
+      allDisputes: [closedRound("d2", 2), closedRound("d1", 2)],
+    });
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).not.toContain("enter the paid hours");
+    expect(text).not.toContain("yourself");
+    const para = flat(container).filter((t) => t.includes("raised for the period total"));
+    expect(para).toEqual([
+      "2.0h came back on your latest closed claim, but it was raised for the " +
+        "period total rather than individual lines — so FRT can't tell which " +
+        "ROs to mark paid. You have 2 closed claims on Jul 16 – Jul 31, and " +
+        "another one may have asked for the same shortage, so these hours may " +
+        "already be on your lines. Check your pay stub first, and only enter " +
+        "paid hours in “Which lines came up short?” if your stub shows hours " +
+        "not already on a line.",
+    ]);
+    // Control: the older-claims note is on screen, so the absence above is
+    // the multi-claim branch and not an empty card.
+    expect(flat(container).filter((t) => t.includes("can't place on a line"))).toHaveLength(1);
+  });
+
+  it("single-claim period-total wording is unchanged", () => {
+    const container = renderCard({ allDisputes: [closedRound("d1", 4)] });
+    expect(flat(container).filter((t) => t.includes("raised for the period total"))).toEqual([
+      "4.0h came back on the closed claim, but it was raised for the period " +
+        "total rather than individual lines — so FRT can't tell which ROs to " +
+        "mark paid. Open “Which lines came up short?” and enter the paid hours " +
+        "on each line yourself.",
+    ]);
+  });
+
+  const breakdownLines = () => [
+    disputeLine({ id: "a", entryId: "e1", claimedHours: 3 }),
+    disputeLine({ id: "b", entryId: "e1", code: "ALN", claimedHours: 3 }),
+  ];
+  const breakdownEntries = () => [
+    liveRO([liveLine(), liveLine({ id: "l2", customCode: "ALN" })]),
+  ];
+
+  it("single-claim needs-breakdown wording is unchanged", () => {
+    const container = renderCard({
+      allDisputes: [itemizedRound(2, breakdownLines(), 6)],
+      entries: breakdownEntries(),
+    });
+    expect(flat(container).filter((t) => t.includes("recorded against individual lines"))).toEqual([
+      "2.0h came back on the closed claim, but it isn't recorded against " +
+        "individual lines — so FRT can't tell which ROs to mark paid. Open " +
+        "“Which lines came up short?” and enter the paid hours on each line " +
+        "yourself.",
+    ]);
+  });
+
+  it("needs-breakdown newest round beside an older round gets check-stub wording", () => {
+    const newest: Dispute = { ...itemizedRound(2, breakdownLines(), 6), id: "d2" };
+    const container = renderCard({
+      allDisputes: [newest, { ...closedRound("d1", 1.5), claimedHours: 4 }],
+      entries: breakdownEntries(),
+    });
+    expect(flat(container).filter((t) => t.includes("recorded against individual lines"))).toEqual([
+      "2.0h came back on your latest closed claim, but it isn't recorded " +
+        "against individual lines — so FRT can't tell which ROs to mark paid. " +
+        "You have 2 closed claims on Jul 16 – Jul 31, and another one may have " +
+        "asked for the same shortage, so these hours may already be on your " +
+        "lines. Check your pay stub first, and only enter paid hours in " +
+        "“Which lines came up short?” if your stub shows hours not already on " +
+        "a line.",
+    ]);
+    expect((container.textContent ?? "").replace(/\s+/g, " ")).not.toContain("enter the paid hours");
+  });
+
+  it("goodwill note on a multi-claim period checks the stub instead of 'yourself'", () => {
+    const newest: Dispute = {
+      ...itemizedRound(0.5, [
+        disputeLine({ entryId: "gone", roNumber: "9999", recoveredHours: 0.5 }),
+      ]),
+      id: "d2",
+    };
+    const container = renderCard({
+      allDisputes: [newest, { ...closedRound("d1", 1), claimedHours: 4 }],
+      entries: [liveRO([liveLine()])],
+    });
+    expect(
+      flat(container).filter((t) => t.includes("couldn't be matched to a line automatically")),
+    ).toEqual([
+      "0.5h of the recovery couldn't be matched to a line automatically — " +
+        "goodwill above what you asked for, or a line or RO that's since been " +
+        "deleted or changed. FRT won't write those hours anywhere. Another " +
+        "claim on Jul 16 – Jul 31 may have asked for the same hours, so check " +
+        "your pay stub first, and only enter them in “Which lines came up " +
+        "short?” if they belong on a line that's still here and your stub " +
+        "shows hours not already on a line.",
+    ]);
+    expect((container.textContent ?? "").replace(/\s+/g, " ")).not.toContain("yourself");
   });
 });

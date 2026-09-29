@@ -237,6 +237,21 @@ function isRestorableUnpaidTime(u: UnpaidTime): boolean {
 }
 
 /**
+ * A backup the importer deliberately refuses because of what the FILE says —
+ * as opposed to a fault in this code. The distinction exists for the Server
+ * Actions boundary: a production build replaces a thrown message with a generic
+ * string plus a digest, so importDataAction catches exactly this class and
+ * returns its sentence as data, while any other error (a genuine bug) keeps
+ * throwing and stays loud. Only throw it with a sentence written for the tech.
+ */
+export class ImportRefusal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ImportRefusal";
+  }
+}
+
+/**
  * Refuse a backup whose itemized claim disagrees with its own lines.
  *
  * WHY THIS EXISTS
@@ -281,14 +296,14 @@ function assertDisputeClaimTotals(disputes: Dispute[]): void {
     // letting it in would let the header alone decide "Paid in full".
     const negative = asks.find((a) => a < 0);
     if (negative !== undefined) {
-      throw new Error(
+      throw new ImportRefusal(
         `This backup can't be restored: the dispute claim for ${label} has a ` +
           `line asking for ${hrs(negative)}, and a claim line can't ask for ` +
           `negative hours. The file looks edited or damaged. Nothing was imported.`,
       );
     }
     if (asks.every((a) => a === 0)) {
-      throw new Error(
+      throw new ImportRefusal(
         `This backup can't be restored: the dispute claim for ${label} lists ` +
           `${lines.length} line${lines.length === 1 ? "" : "s"} but none of ` +
           `them asks for any hours. The file looks edited or damaged. ` +
@@ -300,7 +315,7 @@ function assertDisputeClaimTotals(disputes: Dispute[]): void {
       lines.map((l, k) => ({ ...l, claimedHours: asks[k] })),
     );
     if (!(Math.abs(header - sum) <= SAME_VALUE_EPS)) {
-      throw new Error(
+      throw new ImportRefusal(
         `This backup can't be restored: the dispute claim for ${label} says ` +
           `${hrs(header)} but its lines add up to ${hrs(sum)}. ` +
           `The file looks edited or damaged. Nothing was imported.`,

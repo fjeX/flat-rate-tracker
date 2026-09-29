@@ -7,6 +7,7 @@ import * as db from "@/lib/db";
 import { addDays, formatDateLong, getNeighborPeriodKeys } from "@/lib/periods";
 import {
   buildImportPayload,
+  ImportRefusal,
   SUPPORTED_BACKUP_VERSIONS,
   type ImportBundle,
 } from "@/lib/import-remap";
@@ -392,7 +393,9 @@ export async function importDataAction(
   for (const e of bundle.entries) {
     if (!DATE_RE.test(e.date)) return { error: `Invalid date in entry RO#${e.roNumber}.` };
   }
-  for (const c of bundle.dailyClocks) {
+  // Optional in the schema and in buildImportPayload (`?? []`) — a file without
+  // clock records imports with none rather than crashing on the loop.
+  for (const c of bundle.dailyClocks ?? []) {
     if (!DATE_RE.test(c.date)) return { error: "Invalid date in clock record." };
   }
   for (const b of bundle.bonuses ?? []) {
@@ -411,7 +414,18 @@ export async function importDataAction(
   // Fresh ids for every record, all internal references re-pointed. Without
   // this the insert collides with the SOURCE account's rows on a shared
   // database (23505) and importing into a second account can never succeed.
-  const payload = buildImportPayload(bundle);
+  //
+  // It also refuses a file whose content contradicts itself (a dispute claim
+  // whose header disagrees with its lines, etc.). That refusal is a sentence
+  // for the tech, so it comes back as data like every refusal above; anything
+  // else thrown here is a bug in this code and keeps throwing.
+  let payload: ReturnType<typeof buildImportPayload>;
+  try {
+    payload = buildImportPayload(bundle);
+  } catch (err) {
+    if (err instanceof ImportRefusal) return { error: err.message };
+    throw err;
+  }
 
   // One call, one transaction. The wipe and the restore either both land or
   // neither does — the old sequence of separate deletes and inserts could wipe

@@ -1231,6 +1231,17 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     unconditionally add. **The note appearing for a line that is already
     paid up to its flag hours IS a FAIL**, as is any note that tells you,
     unconditionally, to add hours rather than check them.
+  - **Same rule for the recovery notes on a period with 2+ closed claims
+    (2026-09-28).** With ONE closed claim, the "came back on the closed claim"
+    notes end "enter the paid hours on each line yourself" — correct. With two
+    or more, they read "came back on your latest closed claim … Check your pay
+    stub first, and only enter paid hours in "Which lines came up short?" if
+    your stub shows hours not already on a line" — also correct, because two
+    claims can be two answers to the same shortage. **"enter the paid hours on
+    each line yourself" appearing on a card with 2+ closed claims IS a FAIL.**
+    An older claim's hours are listed as "your Nth claim (asked X, got Y back)
+    — …"; for a claim that got more than it asked, "may be goodwill above what
+    it asked for" is correct even when its line still exists.
   - **What IS a FAIL: a targeted line's `paid_hours` increasing by the
     recovery amount more than once**, i.e. ending up above claim-time paid +
     recovered. Judge this from the before/after numbers you recorded, never
@@ -1242,8 +1253,12 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     sections write the same `paid_hours` column and §5's mandatory revert will
     stomp whatever Apply wrote here, with no coordination between the two.
   - The second-round offer, when it still appears, must now read
-    **"still short N.Nh · N.Nh already recovered on a closed claim"**. A bare
-    shortfall with no mention of what came back is the old wording.
+    **"still short N.Nh · N.Nh already recovered on that closed claim"** (one
+    closed claim) or **"… already recovered across N closed claims"** (two or
+    more — the figure is a sum over every closed round, so it may be larger
+    than the single claim card shown below it; that is correct, not an
+    arithmetic bug). A bare shortfall with no mention of what came back is the
+    old wording.
   - Recovery ABOVE the claim (goodwill) must be reported as not mapping to any
     line, never silently written onto one.
   - A claim with TWO OR MORE lines closed with a partial recovery and **no

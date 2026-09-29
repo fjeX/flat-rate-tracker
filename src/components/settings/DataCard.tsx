@@ -37,6 +37,9 @@ export function DataCard() {
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     setParseError(null);
+    // A refusal belongs to the file it was about. Left set, it would sit next
+    // to the NEXT file's confirm dialog as if that file had been refused.
+    setImportError(null);
     setImportDone(false);
     const file = e.target.files?.[0];
     if (!file) return;

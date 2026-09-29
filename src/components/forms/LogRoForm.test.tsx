@@ -369,8 +369,9 @@ function closeDefaults(over: { reopened: boolean; currentTime: string | null }) 
 }
 
 async function renderClose(trackRoTime = true) {
+  let rerender!: (ui: React.ReactElement) => void;
   await act(async () => {
-    render(
+    ({ rerender } = render(
       <LogRoForm
         initialOpCodes={[]}
         roTemplates={[]}
@@ -381,8 +382,25 @@ async function renderClose(trackRoTime = true) {
         defaultLoggedTime={trackRoTime ? NOW : ""}
         timeZone="America/Los_Angeles"
       />,
-    );
+    ));
   });
+  // Lets a caller re-render with a flipped trackRoTime while keeping every
+  // other prop identical to the initial render above.
+  return (nextTrackRoTime: boolean) =>
+    act(async () => {
+      rerender(
+        <LogRoForm
+          initialOpCodes={[]}
+          roTemplates={[]}
+          existingEntry={openTicket()}
+          closeMode
+          today={TODAY}
+          trackRoTime={nextTrackRoTime}
+          defaultLoggedTime={nextTrackRoTime ? NOW : ""}
+          timeZone="America/Los_Angeles"
+        />,
+      );
+    });
 }
 
 const timePill = () => document.getElementById("ro-time") as HTMLInputElement | null;
@@ -1038,5 +1056,42 @@ describe("LogRoForm — a close-defaults fetch that never answers", () => {
     expect(saveButton().disabled).toBe(false);
     await clickClose();
     expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
+  });
+
+  it("a stalled fetch that re-renders (trackRoTime flips) still doesn't let a late answer overwrite what the tech typed", async () => {
+    // The bug this guards: `timeFieldShown` (the trackRoTime prop) used to be
+    // an effect dependency. Flipping it while STALLED re-ran the seeding
+    // effect as a second "attempt" with its own fresh 15s window, on top of
+    // the still-hung first one. If the underlying fetch then answered inside
+    // attempt 2's window, attempt 2 seeded for real — overwriting the pills
+    // the tech had already unlocked and typed into.
+    const d = deferred<unknown>();
+    getCloseDefaultsAction.mockReturnValue(d.promise);
+    const rerenderWith = await renderClose(true);
+    await stall();
+
+    // Pills are unlocked after the stall; the tech types into them.
+    setInput(datePill(), "2026-09-14");
+    setInput(timePill()!, "07:15");
+
+    // Some unrelated re-render flips trackRoTime (e.g. the settings prop
+    // changes upstream) while the original fetch is still hanging.
+    await rerenderWith(false);
+    await rerenderWith(true);
+
+    // The single in-flight fetch (both attempts share the same mocked
+    // promise) finally answers, well inside a fresh attempt's 15s window but
+    // long after the ORIGINAL attempt's timeout already fired.
+    await act(async () => {
+      d.resolve(closeDefaults({ reopened: true, currentTime: STORED }));
+    });
+
+    // Must still be discarded, exactly like the plain late-answer case above
+    // — not silently re-seeded because a prop flip re-armed the fetch.
+    expect(datePill().value).toBe("2026-09-14");
+    expect(timePill()!.value).toBe("07:15");
+    expect(getCloseDefaultsAction).toHaveBeenCalledTimes(1);
+    await clickClose();
+    expect(closeTicketAction).not.toHaveBeenCalled();
   });
 });

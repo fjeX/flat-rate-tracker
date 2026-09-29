@@ -340,6 +340,15 @@ export function LogRoForm({
     roNumberRef.current = roNumber;
   }, [roNumber]);
 
+  // Same mirror-into-a-ref move for the close-defaults effect below: it only
+  // READS this at seed time (inside the async callback, after the fetch
+  // answers), so it doesn't need to be a dependency that reruns the effect.
+  // Making it one used to be an actual bug — see the ref's own comment.
+  const timeFieldShownRef = useRef(timeFieldShown);
+  useEffect(() => {
+    timeFieldShownRef.current = timeFieldShown;
+  }, [timeFieldShown]);
+
   // Keyed on the entry ID, not the existingEntry object. The page hands this
   // component a fresh object on every server re-render (adding a new library
   // op code revalidates /log mid-close), and keying on identity re-ran the
@@ -347,6 +356,19 @@ export function LogRoForm({
   // back to the defaults under the tech's fingers. The ref makes "once per
   // ticket" hold even if some other dep here ever changes; a FAILED fetch
   // never sets it, so "Try again" still seeds.
+  //
+  // `timeFieldShown` (the trackRoTime prop) is read via a ref, not listed as
+  // a dep, on purpose — it used to be a dep, and that was a real bug: if it
+  // flipped while a fetch was STALLED (not yet seeded, so the guard above
+  // doesn't stop the effect), this whole block re-ran as a second attempt
+  // with a fresh `stalled = false`. The first attempt's late answer is inert
+  // (the cleanup below sets its `cancelled`), but the second attempt's own
+  // fetch could then land inside ITS 15s window and seed for real — silently
+  // overwriting whatever the tech had typed into the now-unlocked pills,
+  // exactly like the answer this effect exists to keep out. This value is
+  // only ever consulted at seed time (inside the async callback, after the
+  // fetch answers), so a ref gets the current value there without making it
+  // a trigger for re-running the fetch at all.
   useEffect(() => {
     if (closeEntryId === null) return;
     if (closeSeededForRef.current === closeEntryId) return;
@@ -396,7 +418,7 @@ export function LogRoForm({
           // nothing the tech could have typed exists yet to be overwritten.
           const stored = d.currentTime ?? "";
           setCurrentFlagTime(stored);
-          if (timeFieldShown) setLoggedTime(stored);
+          if (timeFieldShownRef.current) setLoggedTime(stored);
         }
         setCloseDefaultsResult({ id: closeEntryId, status: "ready" });
       } catch {
@@ -415,7 +437,7 @@ export function LogRoForm({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [closeEntryId, closeDefaultsAttempt, setDate, setLoggedTime, timeFieldShown]);
+  }, [closeEntryId, closeDefaultsAttempt, setDate, setLoggedTime]);
 
   const title = openCreate
     ? "Open a ticket"
