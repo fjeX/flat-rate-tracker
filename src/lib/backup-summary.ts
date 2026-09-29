@@ -24,7 +24,20 @@ export type BackupSection =
   /** The file describes this table; import replaces the destination's rows with these. */
   | { key: string; label: string; state: "replacing"; count: number }
   /** The file predates this table. Import leaves what the account already has. */
-  | { key: string; label: string; state: "untouched" };
+  | { key: string; label: string; state: "untouched" }
+  /**
+   * A CORE table the file doesn't carry. Import refuses the whole file (see
+   * missingCoreSectionRefusal) — never "untouched", because the RPC wipes core
+   * tables unconditionally and that label would promise a keep it can't honor.
+   */
+  | { key: string; label: string; state: "missing" }
+  /**
+   * A core table a GENUINE older backup never carried (see
+   * CORE_SECTIONS_ABSENT_BY_VERSION). Import proceeds and the RPC empties the
+   * table — which is exactly what replacing with a backup from before the
+   * feature existed means — so the dialog says "cleared", with the reason.
+   */
+  | { key: string; label: string; state: "cleared"; detail: string };
 
 export type BackupWarning = { label: string; detail: string };
 
@@ -33,6 +46,8 @@ export type BackupSummary = {
   exportedAt: string | null;
   sections: BackupSection[];
   warnings: BackupWarning[];
+  /** Non-null when the file can't be imported at all; the sentence to show. */
+  refusal: string | null;
 };
 
 /** Order matters — this is reading order in the dialog, biggest stakes first. */
@@ -52,6 +67,69 @@ const SECTIONS: { key: keyof ImportBundle; label: string }[] = [
   { key: "portfolioSnapshots", label: "Portfolio snapshots" },
   { key: "careerMilestones", label: "Career milestones" },
 ];
+
+/**
+ * The tables import_replace_account DELETES UNCONDITIONALLY (no `data ? key`
+ * guard), unlike every other section above. For these, "absent" cannot mean
+ * "leave mine alone": buildImportPayload would send `[]` and the RPC would wipe
+ * the account's rows.
+ *
+ * So a file missing any of them is refused outright, on both sides: the picker
+ * refuses it before the dialog opens, and importDataAction refuses it before
+ * anything else runs. An EMPTY array is a real "I have none" and imports.
+ *
+ * The one exception is CORE_SECTIONS_ABSENT_BY_VERSION below.
+ */
+export const CORE_SECTION_KEYS = [
+  "entries",
+  "opCodes",
+  "dailyClocks",
+  "paidPeriods",
+  "bonuses",
+] as const satisfies readonly (keyof ImportBundle)[];
+
+const CORE: ReadonlySet<string> = new Set(CORE_SECTION_KEYS);
+
+/**
+ * Core sections a GENUINE export of that version may lack, and the dialog's
+ * reason. Evidence (git): entries/opCodes/dailyClocks/paidPeriods are in the
+ * very first export (e77d6a0, v1). `bonuses` joined the export in 89486ec
+ * (2026-07-07) while the version was still 1; v2 (584e450) and every later
+ * version always carry it. So a v1 file without bonuses is a real pre-spiff
+ * backup — it imports, and the destination's spiffs are cleared. Anywhere else
+ * a missing core key means a damaged file and is refused.
+ */
+const CORE_SECTIONS_ABSENT_BY_VERSION: Record<number, Partial<Record<string, string>>> = {
+  1: { bonuses: "this backup predates spiffs" },
+};
+
+function allowedAbsenceReason(version: unknown, key: string): string | null {
+  if (typeof version !== "number") return null;
+  return CORE_SECTIONS_ABSENT_BY_VERSION[version]?.[key] ?? null;
+}
+
+function isAbsent(b: Record<string, unknown>, key: string): boolean {
+  return !Object.prototype.hasOwnProperty.call(b, key) || b[key] == null;
+}
+
+/**
+ * The refusal sentence for a file missing a core section, or null when all five
+ * are present. Same absent-test as summarizeBackup (missing key OR null), so the
+ * dialog and the server can never disagree about what "missing" means. A
+ * present-but-wrong-type value is not this function's business — the schema
+ * refuses that with its own sentence.
+ */
+export function missingCoreSectionRefusal(bundle: unknown): string | null {
+  if (!bundle || typeof bundle !== "object") return null;
+  const b = bundle as Record<string, unknown>;
+  for (const key of CORE_SECTION_KEYS) {
+    if (isAbsent(b, key) && !allowedAbsenceReason(b.version, key)) {
+      const label = SECTIONS.find((s) => s.key === key)!.label.toLowerCase();
+      return `This backup is missing its ${label} section, so nothing was imported — your current data is unchanged.`;
+    }
+  }
+  return null;
+}
 
 /**
  * User-facing copy for the tables the manifest flags with `warnUser`.
@@ -93,11 +171,17 @@ export function summarizeBackup(bundle: ImportBundle): BackupSummary {
     // hasOwnProperty, not a truthiness check: an empty array is a real value
     // that means "delete what's there", and `?? 0` would have flattened it into
     // the same "0" an absent key produces.
-    if (!Object.prototype.hasOwnProperty.call(b, key) || b[key] == null) {
-      return { key, label, state: "untouched" };
+    if (isAbsent(b, key)) {
+      if (!CORE.has(key)) return { key, label, state: "untouched" };
+      const reason = allowedAbsenceReason(b.version, key);
+      return reason
+        ? { key, label, state: "cleared", detail: reason }
+        : { key, label, state: "missing" };
     }
     const count = countOf(b[key]);
-    if (count === null) return { key, label, state: "untouched" };
+    // A core value that isn't a list is no more usable than an absent one —
+    // never "untouched" for a table the RPC wipes regardless.
+    if (count === null) return { key, label, state: CORE.has(key) ? "missing" : "untouched" };
     return { key, label, state: "replacing", count };
   });
 
@@ -131,6 +215,7 @@ export function summarizeBackup(bundle: ImportBundle): BackupSummary {
     exportedAt: typeof bundle.exportedAt === "string" ? bundle.exportedAt : null,
     sections,
     warnings,
+    refusal: missingCoreSectionRefusal(bundle),
   };
 }
 

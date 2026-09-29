@@ -71,8 +71,11 @@ export type ImportBundle = {
   // Photo metadata only — the binaries live in storage and aren't in the JSON,
   // so import ignores this key entirely.
   entryPhotos?: unknown[];
-  // Spiffs/bonuses — optional (older backups predate the feature).
-  bonuses?: Bonus[];
+  // Spiffs/bonuses. Absent/null only in a genuine pre-2026-07-07 v1 file, which
+  // imports with none (`?? []` below) so the RPC clears the destination's
+  // spiffs — the dialog says so. On v2+ a missing key is refused upstream
+  // (missingCoreSectionRefusal).
+  bonuses?: Bonus[] | null;
   // --- version 2 additions. Absent in v1 backups, and "absent" is meaningful:
   // the RPC replaces a table only when the payload carries its key, so restoring
   // a v1 file leaves these alone instead of deleting records it never held.

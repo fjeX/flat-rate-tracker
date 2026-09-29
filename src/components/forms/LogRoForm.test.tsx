@@ -1094,4 +1094,28 @@ describe("LogRoForm — a close-defaults fetch that never answers", () => {
     await clickClose();
     expect(closeTicketAction).not.toHaveBeenCalled();
   });
+
+  // NOTE: a test asserting that a `trackRoTime` flip landing on the exact
+  // render whose fetch settles still seeds the time field (proving the
+  // useLayoutEffect mirror over the old passive-effect one) was attempted
+  // and deliberately left out. Two ways of forcing the flip and the fetch
+  // resolution into the "same turn" were tried:
+  //   - A plain `rerender()` (no flushSync): React 18 auto-batches an update
+  //     issued outside a real event, deferring the WHOLE re-render (not just
+  //     effects) behind the fetch's already-queued microtask. That fails
+  //     identically with EITHER a passive or a layout mirror — it isn't
+  //     testing the effect-flavor distinction at all, just proving renders
+  //     can be arbitrarily late, which nothing in this file can fix.
+  //   - `flushSync(() => rerender(...))`: forces the commit synchronous, but
+  //     React 18's `flushSync` also flushes any pending PASSIVE effects
+  //     synchronously as part of returning (documented React behavior,
+  //     specifically to make `flushSync` callers not observe stale effects).
+  //     Confirmed empirically: swapping the fix back to a plain `useEffect`
+  //     mirror and rerunning this exact test still passed — it cannot fail
+  //     against the bug it's meant to catch, so it would be a fake test.
+  // RTL's `act()` has the same property (it drains the passive-effect queue
+  // before resolving). Both of jsdom's synchronous-update tools exist
+  // precisely to make effect order deterministic for tests, which forecloses
+  // the passive-effect race window this fix closes in real (non-`act`)
+  // runtime code. No jsdom-expressible test distinguishes the two idioms.
 });

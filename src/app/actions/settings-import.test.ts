@@ -65,6 +65,8 @@ function bundle(over: Record<string, unknown> = {}): Bundle {
     entries: [],
     opCodes: [],
     dailyClocks: [],
+    paidPeriods: [],
+    bonuses: [],
     ...over,
   } as unknown as Bundle;
 }
@@ -233,13 +235,81 @@ describe("importDataAction — dispute claim-total refusals come back as data", 
   });
 });
 
-describe("importDataAction — optional sections", () => {
-  it("imports a bundle with no dailyClocks key, sending no clock rows", async () => {
+// import_replace_account deletes these five tables UNCONDITIONALLY. An absent
+// key used to become `[]` in the payload and wipe the account — while the
+// confirm dialog called it "untouched". Liem's rule: refuse the file.
+describe("importDataAction — core sections must be present", () => {
+  const CORE: [string, string][] = [
+    ["entries", "repair orders"],
+    ["opCodes", "op codes"],
+    ["dailyClocks", "daily clock records"],
+    ["paidPeriods", "paid period records"],
+    ["bonuses", "spiffs & bonuses"],
+  ];
+  const sentence = (label: string) =>
+    `This backup is missing its ${label} section, so nothing was imported — your current data is unchanged.`;
+
+  it.each(CORE)("refuses a bundle with no %s key, before the limiter, never calling the RPC", async (key, label) => {
     const b = bundle();
-    delete (b as { dailyClocks?: unknown }).dailyClocks;
-    await expect(importDataAction(b)).resolves.toEqual({});
+    delete (b as unknown as Record<string, unknown>)[key];
+    await expect(importDataAction(b)).resolves.toEqual({ error: sentence(label) });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(enforceRateLimit).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each(CORE)("refuses %s: null as missing", async (key, label) => {
+    await expect(importDataAction(bundle({ [key]: null }))).resolves.toEqual({
+      error: sentence(label),
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("imports when every core key is an empty array, sending empty tables", async () => {
+    await expect(importDataAction(bundle())).resolves.toEqual({});
     expect(rpc).toHaveBeenCalledTimes(1);
-    const [, args] = rpc.mock.calls[0] as [string, { payload: { daily_clock_hours: unknown[] } }];
-    expect(args.payload.daily_clock_hours).toEqual([]);
+    const [, args] = rpc.mock.calls[0] as [string, { payload: Record<string, unknown> }];
+    for (const t of ["entries", "op_codes", "daily_clock_hours", "paid_period_hours", "bonuses"]) {
+      expect(args.payload[t], t).toEqual([]);
+    }
+  });
+
+  it("still imports with every OPTIONAL key absent, and doesn't send those tables", async () => {
+    await expect(importDataAction(bundle())).resolves.toEqual({});
+    const [, args] = rpc.mock.calls[0] as [string, { payload: Record<string, unknown> }];
+    for (const t of ["disputes", "unpaid_time", "labor_rates", "work_schedules", "days_off"]) {
+      expect(args.payload, t).not.toHaveProperty(t);
+    }
+  });
+});
+
+describe("importDataAction — v1 predates spiffs", () => {
+  it.each([["absent"], ["null"]])("a v1 file with bonuses %s imports and sends bonuses: []", async (how) => {
+    const b = bundle({ version: 1 });
+    if (how === "absent") delete (b as unknown as Record<string, unknown>).bonuses;
+    else (b as unknown as Record<string, unknown>).bonuses = null;
+    await expect(importDataAction(b)).resolves.toEqual({});
+    const [, args] = rpc.mock.calls[0] as [string, { payload: { bonuses: unknown[] } }];
+    expect(args.payload.bonuses).toEqual([]);
+  });
+
+  it.each([2, 3, 4, 5])("a v%i file without bonuses is still refused", async (version) => {
+    const b = bundle({ version });
+    delete (b as unknown as Record<string, unknown>).bonuses;
+    await expect(importDataAction(b)).resolves.toEqual({
+      error:
+        "This backup is missing its spiffs & bonuses section, so nothing was imported — your current data is unchanged.",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("a v1 file without dailyClocks is still refused", async () => {
+    const b = bundle({ version: 1 });
+    delete (b as unknown as Record<string, unknown>).dailyClocks;
+    await expect(importDataAction(b)).resolves.toEqual({
+      error:
+        "This backup is missing its daily clock records section, so nothing was imported — your current data is unchanged.",
+    });
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

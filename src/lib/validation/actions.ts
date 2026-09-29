@@ -881,6 +881,12 @@ export const timezoneSchema = z
  * destination's value alone). This only checks that what IS present has the
  * right type, so a hand-edited backup fails with a sentence instead of a
  * Postgres error halfway through the restore RPC.
+ *
+ * Exception, enforced BEFORE this schema runs: the five core sections the RPC
+ * wipes unconditionally (entries, opCodes, dailyClocks, paidPeriods, bonuses)
+ * must be present — see missingCoreSectionRefusal in lib/backup-summary. That
+ * lives there rather than as `.optional()` removals here so the confirm dialog
+ * and the server share one rule and one sentence.
  */
 const looseRows = (label: string) =>
   z.array(z.looseObject({}), { error: `${label} must be a list.` }).optional();
@@ -912,7 +918,9 @@ export const importBundleSchema = z.looseObject({
   dailyClocks: looseRows("Clock records"),
   paidPeriods: looseRows("Paid periods"),
   entryPhotos: looseRows("Photos"),
-  bonuses: looseRows("Spiffs"),
+  // Nullable: a v1 file may lack it, absent OR null (missingCoreSectionRefusal
+  // decides; this schema only type-checks what's there).
+  bonuses: looseRows("Spiffs").nullable(),
   laborRates: looseRows("Labor rates"),
   disputes: looseRows("Disputes"),
   unpaidTime: looseRows("Unpaid time"),

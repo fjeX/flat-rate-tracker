@@ -22,6 +22,8 @@ const BACKUP = JSON.stringify({
   entries: [],
   opCodes: [],
   dailyClocks: [],
+  paidPeriods: [],
+  bonuses: [],
 });
 
 async function openConfirmDialog() {
@@ -95,5 +97,47 @@ describe("DataCard import result handling", () => {
 
     await waitFor(() => expect(screen.queryByText("Invalid date in clock record.")).toBeNull());
     expect(screen.getByText("Replace all data?")).toBeTruthy();
+  });
+});
+
+describe("DataCard refuses a file missing a core section before the dialog", () => {
+  it("shows the refusal and never opens 'Replace all data?'", async () => {
+    render(<DataCard />);
+    const input = screen.getByLabelText("Import backup file") as HTMLInputElement;
+    const raw = JSON.parse(BACKUP);
+    delete raw.bonuses;
+    const file = new File([JSON.stringify(raw)], "old.json", { type: "application/json" });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe(
+      "This backup is missing its spiffs & bonuses section, so nothing was imported — your current data is unchanged.",
+    );
+    expect(screen.queryByText("Replace all data?")).toBeNull();
+    expect(screen.queryByText(/your current data is kept/)).toBeNull();
+    expect(importDataAction).not.toHaveBeenCalled();
+  });
+});
+
+describe("DataCard — v1 backup that predates spiffs", () => {
+  it("opens the dialog and says spiffs will be cleared, not kept", async () => {
+    render(<DataCard />);
+    const input = screen.getByLabelText("Import backup file") as HTMLInputElement;
+    const raw = { ...JSON.parse(BACKUP), version: 1 };
+    delete raw.bonuses;
+    const file = new File([JSON.stringify(raw)], "v1.json", { type: "application/json" });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+    expect(await screen.findByText("Replace all data?")).toBeTruthy();
+    const li = screen.getByText(
+      "Spiffs & bonuses — will be cleared (this backup predates spiffs)",
+    );
+    expect(li.tagName).toBe("LI");
+    // Not listed under "kept".
+    const keptList = screen.getByText(/your current data is kept/).nextElementSibling!;
+    expect(keptList.textContent).not.toMatch(/Spiffs/);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

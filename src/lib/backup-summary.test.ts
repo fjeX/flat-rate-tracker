@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { summarizeBackup, type BackupSection } from "@/lib/backup-summary";
+import {
+  missingCoreSectionRefusal,
+  summarizeBackup,
+  type BackupSection,
+} from "@/lib/backup-summary";
 import type { ImportBundle } from "@/lib/import-remap";
 
 function bundle(over: Record<string, unknown> = {}): ImportBundle {
@@ -11,6 +15,7 @@ function bundle(over: Record<string, unknown> = {}): ImportBundle {
     opCodes: [],
     dailyClocks: [],
     paidPeriods: [],
+    bonuses: [],
     ...over,
   } as unknown as ImportBundle;
 }
@@ -132,5 +137,72 @@ describe("summarizeBackup", () => {
   it("reports a missing exportedAt as null rather than the string 'undefined'", () => {
     const s = summarizeBackup(bundle({ exportedAt: undefined }));
     expect(s.exportedAt).toBeNull();
+  });
+});
+
+// The RPC wipes these five whatever the file says, so "untouched" would be a lie.
+describe("core sections", () => {
+  const CORE: [string, string][] = [
+    ["entries", "repair orders"],
+    ["opCodes", "op codes"],
+    ["dailyClocks", "daily clock records"],
+    ["paidPeriods", "paid period records"],
+    ["bonuses", "spiffs & bonuses"],
+  ];
+
+  it.each(CORE)("an absent %s is missing + refused, never untouched", (key, label) => {
+    const b = bundle() as unknown as Record<string, unknown>;
+    delete b[key];
+    const s = summarizeBackup(b as unknown as ImportBundle);
+    expect(section(s, key).state).toBe("missing");
+    expect(s.refusal).toBe(
+      `This backup is missing its ${label} section, so nothing was imported — your current data is unchanged.`,
+    );
+  });
+
+  it.each(CORE)("a null %s is refused too", (key) => {
+    expect(missingCoreSectionRefusal(bundle({ [key]: null }))).toMatch(/is missing its/);
+  });
+
+  it("empty core arrays are a real 'none' — replacing with zero, no refusal", () => {
+    const s = summarizeBackup(bundle());
+    expect(s.refusal).toBeNull();
+    for (const [key] of CORE) expect(section(s, key)).toMatchObject({ state: "replacing", count: 0 });
+  });
+
+  it("absent OPTIONAL keys stay untouched and don't refuse", () => {
+    const s = summarizeBackup(bundle());
+    expect(s.refusal).toBeNull();
+    expect(section(s, "disputes").state).toBe("untouched");
+    expect(section(s, "careerMilestones").state).toBe("untouched");
+  });
+});
+
+describe("v1 predates spiffs", () => {
+  it("a v1 file without bonuses is 'cleared' with the reason, not refused/untouched/missing", () => {
+    const b = bundle({ version: 1 }) as unknown as Record<string, unknown>;
+    delete b.bonuses;
+    const s = summarizeBackup(b as unknown as ImportBundle);
+    expect(s.refusal).toBeNull();
+    expect(section(s, "bonuses")).toEqual({
+      key: "bonuses",
+      label: "Spiffs & bonuses",
+      state: "cleared",
+      detail: "this backup predates spiffs",
+    });
+  });
+
+  it("v2 without bonuses is still missing + refused", () => {
+    const b = bundle({ version: 2 }) as unknown as Record<string, unknown>;
+    delete b.bonuses;
+    const s = summarizeBackup(b as unknown as ImportBundle);
+    expect(section(s, "bonuses").state).toBe("missing");
+    expect(s.refusal).toMatch(/spiffs & bonuses section/);
+  });
+
+  it("v1 without dailyClocks is still refused — only bonuses has an exception", () => {
+    const b = bundle({ version: 1 }) as unknown as Record<string, unknown>;
+    delete b.dailyClocks;
+    expect(missingCoreSectionRefusal(b)).toMatch(/daily clock records section/);
   });
 });

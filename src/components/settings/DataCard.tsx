@@ -4,7 +4,11 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { Download, Upload, X } from "lucide-react";
 import { exportDataAction, importDataAction } from "@/app/actions/settings";
 import { SUPPORTED_BACKUP_VERSIONS, type ImportBundle } from "@/lib/import-remap";
-import { summarizeBackup } from "@/lib/backup-summary";
+import {
+  CORE_SECTION_KEYS,
+  missingCoreSectionRefusal,
+  summarizeBackup,
+} from "@/lib/backup-summary";
 import { actionErrorMessage } from "@/lib/action-error";
 
 export function DataCard() {
@@ -54,8 +58,16 @@ export function DataCard() {
         if (!SUPPORTED_BACKUP_VERSIONS.includes(raw.version)) {
           throw new Error(`Unsupported backup version ${raw.version}.`);
         }
-        if (!Array.isArray(raw.entries) || !Array.isArray(raw.opCodes)) {
-          throw new Error("Invalid backup format — missing entries or opCodes.");
+        // A missing core section is refused HERE, before the dialog: the RPC
+        // wipes those tables whatever the file says, so there is no honest way
+        // to describe the import. importDataAction refuses it too — this is so
+        // the tech hears why before clicking Replace, not instead of that guard.
+        const missing = missingCoreSectionRefusal(raw);
+        if (missing) throw new Error(missing);
+        // A core key the shared rule allowed to be absent (v1 bonuses) is
+        // skipped here; present ones must be lists.
+        if (CORE_SECTION_KEYS.some((k) => raw[k] != null && !Array.isArray(raw[k]))) {
+          throw new Error("Invalid backup format.");
         }
         setPendingBundle(raw);
       } catch (err) {
@@ -74,6 +86,7 @@ export function DataCard() {
   );
   const replacing = summary?.sections.filter((s) => s.state === "replacing") ?? [];
   const untouched = summary?.sections.filter((s) => s.state === "untouched") ?? [];
+  const cleared = summary?.sections.filter((s) => s.state === "cleared") ?? [];
 
   function handleImportConfirm() {
     if (!pendingBundle) return;
@@ -184,7 +197,7 @@ export function DataCard() {
                 This will permanently replace:
               </p>
               <ul className="mb-4 space-y-1 text-sm" style={{ color: "var(--fg-1)" }}>
-                {replacing.length === 0 && (
+                {replacing.length === 0 && cleared.length === 0 && (
                   <li style={{ color: "var(--fg-3)" }}>Nothing — this file describes no records.</li>
                 )}
                 {replacing.map((s) => (
@@ -193,6 +206,14 @@ export function DataCard() {
                     <span style={{ color: s.count === 0 ? "var(--bad)" : "var(--fg-2)" }}>
                       {s.count === 0 ? "cleared" : s.count}
                     </span>
+                  </li>
+                ))}
+                {/* An older backup that predates a core table: the import
+                    empties it. That is a wipe, so it sits in THIS list, in the
+                    same red as a "cleared" count — never under "kept". */}
+                {cleared.map((s) => (
+                  <li key={s.key} style={{ color: "var(--bad)" }}>
+                    {s.state === "cleared" && `${s.label} — will be cleared (${s.detail})`}
                   </li>
                 ))}
               </ul>

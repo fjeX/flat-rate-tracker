@@ -24,7 +24,7 @@
 //                 sub op codes, custom lines and new-library codes all come
 //                 for free, and there is one place the line rules live.
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RetroTimePrompt } from "@/components/forms/RetroTimePrompt";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import type { Entry, LaborType, NewEntry, OpCode, RoTemplate } from "@/lib/types";
@@ -49,6 +49,14 @@ import {
   getCloseDefaultsAction,
   updateOpenEntryAction,
 } from "@/app/actions/open-tickets";
+
+// This page is server-rendered (no `ssr: false`), and `useLayoutEffect` warns
+// on the server ("does nothing on the server") — it only actually runs in the
+// browser either way, so fall back to `useEffect` there and take the warning
+// off the table. No shared isomorphic-layout-effect helper exists in this
+// repo yet; this one mirror doesn't warrant adding one.
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export function LogRoForm({
   initialOpCodes,
@@ -344,8 +352,21 @@ export function LogRoForm({
   // READS this at seed time (inside the async callback, after the fetch
   // answers), so it doesn't need to be a dependency that reruns the effect.
   // Making it one used to be an actual bug — see the ref's own comment.
+  //
+  // Mirrored in a LAYOUT effect, not a passive one: the async callback below
+  // resumes on a microtask (the line after `await getCloseDefaultsAction(...)`),
+  // and a passive effect is scheduled as a macrotask — it can still be sitting
+  // unflushed when that microtask runs. If a `trackRoTime` prop flip commits
+  // in the very render whose fetch settles, a passive-effect mirror would
+  // read the PREVIOUS render's value here: false→true would skip seeding the
+  // now-visible time field with the stored time, so Save falls back to "now"
+  // — exactly the bug the keep-close-time fix (09-27) targets. Layout effects
+  // flush synchronously right after commit, before the browser (and any
+  // already-queued microtask) gets a turn, so the ref is always current by
+  // the time that continuation reads it. (Render-time assignment was tried
+  // first — `react-hooks/refs` rejects writing a ref during render outright.)
   const timeFieldShownRef = useRef(timeFieldShown);
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     timeFieldShownRef.current = timeFieldShown;
   }, [timeFieldShown]);
 

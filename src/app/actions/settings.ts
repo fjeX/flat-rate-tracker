@@ -11,6 +11,7 @@ import {
   SUPPORTED_BACKUP_VERSIONS,
   type ImportBundle,
 } from "@/lib/import-remap";
+import { missingCoreSectionRefusal } from "@/lib/backup-summary";
 import { buildBackupBundle } from "@/lib/backup-bundle";
 import { reportServerError } from "@/lib/report-error-server";
 import { enforceRateLimit, LIMITS, RateLimitError } from "@/lib/rate-limit";
@@ -364,6 +365,15 @@ export async function importDataAction(
   if (!SUPPORTED_BACKUP_VERSIONS.includes(bundle?.version)) {
     return { error: `Unsupported backup version ${bundle?.version}.` };
   }
+  // A missing CORE section (entries, op codes, clocks, paid periods, spiffs) is
+  // refused before the shape check: import_replace_account deletes those tables
+  // unconditionally, so an absent key is not "leave mine alone" — it would send
+  // `[]` and wipe the account. Before the rate limiter too, like every shape
+  // refusal: it reads only the file. Same test the confirm dialog uses —
+  // including its one exception (a genuine v1 file predating spiffs imports
+  // with none, and the dialog told the tech they'd be cleared).
+  const missing = missingCoreSectionRefusal(bundle);
+  if (missing) return { error: missing };
   const shape = check(importBundleSchema, bundle);
   if (!shape.ok) return { error: shape.error };
 
@@ -393,8 +403,8 @@ export async function importDataAction(
   for (const e of bundle.entries) {
     if (!DATE_RE.test(e.date)) return { error: `Invalid date in entry RO#${e.roNumber}.` };
   }
-  // Optional in the schema and in buildImportPayload (`?? []`) — a file without
-  // clock records imports with none rather than crashing on the loop.
+  // Presence is guaranteed by missingCoreSectionRefusal above; the `?? []` only
+  // keeps this loop from being the thing that crashes if that ever regresses.
   for (const c of bundle.dailyClocks ?? []) {
     if (!DATE_RE.test(c.date)) return { error: "Invalid date in clock record." };
   }
