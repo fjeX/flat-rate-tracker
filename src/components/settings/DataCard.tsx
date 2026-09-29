@@ -77,7 +77,14 @@ export function DataCard() {
     setImportError(null);
     startImport(async () => {
       try {
-        await importDataAction(pendingBundle);
+        // A refusal comes back as DATA (see importDataAction): a thrown message
+        // is masked in a production build. Keep the dialog open with the real
+        // sentence and never fall through to the success state.
+        const res = await importDataAction(pendingBundle);
+        if (res?.error) {
+          setImportError(res.error);
+          return;
+        }
         setPendingBundle(null);
         setImportDone(true);
       } catch (err) {

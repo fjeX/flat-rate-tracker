@@ -2079,8 +2079,11 @@ Instead a **Timeline** section:
   Cancel / Add hours buttons** (2026-09-27, `open-work-hours-refusal-unseen`)
   — not at the top of the Timeline card. Look there first; a refusal that
   only appears at the top of the card, or nowhere near the form, is a FAIL.
-  Same for an Add-event refusal. Delete / reopen failures still render at
-  the top of the card, by design.
+  Same for an Add-event refusal. Delete / reopen failures render on the row
+  you tried to delete, or directly under the Reopen button (2026-09-28,
+  `timeline-delete-error-offscreen`); only a failed timeline LOAD shows at
+  the top of the card. You will rarely see a delete fail — a delete that
+  succeeds is not a missed check.
 - **Close ticket** button at the bottom of the timeline (and in the footer).
   Don't press it yet.
 

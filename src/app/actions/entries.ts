@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
-import { observationsFromEntry } from "@/lib/true-time";
-import { reportServerError } from "@/lib/report-error-server";
+import { syncObservations } from "@/lib/true-time-sync";
 import { check, validate } from "@/lib/validation/core";
 import {
   addLineSchema,
@@ -24,43 +23,6 @@ import type {
   NewEntryOpCode,
   RoMatch,
 } from "@/lib/types";
-import type { DbClient } from "@/lib/db";
-
-/**
- * Keep this RO's True Time observations in step with its current state.
- *
- * Called after every mutation that can change a line's flag or actual hours.
- * Entirely best-effort and never allowed to throw: an observation is statistical
- * side data, and losing one costs the pool a single row, whereas failing the
- * tech's save costs them their work.
- *
- * Reads consent per call rather than caching it, so flipping the setting takes
- * effect on the very next save instead of at some later session boundary.
- */
-async function syncObservations(
-  supabase: DbClient,
-  entryId: string,
-): Promise<void> {
-  try {
-    const [settings, entry, library] = await Promise.all([
-      db.getSettings(supabase),
-      db.getEntry(supabase, entryId),
-      db.listOpCodes(supabase),
-    ]);
-    if (!entry) return;
-    await db.syncEntryLaborTimeObservations(
-      supabase,
-      entryId,
-      observationsFromEntry(entry, library),
-      settings.shareLaborTimes,
-    );
-  } catch (err) {
-    // Swallowed so the tech's save still succeeds — but REPORTED, because a
-    // silently swallowed error here once hid a write path that was failing 100%
-    // of the time.
-    await reportServerError(err, { url: "true-time/syncObservations" });
-  }
-}
 
 // Create or update an entry. Returns the persisted entry so the client can
 // navigate / display success. Throws on validation or DB errors.
@@ -267,9 +229,10 @@ export async function setLineActualHoursAction(
   );
   // True Time hook for hand-entered actual hours (the RO modal's blur-to-save and
   // retro capture) — and where clearing the hours must retract an observation.
-  // NOTE: the timer does NOT save through here (saveTimerAction →
-  // db.addLineActualHours), and as of 2026-09-27 that path syncs no observation;
-  // see incident fingerprint `timer-save-skips-true-time-sync`.
+  // The timer does NOT save through here (saveTimerAction →
+  // db.addLineActualHours); it calls the same shared syncObservations itself
+  // after banking work hours (fixed 2026-09-28, incident fingerprint
+  // `timer-save-skips-true-time-sync`).
   const owner = await db.getEntryIdForLine(supabase, clean.lineId);
   if (owner) await syncObservations(supabase, owner);
   revalidatePath("/");

@@ -8,6 +8,7 @@ import type { DbClient } from "@/lib/db";
 import { hhmmInTz, isoDate, isoDateInTz } from "@/lib/periods";
 import { openWorkRows, ticketOpenWorkHours } from "@/lib/open-tickets";
 import { reportServerError } from "@/lib/report-error-server";
+import { syncObservations } from "@/lib/true-time-sync";
 import {
   bucketFor,
   flushAccumulators,
@@ -533,6 +534,22 @@ export async function saveTimerAction(
   }
 
   await db.deleteTimerSlot(supabase, slot.id);
+
+  // True Time: banking work hours onto a line moves its actual hours, so the
+  // RO's observations must be recomputed from the post-save entry — the same
+  // hook every hand-entered hours path in entries.ts runs. Without it, timed
+  // hours (on a CLOSED RO especially, where nothing else re-syncs) never reach
+  // the pool: fingerprint `timer-save-skips-true-time-sync`.
+  //  - Line target only: a lineless ticket has no line to observe (its hours
+  //    live in the open_work ledger; closeTicketAction syncs on close).
+  //  - workHours > 0 only: a zero save writes nothing to the line, so the
+  //    observations it would recompute are unchanged.
+  //  - AFTER the slot delete: the save is committed by then, and the helper
+  //    swallows (and reports) its own failures, so it can never fail the save.
+  if (target === "line" && workHours > 0) {
+    await syncObservations(supabase, slot.entryId);
+  }
+
   revalidateAfterSave();
 
   return {

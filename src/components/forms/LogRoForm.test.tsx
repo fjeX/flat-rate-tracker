@@ -4,11 +4,12 @@
 // prove the tech ever SEES it — a state field that no JSX reads is exactly the
 // "real code that never runs" shape this project has been bitten by before. So
 // this one drives the actual component and asserts on rendered text.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import React from "react";
 import { LogRoForm } from "./LogRoForm";
 import { logRoFormKey } from "./logRoFormKey";
+import { CLOSE_DEFAULTS_TIMEOUT_MS } from "./closeDefaultsStall";
 import type { Entry, RoMatch } from "@/lib/types";
 
 // One stable spy, not a fresh vi.fn() per render: "did the form navigate away
@@ -47,6 +48,11 @@ vi.mock("@/app/actions/open-tickets", () => ({
   updateOpenEntryAction: vi.fn(async () => ({})),
   closeTicketAction: (input: unknown) => closeTicketAction(input),
   getCloseDefaultsAction: (id: string) => getCloseDefaultsAction(id),
+}));
+const reloadPage = vi.fn();
+vi.mock("./closeDefaultsStall", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./closeDefaultsStall")>()),
+  reloadPage: () => reloadPage(),
 }));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));
 vi.mock("@/lib/retro-capture", () => ({ retroCandidates: () => [] }));
@@ -921,5 +927,116 @@ describe("LogRoForm — each /log target gets a fresh form", () => {
       rerender(unkeyed(openTicket()));
     });
     expect(roField().value).toBe("99999");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// close-defaults-fetch-no-timeout. A request that never settles (dead TCP, no
+// FIN/RST) used to leave the close form on "Loading…" forever.
+
+describe("LogRoForm — a close-defaults fetch that never answers", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function stall() {
+    await act(async () => {
+      vi.advanceTimersByTime(CLOSE_DEFAULTS_TIMEOUT_MS);
+    });
+  }
+
+  it("gives up after the timeout: pills unlocked, Close still blocked, reload offered (not a retry)", async () => {
+    getCloseDefaultsAction.mockReturnValue(new Promise(() => {}));
+    await renderClose();
+
+    await act(async () => {
+      vi.advanceTimersByTime(CLOSE_DEFAULTS_TIMEOUT_MS - 1);
+    });
+    expect(datePill().disabled).toBe(true);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/Couldn.t load this ticket.s close details/);
+    expect(alert.textContent).toMatch(/until the page reloads/);
+    expect(datePill().disabled).toBe(false);
+    expect(timePill()!.disabled).toBe(false);
+    expect(saveButton().disabled).toBe(true);
+    await clickClose();
+    expect(closeTicketAction).not.toHaveBeenCalled();
+
+    // A retry would queue behind the hung server action (Next runs them one at
+    // a time), so the only offer is a reload — and it does reload.
+    expect(() => clickButton("Try again")).toThrow();
+    act(() => clickButton("Reload page").click());
+    expect(reloadPage).toHaveBeenCalledTimes(1);
+    expect(getCloseDefaultsAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("a late answer after the timeout does not overwrite what the tech typed", async () => {
+    const d = deferred<unknown>();
+    getCloseDefaultsAction.mockReturnValue(d.promise);
+    await renderClose();
+    await stall();
+
+    setInput(datePill(), "2026-09-14");
+    setInput(timePill()!, "07:15");
+
+    // A REOPENED answer is the stomping kind: it would set the flag date and
+    // the stored time into both pills.
+    await act(async () => {
+      d.resolve(closeDefaults({ reopened: true, currentTime: STORED }));
+    });
+    expect(datePill().value).toBe("2026-09-14");
+    expect(timePill()!.value).toBe("07:15");
+    expect(screen.queryByText(/Keep flag date/)).toBeNull();
+    // Still not ready: the late data was discarded, not trusted.
+    expect(saveButton().disabled).toBe(true);
+    await clickClose();
+    expect(closeTicketAction).not.toHaveBeenCalled();
+  });
+
+  it("once the hung request finally settles, the queue is free: Try again comes back and works", async () => {
+    const d = deferred<unknown>();
+    getCloseDefaultsAction
+      .mockReturnValueOnce(d.promise)
+      .mockResolvedValueOnce(closeDefaults({ reopened: true, currentTime: STORED }));
+    await renderClose();
+    await stall();
+    expect(() => clickButton("Try again")).toThrow();
+
+    await act(async () => {
+      d.resolve(closeDefaults({ reopened: false, currentTime: null }));
+    });
+    expect(() => clickButton("Reload page")).toThrow();
+    await act(async () => {
+      clickButton("Try again").click();
+    });
+
+    expect(getCloseDefaultsAction).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(radio(/Keep flag date/).checked).toBe(true);
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
+  });
+
+  it("a normal fast answer is unaffected, and the timer can't fire afterwards", async () => {
+    getCloseDefaultsAction.mockResolvedValue(
+      closeDefaults({ reopened: true, currentTime: STORED }),
+    );
+    await renderClose();
+    expect(saveButton().disabled).toBe(false);
+    expect(datePill().value).toBe(FLAG_DATE);
+
+    await stall();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(saveButton().disabled).toBe(false);
+    await clickClose();
+    expect(sentPayload()).toMatchObject({ date: FLAG_DATE, loggedTime: STORED });
   });
 });

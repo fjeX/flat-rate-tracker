@@ -37,6 +37,14 @@ const state = {
   advanceClockOnSchedules: null as number | null,
   failCreateUnpaidTime: false,
   failCreateRoEvent: false,
+  failSyncObservations: false,
+  /** Every syncEntryLaborTimeObservations call: what the shared True Time
+   *  helper pushed for which RO, and with what consent. */
+  syncs: [] as {
+    entryId: string;
+    observations: { lineId: string | null; actualHours: number }[];
+    share: boolean;
+  }[],
   deletedSlotIds: [] as string[],
   updatedSlots: [] as { id: string; patch: Record<string, unknown> }[],
 };
@@ -124,7 +132,30 @@ vi.mock("@/lib/db", () => ({
   },
   addLineActualHours: async (_c: unknown, lineId: string, addHours: number) => {
     calls.push(`addLineActualHours:${lineId}`);
+    // Write the new total back onto the stored entry, like the real UPDATE —
+    // so a later getEntry sees the POST-save line, which is what the True
+    // Time sync must observe.
+    if (state.entry) {
+      state.entry = {
+        ...state.entry,
+        opCodes: state.entry.opCodes.map((l) =>
+          l.id === lineId ? { ...l, actualHours: 2 + addHours } : l,
+        ),
+      };
+    }
     return { previous: 2, total: 2 + addHours };
+  },
+  getSettings: async () => ({ shareLaborTimes: true }),
+  listOpCodes: async () => [],
+  syncEntryLaborTimeObservations: async (
+    _c: unknown,
+    entryId: string,
+    observations: { lineId: string | null; actualHours: number }[],
+    share: boolean,
+  ) => {
+    calls.push("syncEntryLaborTimeObservations");
+    if (state.failSyncObservations) throw new Error("boom sync");
+    state.syncs.push({ entryId, observations, share });
   },
   deleteTimerSlot: async (_c: unknown, id: string) => {
     calls.push("deleteTimerSlot");
@@ -158,6 +189,8 @@ beforeEach(() => {
   state.events = [];
   state.failCreateUnpaidTime = false;
   state.failCreateRoEvent = false;
+  state.failSyncObservations = false;
+  state.syncs = [];
   state.tz = undefined;
   state.advanceClockOnGetEntry = null;
   state.advanceClockOnSchedules = null;
@@ -297,6 +330,102 @@ describe("saveTimerAction — entries with lines (unchanged path)", () => {
     expect(res.previousHours).toBe(2);
     expect(res.totalHours).toBe(3);
     expect(state.ledger).toHaveLength(0);
+  });
+});
+
+describe("saveTimerAction — True Time sync (timer-save-skips-true-time-sync)", () => {
+  // The timer banks hours via db.addLineActualHours, not through entries.ts,
+  // so it has to run the shared observation sync itself — otherwise stopwatch
+  // hours on a CLOSED RO (where no other edit follows) never reach the pool.
+  const ENTRY_ID = "eeeeeeee-0000-4000-8000-000000000001";
+  function linedEntry(status: "open" | "closed") {
+    return makeEntry({
+      status,
+      opCodes: [
+        {
+          id: LINE_ID,
+          opCodeId: null,
+          custom: true,
+          customCode: "BRK",
+          customDescription: null,
+          flagHours: 1,
+          actualHours: null,
+          notes: "",
+          position: 0,
+          subOpCodeId: null,
+          laborType: null,
+        },
+      ],
+    });
+  }
+
+  it("syncs observations from the post-save entry after a line save on a closed RO", async () => {
+    state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS, lineId: LINE_ID })];
+    state.entry = linedEntry("closed");
+
+    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID);
+
+    expect(res.target).toBe("line");
+    expect(state.syncs).toHaveLength(1);
+    expect(state.syncs[0].entryId).toBe(ENTRY_ID);
+    expect(state.syncs[0].share).toBe(true);
+    // Post-save re-read: the observed hours are the banked total (2 + 1), not
+    // the pre-save null the action loaded before writing.
+    expect(state.syncs[0].observations).toEqual([
+      expect.objectContaining({ lineId: LINE_ID, actualHours: 3 }),
+    ]);
+    // Runs after the hours are written and the save is committed.
+    expect(calls.indexOf("syncEntryLaborTimeObservations")).toBeGreaterThan(
+      calls.indexOf(`addLineActualHours:${LINE_ID}`),
+    );
+    expect(calls.indexOf("syncEntryLaborTimeObservations")).toBeGreaterThan(
+      calls.indexOf("deleteTimerSlot"),
+    );
+  });
+
+  it("syncs after a line save on an open (lined) RO too", async () => {
+    state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS, lineId: LINE_ID })];
+    state.entry = linedEntry("open");
+
+    await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID);
+
+    expect(calls).toContain("syncEntryLaborTimeObservations");
+  });
+
+  it("does not sync when no work hours were banked (the line is unchanged)", async () => {
+    state.slots = [makeSlot({ workAccumulated: 0, lineId: LINE_ID })];
+    state.entry = linedEntry("closed");
+
+    await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID);
+
+    expect(calls).not.toContain(`addLineActualHours:${LINE_ID}`);
+    expect(calls).not.toContain("syncEntryLaborTimeObservations");
+  });
+
+  it("does not sync for the ticket target", async () => {
+    state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS })];
+    state.entry = makeEntry({ status: "open", opCodes: [] });
+
+    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null);
+
+    expect(res.target).toBe("ticket");
+    expect(calls).not.toContain("syncEntryLaborTimeObservations");
+  });
+
+  it("a sync failure does not fail the save — it is reported instead", async () => {
+    state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS, lineId: LINE_ID })];
+    state.entry = linedEntry("closed");
+    state.failSyncObservations = true;
+
+    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID);
+
+    expect(res.target).toBe("line");
+    expect(res.totalHours).toBe(3);
+    expect(calls).toContain("deleteTimerSlot");
+    expect(reportServerError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "boom sync" }),
+      { url: "true-time/syncObservations" },
+    );
   });
 });
 

@@ -725,3 +725,134 @@ describe("DisputeOutcomeCard unmapped copy", () => {
     expect(noteCounts(container)).toEqual({ goodwill: 1, periodTotal: 0, breakdown: 0 });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Older rounds whose recovery found no line (older-round-unmapped-hidden)
+// ---------------------------------------------------------------------------
+//
+// The explanation paragraphs describe the NEWEST round and the Apply panel's
+// round only. An older, fully-unmapped round is neither (no rows, so never
+// applyRound) and its hours were rendered nowhere — prod had 2.3h and 3.6h on
+// one period with the card silent. The new note must NAME the claim and send
+// the tech to the pay stub, never tell them to enter hours: rounds re-ask for
+// the same shortage, and "Xh came back — enter it" per round is a double-pay
+// prompt.
+describe("DisputeOutcomeCard older rounds with unplaced recovery", () => {
+  const olderNotes = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll("p"))
+      .map((p) => (p.textContent ?? "").replace(/\s+/g, " ").trim())
+      .filter((t) => t.includes("can't place on a line"));
+
+  /** Newer closed round, one line, armed on the live line (rows > 0). */
+  const armedRound = (id: string): Dispute => ({
+    ...closedRound(id, 0.5),
+    scope: "lines",
+    claimedHours: 0.5,
+    lines: [disputeLine({ id: `${id}-l`, disputeId: id, recoveredHours: 0.5 })],
+  });
+
+  it("names an older period-total round beside a newer closed round", () => {
+    const container = renderCard({
+      // Newest first. d2 is rounds[0] AND applyRound; d1 is older, no lines.
+      allDisputes: [armedRound("d2"), { ...closedRound("d1", 2.3), claimedHours: 4 }],
+      entries: [liveRO([liveLine()])],
+    });
+    expect(olderNotes(container)).toEqual([
+      "An older claim for Jul 16 – Jul 31 also got hours back that FRT can't " +
+        "place on a line: your 1st claim (asked 4.0h) — 2.3h, it was a " +
+        "period-total claim. A later claim may have asked for the same " +
+        "shortage again, so these hours may already be on your lines, or be " +
+        "one payment counted twice. FRT won't write them anywhere. Before " +
+        "changing any line, check your pay stub.",
+    ]);
+    // Its words are its own: the newest round's paragraphs stay uncounted.
+    expect(noteCounts(container)).toEqual({ goodwill: 0, periodTotal: 0, breakdown: 0 });
+  });
+
+  it("lists several older rounds in one note, each with its own reason", () => {
+    const breakdownRound: Dispute = {
+      ...itemizedRound(
+        3.6,
+        [
+          disputeLine({ id: "a", disputeId: "d2", claimedHours: 3 }),
+          disputeLine({ id: "b", disputeId: "d2", code: "ALN", claimedHours: 3 }),
+        ],
+        6,
+      ),
+      id: "d2",
+    };
+    const container = renderCard({
+      allDisputes: [
+        armedRound("d3"),
+        breakdownRound,
+        { ...closedRound("d1", 2.3), claimedHours: 4 },
+      ],
+      entries: [liveRO([liveLine(), liveLine({ id: "l2", customCode: "ALN" })])],
+    });
+    const notes = olderNotes(container);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("2 older claims for Jul 16 – Jul 31");
+    expect(notes[0]).toContain(
+      "your 2nd claim (asked 6.0h) — 3.6h, no per-line split was recorded; " +
+        "your 1st claim (asked 4.0h) — 2.3h, it was a period-total claim.",
+    );
+  });
+
+  it("says nothing once the period no longer reads short", () => {
+    const allDisputes = [armedRound("d2"), { ...closedRound("d1", 2.3), claimedHours: 4 }];
+    // Control: same data while short DOES render it, so the zero below is real.
+    expect(olderNotes(renderCard({ allDisputes, entries: [liveRO([liveLine()])] }))).toHaveLength(1);
+    cleanup();
+    const container = renderCard({
+      allDisputes,
+      entries: [liveRO([liveLine()])],
+      shortedHours: 0,
+    });
+    expect(olderNotes(container)).toHaveLength(0);
+  });
+
+  it("does not re-describe the Apply round's leftovers, even when it is the older round", () => {
+    // d1 is OLDER and is applyRound (0.5h maps, 0.5h doesn't); its leftovers
+    // are the panel footnote. d2 (newest) recovered nothing to place.
+    const d1: Dispute = {
+      ...itemizedRound(1, [
+        disputeLine({ id: "a", entryId: "e1", recoveredHours: 0.5 }),
+        disputeLine({ id: "b", entryId: "gone", roNumber: "9999", recoveredHours: 0.5 }),
+      ]),
+      id: "d1",
+    };
+    const container = renderCard({
+      allDisputes: [closedRound("d2", 0), d1],
+      entries: [liveRO([liveLine()])],
+    });
+    expect(screen.getByRole("button", { name: /^Apply 0\.5h to 1 line$/ })).toBeTruthy();
+    expect(noteCounts(container).goodwill).toBe(1);
+    expect(olderNotes(container)).toHaveLength(0);
+  });
+
+  it("does not re-describe the newest round, which keeps its own paragraph", () => {
+    const container = renderCard({ allDisputes: [closedRound("d1", 4)] });
+    expect(noteCounts(container).periodTotal).toBe(1);
+    expect(olderNotes(container)).toHaveLength(0);
+  });
+
+  it("caps the list at three and never tells the tech to enter hours", () => {
+    const olders = [5, 4, 3, 2, 1].map((n) => ({
+      ...closedRound(`d${n}`, n),
+      claimedHours: 10,
+    }));
+    const container = renderCard({
+      allDisputes: [armedRound("d6"), ...olders],
+      entries: [liveRO([liveLine()])],
+    });
+    const notes = olderNotes(container);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("5 older claims");
+    expect(notes[0]).toContain("your 3rd claim (asked 10.0h) — 3.0h, it was a period-total claim; and 2 more.");
+    expect(notes[0]).not.toContain("1st claim");
+    for (const banned of ["enter the paid hours", "enter them", "add ", "yourself"]) {
+      expect(notes[0].toLowerCase()).not.toContain(banned);
+    }
+    expect(notes[0]).toMatch(/check your pay stub\.$/);
+  });
+});

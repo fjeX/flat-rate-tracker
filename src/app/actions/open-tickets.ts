@@ -13,10 +13,9 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { syncObservations } from "@/lib/true-time-sync";
 import { closePrefill, isReopened, latestTransition } from "@/lib/open-tickets";
 import { hhmmInTz, isoDate, isoDateInTz } from "@/lib/periods";
-import { observationsFromEntry } from "@/lib/true-time";
-import { reportServerError } from "@/lib/report-error-server";
 import { check, validate } from "@/lib/validation/core";
 import {
   addOpenWorkSchema,
@@ -29,7 +28,6 @@ import {
   unpaidTimeIdSchema,
 } from "@/lib/validation/actions";
 import type { Entry, RoEvent, UnpaidTime } from "@/lib/types";
-import type { DbClient } from "@/lib/db";
 
 // Every surface an open ticket touches. /dashboard is listed EXPLICITLY —
 // revalidating "/" does not reach it (memory/reference_frt_stale_state_gotchas).
@@ -540,29 +538,4 @@ export async function closeTicketAction(input: {
 
   const fresh = await db.getEntry(supabase, clean.entryId);
   return fresh ? { entry: fresh } : { error: "Ticket disappeared after close." };
-}
-
-// Same best-effort True Time hook entries.ts runs after every line mutation.
-// Copied rather than imported: entries.ts keeps it module-private, and a
-// "use server" file can only export async functions.
-async function syncObservations(
-  supabase: DbClient,
-  entryId: string,
-): Promise<void> {
-  try {
-    const [settings, entry, library] = await Promise.all([
-      db.getSettings(supabase),
-      db.getEntry(supabase, entryId),
-      db.listOpCodes(supabase),
-    ]);
-    if (!entry) return;
-    await db.syncEntryLaborTimeObservations(
-      supabase,
-      entryId,
-      observationsFromEntry(entry, library),
-      settings.shareLaborTimes,
-    );
-  } catch (err) {
-    await reportServerError(err, { url: "true-time/syncObservations" });
-  }
 }

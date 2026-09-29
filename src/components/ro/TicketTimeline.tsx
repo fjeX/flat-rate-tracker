@@ -65,8 +65,43 @@ export function TicketTimeline({
   const [events, setEvents] = useState<RoEvent[] | null>(null);
   const [ledger, setLedger] = useState<UnpaidTime[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The card-level alert: the timeline LOAD failure only. Nothing a tech taps
+  // reports through it any more (see actionError below).
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // A failed delete / reopen, rendered where the tech acted
+  // (timeline-delete-error-offscreen, 2026-09-28). The top-of-card alert sat
+  // above two unbounded lists, and Reopen sits BELOW them, so on a long
+  // timeline the refusal landed off-screen; a failed delete leaves its row in
+  // place, so the tap looked dead. `target` names the row (or "reopen") the
+  // message belongs to — one slot, so a later failure on another row moves the
+  // message there instead of leaving a stale one behind.
+  const [actionError, setActionError] = useState<{ target: string; message: string } | null>(null);
   const [busy, startTransition] = useTransition();
+
+  /**
+   * Runs one delete/reopen write and reports a refusal against `target`.
+   * Clears any previous action error first: the next attempt is a new answer.
+   */
+  function runAction(
+    target: string,
+    write: () => Promise<{ error?: string }>,
+    fallback: string,
+  ) {
+    setActionError(null);
+    startTransition(async () => {
+      try {
+        const res = await write();
+        if (res.error) setActionError({ target, message: res.error });
+        else afterWrite();
+      } catch (e) {
+        setActionError({ target, message: actionErrorMessage(e, fallback) });
+      }
+    });
+  }
+
+  function errorFor(target: string): string | null {
+    return actionError?.target === target ? actionError.message : null;
+  }
 
   // Reload counter: the section owns its own reads (like LinkedSpiffs), so a
   // write here re-reads here rather than waiting for a parent refresh that
@@ -80,8 +115,9 @@ export function TicketTimeline({
         if (cancelled) return;
         setEvents(t.events);
         setLedger(t.ledger);
+        setLoadError(null);
       } catch (e) {
-        if (!cancelled) setError(actionErrorMessage(e, "Couldn't load the timeline."));
+        if (!cancelled) setLoadError(actionErrorMessage(e, "Couldn't load the timeline."));
       } finally {
         if (!cancelled) setLoaded(true);
       }
@@ -90,6 +126,11 @@ export function TicketTimeline({
       cancelled = true;
     };
   }, [entry.id, reload]);
+
+  function clearStale() {
+    setActionError(null);
+    setLoadError(null);
+  }
 
   function afterWrite() {
     setReload((n) => n + 1);
@@ -116,14 +157,14 @@ export function TicketTimeline({
         )}
       </div>
 
-      {error && (
-        <p role="alert" className="mb-2 text-xs text-[var(--bad)]">{error}</p>
+      {loadError && (
+        <p role="alert" className="mb-2 text-xs text-[var(--bad)]">{loadError}</p>
       )}
 
       {/* ---- The story ---- */}
       <ol className="space-y-1.5">
         {(events ?? []).map((ev) => (
-          <li key={ev.id} className="flex items-start justify-between gap-2 text-sm">
+          <li key={ev.id} className="flex flex-wrap items-start justify-between gap-x-2 text-sm">
             <div className="min-w-0">
               <span className="text-[var(--fg-1)]">{eventLabel(ev)}</span>
               <span className="ml-2 text-xs text-[var(--fg-3)]">
@@ -140,16 +181,11 @@ export function TicketTimeline({
                 disabled={busy}
                 onClick={() => {
                   if (!window.confirm(`Remove "${eventLabel(ev)}" on ${formatDateShort(ev.date)}?`)) return;
-                  setError(null);
-                  startTransition(async () => {
-                    try {
-                      const res = await deleteRoEventAction(ev.id);
-                      if (res.error) setError(res.error);
-                      else afterWrite();
-                    } catch (e) {
-                      setError(actionErrorMessage(e, "Couldn't remove that."));
-                    }
-                  });
+                  runAction(
+                    `event:${ev.id}`,
+                    () => deleteRoEventAction(ev.id),
+                    "Couldn't remove that.",
+                  );
                 }}
                 aria-label={`Remove event ${eventLabel(ev)} on ${formatDateShort(ev.date)}`}
                 className="relative rounded-[var(--radius-sm)] p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
@@ -157,6 +193,11 @@ export function TicketTimeline({
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             )}
+            <InlineAlert
+              error={errorFor(`event:${ev.id}`)}
+              testId={`event-error-${ev.id}`}
+              className="basis-full"
+            />
           </li>
         ))}
       </ol>
@@ -166,7 +207,7 @@ export function TicketTimeline({
           entryId={entry.id}
           today={today}
           busy={busy}
-          onClearTop={() => setError(null)}
+          onClearStale={clearStale}
           onSaved={afterWrite}
         />
       )}
@@ -181,7 +222,7 @@ export function TicketTimeline({
           {work.length > 0 && (
             <ul className="mt-1 space-y-1">
               {work.map((u) => (
-                <li key={u.id} className="flex items-center justify-between gap-2 text-sm">
+                <li key={u.id} className="flex flex-wrap items-center justify-between gap-x-2 text-sm">
                   <span className="min-w-0 truncate">
                     <span className="text-[var(--fg-2)]">{formatDateShort(u.date)}</span>
                     <span className="ml-2 font-mono">{fmtHours(u.hours)}h</span>
@@ -200,16 +241,11 @@ export function TicketTimeline({
                         // Name the row: reason, hours and date — the 2026-09-07
                         // rule for deleting a ledger record.
                         if (!window.confirm(`Delete ${fmtHours(u.hours)}h on this ticket for ${formatDateShort(u.date)}? This can't be undone.`)) return;
-                        setError(null);
-                        startTransition(async () => {
-                          try {
-                            const res = await deleteOpenWorkAction(u.id);
-                            if (res.error) setError(res.error);
-                            else afterWrite();
-                          } catch (e) {
-                            setError(actionErrorMessage(e, "Couldn't delete that."));
-                          }
-                        });
+                        runAction(
+                          `work:${u.id}`,
+                          () => deleteOpenWorkAction(u.id),
+                          "Couldn't delete that.",
+                        );
                       }}
                       aria-label={`Delete ${fmtHours(u.hours)} hours on ${formatDateShort(u.date)}`}
                       className="relative rounded-[var(--radius-sm)] p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
@@ -217,6 +253,11 @@ export function TicketTimeline({
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
+                  <InlineAlert
+                    error={errorFor(`work:${u.id}`)}
+                    testId={`work-error-${u.id}`}
+                    className="basis-full"
+                  />
                 </li>
               ))}
             </ul>
@@ -226,7 +267,7 @@ export function TicketTimeline({
               entryId={entry.id}
               today={today}
               busy={busy}
-              onClearTop={() => setError(null)}
+              onClearStale={clearStale}
               onSaved={afterWrite}
             />
           )}
@@ -253,7 +294,7 @@ export function TicketTimeline({
           only flips status and writes the `reopened` event; the tech closes
           again through the same close flow to add or edit lines. */}
       {!isOpen && (
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--line)] pt-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 border-t border-[var(--line)] pt-3">
           <span className="text-xs text-[var(--fg-3)]">
             Closed by mistake, or a second approved line?
           </span>
@@ -262,21 +303,21 @@ export function TicketTimeline({
             disabled={busy}
             data-testid="reopen-ticket"
             className="btn btn-sm"
-            onClick={() => {
-              setError(null);
-              startTransition(async () => {
-                try {
-                  const res = await reopenTicketAction(entry.id);
-                  if (res.error) setError(res.error);
-                  else afterWrite();
-                } catch (e) {
-                  setError(actionErrorMessage(e, "Couldn't reopen that ticket."));
-                }
-              });
-            }}
+            onClick={() =>
+              runAction(
+                "reopen",
+                () => reopenTicketAction(entry.id),
+                "Couldn't reopen that ticket.",
+              )
+            }
           >
             Reopen
           </button>
+          <InlineAlert
+            error={errorFor("reopen")}
+            testId="reopen-error"
+            className="mt-1 basis-full text-right"
+          />
         </div>
       )}
     </div>
@@ -290,24 +331,39 @@ type AddFormProps = {
   today: string;
   busy: boolean;
   /**
-   * Clears the card's TOP alert — the renderer for delete-event, delete-work
-   * and reopen. The add forms do NOT report their own refusals through it
-   * (open-work-hours-refusal-unseen, 2026-09-27): that alert sits above the
-   * event list, the add forms sit at the bottom, and on a long timeline a
-   * server refusal ("Hours can't exceed 24 in a day.") landed off-screen and
-   * Save looked dead. Each add body owns its own error, rendered next to its
-   * Save button. This prop only keeps the old clearing: a stale banner from
-   * another write is not about the form the tech is opening or submitting.
+   * Clears the parent's stale errors — a failed delete/reopen's inline line
+   * and the load alert. The add forms do NOT report their own refusals through
+   * the parent (open-work-hours-refusal-unseen, 2026-09-27): the old single
+   * alert sat above the event list, the add forms sit at the bottom, and on a
+   * long timeline a server refusal ("Hours can't exceed 24 in a day.") landed
+   * off-screen and Save looked dead. Each add body owns its own error,
+   * rendered next to its Save button — and since 2026-09-28
+   * (timeline-delete-error-offscreen) delete and reopen do the same, beside
+   * the row / button the tech tapped. This prop only keeps the old clearing:
+   * a stale error from another write is not about the form being opened.
    */
-  onClearTop: () => void;
+  onClearStale: () => void;
   onSaved: () => void;
 };
 
-/** An add form's own refusal line, rendered beside its Save button. */
-function FormAlert({ error, testId }: { error: string | null; testId: string }) {
+/**
+ * A write's refusal line, rendered next to where the tech acted — beside an
+ * add form's Save, under a deleted row, under Reopen. Placement, not
+ * scrollIntoView, is the fix: the message is already where the tech's eyes
+ * are, so nothing has to yank the modal's scroll position around.
+ */
+function InlineAlert({
+  error,
+  testId,
+  className = "",
+}: {
+  error: string | null;
+  testId: string;
+  className?: string;
+}) {
   if (!error) return null;
   return (
-    <p role="alert" className="text-xs text-[var(--bad)]" data-testid={testId}>
+    <p role="alert" className={`text-xs text-[var(--bad)] ${className}`} data-testid={testId}>
       {error}
     </p>
   );
@@ -339,7 +395,7 @@ function AddEventForm(props: AddFormProps) {
         onClick={() => {
           // A stale banner from the last failed write is not about the form the
           // tech is opening now.
-          props.onClearTop();
+          props.onClearStale();
           setOpen(true);
         }}
         className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
@@ -358,7 +414,7 @@ function AddEventFields({
   entryId,
   today,
   busy,
-  onClearTop,
+  onClearStale,
   onSaved,
   onDone,
 }: AddFormProps & { onDone: () => void }) {
@@ -385,7 +441,7 @@ function AddEventFields({
     if (sending.current || pending) return;
     sending.current = true;
     setError(null);
-    onClearTop();
+    onClearStale();
     startTransition(async () => {
       try {
         const res = await addRoEventAction({
@@ -456,7 +512,7 @@ function AddEventFields({
           />
         </label>
       </div>
-      <FormAlert error={error} testId="add-event-error" />
+      <InlineAlert error={error} testId="add-event-error" />
       <div className="flex justify-end gap-2">
         {/* Cancel is disabled mid-write too: unmounting the body does not
             cancel the write, so letting it close would leave the tech asking
@@ -494,7 +550,7 @@ function AddHoursForm(props: AddFormProps) {
       <button
         type="button"
         onClick={() => {
-          props.onClearTop();
+          props.onClearStale();
           setOpen(true);
         }}
         className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
@@ -513,7 +569,7 @@ function AddHoursFields({
   entryId,
   today,
   busy,
-  onClearTop,
+  onClearStale,
   onSaved,
   onDone,
 }: AddFormProps & { onDone: () => void }) {
@@ -533,7 +589,7 @@ function AddHoursFields({
     sending.current = true;
     const parsed = Number(hours);
     setError(null);
-    onClearTop();
+    onClearStale();
     startTransition(async () => {
       try {
         const res = await addOpenWorkAction({ entryId, date, hours: parsed, note });
@@ -595,7 +651,7 @@ function AddHoursFields({
       <p className="text-[11px] text-[var(--fg-3)]">
         Hours you worked on it. Waiting on parts or approval is logged as unpaid time, not here.
       </p>
-      <FormAlert error={error} testId="add-hours-error" />
+      <InlineAlert error={error} testId="add-hours-error" />
       <div className="flex justify-end gap-2">
         <button
           type="button"

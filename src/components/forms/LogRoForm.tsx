@@ -37,6 +37,7 @@ import { RoScanSection } from "./RoScanSection";
 import { OpCodeLines } from "./OpCodeLines";
 import { ComebackSection } from "./ComebackSection";
 import { VehicleFields } from "./VehicleFields";
+import { CLOSE_DEFAULTS_TIMEOUT_MS, reloadPage } from "./closeDefaultsStall";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { fmtHours } from "@/lib/stats";
 import { formatDateLong } from "@/lib/periods";
@@ -163,10 +164,17 @@ export function LogRoForm({
   // Stored WITH the id it describes, so "ready" can never be read off a
   // different ticket's fetch. No result for this id ⇒ still loading.
   const closeEntryId = closing && existingEntry ? existingEntry.id : null;
+  // `stalled`: a "failed" that came from the timeout, not from an answer. The
+  // request is still hanging, and Next queues server actions one at a time,
+  // so "Try again" would queue behind it and hang too — the copy offers a
+  // reload instead (see closeDefaultsStall.ts).
   const [closeDefaultsResult, setCloseDefaultsResult] = useState<{
     id: string;
     status: "ready" | "failed";
+    stalled?: boolean;
   } | null>(null);
+  const closeDefaultsStalled =
+    closeDefaultsResult?.id === closeEntryId && closeDefaultsResult?.stalled === true;
   // Bumped by "Try again": the fetch effect's only trigger besides the id.
   const [closeDefaultsAttempt, setCloseDefaultsAttempt] = useState(0);
   const closeDefaultsState: "idle" | "loading" | "ready" | "failed" =
@@ -182,7 +190,9 @@ export function LogRoForm({
   // away — Save was already blocked, but the typing wasn't. Every close waits,
   // not just a reopened one, because "reopened?" is what the fetch answers.
   // Never stuck: a failed fetch is "failed", not "loading", and unlocks the
-  // pills (Save stays blocked behind "Try again"). Idle outside close mode.
+  // pills (Save stays blocked behind "Try again"). So is one that never
+  // answers — CLOSE_DEFAULTS_TIMEOUT_MS turns it into a stalled "failed".
+  // Idle outside close mode.
   const dateTimeLocked = closing && closeDefaultsState === "loading";
   // The entry id the defaults were last APPLIED for. The seeding (keep the
   // flag date, restore the stored time) is a starting point, not a rule: once
@@ -340,11 +350,32 @@ export function LogRoForm({
   useEffect(() => {
     if (closeEntryId === null) return;
     if (closeSeededForRef.current === closeEntryId) return;
+    // `cancelled`: this attempt is over because the effect re-ran ("Try again"
+    // bumped the attempt, or the ticket changed) or the form unmounted. Each
+    // attempt is its own effect run with its own flag, so attempt N's late
+    // answer can never land on attempt N+1.
     let cancelled = false;
+    // `stalled`: the timeout already answered "failed" for THIS attempt. The
+    // pills are unlocked and the tech may be typing in them, so a late answer
+    // must not seed anything — the seeding below overwrites both pills.
+    let stalled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      stalled = true;
+      setCloseDefaultsResult({ id: closeEntryId, status: "failed", stalled: true });
+    }, CLOSE_DEFAULTS_TIMEOUT_MS);
     (async () => {
       try {
         const d = await getCloseDefaultsAction(closeEntryId);
         if (cancelled) return;
+        if (stalled) {
+          // Late, and inert: none of it is applied. But the request HAS now
+          // settled, which frees Next's action queue — so an in-place retry
+          // works again. Downgrade the reload prompt to plain "Try again".
+          setCloseDefaultsResult({ id: closeEntryId, status: "failed" });
+          return;
+        }
+        clearTimeout(timer);
         closeSeededForRef.current = closeEntryId;
         setPrefill(d.prefill);
         setPrefillHours(d.prefill.actualHours > 0 ? String(d.prefill.actualHours) : "");
@@ -373,12 +404,16 @@ export function LogRoForm({
         // the ticket was reopened, so saving would fall back to today + now —
         // the silent move. Block the close, say so, offer a retry (which
         // re-runs this whole seeding, prefill included).
+        // A late rejection after the timeout lands here too: same plain
+        // "failed", now without the stall (the queue is free again).
         if (cancelled) return;
+        clearTimeout(timer);
         setCloseDefaultsResult({ id: closeEntryId, status: "failed" });
       }
     })();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [closeEntryId, closeDefaultsAttempt, setDate, setLoggedTime, timeFieldShown]);
 
@@ -621,6 +656,20 @@ export function LogRoForm({
               >
                 Couldn&apos;t load this ticket&apos;s close details, so closing is
                 paused — FRT can&apos;t tell yet whether it was reopened.
+                {closeDefaultsStalled ? (
+                  // Not "Try again": the stuck request still holds Next's
+                  // server-action queue, so a retry would wait behind it.
+                  <>
+                    {" "}The connection stopped answering, and FRT can&apos;t ask
+                    again until the page reloads. Reloading clears anything
+                    typed on this form.
+                    <div style={{ marginTop: 6 }}>
+                      <button type="button" className="btn btn-sm" onClick={reloadPage}>
+                        Reload page
+                      </button>
+                    </div>
+                  </>
+                ) : (
                 <div style={{ marginTop: 6 }}>
                   <button
                     type="button"
@@ -634,6 +683,7 @@ export function LogRoForm({
                     Try again
                   </button>
                 </div>
+                )}
               </div>
             ) : closeDefaultsState === "loading" ? (
               <p id="close-defaults-loading" role="status" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 6 }}>

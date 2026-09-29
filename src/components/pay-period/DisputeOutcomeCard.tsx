@@ -473,6 +473,48 @@ export function DisputeOutcomeCard({
   const showDisarmedNote =
     periodRecovery.disarmedHours > 0 && disarmed.length > 0 && shortedHours > 0;
 
+  // OLDER ROUNDS WHOSE RECOVERY FOUND NO LINE. Every paragraph above explains
+  // exactly two rounds: the newest (`recovery` — goodwill, period-total and
+  // missing-breakdown notes) and the one on the Apply panel (its footnote). A
+  // third round with unmappedHours > 0 has no rows, so it is never applyRound,
+  // and it isn't rounds[0] — its hours were rendered nowhere. Prod had two such
+  // rounds on one period (2.3h and 3.6h) with the card silent about both.
+  //
+  // Distinct from the disarmed note: disarmed hours are `moved` rows (they DID
+  // find a line), unmappedHours is recovery minus every matched hour, so the
+  // two never describe the same hour.
+  //
+  // CHECK, NEVER ADD — same reasoning as the disarmed note, and stronger here:
+  // a newer round usually re-asks for the shortage an older round left, so an
+  // older round's "Xh came back" is often money the tech already entered (or
+  // the same payment the newer claim restated). A per-round "enter these
+  // hours" is a double-pay prompt. The note names the claims and sends the
+  // tech to the pay stub; it deliberately states no total to type in.
+  //
+  // Claims are named by order and ask ("your 1st claim (asked 3.0h)"). The
+  // card has no date label for a claim, and a date built here would be a UTC
+  // slice or a server/client-timezone hydration mismatch — the ordinal agrees
+  // with the "across N closed claims" count above and the ask with the pack.
+  const olderUnplaced = periodRecovery.rounds
+    .map((r, i) => ({ r, i, nth: periodRecovery.rounds.length - i }))
+    .filter(
+      ({ r, i }) => i > 0 && r !== applyRound && r.plan.unmappedHours > 0,
+    );
+  const showOlderUnplacedNote = olderUnplaced.length > 0 && shortedHours > 0;
+  const ordinal = (n: number) => {
+    const t = n % 100;
+    if (t >= 11 && t <= 13) return `${n}th`;
+    return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+  };
+  // Same three roads as the newest round's paragraphs, in their own words so
+  // the existing paragraphs' phrases stay unique to them.
+  const unplacedReason = (r: (typeof olderUnplaced)[number]["r"]) =>
+    r.plan.needsLineBreakdown
+      ? "no per-line split was recorded"
+      : r.dispute.lines.length === 0
+        ? "it was a period-total claim"
+        : "it didn't match any line still here";
+
   // ONE copy, two homes, never both: inside the rows panel it is a footnote
   // under the rows it qualifies; with no rows there is no panel, so it renders
   // as its own inset alongside the other explanation paragraphs. The two sites
@@ -606,6 +648,33 @@ export function DisputeOutcomeCard({
           Check each line against your pay stub, and only enter more paid hours
           in &ldquo;Which lines came up short?&rdquo; if the shop paid them
           separately.
+        </p>
+      )}
+
+      {/* Older closed rounds whose recovery found no line — see
+          olderUnplaced. One combined note, capped like the disarmed note: N
+          paragraphs each reading "Xh came back" is N add-this prompts for what
+          may be one shortage. */}
+      {showOlderUnplacedNote && (
+        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+          {olderUnplaced.length === 1
+            ? `An older claim for ${periodLabel} also`
+            : `${olderUnplaced.length} older claims for ${periodLabel} also`}{" "}
+          got hours back that FRT can&apos;t place on a line:{" "}
+          {olderUnplaced
+            .slice(0, 3)
+            .map(
+              ({ r, nth }) =>
+                `your ${ordinal(nth)} claim (asked ${fmtHours(r.dispute.claimedHours)}h) — ${fmtHours(r.plan.unmappedHours)}h, ${unplacedReason(r)}`,
+            )
+            .join("; ")}
+          {olderUnplaced.length > 3
+            ? `; and ${olderUnplaced.length - 3} more`
+            : ""}
+          . A later claim may have asked for the same shortage again, so these
+          hours may already be on your lines, or be one payment counted twice.
+          FRT won&apos;t write them anywhere. Before changing any line, check
+          your pay stub.
         </p>
       )}
 

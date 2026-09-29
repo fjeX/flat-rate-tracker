@@ -12,8 +12,8 @@ import {
 } from "@/lib/import-remap";
 import { buildBackupBundle } from "@/lib/backup-bundle";
 import { reportServerError } from "@/lib/report-error-server";
-import { enforceRateLimit, LIMITS } from "@/lib/rate-limit";
-import { validate } from "@/lib/validation/core";
+import { enforceRateLimit, LIMITS, RateLimitError } from "@/lib/rate-limit";
+import { check, validate } from "@/lib/validation/core";
 import {
   goalHoursSchema,
   importBundleSchema,
@@ -335,7 +335,20 @@ export async function exportDataAction(): Promise<string> {
 // tsc, eslint AND `next build` all pass on this; only loading the built page
 // catches it. src/app/actions/use-server-exports.test.ts guards the pattern.
 // Consumers import ImportBundle from @/lib/import-remap directly.
-export async function importDataAction(bundle: ImportBundle): Promise<void> {
+//
+// RETURNS { error } RATHER THAN THROWING for every refusal — the same contract
+// paid-periods.ts / unpaid-time.ts / entries.ts use. A thrown Error crossing the
+// Server Actions boundary has its message replaced with a generic string plus a
+// digest in a production build, so "Unsupported backup version 7." used to
+// reach the tech as "An error occurred in the Server Components render" and
+// they never learned why the file was refused (incident fingerprint
+// `import-error-text-masked`). Every refusal below happens BEFORE the one
+// write (the import_replace_account RPC, atomic inside Postgres), so returning
+// instead of throwing has nothing to roll back. Auth/infra faults still throw —
+// the caller reports those.
+export async function importDataAction(
+  bundle: ImportBundle,
+): Promise<{ error?: string }> {
   // Shape check before anything reads a field off this. A backup is a FILE the
   // user chose, so it is the one input here that arrives hand-editable by
   // design — every other action is at least shaped by the app that called it.
@@ -348,37 +361,45 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
   // Version first, so an old file still hears why it was refused rather than
   // being told which key inside it is the wrong type.
   if (!SUPPORTED_BACKUP_VERSIONS.includes(bundle?.version)) {
-    throw new Error(`Unsupported backup version ${bundle?.version}.`);
+    return { error: `Unsupported backup version ${bundle?.version}.` };
   }
-  validate(importBundleSchema, bundle);
+  const shape = check(importBundleSchema, bundle);
+  if (!shape.ok) return { error: shape.error };
 
   const supabase = await createClient();
 
   // Gated AFTER the shape checks, deliberately: a malformed file is refused for
   // free and never costs the user a slot in their own hourly budget. Same order
   // the auth actions use.
-  await enforceRateLimit(
-    "import-data",
-    await db.getCurrentUserId(supabase),
-    LIMITS.importData,
-    "Too many imports in a short time — please wait a few minutes.",
-  );
+  try {
+    await enforceRateLimit(
+      "import-data",
+      await db.getCurrentUserId(supabase),
+      LIMITS.importData,
+      "Too many imports in a short time — please wait a few minutes.",
+    );
+  } catch (err) {
+    // The limit is a refusal the tech needs to read; anything else (no signed-in
+    // user, a DB fault) is a genuine failure and keeps throwing.
+    if (err instanceof RateLimitError) return { error: err.message };
+    throw err;
+  }
 
   // Validate dates up front purely to give a readable message. The import
   // itself is atomic now, so a bad value further in would roll the whole thing
   // back rather than half-apply — but "Invalid date in clock record" beats a raw
   // Postgres cast error in the UI.
   for (const e of bundle.entries) {
-    if (!DATE_RE.test(e.date)) throw new Error(`Invalid date in entry RO#${e.roNumber}.`);
+    if (!DATE_RE.test(e.date)) return { error: `Invalid date in entry RO#${e.roNumber}.` };
   }
   for (const c of bundle.dailyClocks) {
-    if (!DATE_RE.test(c.date)) throw new Error("Invalid date in clock record.");
+    if (!DATE_RE.test(c.date)) return { error: "Invalid date in clock record." };
   }
   for (const b of bundle.bonuses ?? []) {
-    if (!DATE_RE.test(b.date)) throw new Error("Invalid date in bonus record.");
+    if (!DATE_RE.test(b.date)) return { error: "Invalid date in bonus record." };
   }
   for (const u of bundle.unpaidTime ?? []) {
-    if (!DATE_RE.test(u.date)) throw new Error("Invalid date in unpaid time record.");
+    if (!DATE_RE.test(u.date)) return { error: "Invalid date in unpaid time record." };
   }
 
   // Read the photo paths BEFORE the replace: the rows are about to go with the
@@ -398,7 +419,23 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
   const { error } = await supabase.rpc("import_replace_account", {
     payload: payload as unknown as Json,
   });
-  if (error) throw error;
+  if (error) {
+    // Postgres classes 22 (data exception: bad cast, out-of-range value) and 23
+    // (integrity constraint: CHECK / NOT NULL / FK / unique) mean the DATABASE
+    // refused something in the file — a refusal of the backup, not a fault. The
+    // raw text names tables and constraints, so it goes to the error log and the
+    // tech gets a sentence. The transaction rolled back, so nothing changed.
+    // Anything else (connection, auth, a missing function) is a real fault and
+    // still throws.
+    if (/^2[23]/.test(error.code ?? "")) {
+      await reportServerError(error, { url: "importDataAction:rpc-refused" });
+      return {
+        error:
+          "The database refused a value in this backup, so nothing was imported — your current data is unchanged.",
+      };
+    }
+    throw error;
+  }
 
   // Past the point of no return: the account has been replaced. These binaries
   // belong to rows that no longer exist, so failing to remove them leaks storage
@@ -414,6 +451,7 @@ export async function importDataAction(bundle: ImportBundle): Promise<void> {
   }
 
   revalidateAll();
+  return {};
 }
 
 

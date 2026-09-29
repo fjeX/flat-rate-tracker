@@ -36,14 +36,16 @@ const getTicketTimelineAction = vi.fn(
   async () => ({ events: EVENTS, ledger: [] }) as { events: RoEvent[]; ledger: unknown[] },
 );
 const deleteRoEventAction = vi.fn(async (_id: string) => ({}) as { error?: string });
+const deleteOpenWorkAction = vi.fn(async (_id: string) => ({}) as { error?: string });
+const reopenTicketAction = vi.fn(async (_id: string) => ({}) as { error?: string });
 
 vi.mock("@/app/actions/open-tickets", () => ({
   addOpenWorkAction: (input: unknown) => addOpenWorkAction(input),
   addRoEventAction: (input: unknown) => addRoEventAction(input),
-  deleteOpenWorkAction: vi.fn(),
+  deleteOpenWorkAction: (id: string) => deleteOpenWorkAction(id),
   deleteRoEventAction: (id: string) => deleteRoEventAction(id),
   getTicketTimelineAction: () => getTicketTimelineAction(),
-  reopenTicketAction: vi.fn(),
+  reopenTicketAction: (id: string) => reopenTicketAction(id),
 }));
 
 import { TicketTimeline } from "./TicketTimeline";
@@ -63,8 +65,8 @@ const entry = {
 } as unknown as Entry;
 
 /** Mount once, wait for the timeline load to settle. Never remount after this. */
-async function mountTimeline() {
-  const utils = render(<TicketTimeline entry={entry} onChanged={() => {}} />);
+async function mountTimeline(e: Entry = entry) {
+  const utils = render(<TicketTimeline entry={e} onChanged={() => {}} />);
   await screen.findByTestId("ticket-timeline");
   return utils;
 }
@@ -364,7 +366,8 @@ describe("TicketTimeline — a slow write cannot be submitted twice", () => {
 // above the event list. The add-hours form is at the BOTTOM, so on a long
 // timeline "Hours can't exceed 24 in a day." landed off-screen and Save looked
 // dead. Each add form now renders its own refusal beside its Save button; the
-// top alert stays for delete-event / delete-work / reopen.
+// top alert stayed for delete-event / delete-work / reopen until 2026-09-28
+// (timeline-delete-error-offscreen, below).
 describe("TicketTimeline — an add form's refusal renders inside that form", () => {
   it("add-hours: the 24h refusal renders in the add-hours form, and only there", async () => {
     addOpenWorkAction.mockResolvedValueOnce({ error: "Hours can't exceed 24 in a day." });
@@ -419,30 +422,165 @@ describe("TicketTimeline — an add form's refusal renders inside that form", ()
     );
     expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
+});
 
-  it("delete-event: a failure still renders at the top of the card", async () => {
-    const custom: RoEvent = {
-      ...EVENTS[0],
-      id: "ev-2",
-      kind: "custom",
-      note: "Claim #4471 filed",
-      date: "2026-09-11",
-    };
-    getTicketTimelineAction.mockResolvedValueOnce({ events: [...EVENTS, custom], ledger: [] });
+// ---------------------------------------------------------------------------
+// timeline-delete-error-offscreen (2026-09-28): delete-event, delete-hours and
+// Reopen all reported refusals through the card's ONE top alert, above two
+// unbounded lists — and Reopen sits BELOW them. On a long timeline the message
+// was off-screen, and a failed delete leaves its row in place, so the tap
+// looked dead. Each now reports beside where the tech acted.
+const CUSTOM_A: RoEvent = {
+  ...EVENTS[0],
+  id: "ev-a",
+  kind: "custom",
+  note: "Claim #4471 filed",
+  date: "2026-09-11",
+};
+const CUSTOM_B: RoEvent = {
+  ...EVENTS[0],
+  id: "ev-b",
+  kind: "custom",
+  note: "Called customer",
+  date: "2026-09-12",
+};
+function work(id: string, date: string, hours: number) {
+  return {
+    id,
+    userId: "u1",
+    date,
+    hours,
+    kind: "open_work",
+    entryId: "entry-1",
+    originalEntryId: null,
+    source: "manual",
+    note: "",
+    createdAt: "2026-09-10T12:00:00.000Z",
+    updatedAt: "2026-09-10T12:00:00.000Z",
+  };
+}
+
+/** Everything role=alert on the card, as [testid, text] pairs. */
+function alerts() {
+  return screen
+    .queryAllByRole("alert")
+    .map((a) => [a.getAttribute("data-testid"), a.textContent] as const);
+}
+
+describe("TicketTimeline — a failed delete / reopen reports where the tech acted", () => {
+  let confirmSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+  afterEach(() => {
+    confirmSpy.mockRestore();
+    // Some tests set a persistent mockResolvedValue (the reload after a
+    // successful write re-reads); restore the default for later suites.
+    getTicketTimelineAction.mockReset();
+  });
+
+  it("delete-event: the refusal renders on THAT row, not at the top", async () => {
+    getTicketTimelineAction.mockResolvedValueOnce({
+      events: [...EVENTS, CUSTOM_A, CUSTOM_B],
+      ledger: [],
+    });
     deleteRoEventAction.mockResolvedValueOnce({ error: "Couldn't find that event." });
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await mountTimeline();
 
     await click(screen.getByLabelText(/Remove event Claim #4471 filed/));
-    const card = screen.getByTestId("ticket-timeline");
-    await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe("Couldn't find that event."),
-    );
-    // It is the card-level alert: first child block after the header, not in a form.
-    const alert = screen.getByRole("alert");
-    expect(alert.parentElement).toBe(card);
-    expect(screen.queryByTestId("add-event-form")).toBeNull();
-    expect(screen.queryByTestId("add-hours-form")).toBeNull();
-    confirm.mockRestore();
+    await waitFor(() => expect(alerts()).toEqual([["event-error-ev-a", "Couldn't find that event."]]));
+    const row = screen.getByLabelText(/Remove event Claim #4471 filed/).closest("li")!;
+    expect(within(row).getByRole("alert").textContent).toBe("Couldn't find that event.");
+    // Not a direct child of the card any more (that was the top alert).
+    expect(screen.getByRole("alert").parentElement).not.toBe(screen.getByTestId("ticket-timeline"));
+  });
+
+  it("delete-event: a thrown action falls back to the generic line, on the row", async () => {
+    getTicketTimelineAction.mockResolvedValueOnce({ events: [...EVENTS, CUSTOM_A], ledger: [] });
+    deleteRoEventAction.mockRejectedValueOnce(new Error("boom"));
+    await mountTimeline();
+
+    await click(screen.getByLabelText(/Remove event Claim #4471 filed/));
+    await waitFor(() => expect(screen.getByTestId("event-error-ev-a")).toBeTruthy());
+  });
+
+  it("delete-hours: the refusal renders on THAT row, not at the top", async () => {
+    getTicketTimelineAction.mockResolvedValueOnce({
+      events: EVENTS,
+      ledger: [work("w-1", "2026-09-10", 3), work("w-2", "2026-09-11", 5)],
+    });
+    deleteOpenWorkAction.mockResolvedValueOnce({ error: "That row is locked." });
+    await mountTimeline();
+
+    await click(screen.getByLabelText(/Delete 5(\.0)? hours/));
+    await waitFor(() => expect(alerts()).toEqual([["work-error-w-2", "That row is locked."]]));
+    const row = screen.getByLabelText(/Delete 5(\.0)? hours/).closest("li")!;
+    expect(within(row).getByRole("alert")).toBeTruthy();
+    const other = screen.getByLabelText(/Delete 3(\.0)? hours/).closest("li")!;
+    expect(within(other).queryByRole("alert")).toBeNull();
+  });
+
+  it("a second row's failure moves the message; it never renders on the first", async () => {
+    getTicketTimelineAction.mockResolvedValue({
+      events: [...EVENTS, CUSTOM_A, CUSTOM_B],
+      ledger: [work("w-1", "2026-09-10", 3)],
+    });
+    deleteRoEventAction
+      .mockResolvedValueOnce({ error: "First refusal." })
+      .mockResolvedValueOnce({ error: "Second refusal." });
+    deleteOpenWorkAction.mockResolvedValueOnce({ error: "Hours refusal." });
+    await mountTimeline();
+
+    await click(screen.getByLabelText(/Remove event Claim #4471 filed/));
+    await waitFor(() => expect(alerts()).toEqual([["event-error-ev-a", "First refusal."]]));
+
+    await click(screen.getByLabelText(/Remove event Called customer/));
+    await waitFor(() => expect(alerts()).toEqual([["event-error-ev-b", "Second refusal."]]));
+    const rowA = screen.getByLabelText(/Remove event Claim #4471 filed/).closest("li")!;
+    expect(within(rowA).queryByRole("alert")).toBeNull();
+
+    // Across lists too: an hours-row failure is not shown on an event row.
+    await click(screen.getByLabelText(/Delete 3(\.0)? hours/));
+    await waitFor(() => expect(alerts()).toEqual([["work-error-w-1", "Hours refusal."]]));
+  });
+
+  it("success on the retry clears the row's error", async () => {
+    getTicketTimelineAction.mockResolvedValue({ events: [...EVENTS, CUSTOM_A], ledger: [] });
+    deleteRoEventAction.mockResolvedValueOnce({ error: "Try again." });
+    await mountTimeline();
+
+    await click(screen.getByLabelText(/Remove event Claim #4471 filed/));
+    await waitFor(() => expect(screen.getByTestId("event-error-ev-a")).toBeTruthy());
+
+    await click(screen.getByLabelText(/Remove event Claim #4471 filed/));
+    await waitFor(() => expect(deleteRoEventAction).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryAllByRole("alert")).toHaveLength(0));
+  });
+
+  it("reopen: the refusal renders beside the Reopen button, and success clears it", async () => {
+    const closed = { ...entry, status: "closed" } as Entry;
+    getTicketTimelineAction.mockResolvedValue({ events: EVENTS, ledger: [] });
+    reopenTicketAction.mockResolvedValueOnce({ error: "That ticket isn't closed." });
+    await mountTimeline(closed);
+
+    const reopen = screen.getByTestId("reopen-ticket");
+    await click(reopen);
+    await waitFor(() => expect(alerts()).toEqual([["reopen-error", "That ticket isn't closed."]]));
+    // Same row as the button — not the card's top.
+    expect(screen.getByTestId("reopen-error").parentElement).toBe(reopen.parentElement);
+
+    await click(screen.getByTestId("reopen-ticket"));
+    await waitFor(() => expect(reopenTicketAction).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryAllByRole("alert")).toHaveLength(0));
+  });
+
+  it("the card-level alert remains for a failed timeline load only", async () => {
+    getTicketTimelineAction.mockRejectedValueOnce(new Error("network down"));
+    await mountTimeline();
+    const a = screen.getByRole("alert");
+    expect(a.parentElement).toBe(screen.getByTestId("ticket-timeline"));
+    // Opening an add form clears a stale error, as before.
+    await click(screen.getByTestId("add-event-open"));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
