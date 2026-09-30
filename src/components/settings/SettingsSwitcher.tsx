@@ -60,7 +60,6 @@ export function SettingsSwitcher({
   }
 
   const current = sections.find((s) => s.id === active) ?? sections[0];
-  const others = sections.filter((s) => s.id !== current.id);
 
   return (
     <div className="stg-grid">
@@ -81,11 +80,19 @@ export function SettingsSwitcher({
         </Zone>
       </div>
       <div>
-        <Zone name="More settings" className="stg-more">
+        {/* The list is fixed (Liem, 2026-09-30): every setting stays in its
+            place and the one on display is marked, the way the rail marks
+            the current page, so the eye never has to re-find a row. */}
+        <Zone name="All settings" className="stg-more">
           <ul className="rowlist">
-            {others.map((s) => (
+            {sections.map((s) => (
               <li key={s.id}>
-                <button type="button" className="rowbtn" onClick={() => show(s.id)}>
+                <button
+                  type="button"
+                  className="rowbtn"
+                  aria-current={s.id === current.id ? "true" : undefined}
+                  onClick={() => show(s.id)}
+                >
                   <span>{s.name}</span>
                   <svg className="ic ic-sm" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M5.5 7.5L12 14l6.5-6.5 1.8 1.8L12 17.6 3.7 9.3z" />

@@ -112,6 +112,13 @@
 .rowbtn:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
 .rowbtn > span:first-child { flex: 1 1 auto; min-width: 0; }
 .rowbtn > .ic { flex: none; transform: rotate(-90deg); color: var(--ink-2); }
+/* the one on display: the trim plate with the accent mark, as the rail marks
+   the current page */
+.rowbtn[aria-current] { position: relative; background: var(--trim); color: var(--trim-ink); font-weight: 700; overflow: hidden; }
+.rowbtn[aria-current]::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: var(--w-mark); background: var(--accent-mark); }
+.rowbtn[aria-current] > .ic { color: var(--trim-ink); }
+.rowbtn[aria-current]:hover { background: var(--trim); }
+.rowbtn[aria-current]:focus-visible { outline-color: var(--focus-on-trim); }
 
 /* ---------- plain rows on the wall ---------- */
 .rows > * { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line); min-height: 48px; }

@@ -384,11 +384,13 @@ fonts and corner radius only** — no layout, wording or positions moved:
     for word.
   - **Settings and Account:** /settings shows **one setting at a time**. On
     desktop: the setting on display sits at the left inside a zone named for
-    its group (TRACKING / LOGGING / APPEARANCE / DATA), and a **MORE
-    SETTINGS** zone at the right lists every other setting as a row button
-    with a chevron — tap one and it takes the display. On a phone the list is
-    a **"Setting" dropdown** above the display (the MORE SETTINGS zone is
-    still there, below). **Pay Rates opens by default**; `/settings#appearance`
+    its group (TRACKING / LOGGING / APPEARANCE / DATA), and an **ALL
+    SETTINGS** zone at the right lists every setting as a row button with a
+    chevron, in a fixed order — the one on display is **highlighted** (dark
+    plate with an accent bar at its left, like the current page in the rail;
+    `aria-current="true"`); tap another and it takes the display. On a phone
+    the list is a **"Setting" dropdown** above the display (the ALL SETTINGS
+    zone is still there, below). **Pay Rates opens by default**; `/settings#appearance`
     (the Account page's link) opens Appearance. The list, in order: Pay
     Rates, Pay Period Goal, Pay Period Defaults, Reference hourly rate, Work
     Schedule & Days Off, Timezone, Contribute to True Time, Quick Add RO,
