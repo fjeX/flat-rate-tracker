@@ -18,7 +18,9 @@ import {
   type TimerSlot,
 } from "@/lib/timer";
 import {
+  FreeSlot,
   TimerSlotCard,
+  TimerSteps,
   lineLabelFor,
   vehicleLabel,
 } from "@/components/timer/TimerSlotCard";
@@ -40,6 +42,8 @@ import { useTickingNow } from "@/lib/use-ticking-now";
 // while the tab is open and then goes with the session, matching every other
 // pay feature being signed-in-only. The save modal says so plainly rather than
 // quietly dropping it.
+
+const FREE_SLOTS = Array.from({ length: MAX_TIMER_SLOTS }, (_, i) => i + 1);
 
 export function GuestTimerSlots() {
   const {
@@ -84,7 +88,6 @@ export function GuestTimerSlots() {
     return m;
   }, [timers]);
 
-  const canAddTimer = timers.length < MAX_TIMER_SLOTS;
   function attachBlockReason(entry: Entry): string | null {
     const taken = slotsByEntry.get(entry.id);
     if (!taken) return null;
@@ -141,17 +144,6 @@ export function GuestTimerSlots() {
             slots in use
           </p>
         </div>
-        {timers.length > 0 && (
-          <Button
-            variant="go"
-            onClick={() => setPickRoOpen(true)}
-            disabled={!canAddTimer}
-            title={canAddTimer ? undefined : "Save or clear one to free up a slot."}
-          >
-            <Plus size={16} aria-hidden="true" />
-            {canAddTimer ? "Add a timer" : "All timers in use"}
-          </Button>
-        )}
       </div>
 
       {error && (
@@ -179,6 +171,7 @@ export function GuestTimerSlots() {
               )
             }
           />
+          <TimerSteps />
         </Zone>
       ) : (
         <>
@@ -208,10 +201,10 @@ export function GuestTimerSlots() {
                 onPickLine={() => setLinePickSlotId(slot.id)}
               />
             ))}
+            {FREE_SLOTS.filter((n) => !timers.some((s) => s.slot === n)).map((n) => (
+              <FreeSlot key={`free-${n}`} slot={n} onStart={() => setPickRoOpen(true)} disabled={entries.length === 0} />
+            ))}
           </div>
-          {!canAddTimer && (
-            <p className="tmr-more-hint">All {MAX_TIMER_SLOTS} timers are in use. Save or clear one to free up a slot.</p>
-          )}
         </>
       )}
 

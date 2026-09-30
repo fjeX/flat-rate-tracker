@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   Package,
   Pause,
+  Plus,
   RotateCcw,
   Save,
   Wrench,
@@ -78,6 +79,41 @@ export function vehicleLabel(entry: Entry): string {
     .filter(Boolean)
     .join(" ")
     .trim();
+}
+
+/** The three steps a timer goes through; shown where a tech starts from nothing. */
+export function TimerSteps() {
+  return (
+    <ol className="tmr-steps" aria-label="How a timer works">
+      <li><b>Start</b> it on an RO</li>
+      <li><b>Pick the line</b> the hours land on</li>
+      <li><b>Save</b> when the job is done</li>
+    </ol>
+  );
+}
+
+/**
+ * An empty slot, drawn where a timer would be (Liem, 2026-09-30): three bays,
+ * some with a car on the lift, some free. The free bay IS the add button.
+ */
+export function FreeSlot({
+  slot,
+  onStart,
+  disabled,
+}: {
+  slot: number;
+  onStart: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Zone className="tmr-slot tmr-free" name={`Timer ${slot}`} aside="Free">
+      <p className="tmr-free-txt">Nothing on this lift.</p>
+      <Button variant="line" onClick={onStart} disabled={disabled}>
+        <Plus size={16} aria-hidden="true" />
+        Start a timer
+      </Button>
+    </Zone>
+  );
 }
 
 export function TimerSlotCard({
@@ -253,11 +289,29 @@ export function TimerSlotCard({
               )}
             </>
           ) : (
-            <Button variant="line" size="sm" onClick={onPickLine}>
+            // The one thing standing between this timer and Save, so it is
+            // the primary action while it is needed.
+            <Button variant="go" size="sm" onClick={onPickLine}>
               Pick a line
             </Button>
           )}
         </div>
+      )}
+
+      {/* What to do next. A disabled Save with a tooltip explained nothing on
+          a phone (Liem, 2026-09-30); this says the step out loud, and goes
+          away once there is nothing left to do but work. */}
+      {entry && needsLine && (
+        <StatusField tag="Next" inset>
+          Pick the line these hours land on. Save unlocks after that.
+        </StatusField>
+      )}
+      {entry && !needsLine && !hasTime && (
+        <StatusField tag="Next" inset>
+          {working
+            ? "Counting. Save when the job is done, or put it on hold while you wait."
+            : "Tap Working to start the clock."}
+        </StatusField>
       )}
 
       <div className="seg tmr-seg" role="group" aria-label="Timer status">

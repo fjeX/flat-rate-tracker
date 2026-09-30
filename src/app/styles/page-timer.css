@@ -24,6 +24,26 @@
   .tmr-slots { grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); align-items: start; }
 }
 .tmr-empty { margin-top: var(--s2); }
+
+/* the three steps, under the empty state */
+.tmr-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2) var(--s4); margin: 0 0 var(--s3); padding: 0; list-style: none; counter-reset: step; font-size: var(--fs-label); color: var(--ink-2); }
+.tmr-steps li { display: flex; align-items: center; gap: var(--s2); }
+.tmr-steps li::before {
+  counter-increment: step; content: counter(step);
+  display: grid; place-items: center; width: 22px; height: 22px; flex: none;
+  background: var(--block); color: var(--block-ink); border-radius: var(--r-sign);
+  font-family: var(--font-num); font-size: var(--fs-min); font-weight: 700;
+}
+.tmr-steps b { color: var(--ink); }
+
+/* a free slot: the same zone, drawn empty, dashed like a disabled control */
+.tmr-free { border: var(--w-edge) dashed var(--line); background: transparent; }
+@media (max-width: 699px) { .tmr-free { border-left: 0; border-right: 0; } }
+.tmr-free .zone-name, .tmr-free .zone-aside { color: var(--ink-3); }
+.tmr-free-txt { margin: 0 0 var(--s3); color: var(--ink-3); font-size: var(--fs-body); }
+
+/* the Next field sits inside the timer's flow */
+.tmr-slot .sfield { margin-top: var(--s3); }
 .tmr-more { margin-top: var(--s4); }
 .tmr-more-hint { margin: var(--s2) 0 0; text-align: center; color: var(--ink-3); font-size: var(--fs-label); }
 

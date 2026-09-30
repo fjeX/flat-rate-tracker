@@ -20,7 +20,7 @@ import {
   TimerSaveReceipt,
   type TimerSaveReceiptData,
 } from "./TimerSaveModal";
-import { TimerSlotCard, lineLabelFor, vehicleLabel } from "./TimerSlotCard";
+import { FreeSlot, TimerSlotCard, TimerSteps, lineLabelFor, vehicleLabel } from "./TimerSlotCard";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -36,6 +36,9 @@ import { actionErrorMessage } from "@/lib/action-error";
 // The signed-in timer page. Up to MAX_TIMER_SLOTS jobs run at once, because a
 // bay does: one car on the lift, one waiting on parts, one waiting on an
 // approval. Card markup is shared with the guest mirror via TimerSlotCard.
+
+// Slot numbers 1..MAX, so free bays can be drawn where a timer would be.
+const FREE_SLOTS = Array.from({ length: MAX_TIMER_SLOTS }, (_, i) => i + 1);
 
 export function TimerSlots({
   slots,
@@ -133,7 +136,6 @@ export function TimerSlots({
   }
 
   const slotsUsed = slots.length;
-  const canAddTimer = slotsUsed < MAX_TIMER_SLOTS;
 
   function run(action: () => Promise<unknown>) {
     setError(null);
@@ -208,17 +210,6 @@ export function TimerSlots({
             slots in use
           </p>
         </div>
-        {slots.length > 0 && (
-          <Button
-            variant="go"
-            onClick={() => setPickRoOpen(true)}
-            disabled={!canAddTimer || pending}
-            title={canAddTimer ? undefined : "Save or clear one to free up a slot."}
-          >
-            <Plus size={16} aria-hidden="true" />
-            {canAddTimer ? "Add a timer" : "All timers in use"}
-          </Button>
-        )}
       </div>
 
       {error && (
@@ -244,6 +235,7 @@ export function TimerSlots({
               </Button>
             }
           />
+          <TimerSteps />
         </Zone>
       ) : (
         <>
@@ -272,10 +264,10 @@ export function TimerSlots({
                 onOpenDetail={setDetailEntry}
               />
             ))}
+            {FREE_SLOTS.filter((n) => !slots.some((s) => s.slot === n)).map((n) => (
+              <FreeSlot key={`free-${n}`} slot={n} onStart={() => setPickRoOpen(true)} disabled={pending} />
+            ))}
           </div>
-          {!canAddTimer && (
-            <p className="tmr-more-hint">All {MAX_TIMER_SLOTS} timers are in use. Save or clear one to free up a slot.</p>
-          )}
         </>
       )}
 
