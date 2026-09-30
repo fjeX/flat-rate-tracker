@@ -1,5 +1,10 @@
 "use client";
 
+// History, in the final design language (phase 5 sketch; no mock screen
+// existed for this page). Same features as before, re-arranged: one range
+// control, a sort control and a search well up top; the Flagged hours chart
+// in its zone; then the ROs as tags (the same object the dashboard and Pay
+// Period draw), grouped under a day heading while the list is in date order.
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadMoreEntries } from "@/app/actions/entries";
@@ -8,6 +13,7 @@ import type { Entry, OpCode, UserSettings } from "@/lib/types";
 import {
   endOfMonth,
   endOfWeek,
+  formatDateShort,
   formatLoggedTime,
   getPeriodForDate,
   startOfMonth,
@@ -15,8 +21,16 @@ import {
 } from "@/lib/periods";
 import { fmtHours, type DayDenom } from "@/lib/stats";
 import type { RateMap } from "@/lib/earnings";
+import { lineCode } from "@/lib/line-code";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
+import { RoTag } from "@/components/dashboard/RoTag";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { DurationBar } from "@/components/ui/DurationBar";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { withPt } from "@/components/ui/Figure";
+import { Zone } from "@/components/ui/Zone";
 import { HistoryBarChart } from "./HistoryBarChart";
 
 type FilterKind = "today" | "week" | "period" | "month" | "all";
@@ -35,6 +49,11 @@ const SORT_CHIPS: { kind: SortKind; label: string }[] = [
   { kind: "date",      label: "Date" },
   { kind: "hours",     label: "Hours" },
   { kind: "ro_number", label: "RO #" },
+];
+
+const MONTHS_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
 function getRange(
@@ -73,7 +92,7 @@ function fmtTime(isoTimestamp: string, tz?: string): string {
 }
 
 /**
- * "Aug 14 · 9:42 AM" for one row.
+ * The time on one row.
  *
  * WHICH TIME THIS IS — the one decision worth reading before changing it.
  *
@@ -84,91 +103,32 @@ function fmtTime(isoTimestamp: string, tz?: string): string {
  * `logged_time` is the answer to the question this slot was always ASKING, so it
  * wins when it exists. The fallback is unchanged, so no existing row loses
  * anything, and no row ever shows both — one slot, one value, best available.
- *
- * The alternative (show logged_time only, blank otherwise) would silently strip
- * the time off every RO logged before the feature. The one this replaces (leave
- * History on created_at) is worse still: the same RO would read 9:42 AM in the
- * dashboard list and 9:47 PM here.
  */
-function fmtRowDate(
-  date: string,
-  today: string,
-  createdAt: string,
-  loggedTime: string | null | undefined,
-  tz?: string,
-): string {
-  const yesterday = (() => {
-    const d = new Date(today + "T12:00:00");
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 10);
-  })();
-  const time = formatLoggedTime(loggedTime) ?? fmtTime(createdAt, tz);
-  if (date === today) return `Today · ${time}`;
-  if (date === yesterday) return `Yesterday · ${time}`;
-  const MONTHS = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-  ];
-  const [, m, d] = date.split("-").map(Number);
-  return `${MONTHS[m - 1]} ${d} · ${time}`;
+function rowTime(entry: Entry, tz?: string): string {
+  return formatLoggedTime(entry.loggedTime) ?? fmtTime(entry.createdAt, tz);
 }
 
-function RoRow({
-  entry,
-  today,
-  tz,
-  onOpen,
-  hasPhoto = false,
-}: {
-  entry: Entry;
-  today: string;
-  tz?: string;
-  onOpen: () => void;
-  hasPhoto?: boolean;
-}) {
-  const vehicle = [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  const dateLine = fmtRowDate(entry.date, today, entry.createdAt, entry.loggedTime, tz);
-
-  return (
-    <button
-      type="button"
-      className="history-ro-row"
-      onClick={onOpen}
-      style={{ width: "100%", textAlign: "left", background: "transparent", border: "none" }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span className="history-ro-num">#{entry.roNumber}</span>
-          {hasPhoto && (
-            <Camera
-              size={13}
-              aria-label="Has photo"
-              style={{ color: "var(--fg-3)", flexShrink: 0, alignSelf: "center" }}
-            />
-          )}
-        </div>
-        {/*
-          Until the frt_timezone cookie exists — a user's first ever page load,
-          before the layout's sync writes it — the server formats this time in
-          the container's UTC and the browser formats it in the real local zone,
-          which is React error #418 on every row. The client value is the
-          correct one and React keeps it; suppressing the warning here is the
-          documented handling for locale/time formatting, not a mask. Once the
-          cookie is set, `tz` pins both sides and there is nothing to suppress.
-        */}
-        <div className="history-ro-meta" suppressHydrationWarning={!tz}>{dateLine}</div>
-        {vehicle && <div className="history-ro-vehicle">{vehicle}</div>}
-      </div>
-      <div className="history-ro-hours">
-        {fmtHours(entry.flagHours)}
-        <span style={{ color: "var(--fg-3)", fontWeight: 500, fontSize: 12 }}>h</span>
-      </div>
-    </button>
-  );
+function yesterdayOf(today: string): string {
+  const d = new Date(today + "T12:00:00");
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
+
+/** "Today", "Yesterday", "Thu, Mar 12". */
+function dayHeading(date: string, today: string): string {
+  if (date === today) return "Today";
+  if (date === yesterdayOf(today)) return "Yesterday";
+  const wd = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" });
+  return `${wd}, ${formatDateShort(date)}`;
+}
+
+/** "March 2026". */
+function monthHeading(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return `${MONTHS_LONG[m - 1]} ${y}`;
+}
+
+type Group = { key: string; heading: string; entries: Entry[]; hours: number };
 
 export function HistoryView({
   entries,
@@ -230,6 +190,8 @@ export function HistoryView({
   // is always on the first page: the common case was the uncovered one.
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set());
 
+  const libraryById = useMemo(() => new Map(library.map((oc) => [oc.id, oc])), [library]);
+
   const allEntries = useMemo(
     () => [...entries, ...extraEntries].filter((e) => !deletedIds.has(e.id)),
     [entries, extraEntries, deletedIds],
@@ -284,131 +246,237 @@ export function HistoryView({
       });
   }, [allEntries, range, search, sortBy, sortDir]);
 
+  const shownHours = filtered.reduce((s, e) => s + e.flagHours, 0);
+
+  // Groups only make sense in date order. Day groups for the short ranges;
+  // month groups once the range spans months. Any other sort is one flat
+  // list, and each tag carries its full date instead.
+  const grouped = sortBy === "date";
+  const byMonth = filter === "month" || filter === "all";
+  const groups: Group[] = useMemo(() => {
+    if (!grouped) return [{ key: "all", heading: "", entries: filtered, hours: shownHours }];
+    const out: Group[] = [];
+    for (const e of filtered) {
+      const key = byMonth ? e.date.slice(0, 7) : e.date;
+      const last = out[out.length - 1];
+      if (last && last.key === key) {
+        last.entries.push(e);
+        last.hours += e.flagHours;
+      } else {
+        out.push({
+          key,
+          heading: byMonth ? monthHeading(key) : dayHeading(key, today),
+          entries: [e],
+          hours: e.flagHours,
+        });
+      }
+    }
+    return out;
+  }, [grouped, byMonth, filtered, shownHours, today]);
+
   const openEntry = openId ? allEntries.find((e) => e.id === openId) ?? null : null;
 
   return (
-    <main className="app-main" style={{ paddingBottom: 80 }}>
-      <h1 className="sr-only">History</h1>
-      {/* Filter chips */}
-      <div className="filter-row">
-        {CHIPS.map((chip) => (
-          <button
-            key={chip.kind}
-            type="button"
-            onClick={() => setFilter(chip.kind)}
-            className={`filter-chip${filter === chip.kind ? " active" : ""}`}
-          >
-            {chip.label}
-          </button>
-        ))}
+    <main className="hist-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>History</h1>
+          <p>
+            <span className="num">{filtered.length}</span> {filtered.length === 1 ? "RO" : "ROs"} ·{" "}
+            <span className="num">{withPt(fmtHours(shownHours))}</span>h in this range
+          </p>
+        </div>
       </div>
 
-      {/* Sort chips */}
-      <div className="filter-row" style={{ marginTop: 6 }}>
-        <span style={{ fontSize: 12, color: "var(--fg-3)", fontWeight: 500, alignSelf: "center", flexShrink: 0 }}>
-          Sort By:
-        </span>
-        {SORT_CHIPS.map((chip) => {
-          const active = sortBy === chip.kind;
-          const arrow = active ? (sortDir === "desc" ? " ↓" : " ↑") : "";
-          return (
+      <div className="hist-ctl">
+        <div className="seg" role="group" aria-label="Range">
+          {CHIPS.map((chip) => (
             <button
               key={chip.kind}
               type="button"
-              onClick={() => handleSortClick(chip.kind)}
-              className={`filter-chip${active ? " active" : ""}`}
+              aria-pressed={filter === chip.kind}
+              onClick={() => setFilter(chip.kind)}
             >
-              {chip.label}{arrow}
+              {chip.label}
             </button>
-          );
-        })}
-      </div>
-
-      {/* Bar chart — mirrors the dashboard "Flagged Hours" chart */}
-      <HistoryBarChart
-        entries={allEntries}
-        filter={filter}
-        today={today}
-        weekStart={weekStartProp}
-        weekEnd={weekEndProp}
-        splitDay={settings.splitDay}
-        denomByDay={denomByDay}
-      />
-
-      {/* Search bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          background: "var(--bg-0)",
-          border: "1px solid var(--line-soft)",
-          borderRadius: 8,
-          padding: "0 12px",
-          marginTop: 12,
-        }}
-      >
-        <Search style={{ width: 16, height: 16, color: "var(--fg-3)", flexShrink: 0 }} />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search RO#, vehicle, or notes"
-          className="input"
-          style={{ border: "none", background: "transparent", flex: 1, padding: "8px 0" }}
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => setSearch("")}
-            aria-label="Clear search"
-            style={{ color: "var(--fg-3)", display: "flex", alignItems: "center", background: "transparent", border: "none", cursor: "pointer" }}
-          >
-            <X style={{ width: 16, height: 16 }} />
-          </button>
-        )}
-      </div>
-
-      {/* Flat RO list */}
-      {filtered.length === 0 ? (
-        <div className="card flush" style={{ marginTop: 12 }}>
-          <EmptyState
-            icon={<Search size={22} />}
-            title="No ROs in this range"
-            description={
-              search.trim()
-                ? "No matches — try a different search."
-                : "Pick another range above, or log an RO to fill this in."
-            }
-          />
-        </div>
-      ) : (
-        <div className="card flush" style={{ marginTop: 12 }}>
-          {filtered.map((entry) => (
-            <RoRow
-              key={entry.id}
-              entry={entry}
-              today={today}
-              tz={tz}
-              onOpen={() => setOpenId(entry.id)}
-              hasPhoto={entryIdsWithPhotos?.has(entry.id) ?? false}
-            />
           ))}
         </div>
-      )}
-
-      {hasMore && (
-        <div style={{ textAlign: "center", padding: "16px 0" }}>
-          <button
-            type="button"
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            className="filter-chip"
-          >
-            {loadingMore ? "Loading…" : "Load more"}
-          </button>
+        <div className="hist-ctl-row">
+          <div className="seg" role="group" aria-label="Sort by">
+            {SORT_CHIPS.map((chip) => {
+              const active = sortBy === chip.kind;
+              return (
+                <button
+                  key={chip.kind}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => handleSortClick(chip.kind)}
+                  aria-label={`Sort by ${chip.label}${active ? `, ${sortDir === "desc" ? "descending" : "ascending"}` : ""}`}
+                >
+                  {chip.label}
+                  {active && <span className="dir" aria-hidden="true">{sortDir === "desc" ? "↓" : "↑"}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <label className="hist-search">
+            <span className="sr-only">Search RO#, vehicle, or notes</span>
+            <Search aria-hidden="true" />
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search RO#, vehicle, or notes"
+            />
+            {search && (
+              <button
+                type="button"
+                className="hist-clear"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </label>
         </div>
-      )}
+      </div>
+
+      <div className="hist-grid">
+        <div className="hist-chart-col">
+          <HistoryBarChart
+            entries={allEntries}
+            filter={filter}
+            today={today}
+            weekStart={weekStartProp}
+            weekEnd={weekEndProp}
+            splitDay={settings.splitDay}
+            denomByDay={denomByDay}
+          />
+        </div>
+
+        <div>
+          <Zone
+            id="z-hist-ros"
+            name="Repair orders"
+            aside={
+              filtered.length > 0 ? (
+                <>
+                  <span className="num">{filtered.length}</span> {filtered.length === 1 ? "RO" : "ROs"} ·{" "}
+                  <span className="num">{withPt(fmtHours(shownHours))}</span>h
+                </>
+              ) : undefined
+            }
+          >
+            {filtered.length === 0 ? (
+              <div className="hist-empty">
+                <EmptyState
+                  icon={<Search size={22} />}
+                  title="No ROs in this range"
+                  description={
+                    search.trim()
+                      ? "No matches — try a different search."
+                      : "Pick another range above, or log an RO to fill this in."
+                  }
+                />
+              </div>
+            ) : (
+              <>
+                <p className="scale-note">
+                  <i aria-hidden="true" />
+                  Bar is flagged time. This length is 1.0 hour.
+                </p>
+                <div className="hist-groups">
+                  {groups.map((g) => (
+                    <div key={g.key} className="hist-group">
+                      {grouped && (
+                        <h3 className="hist-group-h">
+                          <span>{g.heading}</span>
+                          <span className="hist-group-sum">
+                            <span className="num">{g.entries.length}</span> {g.entries.length === 1 ? "RO" : "ROs"} ·{" "}
+                            <span className="num">{withPt(fmtHours(g.hours))}</span>h
+                          </span>
+                        </h3>
+                      )}
+                      <ul className="tags">
+                        {g.entries.map((e) => {
+                          const vehicle = [e.vehicle.year, e.vehicle.make, e.vehicle.model]
+                            .filter(Boolean)
+                            .join(" ")
+                            .trim();
+                          // Under a day heading the tag needs only the time;
+                          // in a flat list it carries the date too.
+                          const when = grouped && !byMonth
+                            ? rowTime(e, tz)
+                            : `${formatDateShort(e.date)} · ${rowTime(e, tz)}`;
+                          return (
+                            <RoTag
+                              key={e.id}
+                              className="history-ro-row"
+                              roNumber={e.roNumber}
+                              onOpen={() => setOpenId(e.id)}
+                              headExtra={
+                                <>
+                                  {e.status === "open" && <Badge tone="neutral">Open</Badge>}
+                                  {entryIdsWithPhotos?.has(e.id) && (
+                                    <Camera size={14} aria-label="Has photo" className="hist-photo" />
+                                  )}
+                                </>
+                              }
+                              // Until the frt_timezone cookie exists (a user's
+                              // first ever page load) the server formats this
+                              // time in UTC and the browser in the local zone:
+                              // React error #418 on every row. The client value
+                              // is the right one and React keeps it. Once the
+                              // cookie is set, `tz` pins both sides.
+                              when={<span suppressHydrationWarning={!tz}>{when}</span>}
+                              hours={fmtHours(e.flagHours)}
+                              body={
+                                <>
+                                  {/* vehicle and op codes share a line (compact tag) */}
+                                  <div className="hist-line">
+                                    {vehicle && <div className="tag-veh">{vehicle}</div>}
+                                    {e.opCodes.length > 0 && (
+                                      <ul className="ops" aria-label="Op codes, flagged over actual hours">
+                                        {e.opCodes.map((line) => {
+                                          const flag = fmtHours(line.flagHours);
+                                          const actual =
+                                            line.actualHours !== null ? fmtHours(line.actualHours) : "—";
+                                          return (
+                                            <li key={line.id}>
+                                              <b>{lineCode(line, libraryById)}</b>
+                                              <span className="num">
+                                                {withPt(flag)}/{withPt(actual)}
+                                              </span>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                    )}
+                                  </div>
+                                  <DurationBar hours={e.flagHours} />
+                                </>
+                              }
+                            />
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {hasMore && (
+              <div className="hist-more">
+                <Button variant="line" onClick={handleLoadMore} disabled={loadingMore}>
+                  {loadingMore ? "Loading…" : "Load more"}
+                </Button>
+              </div>
+            )}
+          </Zone>
+        </div>
+      </div>
 
       {openEntry && (
         renderDetail

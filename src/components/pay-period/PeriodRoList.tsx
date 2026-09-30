@@ -15,22 +15,12 @@ import type { Entry, OpCode } from "@/lib/types";
 import { formatDateShort, formatLoggedTime } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import type { RateMap } from "@/lib/earnings";
+import { lineCode } from "@/lib/line-code";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { Badge } from "@/components/ui/Badge";
 import { Head, HeadRow } from "@/components/ui/Card";
 import { DurationBar } from "@/components/ui/DurationBar";
 import { withPt } from "@/components/ui/Figure";
-
-// Resolve a line's display code using either its custom fields or a
-// reference from the library.
-function lineCode(
-  line: Entry["opCodes"][number],
-  libraryById: Map<string, OpCode>,
-): string {
-  if (line.custom) return (line.customCode ?? "").trim() || "—";
-  if (line.opCodeId) return libraryById.get(line.opCodeId)?.code ?? "—";
-  return "—";
-}
 
 export function PeriodRoList({
   entries,

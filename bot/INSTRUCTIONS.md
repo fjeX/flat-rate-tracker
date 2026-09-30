@@ -257,6 +257,21 @@ fonts and corner radius only** — no layout, wording or positions moved:
     row, a "Period total, N ROs" row, and "Show all N ROs · M hidden".
     Custom-dates dialog: Cancel / Save in a bottom bar. Dispute pack: "Back to
     pay period" with a chevron.
+- Phase 5 rebuilds the remaining pages one at a time, in the same language.
+  - **History:** the H1 is "History" with "N ROs · X.Xh in this range" under
+    it. The **range** (Today / Week / Period / Month / All) and the **sort**
+    (Date / Hours / RO #) are **button groups with `aria-pressed`**
+    (`role="group"` named "Range" and "Sort by"); the "Sort By:" chip row is
+    gone, and the pressed sort button carries the ↓/↑ arrow. Search is a
+    full-size field (placeholder "Search RO#, vehicle, or notes") with an ✕
+    clear button. **Flagged hours** is a zone with the dashboard-style HTML
+    chart (no SVG). **Repair orders** is a zone of compact RO tags **grouped
+    under day headings** ("Yesterday", "Tue, Mar 10", each with "N ROs ·
+    X.Xh"); Month and All group by month; sorting by Hours or RO # drops the
+    headings and puts the date on each tag. The **RO number is the button**
+    that opens the detail dialog, as on the dashboard. On desktop the chart
+    sits to the left and **stays on screen while the list scrolls** — that is
+    deliberate. "Load more" is a plain outlined button under the list.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

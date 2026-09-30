@@ -21,7 +21,7 @@ export function Skeleton({
   );
 }
 
-/** Mirrors `.ro-row` / `.history-ro-row` layout — number, meta, vehicle, hours. */
+/** Mirrors the legacy `.ro-row` layout — number, meta, vehicle, hours. */
 export function RoListSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <div className="card flush">

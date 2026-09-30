@@ -7,11 +7,13 @@
 @import "./styles/ui-fields.css";
 @import "./styles/ui-surfaces.css";
 @import "./styles/ui-figures.css";
+@import "./styles/ui-page.css";
 @import "./styles/ui-shell.css";
 @import "./styles/ui-appearance.css";
 @import "./styles/page-dashboard.css";
 @import "./styles/page-log.css";
 @import "./styles/page-pay-period.css";
+@import "./styles/page-history.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1
@@ -893,36 +895,9 @@ body {
   cursor: not-allowed;
 }
 
-.history-summary {
-  display: flex; gap: 18px; flex-wrap: wrap;
-  padding: 14px 16px;
-  background: var(--bg-1);
-  border: 1px solid transparent;
-  box-shadow: var(--shadow-card);
-  border-radius: var(--radius);
-  margin: 12px 0;
-  font-size: 13px;
-}
-.history-summary .k { color: var(--fg-3); font-size: 12px; letter-spacing: 0; text-transform: none; display: block; margin-bottom: 2px; }
-.history-summary .v { font-family: var(--font-num); font-weight: 700; font-size: 16px; }
-
-/* ── History RO rows ─────────────────────────────────── */
-.history-ro-row {
-  display: flex;
-  align-items: center;
-  padding: 12px 14px;
-  cursor: pointer;
-  transition: background 120ms;
-  gap: 10px;
-}
-.history-ro-row:hover { background: var(--bg-2); }
-.history-ro-row + .history-ro-row {
-  border-top: 1px dashed var(--line-soft);
-}
-.history-ro-num { color: var(--brand); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
-.history-ro-meta { font-size: 12px; color: var(--fg-3); margin-top: 1px; }
-.history-ro-vehicle { font-size: 14px; color: var(--fg-1); }
-.history-ro-hours { color: var(--fg-0); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; flex-shrink: 0; }
+/* History's rows are RO tags now (ui-page.css / page-history.css). The
+   `history-ro-row` class survives on each tag only as the write-smoke
+   locator (tests/smoke/write.smoke.ts) and carries no style. */
 
 /* ── Animations ──────────────────────────────────────── */
 @keyframes modal-backdrop-in {
@@ -987,14 +962,13 @@ body {
 .opc-dropdown-item:active{
   transform: scale(0.96);
 }
-.ro-row:active, .history-ro-row:active { background: var(--bg-4); }
+.ro-row:active { background: var(--bg-4); }
 
 /* ── Focus-visible (keyboard-only focus ring) ───────────
    Brand-colored ring on every custom interactive class in the file, plus
    a generic fallback for any plain <button>/<a> that isn't covered above. */
 .filter-chip:focus-visible,
 .ro-row:focus-visible,
-.history-ro-row:focus-visible,
 .opc-dropdown-item:focus-visible,
 button:focus-visible,
 a:focus-visible {

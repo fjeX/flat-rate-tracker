@@ -15,11 +15,12 @@ import { FiguresInText } from "./Figures";
 // Types
 // ---------------------------------------------------------------------------
 
-type TabId = "week" | "period" | "month";
+/** How HoursChart labels the x axis: every bar (week), bar + Wk 1/2 (period), sparse (month). */
+export type TabId = "week" | "period" | "month";
 type Mode = "total" | "avg";
 type SubMode = "worked" | "all";
 
-type BarData = {
+export type ChartBar = {
   label: string;       // short axis label (M, May 3)
   longLabel: string;   // readout label (Mon, May 3)
   subLabel?: string;   // secondary axis label (Wk 1 / Wk 2 for period tab)
@@ -87,7 +88,7 @@ function computeWeek(
   windowEnd: string,
   today: string,
   mode: Mode,
-): BarData[] {
+): ChartBar[] {
   // ── Avg source: day-of-week averages across the 90d window ──────────────
   // Worked days come from forecast.ts's flagHoursByDate rather than a local
   // loop. The two used to define "worked" differently — here any entry counted,
@@ -112,7 +113,7 @@ function computeWeek(
     totalByDate.set(entry.date, (totalByDate.get(entry.date) ?? 0) + entry.flagHours);
   }
 
-  const bars: BarData[] = [];
+  const bars: ChartBar[] = [];
   let d = weekStart;
   while (d <= weekEnd) {
     const jsDay = new Date(d + "T00:00:00").getDay();
@@ -148,7 +149,7 @@ function computePeriod(
   today: string,
   mode: Mode,
   subMode: SubMode,
-): BarData[] {
+): ChartBar[] {
   const periodTotals = new Map<string, { total: number; start: string; end: string }>();
   const periodWorkedDates = new Map<string, Set<string>>();
 
@@ -180,7 +181,7 @@ function computePeriod(
   const sorted = Array.from(periodTotals.entries())
     .sort(([, a], [, b]) => a.start.localeCompare(b.start));
 
-  const bars: BarData[] = sorted.map(([key, { total, start, end }]) => {
+  const bars: ChartBar[] = sorted.map(([key, { total, start, end }]) => {
     const [, m, d] = start.split("-").map(Number);
     const dateLabel = `${MONTHS_SHORT[m - 1]} ${d}`;
 
@@ -219,7 +220,7 @@ function computeMonth(
   today: string,
   mode: Mode,
   subMode: SubMode,
-): BarData[] {
+): ChartBar[] {
   const monthTotals = new Map<string, number>();
   const workedDaysByMonth = new Map<string, Set<string>>();
 
@@ -246,7 +247,7 @@ function computeMonth(
   const currentMonth = today.substring(0, 7);
   const sorted = Array.from(monthTotals.entries()).sort(([a], [b]) => a.localeCompare(b));
 
-  const bars: BarData[] = sorted.map(([key, total]) => {
+  const bars: ChartBar[] = sorted.map(([key, total]) => {
     const [y2, m2] = key.split("-").map(Number);
     let value: number;
     if (mode === "total") {
@@ -284,7 +285,7 @@ function computeInsight(
   windowStart: string,
   windowEnd: string,
   activeTab: TabId,
-  bars: BarData[],
+  bars: ChartBar[],
   mode: Mode,
 ): string {
   if (entries.length === 0 || bars.every((b) => b.value === 0)) {
@@ -293,7 +294,7 @@ function computeInsight(
 
   // Week tab = one bar per weekday of the current week.
   if (activeTab === "week") {
-    const dayName = (b: BarData) => b.longLabel.split(",")[0]; // "Mon, May 3" -> "Mon"
+    const dayName = (b: ChartBar) => b.longLabel.split(",")[0]; // "Mon, May 3" -> "Mon"
 
     if (mode === "avg") {
       const withValues = bars.filter((b) => b.value > 0);
@@ -355,7 +356,7 @@ function niceStep(max: number): number {
   return 1000;
 }
 
-function HoursChart({
+export function HoursChart({
   bars,
   hover,
   setHover,
@@ -363,7 +364,7 @@ function HoursChart({
   mode,
   ariaLabel,
 }: {
-  bars: BarData[];
+  bars: ChartBar[];
   hover: number | null;
   setHover: (i: number | null) => void;
   tab: TabId;
@@ -480,7 +481,7 @@ export function AveragesChart({
   const windowStart = addDays(today, -89);
   const windowEnd = today;
 
-  const bars: BarData[] = (() => {
+  const bars: ChartBar[] = (() => {
     switch (activeTab) {
       case "week":   return computeWeek(entries, unpaid, weekStart, weekEnd, windowStart, windowEnd, today, mode);
       case "period": return computePeriod(entries, unpaid, windowStart, windowEnd, splitDay, today, mode, subMode);

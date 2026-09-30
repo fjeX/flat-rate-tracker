@@ -1,0 +1,123 @@
+/* =====================================================================
+   ui-page.css — the page language the mock shares between screens
+   (final.html 473-740): page title, segmented control, plain rows, RO tags,
+   the bar chart. Hoisted out of page-dashboard.css at the start of phase 5
+   (History was about to become the third copy; Pay Period still carries its
+   own `pp-` copy of the tag and is switched over when that page is next
+   touched). Tokens only: no raw colour appears in this file.
+
+   Cascade: loads after the ui-*.css partials and before globals.css. None of
+   these names exists in globals.css (checked 2026-09-30), so nothing here
+   needs a page scope to win.
+   ===================================================================== */
+
+/* ---------- page title ---------- */
+.pagehead { display: flex; align-items: center; gap: var(--s3); min-height: 48px; }
+.pagehead h1 { font-size: var(--fs-head); font-weight: 700; line-height: 1.1; text-wrap: balance; letter-spacing: 0; margin: 0; }
+.pagehead p { color: var(--ink-2); font-size: var(--fs-label); margin: 2px 0 0; }
+.who {
+  width: 40px; height: 40px; display: grid; place-items: center; flex: none;
+  background: var(--block); color: var(--block-ink); border-radius: var(--r-sign);
+  font-weight: 700; font-size: var(--fs-title); line-height: 1;
+}
+.grow { flex: 1 1 auto; min-width: 0; }
+@media (min-width: 700px) {
+  .pagehead h1 { font-size: var(--fs-head-wide); }
+}
+
+/* ---------- plain rows on the wall ---------- */
+.rows > * { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line); min-height: 48px; }
+.rows > *:last-child { border-bottom: 0; }
+.rows + .rows { border-top: var(--w-hair) solid var(--line); margin-top: 0; }
+.rows .k { font-weight: 600; color: var(--ink-2); }
+.rows .v { text-align: right; font-size: var(--fs-num); }
+
+/* ---------- segmented control (mock .seg) ---------- */
+.seg { display: inline-flex; border: var(--w-edge) solid var(--edge); border-radius: var(--r-sign); overflow: hidden; }
+.seg button {
+  min-height: var(--tap); min-width: 56px; padding: 0 var(--s3); background: transparent; color: var(--ink); border: 0;
+  border-right: var(--w-hair) solid var(--line); font-weight: 700; font-size: var(--fs-label); cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--quiet-hover); }
+.seg button:active { background: var(--quiet-active); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.seg button[aria-pressed="true"]:hover { background: var(--accent-hover); }
+.seg button[aria-pressed="true"]:active { background: var(--accent-active); }
+.seg button:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -5px; }
+.seg button[aria-pressed="true"]:focus-visible { outline-color: var(--accent-ink); }
+
+/* ---------- RO tags: one repair order each (mock .tag) ---------- */
+.tags { display: grid; gap: var(--s2); margin-top: var(--s2); }
+.tag {
+  position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0 var(--s2); align-items: start;
+  background: var(--panel); padding: 0 var(--s3) var(--s3) 0;
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+  border-radius: 0 var(--r-sign) var(--r-sign) 0;
+}
+.tag-hole { grid-column: 1; grid-row: 1 / span 2; align-self: center; justify-self: end; width: 14px; height: 14px; border-radius: 50%; background: var(--wall); border: var(--w-edge) solid var(--ink-3); }
+.tag-head { grid-column: 2 / 4; grid-row: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); padding-right: 76px; }
+.ro-link {
+  display: inline-flex; align-items: center; min-height: var(--tap); min-width: var(--tap); padding: 0; background: transparent; border: 0; border-radius: var(--r-sign);
+  color: var(--accent-text); cursor: pointer;
+  font-family: var(--font-num); font-weight: 600; font-size: var(--fs-body); letter-spacing: var(--track-num); font-variant-numeric: tabular-nums;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: var(--w-tag);
+}
+.ro-link:hover { background: var(--quiet-hover); text-decoration-thickness: 2.5px; }
+.ro-link:active { background: var(--quiet-active); }
+.ro-link:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.tag-when { font-size: var(--fs-label); color: var(--ink-3); }
+.tag-hrs-cell { grid-column: 2 / 4; grid-row: 1; justify-self: end; padding-top: 10px; }
+.tag-hrs { font-family: var(--font-num); font-weight: 600; font-size: var(--fs-fig-row); letter-spacing: var(--track-fig); line-height: 1; font-variant-numeric: tabular-nums; }
+.tag-hrs .unit { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0; margin-left: 2px; }
+.tag-body { grid-column: 2 / 4; grid-row: 2; min-width: 0; }
+.tag-body.has-act { grid-column: 2; }
+.tag-act { grid-column: 3; grid-row: 2; align-self: end; }
+.tag-veh { font-weight: 700; font-size: var(--fs-control); margin-top: -6px; line-height: 1.25; }
+.tag-veh.is-unset { color: var(--ink-3); font-weight: 600; }
+.tag-meta { color: var(--ink-2); font-size: var(--fs-label); margin: 2px 0 var(--s2); }
+.tag-meta .num { font-size: var(--fs-label); }
+.ops { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 var(--s2); }
+.ops li .num { font-weight: 500; }
+/* the placeholder tags in loading.tsx */
+.tag-skel { background: var(--panel); padding: 0 var(--s3) var(--s3) 40px; min-height: 112px; }
+
+/* ---------- bar chart (mock .chart): plain bars on a ruled plot ---------- */
+.chart-ctl { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; justify-content: space-between; }
+.chart-headline { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; margin: var(--s3) 0 0; }
+.chart-headline .when { font-weight: 700; color: var(--ink-2); }
+.chart-headline b { font-size: var(--fs-fig); font-weight: 600; letter-spacing: var(--track-fig); line-height: 1.1; }
+.chart-headline b .unit { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0; margin-left: 2px; }
+.chart-headline .what { color: var(--ink-3); font-size: var(--fs-label); }
+.chart { position: relative; padding-left: 30px; margin-top: var(--s5); }
+.chart-plot { position: relative; height: 152px; border-bottom: var(--w-edge) solid var(--ink); }
+.chart-grid { position: absolute; left: 0; right: 0; border-top: var(--w-hair) solid var(--line-soft); }
+.chart-grid span { position: absolute; right: 100%; top: -8px; width: 30px; padding-right: 6px; text-align: right; font-family: var(--font-num); letter-spacing: var(--track-num); font-size: var(--fs-min); color: var(--ink-3); }
+.chart-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 3px; }
+.chart-bars div { flex: 1 1 0; min-width: 0; position: relative; background: var(--bar); min-height: 2px; max-width: 72px; margin: 0 auto; transform-origin: bottom; animation: bar-rise 520ms var(--ease) both; }
+.chart-bars div.zero { background: var(--bar-dim); }
+.chart-bars.dim div { background: var(--bar-dim); }
+.chart-bars div.hot, .chart-bars.dim div.hot { background: var(--ink); }
+.chart-bars div.now, .chart-bars.dim div.now { background: var(--accent-text); min-height: var(--w-mark); }
+.chart-bars div > span { position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); font-family: var(--font-num); letter-spacing: var(--track-num); font-size: var(--fs-min); font-weight: 600; white-space: nowrap; color: var(--ink); }
+/* transparent columns over the bars: hover and touch move the readout */
+.chart-hit { position: absolute; inset: 0; display: flex; gap: 3px; }
+.chart-hit span { flex: 1 1 0; min-width: 0; }
+.chart-x { display: flex; gap: 3px; margin-top: 6px; }
+.chart-x span { flex: 1 1 0; min-width: 0; text-align: center; font-size: var(--fs-min); font-weight: 600; color: var(--ink-3); white-space: nowrap; min-height: 1.3em; }
+.chart-x span small { display: block; font-size: var(--fs-min); font-weight: 400; color: var(--ink-3); }
+.chart-x span.now { color: var(--ink); font-weight: 700; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.chart-foot { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); margin-top: var(--s3); padding-top: var(--s2); border-top: var(--w-hair) solid var(--line); font-size: var(--fs-label); color: var(--ink-2); }
+.chart-foot b { color: var(--ink); }
+.chart-foot b.num { font-size: var(--fs-label); }
+.insight { display: flex; gap: var(--s2); align-items: flex-start; margin-top: var(--s2); color: var(--ink-2); }
+.insight svg { margin-top: 3px; }
+.insight b { color: var(--ink); }
+.insight .num { font-size: var(--fs-label); }
+@media (min-width: 1024px) {
+  .chart-plot { height: 200px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-bars div { animation: none; }
+}

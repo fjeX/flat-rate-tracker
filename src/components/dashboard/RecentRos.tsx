@@ -17,6 +17,7 @@ import type { Entry, OpCode } from "@/lib/types";
 import { formatDateShort, formatLoggedTime } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import type { RateMap } from "@/lib/earnings";
+import { lineCode } from "@/lib/line-code";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
@@ -26,17 +27,6 @@ import { withPt } from "@/components/ui/Figure";
 import { DashIcon } from "./DashIcon";
 import { Zone } from "@/components/ui/Zone";
 import { RoTag } from "./RoTag";
-
-// Resolve a line's display code using either its custom fields or a
-// reference from the library.
-function lineCode(
-  line: Entry["opCodes"][number],
-  libraryById: Map<string, OpCode>,
-): string {
-  if (line.custom) return (line.customCode ?? "").trim() || "—";
-  if (line.opCodeId) return libraryById.get(line.opCodeId)?.code ?? "—";
-  return "—";
-}
 
 export function RecentRos({
   entries,
