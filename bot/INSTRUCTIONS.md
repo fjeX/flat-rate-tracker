@@ -272,6 +272,20 @@ fonts and corner radius only** — no layout, wording or positions moved:
     that opens the detail dialog, as on the dashboard. On desktop the chart
     sits to the left and **stays on screen while the list scrolls** — that is
     deliberate. "Load more" is a plain outlined button under the list.
+  - **Timer:** the H1 is "Timers" with "N of 3 slots in use" under it; the
+    **Add a timer** button sits in the page head (top right), not under the
+    cards, and reads "All timers in use" (disabled) when 3 are running, with
+    the hint sentence under the cards. **Each timer is a zone** headed "TIMER
+    1" with its status as a tag at the right (Currently working / Hold for
+    parts / Hold for approval / Paused). Inside: the RO number (a button that
+    opens the detail dialog) and date, the vehicle, the big worked-time clock
+    with "worked" (or "worked · not counting while …") under it and a thin bar
+    that grows one block per worked hour, any "Waiting on parts 3m" lines, a
+    **Line** row (the op-code chip plus a Change / Pick a line button), the
+    4-button status row (`role="group"` "Timer status", `aria-pressed`;
+    Working is green when pressed, the others accent), then Save / Reset /
+    Clear. From 700px wide the timers sit side by side. The empty state is a
+    zone with "Start a timer".
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

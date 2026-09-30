@@ -26,6 +26,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusField } from "@/components/ui/StatusField";
+import { Zone } from "@/components/ui/Zone";
 import { tap } from "@/lib/haptics";
 import { useTickingNow } from "@/lib/use-ticking-now";
 
@@ -130,43 +132,61 @@ export function GuestTimerSlots() {
   }
 
   return (
-    <main className="app-main" style={{ paddingBottom: 64 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div className="section-title">
-          Timers
-          <span style={{ color: "var(--fg-3)", fontWeight: 400 }}>
-            {timers.length} of {MAX_TIMER_SLOTS}
-          </span>
-        </div>
-
-        {error && (
-          <p role="alert" className="text-sm text-[var(--bad)]">
-            {error}
+    <main className="tmr-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>Timers</h1>
+          <p>
+            <span className="num">{timers.length}</span> of <span className="num">{MAX_TIMER_SLOTS}</span>{" "}
+            slots in use
           </p>
+        </div>
+        {timers.length > 0 && (
+          <Button
+            variant="go"
+            onClick={() => setPickRoOpen(true)}
+            disabled={!canAddTimer}
+            title={canAddTimer ? undefined : "Save or clear one to free up a slot."}
+          >
+            <Plus size={16} aria-hidden="true" />
+            {canAddTimer ? "Add a timer" : "All timers in use"}
+          </Button>
         )}
+      </div>
 
-        {timers.length === 0 ? (
-          <div className="card">
-            <EmptyState
-              icon={<Wrench size={22} />}
-              title="No timers running"
-              description={`Put a car on a timer and its time lands on the RO. Run up to ${MAX_TIMER_SLOTS} at once — one on the lift, one waiting on parts.`}
-              action={
-                entries.length > 0 ? (
-                  <Button variant="primary" onClick={() => setPickRoOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                    Start a timer
-                  </Button>
-                ) : (
-                  <Link href="/guest/log" className="btn btn-primary btn-sm">
-                    Log an RO first →
-                  </Link>
-                )
-              }
-            />
-          </div>
-        ) : (
-          <div className="timer-slots">
+      {error && (
+        <StatusField tag="Fix" role="alert">
+          {error}
+        </StatusField>
+      )}
+
+      {timers.length === 0 ? (
+        <Zone name="Timers" className="tmr-empty">
+          <EmptyState
+            icon={<Wrench size={22} />}
+            title="No timers running"
+            description={`Put a car on a timer and its time lands on the RO. Run up to ${MAX_TIMER_SLOTS} at once — one on the lift, one waiting on parts.`}
+            action={
+              entries.length > 0 ? (
+                <Button variant="go" onClick={() => setPickRoOpen(true)}>
+                  <Plus size={16} aria-hidden="true" />
+                  Start a timer
+                </Button>
+              ) : (
+                <Link href="/guest/log" className="btn btn-go btn-sm">
+                  Log an RO first →
+                </Link>
+              )
+            }
+          />
+        </Zone>
+      ) : (
+        <>
+          <p className="scale-note tmr-scale">
+            <i aria-hidden="true" />
+            Bar is worked time. This length is 1.0 hour.
+          </p>
+          <div className="tmr-slots">
             {timers.map((slot) => (
               <TimerSlotCard
                 key={slot.id}
@@ -189,25 +209,11 @@ export function GuestTimerSlots() {
               />
             ))}
           </div>
-        )}
-
-        {timers.length > 0 && (
-          <div>
-            <button
-              type="button"
-              className="timer-add"
-              onClick={() => setPickRoOpen(true)}
-              disabled={!canAddTimer}
-            >
-              <Plus className="h-4 w-4" />
-              {canAddTimer ? "Add another timer" : "All timers in use"}
-            </button>
-            {!canAddTimer && (
-              <p className="timer-add-hint">Save or clear one to free up a slot.</p>
-            )}
-          </div>
-        )}
-      </div>
+          {!canAddTimer && (
+            <p className="tmr-more-hint">All {MAX_TIMER_SLOTS} timers are in use. Save or clear one to free up a slot.</p>
+          )}
+        </>
+      )}
 
       {/* Attach-an-RO picker */}
       {pickRoOpen && (
