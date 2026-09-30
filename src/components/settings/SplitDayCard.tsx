@@ -4,6 +4,10 @@ import { useState, useTransition } from "react";
 import { setSplitDayAction } from "@/app/actions/settings";
 import { getRangeForPeriodKey, formatPeriodLabel, isoDate } from "@/lib/periods";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { SettingRow } from "./SettingRow";
 
 interface Props {
   initialSplitDay: number;
@@ -49,77 +53,64 @@ export function SplitDayCard({ initialSplitDay, overrideCount }: Props) {
   }
 
   return (
-    <section className="card padded-lg">
-      <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>Pay Period Defaults</h2>
-      <p className="mb-5 text-sm" style={{ color: "var(--fg-2)" }}>
-        The day of the month that ends the first pay period (P1). P2 runs from the next day through
-        end of month.
-      </p>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <label htmlFor="splitDay" className="whitespace-nowrap text-sm" style={{ color: "var(--fg-1)" }}>
-            First period ends on day
-          </label>
-          <input
-            id="splitDay"
-            type="number"
-            min={1}
-            max={30}
-            required
-            aria-required="true"
-            value={inputVal}
-            onChange={(e) => {
-              setSaved(false);
-              setError(null);
-              setInputVal(e.target.value);
-            }}
-            aria-invalid={!valid}
-            aria-describedby={error ? "splitDay-error" : undefined}
-            className="input w-20"
-          />
-          <button
-            type="submit"
-            disabled={!dirty || pending}
-            className="btn btn-primary btn-sm"
-          >
+    <SettingRow
+      titleAs="h2"
+      title="Pay Period Defaults"
+      wide
+      description="The day of the month that ends the first pay period (P1). P2 runs from the next day through end of month."
+      fine={
+        overrideCount > 0 ? (
+          <>
+            {overrideCount} custom override{overrideCount !== 1 ? "s" : ""} in effect —{" "}
+            <a href="/pay-period">manage on the Pay Period tab</a>.
+          </>
+        ) : undefined
+      }
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="stg-inline">
+          <Field label="First period ends on day" htmlFor="splitDay">
+            <Input
+              id="splitDay"
+              type="number"
+              min={1}
+              max={30}
+              required
+              aria-required="true"
+              mono
+              className="is-day"
+              value={inputVal}
+              onChange={(e) => {
+                setSaved(false);
+                setError(null);
+                setInputVal(e.target.value);
+              }}
+              aria-invalid={!valid}
+              aria-describedby={error ? "splitDay-error" : undefined}
+            />
+          </Field>
+          <Button type="submit" variant="go" disabled={!dirty || pending} saved={saved}>
             {pending ? "Saving…" : saved ? "Saved!" : "Save"}
-          </button>
+          </Button>
         </div>
-
         {error && (
-          <p id="splitDay-error" role="alert" className="text-sm" style={{ color: "var(--bad)" }}>
+          <p id="splitDay-error" role="alert" className="stg-note is-bad">
             {error}
           </p>
         )}
-
         {preview && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-[var(--radius-sm)] border px-3 py-2" style={{ borderColor: "var(--line)", background: "var(--bg-3)" }}>
-              <span className="text-xs font-medium" style={{ color: "var(--brand)" }}>P1</span>
-              <p className="mt-0.5 text-sm" style={{ color: "var(--fg-1)" }}>
-                {preview.p1 ? formatPeriodLabel(preview.p1) : "—"}
-              </p>
+          <div className="stg-preview">
+            <div>
+              <span className="stg-k">P1</span>
+              <p>{preview.p1 ? formatPeriodLabel(preview.p1) : "—"}</p>
             </div>
-            <div className="rounded-[var(--radius-sm)] border px-3 py-2" style={{ borderColor: "var(--line)", background: "var(--bg-3)" }}>
-              <span className="text-xs font-medium" style={{ color: "var(--brand)" }}>P2</span>
-              <p className="mt-0.5 text-sm" style={{ color: "var(--fg-1)" }}>
-                {preview.p2 ? formatPeriodLabel(preview.p2) : "—"}
-              </p>
+            <div>
+              <span className="stg-k">P2</span>
+              <p>{preview.p2 ? formatPeriodLabel(preview.p2) : "—"}</p>
             </div>
           </div>
         )}
-
-        {overrideCount > 0 && (
-          <p className="text-xs" style={{ color: "var(--fg-3)" }}>
-            {overrideCount} custom override{overrideCount !== 1 ? "s" : ""} in effect —{" "}
-            <a href="/pay-period" className="underline underline-offset-2" style={{ color: "var(--brand)" }}>
-              manage on the Pay Period tab
-            </a>
-            .
-          </p>
-        )}
       </form>
-    </section>
+    </SettingRow>
   );
 }

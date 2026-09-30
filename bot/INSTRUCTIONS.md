@@ -382,6 +382,26 @@ fonts and corner radius only** — no layout, wording or positions moved:
     label-style footer "GENERATED <date> · RO #<threshold> LINE". Every
     figure and every sentence is unchanged; §8b's checks still apply word
     for word.
+  - **Settings and Account:** the eleven settings cards are now **rows**
+    inside four zones — APPEARANCE (unchanged from phase 3), TRACKING (Pay
+    Period Goal, Pay Rates, Default type for new lines, Reference hourly
+    rate, Pay Period Defaults, Timezone, Contribute to True Time, Work
+    Schedule & Days Off), LOGGING (Quick Add RO, Time of day on each RO, RO
+    Scan Templates) and DATA (Backup — was titled "Data" — and Danger Zone).
+    Each row is the setting's name and sentence on the left with its control
+    on the right (under it on phones): a switch, a field plus a blue Save, or
+    a button. Every heading, label, id, switch name and sentence is unchanged
+    (§1b, §1c, §7d, §8k, the Data/Import checks all apply as written); the
+    only wording changes are the Data row's title ("Backup") and the "Default
+    type for new lines" select, which is its own row now. Danger Zone has a
+    red rule above it and a red-outlined **Clear all data** button. /account:
+    one PROFILE zone with the rows Your name (First/Last Name), Email Address
+    ("Current: …" then New Email Address) and Password (Current / New /
+    Confirm — the Current Password field is still there and still required),
+    then a PREFERENCES zone with **Week Starts On** as a Sunday / Monday
+    button group (`aria-pressed`) and a "Theme and accent — Moved to
+    Settings > Appearance" row with an **Open Appearance** button (this
+    replaces the one-line link).
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

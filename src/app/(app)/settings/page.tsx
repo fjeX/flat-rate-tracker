@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { GoalHoursCard } from "@/components/settings/GoalHoursCard";
@@ -13,8 +14,8 @@ import { QuickAddCard } from "@/components/settings/QuickAddCard";
 import { RoTimeCard } from "@/components/settings/RoTimeCard";
 import { TrueTimeCard } from "@/components/settings/TrueTimeCard";
 import { AppearanceCard } from "@/components/settings/AppearanceCard";
-import { Card } from "@/components/ui/Card";
-import Link from "next/link";
+import { SettingRow } from "@/components/settings/SettingRow";
+import { Zone } from "@/components/ui/Zone";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -28,22 +29,25 @@ export default async function SettingsPage() {
   const timezone = cookieStore.get("frt_timezone")?.value ?? "";
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6">
-      <h1 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>Settings</h1>
+    <main className="stg-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>Settings</h1>
+          <p>How the app tracks, logs and looks. Every change saves on its own.</p>
+        </div>
+      </div>
 
-      <section className="mt-6" id="appearance">
-        <Card name="Appearance" paddedLg>
+      <div className="stg-col">
+        {/* Phase 3 built Appearance from the mock; it keeps its own layout. */}
+        <Zone id="appearance" name="Appearance">
           <AppearanceCard
             initialTheme={settings.theme}
             initialAccent={settings.accent}
             mode="account"
           />
-        </Card>
-      </section>
+        </Zone>
 
-      <section className="mt-8">
-        <h2 className="section-title">Tracking</h2>
-        <div className="space-y-6">
+        <Zone name="Tracking">
           <GoalHoursCard initialGoalHours={settings.goalHours} />
           <PayRatesCard
             initialRates={laborRates}
@@ -53,38 +57,28 @@ export default async function SettingsPage() {
           <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />
           <TimezoneCard initialTimezone={timezone} />
           <TrueTimeCard initialShare={settings.shareLaborTimes} />
-          <section className="card padded-lg">
-            <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>
-              Work Schedule & Days Off
-            </h2>
-            <p className="mb-4 text-sm" style={{ color: "var(--fg-2)" }}>
-              Your weekly pattern, days off, and one-day changes live on the
-              schedule calendar — they drive efficiency on days you don&apos;t
-              enter clocked hours.
-            </p>
-            <Link href="/schedule" className="btn btn-primary">
+          <SettingRow
+            titleAs="h2"
+            title="Work Schedule & Days Off"
+            description="Your weekly pattern, days off, and one-day changes live on the schedule calendar — they drive efficiency on days you don't enter clocked hours."
+          >
+            <Link href="/schedule" className="btn btn-line">
               Open schedule calendar
             </Link>
-          </section>
-        </div>
-      </section>
+          </SettingRow>
+        </Zone>
 
-      <section className="mt-8">
-        <h2 className="section-title">Logging</h2>
-        <div className="space-y-6">
+        <Zone name="Logging">
           <QuickAddCard />
           <RoTimeCard initialTrack={settings.trackRoTime} />
           <RoTemplateCard userId={user!.id} initialTemplates={settings.roTemplates} />
-        </div>
-      </section>
+        </Zone>
 
-      <section className="mt-8">
-        <h2 className="section-title">Data</h2>
-        <div className="space-y-6">
+        <Zone name="Data">
           <DataCard />
           <DangerZoneCard />
-        </div>
-      </section>
+        </Zone>
+      </div>
     </main>
   );
 }

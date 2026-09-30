@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { updateProfile, updateEmail, updatePassword } from "@/app/actions/account";
 import { setWeekStartDayAction } from "@/app/actions/settings";
 import Link from "next/link";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Zone } from "@/components/ui/Zone";
+import { SettingRow } from "@/components/settings/SettingRow";
 
 interface Props {
   initialFirstName: string;
@@ -26,13 +31,7 @@ interface Props {
 function Feedback({ error, message }: { error?: string; message?: string }) {
   if (!error && !message) return null;
   return (
-    <p
-      style={{
-        margin: "8px 0 0",
-        fontSize: 13,
-        color: error ? "var(--bad)" : "var(--good)",
-      }}
-    >
+    <p className={`stg-note ${error ? "is-bad" : "is-good"}`} role={error ? "alert" : undefined}>
       {error ?? message}
     </p>
   );
@@ -116,109 +115,73 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-      {/* ── Profile ─────────────────────────────────────────── */}
-      <section>
-        <h2 className="section-title">Profile</h2>
-        <div className="card padded-lg">
-          <form onSubmit={handleProfileSubmit}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
-              }}
-            >
-              <div>
-                <label className="field-label" htmlFor="first_name">
-                  First Name
-                </label>
-                <input
+    <>
+      <Zone name="Profile">
+        <SettingRow titleAs="h2" title="Your name" wide description="Shown on your dispute packs and work records.">
+          <form onSubmit={handleProfileSubmit} className="stg-form">
+            <div className="stg-pair">
+              <Field label="First Name" htmlFor="first_name">
+                <Input
                   id="first_name"
                   name="first_name"
                   type="text"
-                  className="input"
                   placeholder="John"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   autoComplete="given-name"
                 />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="last_name">
-                  Last Name
-                </label>
-                <input
+              </Field>
+              <Field label="Last Name" htmlFor="last_name">
+                <Input
                   id="last_name"
                   name="last_name"
                   type="text"
-                  className="input"
                   placeholder="Smith"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   autoComplete="family-name"
                 />
-              </div>
+              </Field>
             </div>
-            <div style={{ marginTop: 14 }}>
-              <button
-                type="submit"
-                className="btn btn-primary btn-sm"
-                disabled={profilePending}
-              >
-                {profilePending ? "Saving…" : "Save Profile"}
-              </button>
-            </div>
+            <Button type="submit" variant="go" disabled={profilePending}>
+              {profilePending ? "Saving…" : "Save Profile"}
+            </Button>
             <Feedback {...profileResult} />
           </form>
-        </div>
-      </section>
+        </SettingRow>
 
-      {/* ── Email ────────────────────────────────────────────── */}
-      <section>
-        <h2 className="section-title">Email Address</h2>
-        <div className="card padded-lg">
-          <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--fg-2)" }}>
-            Current:{" "}
-            <span style={{ color: "var(--fg-1)", fontWeight: 500 }}>{initialEmail}</span>
-          </p>
-          <form onSubmit={handleEmailSubmit}>
-            <div>
-              <label className="field-label" htmlFor="email">
-                New Email Address
-              </label>
-              <input
+        <SettingRow
+          titleAs="h2"
+          title="Email Address"
+          wide
+          description={
+            <>
+              Current: <b>{initialEmail}</b>
+            </>
+          }
+        >
+          <form onSubmit={handleEmailSubmit} className="stg-form">
+            <Field label="New Email Address" htmlFor="email">
+              <Input
                 id="email"
                 name="email"
                 type="email"
-                className="input"
                 placeholder="new@example.com"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 autoComplete="email"
                 required
               />
-            </div>
-            <div style={{ marginTop: 14 }}>
-              <button
-                type="submit"
-                className="btn btn-primary btn-sm"
-                disabled={emailPending}
-              >
-                {emailPending ? "Updating…" : "Update Email"}
-              </button>
-            </div>
+            </Field>
+            <Button type="submit" variant="go" disabled={emailPending}>
+              {emailPending ? "Updating…" : "Update Email"}
+            </Button>
             <Feedback {...emailResult} />
           </form>
-        </div>
-      </section>
+        </SettingRow>
 
-      {/* ── Password ─────────────────────────────────────────── */}
-      <section>
-        <h2 className="section-title">Password</h2>
-        <div className="card padded-lg">
-          <form onSubmit={handlePasswordSubmit}>
+        <SettingRow titleAs="h2" title="Password" wide description="At least 8 characters.">
+          <form onSubmit={handlePasswordSubmit} className="stg-form">
             {/*
               Identity anchor for password managers and the browser's own
               accessibility check ("password forms should have a username
@@ -241,34 +204,26 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
               tabIndex={-1}
               aria-hidden="true"
             />
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="stg-stack">
               {hasPassword && (
-                <div>
-                  <label className="field-label" htmlFor="current_password">
-                    Current Password
-                  </label>
-                  <input
+                <Field label="Current Password" htmlFor="current_password">
+                  <Input
                     id="current_password"
                     name="current_password"
                     type="password"
-                    className="input"
                     placeholder="Your current password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     autoComplete="current-password"
                     required
                   />
-                </div>
+                </Field>
               )}
-              <div>
-                <label className="field-label" htmlFor="new_password">
-                  New Password
-                </label>
-                <input
+              <Field label="New Password" htmlFor="new_password">
+                <Input
                   id="new_password"
                   name="new_password"
                   type="password"
-                  className="input"
                   placeholder="At least 8 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -276,88 +231,53 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
                   minLength={8}
                   required
                 />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="confirm_password">
-                  Confirm Password
-                </label>
-                <input
+              </Field>
+              <Field label="Confirm Password" htmlFor="confirm_password">
+                <Input
                   id="confirm_password"
                   name="confirm_password"
                   type="password"
-                  className="input"
                   placeholder="Repeat new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   autoComplete="new-password"
                   required
                 />
-              </div>
+              </Field>
             </div>
-            <div style={{ marginTop: 14 }}>
-              <button
-                type="submit"
-                className="btn btn-primary btn-sm"
-                disabled={passwordPending}
-              >
-                {passwordPending ? "Changing…" : "Change Password"}
-              </button>
-            </div>
+            <Button type="submit" variant="go" disabled={passwordPending}>
+              {passwordPending ? "Changing…" : "Change Password"}
+            </Button>
             <Feedback {...passwordResult} />
           </form>
-        </div>
-      </section>
+        </SettingRow>
+      </Zone>
 
-      {/* ── Preferences ──────────────────────────────────────── */}
-      <section>
-        <h2 className="section-title">Preferences</h2>
-        <div className="card padded-lg">
-          <p className="field-label" style={{ marginBottom: 12 }}>
-            Week Starts On
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={weekPending}
-              onClick={() => handleWeekStartDay(0)}
-              style={{
-                borderColor: weekStartDay === 0 ? "var(--brand)" : "var(--line)",
-                background: weekStartDay === 0 ? "var(--brand-bg)" : "var(--bg-3)",
-                color: weekStartDay === 0 ? "var(--brand)" : "var(--fg-2)",
-                fontWeight: weekStartDay === 0 ? 600 : 400,
-              }}
-            >
+      <Zone name="Preferences">
+        <SettingRow
+          titleAs="h2"
+          title="Week Starts On"
+          description="Affects the Week view in History and the Averages chart."
+        >
+          <div className="seg" role="group" aria-label="Week Starts On">
+            <button type="button" aria-pressed={weekStartDay === 0} disabled={weekPending} onClick={() => handleWeekStartDay(0)}>
               Sunday
             </button>
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={weekPending}
-              onClick={() => handleWeekStartDay(1)}
-              style={{
-                borderColor: weekStartDay === 1 ? "var(--brand)" : "var(--line)",
-                background: weekStartDay === 1 ? "var(--brand-bg)" : "var(--bg-3)",
-                color: weekStartDay === 1 ? "var(--brand)" : "var(--fg-2)",
-                fontWeight: weekStartDay === 1 ? 600 : 400,
-              }}
-            >
+            <button type="button" aria-pressed={weekStartDay === 1} disabled={weekPending} onClick={() => handleWeekStartDay(1)}>
               Monday
             </button>
           </div>
-          <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--fg-3)" }}>
-            Affects the Week view in History and the Averages chart.
-          </p>
-        </div>
-      </section>
-
-      {/* Theme and accent live in Settings now */}
-      <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)" }}>
-        <Link href="/settings#appearance" className="preview-link">
-          Theme and accent moved to Settings &gt; Appearance
-        </Link>
-      </p>
-
-    </div>
+        </SettingRow>
+        <SettingRow
+          titleAs="h2"
+          title="Theme and accent"
+          description="Moved to Settings > Appearance."
+        >
+          <Link href="/settings#appearance" className="btn btn-line">
+            Open Appearance
+          </Link>
+        </SettingRow>
+      </Zone>
+    </>
   );
 }

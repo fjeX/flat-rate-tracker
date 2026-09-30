@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertTriangle } from "lucide-react";
 import { clearAllDataAction } from "@/app/actions/settings";
 import { tap } from "@/lib/haptics";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { StatusField } from "@/components/ui/StatusField";
+import { SettingRow } from "./SettingRow";
 
 const CONFIRM_WORD = "DELETE";
 
@@ -28,31 +31,27 @@ export function DangerZoneCard() {
     });
   }
 
-  const dangerBorderStyle = { borderColor: "color-mix(in oklab, var(--bad) 30%, var(--line))" } as const;
-
   if (done) {
     return (
-      <section className="card padded-lg" style={dangerBorderStyle}>
-        <p className="text-sm" style={{ color: "var(--fg-2)" }}>All data cleared. Settings reset to defaults.</p>
-      </section>
+      <SettingRow titleAs="h2" title="Danger Zone" tone="bad">
+        <StatusField tag="Saved" inset>All data cleared. Settings reset to defaults.</StatusField>
+      </SettingRow>
     );
   }
 
   return (
-    <section className="card padded-lg" style={dangerBorderStyle}>
-      <div className="mb-3 flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4" style={{ color: "var(--bad)" }} />
-        <h2 className="text-base font-semibold" style={{ color: "var(--bad)" }}>Danger Zone</h2>
-      </div>
-      <p className="mb-5 text-sm" style={{ color: "var(--fg-2)" }}>
-        Permanently deletes all repair orders, op codes, clocked hours, and pay period records.
-        Resets split day to 15 and clears all overrides. This cannot be undone.
-      </p>
-      <div className="flex flex-wrap items-center gap-3">
+    <SettingRow
+      titleAs="h2"
+      title="Danger Zone"
+      tone="bad"
+      wide
+      description="Permanently deletes all repair orders, op codes, clocked hours, and pay period records. Resets split day to 15 and clears all overrides. This cannot be undone."
+    >
+      <div className="stg-danger">
         <label htmlFor="danger-confirm" className="sr-only">
           Type {CONFIRM_WORD} to confirm deletion
         </label>
-        <input
+        <Input
           id="danger-confirm"
           type="text"
           value={input}
@@ -64,26 +63,17 @@ export function DangerZoneCard() {
           aria-required="true"
           aria-invalid={input.length > 0 && input !== CONFIRM_WORD}
           aria-describedby={error ? "danger-error" : "danger-hint"}
-          className="input flex-1"
-          style={{ borderColor: "color-mix(in oklab, var(--bad) 35%, var(--line))" }}
         />
-        <button
-          onClick={handleClear}
-          disabled={input !== CONFIRM_WORD || pending}
-          className="btn"
-          style={{ background: "var(--bad-bg)", color: "var(--bad)", borderColor: "color-mix(in oklab, var(--bad) 40%, transparent)" }}
-        >
+        <Button variant="danger" onClick={handleClear} disabled={input !== CONFIRM_WORD || pending}>
           {pending ? "Clearing…" : "Clear all data"}
-        </button>
+        </Button>
       </div>
-      <p id="danger-hint" className="mt-2 text-xs" style={{ color: "var(--fg-3)" }}>
-        This cannot be undone.
-      </p>
+      <p id="danger-hint" className="stg-note">This cannot be undone.</p>
       {error && (
-        <p id="danger-error" role="alert" className="mt-2 text-sm" style={{ color: "var(--bad)" }}>
+        <p id="danger-error" role="alert" className="stg-note is-bad">
           {error}
         </p>
       )}
-    </section>
+    </SettingRow>
   );
 }

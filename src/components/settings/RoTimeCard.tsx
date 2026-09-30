@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { setTrackRoTimeAction } from "@/app/actions/settings";
 import { Switch } from "@/components/ui/Switch";
 import { actionErrorMessage } from "@/lib/action-error";
+import { SettingRow } from "./SettingRow";
 
 /**
  * The RO time-of-day switch. Off by default.
@@ -37,46 +38,26 @@ export function RoTimeCard({ initialTrack }: { initialTrack: boolean }) {
   }
 
   return (
-    <section className="card padded-lg">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2
-            className="mb-1 text-base font-semibold"
-            style={{ color: "var(--fg-0)" }}
-          >
-            Time of day on each RO
-          </h2>
-          <p className="text-sm" style={{ color: "var(--fg-2)" }}>
-            Adds a time field to the log form, filled in with the current time in
-            your timezone and editable before you save. It shows on the RO in
-            your lists, so a day reads as a sequence of jobs instead of a pile.
-          </p>
-          <p className="mt-2 text-sm" style={{ color: "var(--fg-2)" }}>
-            Worth it only if you log ROs as you finish them. If you write up the
-            whole day at once, every RO gets stamped with the time you sat down —
-            which tells you nothing. Leave this off in that case.
-          </p>
-          <p className="mt-2 text-xs" style={{ color: "var(--fg-3)" }}>
-            Turning it off stops new ROs recording a time. Times already on your
-            ROs stay exactly where they are.
-          </p>
-          {error && <p className="mt-2 text-xs text-[var(--bad)]">{error}</p>}
-        </div>
-
-        <Switch
-          checked={track}
-          onChange={toggle}
-          disabled={isPending}
-          // MUST match the visible <h2> above, word for word. This is the
-          // switch's only accessible name, and a name that doesn't contain the
-          // label a user can see is a WCAG 2.5.3 (Label in Name) failure —
-          // speech input users say what they read, and "click Time of day on
-          // each RO" matched nothing while this said "Record a time on each
-          // RO". Static, not state-dependent: role="switch" + aria-checked
-          // already announce on/off.
-          label="Time of day on each RO"
-        />
-      </div>
-    </section>
+    <SettingRow
+      titleAs="h2"
+      title="Time of day on each RO"
+      description={
+        <>
+          Adds a time field to the log form, filled in with the current time in
+          your timezone and editable before you save. It shows on the RO in your
+          lists, so a day reads as a sequence of jobs instead of a pile. Worth it
+          only if you log ROs as you finish them. If you write up the whole day at
+          once, every RO gets stamped with the time you sat down — which tells you
+          nothing. Leave this off in that case.
+        </>
+      }
+      fine="Turning it off stops new ROs recording a time. Times already on your ROs stay exactly where they are."
+    >
+      {/* MUST match the visible heading above, word for word. This is the
+          switch's only accessible name, and a name that doesn't contain the
+          label a user can see is a WCAG 2.5.3 (Label in Name) failure. */}
+      <Switch checked={track} onChange={toggle} disabled={isPending} label="Time of day on each RO" />
+      {error && <p className="stg-note is-bad">{error}</p>}
+    </SettingRow>
   );
 }

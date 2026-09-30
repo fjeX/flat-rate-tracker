@@ -7,6 +7,10 @@ import {
 } from "@/app/actions/labor-rates";
 import { LABOR_TYPES, LABOR_TYPE_LABELS } from "@/lib/earnings";
 import type { LaborRate, LaborType } from "@/lib/types";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { SettingRow } from "./SettingRow";
 
 type RateInputs = Record<LaborType, string>;
 
@@ -86,101 +90,82 @@ export function PayRatesCard({
   }
 
   return (
-    <section className="card padded-lg">
-      <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>
-        Pay Rates
-      </h2>
-      <p className="mb-5 text-sm" style={{ color: "var(--fg-2)" }}>
-        Your hourly rate for each type of labor. Leave a row blank if it doesn&apos;t
-        apply. Once any rate is set, earnings show up on the dashboard, pay period,
-        and each RO. Warranty usually pays less than customer pay — that gap is what
-        the warranty-loss figure measures.
-      </p>
-
-      <form onSubmit={handleSubmit} className="space-y-3">
-        {LABOR_TYPES.map((t) => {
-          const invalid = Number.isNaN(parseRate(inputs[t]));
-          return (
-            <div key={t} className="flex items-center gap-3">
-              <label
-                htmlFor={`rate-${t}`}
-                className="flex-1 text-sm"
-                style={{ color: "var(--fg-1)" }}
-              >
-                {LABOR_TYPE_LABELS[t]}
-              </label>
-              <div className="flex items-center gap-1">
-                <span style={{ color: "var(--fg-3)" }}>$</span>
-                <input
-                  id={`rate-${t}`}
-                  type="number"
-                  min={0}
-                  max={9999}
-                  step={0.5}
-                  inputMode="decimal"
-                  value={inputs[t]}
-                  onChange={(e) => {
-                    setInputs((prev) => ({ ...prev, [t]: e.target.value }));
-                    setSaved(false);
-                    setError(null);
-                  }}
-                  aria-invalid={invalid}
-                  placeholder="—"
-                  className="input mono w-24 text-right tabular-nums"
-                />
-                <span className="text-xs" style={{ color: "var(--fg-3)" }}>/hr</span>
-              </div>
-            </div>
-          );
-        })}
-
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button
-            type="submit"
-            disabled={!dirty || anyInvalid || pending}
-            className="btn btn-primary"
-          >
-            {pending ? "Saving…" : saved ? "Saved ✓" : "Save rates"}
-          </button>
-          {anyInvalid && (
-            <span className="text-sm" style={{ color: "var(--bad)" }}>
-              Rates must be between 0 and 9999.
-            </span>
-          )}
-        </div>
-        {error && (
-          <p role="alert" className="text-sm" style={{ color: "var(--bad)" }}>
-            {error}
-          </p>
-        )}
-      </form>
-
-      <div
-        className="mt-5 flex flex-wrap items-center gap-3 border-t pt-4"
-        style={{ borderColor: "var(--line)" }}
+    <>
+      <SettingRow
+        titleAs="h2"
+        title="Pay Rates"
+        wide
+        description="Your hourly rate for each type of labor. Leave a row blank if it doesn't apply. Once any rate is set, earnings show up on the dashboard, pay period, and each RO. Warranty usually pays less than customer pay — that gap is what the warranty-loss figure measures."
       >
-        <label
-          htmlFor="default-labor-type"
-          className="text-sm"
-          style={{ color: "var(--fg-1)" }}
-        >
-          Default type for new lines
-        </label>
-        <select
-          id="default-labor-type"
-          value={defaultType}
-          onChange={(e) => handleDefaultChange(e.target.value)}
-          disabled={defaultPending}
-          className="input text-sm"
-        >
-          <option value="">None (untyped)</option>
-          {LABOR_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {LABOR_TYPE_LABELS[t]}
-            </option>
-          ))}
-        </select>
-      </div>
-    </section>
+        <form onSubmit={handleSubmit}>
+          <ul className="stg-rates">
+            {LABOR_TYPES.map((t) => {
+              const invalid = Number.isNaN(parseRate(inputs[t]));
+              return (
+                <li key={t}>
+                  <label htmlFor={`rate-${t}`}>{LABOR_TYPE_LABELS[t]}</label>
+                  <span className="stg-money">
+                    <span className="stg-cur" aria-hidden="true">$</span>
+                    <Input
+                      id={`rate-${t}`}
+                      type="number"
+                      min={0}
+                      max={9999}
+                      step={0.5}
+                      inputMode="decimal"
+                      mono
+                      className="is-money"
+                      value={inputs[t]}
+                      onChange={(e) => {
+                        setInputs((prev) => ({ ...prev, [t]: e.target.value }));
+                        setSaved(false);
+                        setError(null);
+                      }}
+                      aria-invalid={invalid}
+                      placeholder="—"
+                    />
+                    <span className="stg-unit">/hr</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="stg-actions">
+            <Button type="submit" variant="go" disabled={!dirty || anyInvalid || pending} saved={saved}>
+              {pending ? "Saving…" : saved ? "Saved ✓" : "Save rates"}
+            </Button>
+            {anyInvalid && <span className="stg-note is-bad" style={{ margin: 0 }}>Rates must be between 0 and 9999.</span>}
+          </div>
+          {error && (
+            <p role="alert" className="stg-note is-bad">
+              {error}
+            </p>
+          )}
+        </form>
+      </SettingRow>
+
+      <SettingRow
+        titleAs="h2"
+        title="Default type for new lines"
+        description="The labor type a new line starts on. Change it on the line whenever a job is different."
+      >
+        <Field label="Default type" htmlFor="default-labor-type" labelHidden>
+          <select
+            id="default-labor-type"
+            value={defaultType}
+            onChange={(e) => handleDefaultChange(e.target.value)}
+            disabled={defaultPending}
+            className="input"
+          >
+            <option value="">None (untyped)</option>
+            {LABOR_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {LABOR_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </SettingRow>
+    </>
   );
 }

@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { setTimezoneAction } from "@/app/actions/settings";
 import { useClientValue } from "@/lib/client-storage";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { SettingRow } from "./SettingRow";
 
 const TIMEZONES = [
   { label: "Eastern (ET) — New York", value: "America/New_York" },
@@ -53,57 +56,48 @@ export function TimezoneCard({ initialTimezone }: { initialTimezone: string }) {
   const isInList = TIMEZONES.some((t) => t.value === tz);
 
   return (
-    <section className="card padded-lg">
-      <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>Timezone</h2>
-      <p className="mb-4 text-sm" style={{ color: "var(--fg-2)" }}>
-        Sets what &ldquo;today&rdquo; means for your dashboard. If your ROs disappear partway through your shift, set this to your local timezone.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="field-label" htmlFor="timezone-select">
-          Timezone
-        </label>
-        <select
-          id="timezone-select"
-          value={isInList ? tz : ""}
-          onChange={(e) => save(e.target.value)}
-          disabled={pending}
-          aria-describedby={error ? "timezone-error" : undefined}
-          className="input flex-1"
-          style={{ minWidth: 200, padding: "6px 12px" }}
-        >
-          {!isInList && tz && (
-            <option value="">{tz}</option>
-          )}
-          {TIMEZONES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-
-        <button
-          type="button"
+    <SettingRow
+      titleAs="h2"
+      title="Timezone"
+      description="Sets what “today” means for your dashboard. If your ROs disappear partway through your shift, set this to your local timezone."
+    >
+      <div className="stg-inline">
+        <Field label="Timezone" htmlFor="timezone-select">
+          <select
+            id="timezone-select"
+            value={isInList ? tz : ""}
+            onChange={(e) => save(e.target.value)}
+            disabled={pending}
+            aria-describedby={error ? "timezone-error" : undefined}
+            className="input"
+          >
+            {!isInList && tz && <option value="">{tz}</option>}
+            {TIMEZONES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Button
+          variant="quiet"
           disabled={pending}
           onClick={() => save(Intl.DateTimeFormat().resolvedOptions().timeZone)}
-          className="btn btn-sm"
         >
           Auto-detect
-        </button>
+        </Button>
       </div>
-
       {error && (
-        <p id="timezone-error" role="alert" className="mt-2 text-xs" style={{ color: "var(--bad)" }}>
+        <p id="timezone-error" role="alert" className="stg-note is-bad">
           {error}
         </p>
       )}
-
       {tz && (
-        <p className="mt-2 text-xs" style={{ color: "var(--fg-3)" }}>
-          Current: {tz}
-          {saved && <span className="ml-2" style={{ color: "var(--good)" }}>✓ Saved</span>}
+        <p className={`stg-note${saved ? " is-good" : ""}`}>
+          {saved ? "Saved · " : "Current: "}
+          {tz}
         </p>
       )}
-    </section>
+    </SettingRow>
   );
 }

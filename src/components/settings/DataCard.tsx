@@ -10,6 +10,8 @@ import {
   summarizeBackup,
 } from "@/lib/backup-summary";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Button } from "@/components/ui/Button";
+import { SettingRow } from "./SettingRow";
 
 export function DataCard() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -111,36 +113,21 @@ export function DataCard() {
 
   return (
     <>
-      <section className="card padded-lg">
-        <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>Data</h2>
-        <p className="mb-2 text-sm" style={{ color: "var(--fg-2)" }}>
-          Export a full backup or restore from a previous one.
-        </p>
-        <p className="mb-5 text-xs" style={{ color: "var(--fg-3)" }}>
-          Note: RO photo image files aren&apos;t included in the JSON backup — only
-          their metadata. Photos stay in secure storage and can&apos;t be restored
-          from this file.
-        </p>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleExport}
-            disabled={exportPending}
-            className="btn"
-          >
-            <Download className="h-4 w-4" />
+      <SettingRow
+        titleAs="h2"
+        title="Backup"
+        description="Export a full backup or restore from a previous one."
+        fine="RO photo image files aren't included in the JSON backup — only their metadata. Photos stay in secure storage and can't be restored from this file."
+      >
+        <div className="stg-actions" style={{ marginTop: 0 }}>
+          <Button variant="line" onClick={handleExport} disabled={exportPending}>
+            <Download size={16} aria-hidden="true" />
             {exportPending ? "Preparing…" : "Download backup"}
-          </button>
-
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={importPending}
-            className="btn"
-          >
-            <Upload className="h-4 w-4" />
+          </Button>
+          <Button variant="quiet" onClick={() => fileRef.current?.click()} disabled={importPending}>
+            <Upload size={16} aria-hidden="true" />
             Import backup…
-          </button>
-
+          </Button>
           <label htmlFor="backup-file-input" className="sr-only">
             Import backup file
           </label>
@@ -154,17 +141,16 @@ export function DataCard() {
             onChange={handleFileChange}
           />
         </div>
-
         {exportError && (
-          <p role="alert" className="mt-3 text-sm" style={{ color: "var(--bad)" }}>{exportError}</p>
+          <p role="alert" className="stg-note is-bad">{exportError}</p>
         )}
         {parseError && (
-          <p id="backup-parse-error" role="alert" className="mt-3 text-sm" style={{ color: "var(--bad)" }}>{parseError}</p>
+          <p id="backup-parse-error" role="alert" className="stg-note is-bad">{parseError}</p>
         )}
         {importDone && (
-          <p className="mt-3 text-sm" style={{ color: "var(--good)" }}>Import complete — data replaced.</p>
+          <p className="stg-note is-good">Import complete — data replaced.</p>
         )}
-      </section>
+      </SettingRow>
 
       {pendingBundle && summary && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/70 sm:items-center">
