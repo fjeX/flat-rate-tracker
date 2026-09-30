@@ -1249,7 +1249,11 @@ button.step-head {
   color: var(--fg-0); padding: 4px 0;
   border-bottom: 2px solid var(--line);
 }
-.ro-hero input:focus { border-bottom-color: var(--brand); }
+/* A real ring, not just the underline colour. Until 2026-09-29 the
+   quality gate's focus check passed here only because the surrounding
+   card's drop shadow counted as a "ring" on an ancestor; the overhaul
+   removed card shadows and exposed it. */
+.ro-hero input:focus { border-bottom-color: var(--brand); box-shadow: var(--ring); }
 
 /* Op-code search */
 .opc-search { position: relative; }
