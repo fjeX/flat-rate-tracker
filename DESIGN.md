@@ -105,6 +105,13 @@ components:
     height: "44px"
 ---
 
+> **⚠️ Superseded (2026-09-29).** This describes the old "Calm Workspace"
+> system. The app is mid-rollout to the locked 2026-09 overhaul design: see
+> `plans/frt-visual-overhaul-rollout.md` in the Claude-EA repo, and the token
+> block at the top of `src/app/globals.css` (the old names below now resolve
+> through its alias bridge). This file is rewritten from the built result at
+> the end of the rollout (phase 6). Do not design new UI from it.
+
 # Design System: Flat Rate Tracker
 
 ## Overview

@@ -801,7 +801,7 @@ export default function LandingPage() {
           }
         }
       `}</style>
-      <div id="lp" className="min-h-screen selection:bg-[var(--brand)] selection:text-[var(--brand-ink)]">
+      <div id="lp" className="min-h-screen selection:bg-[var(--select-bg)] selection:text-[var(--select-ink)]">
         <Nav />
         <Hero />
         <PaceSection />

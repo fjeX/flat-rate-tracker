@@ -138,14 +138,24 @@ Never write the password into the report, screenshots descriptions, or anywhere 
    **RECURRING (also seen YYYY-MM-DD)** instead of being reported as new.
 3. If a previously-broken thing now works, report it under **Fixed since last run**.
 
-## Heads-up: the app was redesigned (2026-07-09)
+## Heads-up: the app is being re-skinned (2026-09-29 onward)
 
-The whole UI moved to the "Calm Workspace" design language — borderless
-elevated cards, pill buttons/tabs, sentence-case labels, brighter light theme.
-**This is intentional, not breakage.** Judge behavior and legibility, not
-whether it looks like previous nights' screenshots. Do flag anything that is
-genuinely broken in the new look (overlapping text, unreadable contrast,
-controls too small to tap, horizontal scrolling).
+A new visual design is rolling out in phases. Phase 1 changed **colours,
+fonts and corner radius only** — no layout, wording or positions moved:
+- Fonts are now **Titillium Web** (text) and **Azeret Mono** (numbers). Wide,
+  spaced-out figures like `0 . 0` are the new number font, not a bug.
+- Palette is green-grey (dark default) / grey-white (light). The accent is
+  **blue**, not orange. Cards have no drop shadow and 6px corners.
+- **Everything this file calls "amber" is now neutral grey text on a dark or
+  pale grey field** (e.g. the amber `unpaid rework` pill, the amber "empty?"
+  schedule days, the amber efficiency tier, the "Unpaid rework · N lines"
+  row). Check the element is present and says the right thing; do not report
+  it for not being amber. Green = good and red = bad are unchanged.
+- **This is intentional, not breakage.** Judge behaviour and legibility, not
+  whether it looks like previous nights' screenshots. Do flag anything
+  genuinely broken in the new look: overlapping text, unreadable contrast,
+  text the same colour as its background, controls too small to tap,
+  horizontal scrolling.
 
 ## Nightly checklist
 
@@ -1601,8 +1611,9 @@ efficiency denominator falls back to the scheduled hours.
   `· mixed` suffixes are GONE from the visible text (provenance moved to the
   hover title). Seeing a bare "efficiency" label is correct, not a regression.
 - **Tier colors are honest now (2026-07-15 fix):** efficiency < 95% shows
-  amber, < 80% red. Colored-not-green tiles are not a bug; check the color
-  matches the number.
+  the middle tier, < 80% red. Since the 2026-09-29 re-skin the middle tier is
+  **neutral grey, not amber**. Not-green tiles are not a bug; check the tier
+  matches the number (≥ 95% green, 80–94% grey, < 80% red).
 - **Chart hover efficiency (2026-07-16):** on the dashboard Flagged Hours
   chart (Week tab, Total mode) and the History chart (Today/Week filters),
   hovering a day bar with flagged hours shows "N% efficiency" in the readout

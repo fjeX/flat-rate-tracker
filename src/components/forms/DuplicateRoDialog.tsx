@@ -81,11 +81,11 @@ export function DuplicateRoDialog({
         <button
           type="button"
           onClick={onLogNew}
-          style={!suggestEdit ? { color: "var(--brand-ink)" } : undefined}
+          style={!suggestEdit ? { color: "var(--accent-ink)" } : undefined}
           className={`flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-semibold transition-colors ${
             suggestEdit
               ? "border border-[var(--line)] text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
-              : "bg-[var(--brand)] hover:brightness-105"
+              : "bg-[var(--accent)] hover:bg-[var(--accent-hover)]"
           }`}
         >
           <Plus className="h-4 w-4" />

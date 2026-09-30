@@ -11,9 +11,9 @@ import { ClaimAccountLink } from "@/components/guest/ClaimAccountLink";
  * was current on BUILD DAY into the static HTML. The canary then serves that
  * build-day markup to a browser whose clock is frozen to FIXTURE_NOW, the text
  * disagrees, and React recovers the hydration mismatch by re-rendering from the
- * root. That rewrites <html className> from the server prop in
- * src/app/layout.tsx, which has no `theme-light` — so the class the <head>
- * theme script added is wiped and the light-mode canary photographs a dark page.
+ * root. That rewrites <html> from the server props in src/app/layout.tsx
+ * (data-theme="dark", no `theme-light`) — so what the <head> theme script set
+ * is wiped and the light-mode canary photographs a dark page.
  *
  * Segment config cannot live on the pages themselves ("use client" forbids it),
  * so it lives on the layout and covers the whole /guest segment.

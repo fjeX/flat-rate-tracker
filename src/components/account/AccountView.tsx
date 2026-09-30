@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import { updateProfile, updateEmail, updatePassword } from "@/app/actions/account";
 import { setWeekStartDayAction } from "@/app/actions/settings";
 import { useStored, writeStored } from "@/lib/client-storage";
-
-// Also read by the anti-FOUC inline script in app/layout.tsx, which runs before
-// React and therefore reads localStorage directly. Keep the spelling in step.
-const THEME_KEY = "theme";
+// THEME_KEY is shared with the anti-FOUC <head> script (THEME_BOOT_SCRIPT).
+import { THEME_KEY, applyThemeToRoot } from "@/lib/theme";
 
 interface Props {
   initialFirstName: string;
@@ -91,11 +89,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
     // writeStored persists AND notifies, so `theme` above updates from the
     // store — no separate setState to keep in step with what was written.
     writeStored(THEME_KEY, next);
-    if (next === "light") {
-      document.documentElement.classList.add("theme-light");
-    } else {
-      document.documentElement.classList.remove("theme-light");
-    }
+    applyThemeToRoot(document.documentElement, next);
   }
 
   // Handlers

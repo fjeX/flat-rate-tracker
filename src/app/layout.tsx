@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
+import { Titillium_Web, Azeret_Mono } from "next/font/google";
 import "./globals.css";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 
-const plexSans = IBM_Plex_Sans({
-  variable: "--font-plex",
+const titillium = Titillium_Web({
+  variable: "--font-titillium",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "600", "700"],
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+const azeret = Azeret_Mono({
+  variable: "--font-azeret",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -25,17 +26,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // data-theme / data-accent are rendered with the defaults so a page is
+    // never token-less: if React ever re-renders <html> from these props
+    // (hydration recovery), the worst case is the default look, not a blank
+    // palette. The <head> script swaps in the saved choice before first paint.
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${plexSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      data-theme="dark"
+      data-accent="blue"
+      data-panel="accent"
+      className={`${titillium.variable} ${azeret.variable} h-full antialiased`}
     >
       <head>
         <script
           suppressHydrationWarning
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='light')document.documentElement.classList.add('theme-light');}catch(e){}})();`,
-          }}
+          dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }}
         />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>

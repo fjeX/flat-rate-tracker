@@ -39,7 +39,7 @@ export default function AppError({
       </p>
       <button
         onClick={reset}
-        style={{ background: "var(--brand)", color: "var(--brand-ink)", border: "none", borderRadius: "var(--radius-sm)", padding: "8px 20px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+        style={{ background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: "var(--radius-sm)", padding: "8px 20px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
       >
         Reload
       </button>

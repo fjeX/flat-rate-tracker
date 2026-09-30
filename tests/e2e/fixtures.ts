@@ -61,8 +61,13 @@ export const test = base.extend<UiFixtures>({
     await context.addInitScript((t) => {
       try {
         localStorage.setItem("theme", t);
-        if (t === "light") document.documentElement.classList.add("theme-light");
-        else document.documentElement.classList.remove("theme-light");
+        localStorage.setItem("accent", "blue");
+        const root = document.documentElement;
+        root.setAttribute("data-theme", t);
+        root.setAttribute("data-accent", "blue");
+        // theme-light rides along for one release (see src/lib/theme.ts)
+        if (t === "light") root.classList.add("theme-light");
+        else root.classList.remove("theme-light");
       } catch {}
     }, theme);
     /**

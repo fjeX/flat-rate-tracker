@@ -1,91 +1,426 @@
 @import "tailwindcss";
 
-/* ===================================================================
-   Flat Rate Tracker — Hi-Fi design system
-   =================================================================== */
+/* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
+   plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1
+   of plans/frt-visual-overhaul-rollout.md. One edit: --font-ui / --font-num
+   lead with the next/font variables set on <html> in src/app/layout.tsx. */
+/* =====================================================================
+   TOKENS — Flat Rate Tracker, final design (2026-09-29)
+   Order: 1 base · 2 light theme · 3 dark themes (dark, dark-graphite,
+          dark-pitch) · 4 accents, light · 5 accents, dark · 6 headline-panel
+          treatments
+   data-theme is "light", "dark", "dark-graphite" or "dark-pitch". Every
+   dark theme shares block 3's base and the dark accents ([data-theme^="dark"]);
+   graphite and pitch only override surface tokens.
+   No raw colour value appears below this block.
+   ===================================================================== */
 
+/* ---------- 1. BASE ---------- */
 :root {
-  color-scheme: dark;
+  /* type */
+  --font-ui: var(--font-titillium, "Titillium Web"), "Segoe UI", Tahoma, sans-serif;
+  --font-num: var(--font-azeret, "Azeret Mono"), "Cascadia Mono", Consolas, monospace;
+  --fs-min: 0.75rem;      /* 12  smallest text anywhere */
+  --fs-label: 0.8125rem;  /* 13  labels, asides */
+  --fs-body: 0.9375rem;   /* 15 */
+  --fs-control: 1rem;     /* 16  inputs, nav rows */
+  --fs-num: 1.0625rem;    /* 17  figures in rows */
+  --fs-title: 1.1875rem;  /* 19  step and fold titles, row totals */
+  --fs-head: 1.5rem;      /* 24  page title (phone) */
+  --fs-head-wide: 1.75rem;/* 28  page title (700px and up) */
+  --fs-fig: 1.75rem;      /* 28  figures on the wall */
+  --fs-fig-row: 1.375rem; /* 22  the hours on an RO row */
+  --fs-sign: 2.75rem;     /* 44  the headline figure */
+  --track-label: 0.06em;  /* every uppercase label */
+  --track-num: -0.035em;  /* Azeret Mono is wide: figures are set tight */
+  --track-fig: -0.04em;
+  --pt-pull: -0.14em;     /* each side of a decimal point or comma */
 
-  /* backgrounds — Calm Workspace: soft warm charcoal ladder; separation
-     comes from elevation (--shadow-card), not borders */
-  --bg-0: #141519;
-  --bg-1: #1d1f24;
-  --bg-2: #24262c;
-  --bg-3: #2d3038;
-  --bg-4: #383c45;
-  --line: rgba(255, 255, 255, 0.06);
-  --line-soft: rgba(255, 255, 255, 0.04);
+  /* space */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --gutter: 16px;
 
-  /* text */
-  --fg-0: #f4f3f1;
-  --fg-1: #d8d5d1;
-  --fg-2: #a9a59f;
-  /* Brightened 2026-08-04 from #8d8983 to clear WCAG AA 4.5:1 on every dark
-     surface (was 3.79:1 on --bg-3). Closes the a11y follow-up logged 2026-07-23. */
-  --fg-3: #9b9791;
+  /* rule weights */
+  --w-hair: 1px;          /* dividers */
+  --w-tag: 1.5px;         /* tag and op-code outlines */
+  --w-edge: 2px;          /* controls, panels, the shell */
+  --w-heavy: 3px;         /* zone top rule, headline rule, focus ring */
+  --w-mark: 4px;          /* current-page mark */
 
-  /* brand & semantic — chroma eased vs the old ramp; color is reserved
-     for state, not decoration */
-  --brand:        oklch(0.73 0.14 55);
-  --brand-strong: oklch(0.66 0.16 50);
-  --brand-soft:   oklch(0.30 0.10 50 / 0.45);
-  --brand-bg:     oklch(0.30 0.08 50 / 0.18);
-  /* text/icon color on a brand-filled surface */
-  --brand-ink:    oklch(0.18 0.04 50);
+  /* shape */
+  --r-tag: 2px;
+  --r-sign: 4px;
+  --r-panel: 6px;
+  --tap: 44px;
+  --field-h: 48px;
+  --hour: 52px;           /* one flagged hour on a duration bar */
+  --nav-h: 60px;
+  --save-h: 54px;
+  --rail-w: 248px;
+  --page-max: 1180px;
 
-  --good:        oklch(0.78 0.16 150);
-  --good-strong: oklch(0.65 0.17 150);
-  --good-bg:     oklch(0.30 0.10 150 / 0.18);
-
-  --bad:         oklch(0.72 0.18 25);
-  --bad-bg:      oklch(0.30 0.12 25 / 0.20);
-
-  --warn:        oklch(0.82 0.15 80);
-  --warn-bg:     oklch(0.30 0.09 80 / 0.20);
-
-  --info:        oklch(0.75 0.13 230);
-  --info-bg:     oklch(0.30 0.08 230 / 0.20);
-
-  /* op-code category hues — muted, decorative-adjacent (a 3px tick, never
-     text). 8 slots; tags map to one deterministically (tagHue.ts). */
-  --tag-hue-0: oklch(0.72 0.11 15);
-  --tag-hue-1: oklch(0.74 0.11 60);
-  --tag-hue-2: oklch(0.74 0.10 110);
-  --tag-hue-3: oklch(0.74 0.11 150);
-  --tag-hue-4: oklch(0.74 0.10 200);
-  --tag-hue-5: oklch(0.72 0.10 240);
-  --tag-hue-6: oklch(0.72 0.11 290);
-  --tag-hue-7: oklch(0.72 0.11 330);
-
-  --radius: 18px;
-  --radius-sm: 12px;
-  --shadow-card: 0 1px 2px rgba(0,0,0,0.25), 0 10px 30px rgba(0,0,0,0.28);
-  /* pop-over / dropdown / sticky-bar elevation */
-  --shadow-pop: 0 18px 48px rgba(0,0,0,0.5);
-  /* keyboard/interactive focus ring — single source, don't hand-roll */
-  --ring: 0 0 0 3px oklch(0.73 0.14 55 / 0.3);
-  /* translucent chrome surfaces (header, tab bar, sticky save bar) */
-  --bar-bg: rgba(20, 21, 25, 0.85);
-  /* minimum touch target — shop use, greasy hands */
-  --tap-min: 44px;
-
-  /* overlay scrim — full-bleed photo lightbox needs a near-black scrim in BOTH
-     themes; these are named (not theme-flipped) precisely so light theme keeps
-     the same dark backdrop. See .theme-light for the intentionally-equal copy. */
-  --overlay-scrim: rgba(0,0,0,0.92);
-  --overlay-fg: #fff;
-
-  /* backwards-compat for existing Tailwind usage */
-  --background: #141519;
-  --foreground: #f4f3f1;
+  /* motion */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --fast: 150ms;
 }
+
+/* ---------- 2. LIGHT THEME: painted wall, sign-white panels ---------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --wall: #e7eae8;
+  --wall-2: #dbe0dd;
+  --panel: #fcfdfc;
+  --plate: #d3d9d6;
+  --head-tint: #c5cdc9;     /* headline panel, tint treatment */
+  --ink: #14181b;
+  --ink-2: #384045;
+  --ink-3: #4a545a;
+  --disabled-ink: #4a545a;
+  --line: #b4bcb8;
+  --line-soft: #cdd3d0;
+  --edge: #14181b;          /* control and panel outline */
+  --zone-line: #4a545a;
+  --zone-ink: #ffffff;
+
+  --block: #14181b;         /* neutral inverse block: step numbers, initials */
+  --block-ink: #ffffff;
+
+  --good: #005725;
+  --good-ink: #ffffff;
+  --good-bg: #cfe6d3;
+  --bad: #94180d;
+  --bad-bg: #fedbd5;
+  --note-bg: #dbe0dd;
+
+  --quiet-hover: #d3d9d6;
+  --quiet-active: #c3cac7;
+  --field: #ffffff;
+  --field-line: #4a545a;
+  --field-cut: inset 0 2px 3px rgba(20, 24, 27, 0.16);
+  --bar: #384045;
+  --bar-track: #cdd3d0;
+  --bar-dim: #8d9793;
+
+  --trim: #14181b;          /* bottom bar plate, current page in the rail */
+  --trim-ink: #ffffff;
+  --trim-ink-2: #c9d0cd;
+  --trim-line: #384045;
+
+  --focus: #14181b;
+  --focus-on-trim: #ffffff;
+  --select-bg: #14181b;
+  --select-ink: #ffffff;
+  --scroll-thumb: #8d9793;
+  --backdrop: rgba(20, 24, 27, 0.55);
+  --lift: 0 2px 6px rgba(20, 24, 27, 0.2);
+}
+
+/* ---------- 3. DARK THEMES ----------
+   dark (default): deep label stock, green-grey, near-black seams.
+   dark-graphite and dark-pitch follow, overriding surfaces only. */
+:root[data-theme^="dark"] {
+  color-scheme: dark;
+  --wall: #141b1a;
+  --wall-2: #0b100f;
+  --panel: #1b2423;
+  --plate: #0b100f;
+  --head-tint: #2a3634;
+  --ink: #edf2ee;
+  --ink-2: #c0cbc7;
+  --ink-3: #9aa8a4;
+  --disabled-ink: #9aa8a4;
+  --line: #34413f;
+  --line-soft: #2c3836;
+  --edge: #8b9a96;
+  --zone-line: #040706;
+  --zone-ink: #edf2ee;
+
+  --block: #edf2ee;
+  --block-ink: #0b100f;
+
+  --good: #7cd591;
+  --good-ink: #0b100f;
+  --good-bg: #12301e;
+  --bad: #fc8e72;
+  --bad-bg: #3f1a14;
+  --note-bg: #0b100f;
+
+  --quiet-hover: #2c3836;
+  --quiet-active: #34413f;
+  --field: #0b100f;
+  --field-line: #8b9a96;
+  --field-cut: inset 0 2px 3px rgba(0, 0, 0, 0.5);
+  --bar: #c0cbc7;
+  --bar-track: #2c3836;
+  --bar-dim: #6f7f7b;
+
+  --trim: #040706;
+  --trim-ink: #edf2ee;
+  --trim-ink-2: #a9b7b3;
+  --trim-line: #2c3836;
+
+  --focus: #edf2ee;
+  --focus-on-trim: #edf2ee;
+  --select-bg: #edf2ee;
+  --select-ink: #0b100f;
+  --scroll-thumb: #6f7f7b;
+  --backdrop: rgba(0, 0, 0, 0.7);
+  --lift: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* dark-graphite: the same depths with no green in them */
+:root[data-theme="dark-graphite"] {
+  --wall: #181a1d;
+  --wall-2: #0e1012;
+  --panel: #202327;
+  --plate: #0e1012;
+  --head-tint: #2e3237;
+  --ink: #eef0f2;
+  --ink-2: #c3c8cd;
+  --ink-3: #9ca3aa;
+  --disabled-ink: #9ca3aa;
+  --line: #373c42;
+  --line-soft: #2e3338;
+  --edge: #8e959c;
+  --zone-line: #050607;
+  --zone-ink: #eef0f2;
+  --block: #eef0f2;
+  --block-ink: #0e1012;
+  --note-bg: #0e1012;
+  --quiet-hover: #2e3338;
+  --quiet-active: #373c42;
+  --field: #0e1012;
+  --field-line: #8e959c;
+  --bar: #c3c8cd;
+  --bar-track: #2e3338;
+  --bar-dim: #71787f;
+  --trim: #050607;
+  --trim-ink: #eef0f2;
+  --trim-ink-2: #adb4bb;
+  --trim-line: #2e3338;
+  --focus: #eef0f2;
+  --focus-on-trim: #eef0f2;
+  --select-bg: #eef0f2;
+  --select-ink: #0e1012;
+  --scroll-thumb: #71787f;
+}
+
+/* dark-pitch: near black, for OLED phones and dim bays.
+   The zone rule is lifted so it still shows against black. */
+:root[data-theme="dark-pitch"] {
+  --wall: #0b0c0d;
+  --wall-2: #000000;
+  --panel: #151719;
+  --plate: #000000;
+  --head-tint: #24272a;
+  --ink: #f2f3f4;
+  --ink-2: #c7cacd;
+  --ink-3: #a0a4a8;
+  --disabled-ink: #a0a4a8;
+  --line: #303336;
+  --line-soft: #26292c;
+  --edge: #969a9e;
+  --zone-line: #3a3e42;
+  --zone-ink: #f2f3f4;
+  --block: #f2f3f4;
+  --block-ink: #000000;
+  --note-bg: #000000;
+  --quiet-hover: #26292c;
+  --quiet-active: #303336;
+  --field: #000000;
+  --field-line: #969a9e;
+  --bar: #c7cacd;
+  --bar-track: #26292c;
+  --bar-dim: #74797e;
+  --trim: #000000;
+  --trim-ink: #f2f3f4;
+  --trim-ink-2: #b1b6bb;
+  --trim-line: #26292c;
+  --focus: #f2f3f4;
+  --focus-on-trim: #f2f3f4;
+  --select-bg: #f2f3f4;
+  --select-ink: #000000;
+  --scroll-thumb: #74797e;
+  --backdrop: rgba(0, 0, 0, 0.8);
+}
+
+/* ---------- 4. ACCENTS, LIGHT ----------
+   --accent         fill of a primary button, a selected chip or segment, switch ON
+   --accent-hover   that fill, hovered
+   --accent-active  that fill, pressed
+   --accent-ink     text and icons on any of the three fills
+   --accent-text    accent as text or a mark on wall, wall-2, panel, plate
+   --accent-tint    pale field (headline panel, accent treatment)
+   --accent-mark    current-page mark on the trim plate (trim is dark in both themes)
+   The second selector lets a swatch carry its own accent. */
+:root[data-theme="light"][data-accent="blue"], :root[data-theme="light"] [data-swatch="blue"] {
+  --accent: #0a5a9c; --accent-hover: #084a81; --accent-active: #063a66; --accent-ink: #ffffff;
+  --accent-text: #0a5a9c; --accent-tint: #d3e4f3; --accent-mark: #8cc3f2;
+}
+:root[data-theme="light"][data-accent="orange"], :root[data-theme="light"] [data-swatch="orange"] {
+  --accent: #bf5300; --accent-hover: #a64800; --accent-active: #8c3d00; --accent-ink: #ffffff;
+  --accent-text: #964000; --accent-tint: #f8dfc9; --accent-mark: #ff9d52;
+}
+:root[data-theme="light"][data-accent="teal"], :root[data-theme="light"] [data-swatch="teal"] {
+  --accent: #00697a; --accent-hover: #005766; --accent-active: #004652; --accent-ink: #ffffff;
+  --accent-text: #005f6e; --accent-tint: #cbe6e9; --accent-mark: #6fd3d8;
+}
+/* red is a cool cherry, on purpose: --bad is a warm brick, so the two never read as one colour */
+:root[data-theme="light"][data-accent="red"], :root[data-theme="light"] [data-swatch="red"] {
+  --accent: #a8163a; --accent-hover: #8f1231; --accent-active: #760f28; --accent-ink: #ffffff;
+  --accent-text: #a8163a; --accent-tint: #e8d6da; --accent-mark: #ff9cbb; /* tint is rose-grey, so the accent headline panel never reads as a warning */
+}
+:root[data-theme="light"][data-accent="ink"], :root[data-theme="light"] [data-swatch="ink"] {
+  --accent: #14181b; --accent-hover: #2e363a; --accent-active: #454f55; --accent-ink: #ffffff;
+  --accent-text: #14181b; --accent-tint: #d9dedb; --accent-mark: #ffffff;
+}
+
+/* ---------- 5. ACCENTS, DARK (all three dark themes) ---------- */
+:root[data-theme^="dark"][data-accent="blue"], :root[data-theme^="dark"] [data-swatch="blue"] {
+  --accent: #1f6fb5; --accent-hover: #185d9a; --accent-active: #124c80; --accent-ink: #ffffff;
+  --accent-text: #8cc3f2; --accent-tint: #16324c; --accent-mark: #8cc3f2;
+}
+:root[data-theme^="dark"][data-accent="orange"], :root[data-theme^="dark"] [data-swatch="orange"] {
+  --accent: #f5812f; --accent-hover: #e06d1c; --accent-active: #c95d12; --accent-ink: #140a02;
+  --accent-text: #ffa766; --accent-tint: #40260f; --accent-mark: #ff9d52;
+}
+:root[data-theme^="dark"][data-accent="teal"], :root[data-theme^="dark"] [data-swatch="teal"] {
+  --accent: #0f7f85; --accent-hover: #0c6c71; --accent-active: #095a5e; --accent-ink: #ffffff;
+  --accent-text: #6fd3d8; --accent-tint: #0f3438; --accent-mark: #6fd3d8;
+}
+:root[data-theme^="dark"][data-accent="red"], :root[data-theme^="dark"] [data-swatch="red"] {
+  --accent: #d1325a; --accent-hover: #bb2a4f; --accent-active: #a32344; --accent-ink: #ffffff;
+  --accent-text: #ff9cbb; --accent-tint: #3e2a30; --accent-mark: #ff9cbb;
+}
+:root[data-theme^="dark"][data-accent="ink"], :root[data-theme^="dark"] [data-swatch="ink"] {
+  --accent: #edf2ee; --accent-hover: #d5ddd8; --accent-active: #c0cbc7; --accent-ink: #0b100f;
+  --accent-text: #edf2ee; --accent-tint: #34413f; --accent-mark: #edf2ee;
+}
+
+/* ---------- 6. HEADLINE PANEL TREATMENTS ----------
+   One component (.head) marks "this is the number that matters".
+   These refer only to theme and accent tokens, so they hold in both themes. */
+:root[data-panel="tint"] {
+  --head-bg: var(--head-tint);
+  --head-side-w: 0px;  --head-side: transparent;
+  --head-top-w: var(--w-heavy);  --head-top: var(--ink);
+  --head-radius: 0 0 var(--r-sign) var(--r-sign);
+}
+:root[data-panel="outline"] {
+  --head-bg: var(--panel);
+  --head-side-w: var(--w-edge);  --head-side: var(--ink);
+  --head-top-w: var(--w-edge);  --head-top: var(--ink);
+  --head-radius: var(--r-sign);
+}
+:root[data-panel="accent"] {
+  --head-bg: var(--accent-tint);
+  --head-side-w: 0px;  --head-side: transparent;
+  --head-top-w: var(--w-heavy);  --head-top: var(--accent);
+  --head-radius: 0 0 var(--r-sign) var(--r-sign);
+}
+:root {
+  --head-ink: var(--ink);
+  --head-ink-2: var(--ink-2);
+  --head-rule: var(--ink-3);
+}
+
+/* ---------- 7. CARRIED OVER FROM THE OLD SYSTEM ----------
+   Not in final.html. Kept so "no raw colour below this block" stays true
+   while the alias bridge runs. */
+
+/* op-code category hues: a 3px tick only, never text, never a fill.
+   Re-cut 2026-09-29 to the new palette: same eight hues as before, chroma
+   roughly halved so they sit on the green-grey wall as quiet marks rather
+   than colour for state. Tags map to a slot in tagHue.ts. */
+:root[data-theme="light"] {
+  --tag-hue-0: oklch(0.56 0.07 15);
+  --tag-hue-1: oklch(0.58 0.07 60);
+  --tag-hue-2: oklch(0.58 0.06 110);
+  --tag-hue-3: oklch(0.56 0.07 150);
+  --tag-hue-4: oklch(0.56 0.06 200);
+  --tag-hue-5: oklch(0.54 0.07 240);
+  --tag-hue-6: oklch(0.54 0.07 290);
+  --tag-hue-7: oklch(0.56 0.07 330);
+}
+:root[data-theme^="dark"] {
+  --tag-hue-0: oklch(0.70 0.06 15);
+  --tag-hue-1: oklch(0.72 0.06 60);
+  --tag-hue-2: oklch(0.72 0.05 110);
+  --tag-hue-3: oklch(0.72 0.06 150);
+  --tag-hue-4: oklch(0.72 0.05 200);
+  --tag-hue-5: oklch(0.70 0.06 240);
+  --tag-hue-6: oklch(0.70 0.06 290);
+  --tag-hue-7: oklch(0.70 0.06 330);
+}
+:root {
+  /* A photo lightbox stays dark in every theme, on purpose: these are named
+     rather than theme-flipped so nobody "fixes" the light copy. */
+  --overlay-scrim: rgba(0, 0, 0, 0.92);
+  --overlay-fg: #ffffff;
+}
+
+/* ---------- 8. ALIAS BRIDGE (phase 1 → retired by phase 6) ----------
+   Every old token name, pointed at the new name that replaces it, so one
+   deploy re-skins every route with zero component edits. Each later phase
+   deletes the lines whose last user it replaced. Do not add new users of
+   anything in this block: write the new name. */
+:root {
+  --bg-0: var(--wall-2);
+  --bg-1: var(--wall);
+  --bg-2: var(--panel);
+  --bg-3: var(--plate);
+  --bg-4: var(--head-tint);
+  --fg-0: var(--ink);
+  --fg-1: var(--ink-2);
+  --fg-2: var(--ink-3);
+  --fg-3: var(--ink-3);
+
+  /* --brand is text 88 times and a fill 16 times. As text it needs
+     --accent-text (dark blue --accent on the dark wall is ~3.3:1). The fills
+     that carry text (.btn-primary, error pages, avatar, duplicate dialog)
+     were switched to --accent / --accent-ink directly; the rest are bars and
+     dots, where --accent-text is the design's "accent as a mark". */
+  --brand: var(--accent-text);
+  --brand-strong: var(--accent-hover);
+  --brand-ink: var(--accent-ink);
+  --brand-soft: var(--accent-tint);
+  --brand-bg: var(--accent-tint);
+
+  /* --good, --good-bg, --bad, --bad-bg keep their names in the new system */
+  --good-strong: var(--good);
+
+  /* Decided 2026-09-29: today's amber warnings read as NOTE-style (neutral)
+     until each page retags its own in that page's phase. */
+  --warn: var(--ink-2);
+  --warn-bg: var(--note-bg);
+
+  --info: var(--accent-text);
+  --info-bg: var(--accent-tint);
+
+  /* --ring is used as a box-shadow value (incl. `inset var(--ring)`), so it
+     is written as a 3px spread rather than an outline shorthand. */
+  --ring: 0 0 0 var(--w-heavy) var(--focus);
+  --radius: var(--r-panel);
+  --radius-sm: var(--r-sign);
+  --shadow-card: none;
+  --shadow-pop: var(--lift);
+  /* The header, tab strip, bottom bar and save bar still carry --fg-* text,
+     which is dark on light. --trim is dark in BOTH themes, so pointing them
+     at it now would put dark text on a dark bar in light mode. They sit on
+     the wall until the shell is rebuilt with --trim-ink in phase 3. */
+  --bar-bg: var(--wall);
+  --tap-min: var(--tap);
+
+  --background: var(--wall-2);
+  --foreground: var(--ink);
+}
+/* ======================= end of token block ======================= */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-plex);
-  --font-mono: var(--font-jetbrains-mono);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-num);
 }
 
 * { box-sizing: border-box; }
@@ -95,7 +430,7 @@ body {
   /* Calm Workspace: flat, quiet page ground — cards carry the depth */
   background: var(--bg-0);
   color: var(--fg-0);
-  font-family: var(--font-plex, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   /* Set by TimerPip while the floating panel is docked at the bottom, so page
@@ -104,7 +439,7 @@ body {
   padding-bottom: var(--pip-reserve, 0px);
 }
 
-.mono { font-family: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace); }
+.mono { font-family: var(--font-num); }
 .tabular { font-variant-numeric: tabular-nums; }
 
 /* ── Layout ───────────────────────────────────────────── */
@@ -273,8 +608,8 @@ body {
 .greeting .avatar {
   width: 44px; height: 44px; border-radius: 50%;
   display: grid; place-items: center;
-  background: var(--brand-strong);
-  font-weight: 700; color: white; font-size: 16px;
+  background: var(--accent);
+  font-weight: 700; color: var(--accent-ink); font-size: 16px;
   flex-shrink: 0;
 }
 .greeting h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
@@ -382,8 +717,8 @@ body {
   background: linear-gradient(90deg, var(--good-strong), var(--good));
   border-radius: 999px;
 }
-.pace-fill.warn { background: linear-gradient(90deg, oklch(0.65 0.16 80), var(--warn)); }
-.pace-fill.bad  { background: linear-gradient(90deg, oklch(0.55 0.20 25), var(--bad)); }
+.pace-fill.warn { background: var(--warn); }
+.pace-fill.bad  { background: var(--bad); }
 .pace-fill.brand{ background: linear-gradient(90deg, var(--brand-strong), var(--brand)); }
 .pace-target {
   position: absolute; top: 13px; bottom: -4px;
@@ -398,7 +733,7 @@ body {
   transform: translateX(-50%);
   font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--fg-3);
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   white-space: nowrap; line-height: 1;
 }
 .pace-foot { display: flex; justify-content: space-between; font-size: 11px; color: var(--fg-3); }
@@ -417,7 +752,7 @@ body {
 .pace-earnings .label { font-size: 13px; color: var(--fg-2); }
 .pace-earnings .val {
   font-size: 13px; font-weight: 600; color: var(--good);
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
 
@@ -621,7 +956,7 @@ body {
   color-scheme: dark;
   transition: border-color 120ms, color 120ms, background 120ms;
 }
-.theme-light .pill-input { color-scheme: light; }
+:root[data-theme="light"] .pill-input { color-scheme: light; }
 .pill-input:hover {
   border-color: var(--brand-soft);
   color: var(--fg-1);
@@ -661,14 +996,14 @@ body {
 .ro-show-all:hover { background: var(--bg-2); }
 
 .ro-num {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-family: var(--font-num);
   font-size: 13px; color: var(--brand); font-weight: 600;
 }
 .ro-meta { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
 .ro-vehicle { font-size: 13px; color: var(--fg-1); }
 .ro-row .grow { flex: 1; min-width: 0; }
 .ro-row .hours {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-family: var(--font-num);
   font-size: 14px; font-weight: 600;
 }
 .ro-row .hours .unit { color: var(--fg-3); font-weight: 500; margin-left: 1px; }
@@ -677,7 +1012,7 @@ body {
   display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px;
 }
 .ro-code-chip {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-family: var(--font-num);
   font-size: 11px;
   background: var(--bg-3);
   border: 1px solid var(--line);
@@ -730,19 +1065,19 @@ body {
   cursor: not-allowed;
 }
 .btn-primary {
-  background: var(--brand);
+  background: var(--accent);
   border-color: transparent;
-  color: var(--brand-ink);
+  color: var(--accent-ink);
   font-weight: 600;
 }
-.btn-primary:hover { filter: brightness(1.06); }
+.btn-primary:hover { background: var(--accent-hover); }
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-ghost:hover { background: var(--bg-3); }
 /* positive/"go" action — timer start, confirmations */
 .btn-good {
   background: var(--good-strong);
   border-color: transparent;
-  color: var(--brand-ink);
+  color: var(--good-ink);
   font-weight: 600;
 }
 .btn-good:hover:not(:disabled) { filter: brightness(1.06); }
@@ -774,7 +1109,7 @@ body {
   transition: border-color 120ms, box-shadow 120ms;
 }
 .input:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
-.input.mono { font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace); }
+.input.mono { font-family: var(--font-num); }
 .field-label {
   font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--fg-2);
   display: block; margin-bottom: 6px; font-weight: 550;
@@ -908,7 +1243,7 @@ button.step-head {
 .ro-hero .hash { font-size: 26px; color: var(--fg-3); font-weight: 300; }
 .ro-hero input {
   flex: 1; min-width: 0;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 34px; font-weight: 700; letter-spacing: 0.02em;
   background: transparent; border: none; outline: none;
   color: var(--fg-0); padding: 4px 0;
@@ -931,7 +1266,7 @@ button.step-head {
   border-bottom: 1px dashed var(--line);
 }
 .opc-line:last-child { border-bottom: none; }
-.opc-code { font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace); font-size: 13px; color: var(--brand); font-weight: 600; }
+.opc-code { font-family: var(--font-num); font-size: 13px; color: var(--brand); font-weight: 600; }
 .opc-desc { font-size: 13px; color: var(--fg-1); }
 .opc-line .grow { flex: 1; min-width: 0; }
 .opc-hours-input {
@@ -939,7 +1274,7 @@ button.step-head {
   /* The most-tapped control in the app — pad to a ~44px rendered height so it's
      an easy hit target on mobile without shrinking the visual field width. */
   padding: 13px 8px;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 13px;
   background: var(--bg-2);
   border: 1px solid transparent;
@@ -1023,7 +1358,7 @@ button.step-head {
 /* full 44px hit target on touch layouts without inflating desktop density */
 @media (max-width: 899px) { .opc-chip { min-height: var(--tap-min); } }
 .opc-chip:hover { background: var(--bg-3); }
-.opc-chip .c { font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace); color: var(--brand); font-weight: 600; }
+.opc-chip .c { font-family: var(--font-num); color: var(--brand); font-weight: 600; }
 .opc-chip .h { color: var(--fg-3); font-size: 11px; }
 
 .opc-total {
@@ -1033,7 +1368,7 @@ button.step-head {
   border-top: 1px solid var(--line);
 }
 .opc-total .label { font-size: 11px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--fg-3); }
-.opc-total .val   { font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace); font-size: 20px; font-weight: 700; color: var(--brand); }
+.opc-total .val   { font-family: var(--font-num); font-size: 20px; font-weight: 700; color: var(--brand); }
 
 /* Unpaid rework total. Sits BELOW the flag total and is never subtracted from
    it — showing free work next to paid work is the entire point; netting them
@@ -1202,7 +1537,7 @@ button.step-head {
   z-index: 20;
 }
 .save-bar .summary { font-size: 13px; color: var(--fg-2); }
-.save-bar .summary b { color: var(--fg-0); font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace); }
+.save-bar .summary b { color: var(--fg-0); font-family: var(--font-num); }
 
 /* ── History page ────────────────────────────────────── */
 .filter-row {
@@ -1258,7 +1593,7 @@ button.step-head {
 .period-bars .bar.today {
   background: linear-gradient(180deg, var(--brand), var(--brand-strong));
   border-color: var(--brand);
-  box-shadow: 0 0 12px oklch(0.65 0.18 50 / 0.40);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--accent) 40%, transparent);
 }
 .period-bars .bar.future {
   background: transparent;
@@ -1287,7 +1622,7 @@ button.step-head {
   font-size: 13px;
 }
 .history-summary .k { color: var(--fg-3); font-size: 12px; letter-spacing: 0; text-transform: none; display: block; margin-bottom: 2px; }
-.history-summary .v { font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace); font-weight: 700; font-size: 16px; }
+.history-summary .v { font-family: var(--font-num); font-weight: 700; font-size: 16px; }
 
 /* ── History RO rows ─────────────────────────────────── */
 .history-ro-row {
@@ -1320,8 +1655,8 @@ button.step-head {
 .modal-panel { animation: modal-panel-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
 @keyframes pulse-good {
-  0%, 100% { box-shadow: 0 0 0 0 oklch(0.78 0.16 150 / 0.55); }
-  50%      { box-shadow: 0 0 0 6px oklch(0.78 0.16 150 / 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--good) 55%, transparent); }
+  50%      { box-shadow: 0 0 0 6px transparent; }
 }
 
 /* ===================================================================
@@ -1533,82 +1868,12 @@ a { color: inherit; }
 }
 
 /* ── Light theme ─────────────────────────────────────────── */
-.theme-light {
-  color-scheme: light;
-  /* Calm Workspace light: warm paper ground, white cards, separation by
-     shadow. NOTE: this reverses the 2026-07-07 "dim the ladder" tuning —
-     the bright ladder is what Liem picked from the direction B prototype
-     (docs/design-directions). Semantic colors below kept at their darker
-     AA-verified lightness, which the brighter ground only helps. */
-  --bg-0: #f6f5f3;
-  --bg-1: #ffffff;
-  --bg-2: #f1f0ed;
-  --bg-3: #e9e7e3;
-  --bg-4: #dedbd5;
-  --line: rgba(28, 25, 20, 0.07);
-  --line-soft: rgba(28, 25, 20, 0.05);
-  --fg-0: #201d19;
-  --fg-1: #3a362f;
-  --fg-2: #605b53;
-  /* Darkened 2026-08-04 from #767066 to clear WCAG AA 4.5:1 on every light
-     surface (was 3.97:1 on --bg-3). Closes the a11y follow-up logged 2026-07-23. */
-  --fg-3: #6d675d;
-
-  /* brand & semantic — dropped lightness vs. dark theme so text-on-light
-     passes AA (4.5:1) against --bg-0/1/2; verified with contrast.js.
-     Worst case is each color on --bg-2 card surfaces: all >= 4.5:1. */
-  /* burnt orange rather than maroon — L 0.47 keeps both brand-as-text on
-     white and white-ink-on-brand at ~5:1 */
-  --brand:        oklch(0.47 0.17 52);
-  --brand-strong: oklch(0.42 0.18 48);
-  --brand-soft:   oklch(0.50 0.10 50 / 0.35);
-  --brand-bg:     oklch(0.90 0.08 55 / 0.15);
-
-  --good:        oklch(0.39 0.16 150);
-  --good-strong: oklch(0.36 0.17 150);
-  --good-bg:     oklch(0.90 0.08 150 / 0.15);
-
-  --bad:         oklch(0.43 0.18 25);
-  --bad-bg:      oklch(0.90 0.08 25 / 0.15);
-
-  --warn:        oklch(0.41 0.15 80);
-  --warn-bg:     oklch(0.90 0.08 80 / 0.15);
-
-  --info:        oklch(0.39 0.13 230);
-  --info-bg:     oklch(0.90 0.08 230 / 0.15);
-
-  /* category hues — darkened for the paper ground; still tick-only, so
-     these need to be distinguishable, not AA-as-text */
-  --tag-hue-0: oklch(0.52 0.14 15);
-  --tag-hue-1: oklch(0.54 0.13 60);
-  --tag-hue-2: oklch(0.54 0.12 110);
-  --tag-hue-3: oklch(0.52 0.13 150);
-  --tag-hue-4: oklch(0.52 0.12 200);
-  --tag-hue-5: oklch(0.50 0.12 240);
-  --tag-hue-6: oklch(0.50 0.13 290);
-  --tag-hue-7: oklch(0.52 0.13 330);
-
-  --shadow-card: 0 1px 2px rgba(28,25,20,0.05), 0 10px 30px rgba(28,25,20,0.07);
-  --shadow-pop: 0 18px 48px rgba(28,25,20,0.16);
-  --ring: 0 0 0 3px oklch(0.43 0.165 55 / 0.25);
-  --bar-bg: rgba(246, 245, 243, 0.88);
-  --brand-ink: oklch(0.99 0.005 50);
-
-  /* Intentionally identical to :root — a photo lightbox stays dark in light
-     mode. Named tokens document that this is deliberate, not an oversight. */
-  --overlay-scrim: rgba(0,0,0,0.92);
-  --overlay-fg: #fff;
-
-  --background: #f6f5f3;
-  --foreground: #201d19;
-}
-.theme-light body {
-  background: var(--bg-0);
-}
+/* The palette lives in the token block at the top of this file
+   (:root[data-theme="light"]); only light-specific rules stay here. */
 /* The wordmark PNG has white lettering (invisible on paper). Until a
    light asset exists, darken the whole mark to read as ink-on-paper.
    Attribute selector covers header + auth pages without touching JSX. */
-.theme-light img[alt="Flat Rate Tracker"] {
+:root[data-theme="light"] img[alt="Flat Rate Tracker"] {
   filter: brightness(0.35) saturate(1.6) contrast(1.15);
 }
 
@@ -1670,7 +1935,7 @@ a { color: inherit; }
 .gami-heat-num { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; margin-top: 5px; }
 .gami-heat-num .unit { font-size: 14px; font-weight: 500; color: var(--fg-2); letter-spacing: 0; }
 .gami-heat-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.gami-heat-flame { color: var(--brand); filter: drop-shadow(0 0 10px oklch(0.65 0.18 50 / 0.45)); }
+.gami-heat-flame { color: var(--brand); filter: drop-shadow(0 0 10px color-mix(in oklab, var(--accent) 45%, transparent)); }
 .gami-heat-flame.cold { color: var(--fg-3); filter: none; }
 .gami-heat-track {
   position: relative; height: 12px; margin-top: 14px;
@@ -1679,7 +1944,7 @@ a { color: inherit; }
 .gami-heat-fill {
   position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px;
   background: linear-gradient(90deg, var(--brand-strong), var(--brand));
-  box-shadow: 0 0 14px oklch(0.65 0.18 50 / 0.35);
+  box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 35%, transparent);
 }
 .gami-heat:not([data-animated="true"]) .gami-heat-fill {
   animation: pace-grow 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -1688,7 +1953,7 @@ a { color: inherit; }
 .gami-heat-mark {
   position: absolute; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 11px; color: var(--fg-3);
 }
 .gami-heat-mark::before { content: ""; width: 1.5px; height: 7px; background: var(--fg-3); opacity: 0.5; }
@@ -1729,11 +1994,11 @@ a { color: inherit; }
 .gami-road-stop.done .pin { background: var(--brand); }
 .gami-road-stop.here .pin {
   width: 17px; height: 17px; background: var(--brand);
-  box-shadow: 0 0 0 5px var(--brand-bg), 0 0 14px oklch(0.65 0.18 50 / 0.5);
+  box-shadow: 0 0 0 5px var(--brand-bg), 0 0 14px color-mix(in oklab, var(--accent) 50%, transparent);
 }
 .gami-road-stop .t {
   position: absolute; top: 14px;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 11px; color: var(--fg-3); white-space: nowrap;
 }
 .gami-road-stop.done .t { color: var(--fg-1); font-weight: 600; }
@@ -1746,7 +2011,7 @@ a { color: inherit; }
   border: 1px solid color-mix(in oklab, var(--fg-3) 25%, transparent);
   box-shadow: var(--shadow-card);
   padding: 18px; position: relative; overflow: hidden;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
 }
 /* Dashed brand strip — a plain dashed border, not a new gradient technique
    (the approved gradient set stays closed; see design-review 2026-07-14). */
@@ -1787,7 +2052,7 @@ a { color: inherit; }
 .gami-snap-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .gami-snap-title { font-size: 14px; font-weight: 600; }
 .gami-snap-count {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 12px; color: var(--fg-2); font-variant-numeric: tabular-nums;
 }
 .gami-snap-count b { color: var(--brand); font-size: 14px; }
@@ -1824,7 +2089,7 @@ a { color: inherit; }
   color: var(--fg-3); margin-bottom: 2px;
 }
 .timer-slot-ro {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 14px; color: var(--brand);
 }
 .timer-slot-vehicle {
@@ -1836,7 +2101,7 @@ a { color: inherit; }
 
 .timer-slot-display { text-align: center; padding: 12px 0 2px; }
 .timer-slot-time {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 34px; font-weight: 600; color: var(--fg-0);
   font-variant-numeric: tabular-nums; line-height: 1.1;
 }
@@ -1852,7 +2117,7 @@ a { color: inherit; }
 }
 .timer-slot-split span { color: var(--fg-3); }
 .timer-slot-split b {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg-1);
 }
 .timer-slot-split .wait b { color: var(--warn); }
@@ -1904,7 +2169,7 @@ a { color: inherit; }
   margin-top: 10px; font-size: 12px; color: var(--fg-3);
 }
 .timer-slot-line .code {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   color: var(--brand);
 }
 
@@ -1946,13 +2211,13 @@ a { color: inherit; }
 }
 .pip-row.active { border-color: color-mix(in oklab, var(--good) 30%, transparent); }
 .pip-row .ro {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 12px; color: var(--brand);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
 }
 .pip-row .time {
   margin-left: auto;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .pip-row .why { font-size: 11px; color: var(--fg-3); }
@@ -2135,7 +2400,7 @@ a { color: inherit; }
 .period-hero.is-over  .period-hero-eyebrow { color: var(--warn); }
 .period-hero.is-match .period-hero-eyebrow { color: var(--good); }
 .period-hero-figure {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-family: var(--font-num);
   font-size: 34px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.05;
   margin: 5px 0 0;
 }
@@ -2256,13 +2521,13 @@ a { color: inherit; }
 .day-cell.is-out { background: transparent; opacity: 0.4; }
 .day-cell.is-selected { background: var(--brand-bg); box-shadow: inset 0 0 0 1px var(--brand); }
 .day-num {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 13px; font-weight: 550; line-height: 1;
 }
 .day-cell.is-today .day-num { color: var(--brand); font-weight: 700; }
 .day-sub {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 11px; line-height: 1; color: var(--fg-3);
 }
@@ -2277,7 +2542,7 @@ a { color: inherit; }
 .day-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-3); }
 .day-legend i {
   font-style: normal;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
 }
@@ -2321,7 +2586,7 @@ a { color: inherit; }
 .settle-strip-label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; color: var(--fg-1); }
 .settle-strip-nav { display: flex; align-items: center; gap: 2px; flex: none; }
 .settle-count {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 12px; color: var(--fg-3); min-width: 44px; text-align: center;
 }
@@ -2351,7 +2616,7 @@ a { color: inherit; }
   gap: 4px;
 }
 .trend-val {
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 11px; color: var(--fg-3); line-height: 1;
 }
@@ -2390,7 +2655,7 @@ a { color: inherit; }
   padding: 1px 5px;
   background: var(--bg-1);
   border-radius: 999px;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-size: 11px; color: var(--fg-3); line-height: 1.2;
 }
 .trend-labels { display: flex; gap: 8px; margin-top: 6px; }
@@ -2411,7 +2676,7 @@ a { color: inherit; }
 }
 .leak-rank {
   flex: none; width: 16px;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 12px; font-weight: 700; color: var(--fg-3);
 }
@@ -2420,7 +2685,7 @@ a { color: inherit; }
 .leak-why { display: block; margin-top: 2px; font-size: 12px; color: var(--fg-3); }
 .leak-hours {
   flex: none;
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 16px; font-weight: 700;
 }
@@ -2439,7 +2704,7 @@ a { color: inherit; }
 .gain-name { flex: 1; min-width: 0; }
 .gain-hours {
   flex: none; color: var(--good);
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 14px; font-weight: 600;
 }
@@ -2464,7 +2729,7 @@ a { color: inherit; }
 .opcode-item-desc { display: block; margin-top: 2px; font-size: 12px; color: var(--fg-3); }
 .opcode-item-meta {
   margin-top: 6px; font-size: 12px; color: var(--fg-3);
-  font-family: var(--font-jetbrains-mono, "JetBrains Mono", monospace);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
 .opcode-item-head .pill,

@@ -53,6 +53,12 @@ for (const route of ROUTES) {
         html,
         "positive control failed: <html> class list is unreadable, so the dark-mode theme assertion below would be vacuous",
       ).toHaveClass(/(^|\s)antialiased(\s|$)/);
+      // data-theme is what paints since the 2026-09 overhaul; theme-light is
+      // the one-release compatibility class and is checked alongside it.
+      await expect(
+        html,
+        `${theme} project rendered with the wrong data-theme — it was reset (hydration recovery?), so this snapshot would be the wrong palette`,
+      ).toHaveAttribute("data-theme", theme);
       if (theme === "light") {
         await expect(
           html,
