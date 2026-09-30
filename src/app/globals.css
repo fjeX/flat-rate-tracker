@@ -20,6 +20,7 @@
 @import "./styles/page-schedule.css";
 @import "./styles/page-snapshots.css";
 @import "./styles/page-settings.css";
+@import "./styles/page-auth.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1

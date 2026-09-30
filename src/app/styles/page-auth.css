@@ -1,0 +1,67 @@
+/* Phase 5: the signed-out pages (Sign in, Sign up, Forgot password, Reset
+   password), sketched on the dev server in the final language; no mock screen
+   exists (plans/frt-visual-overhaul-rollout.md). Tokens only.
+
+   Everything here is prefixed `auth-`. The frame is AuthShell.tsx: the tower
+   mark (.logo, ui-shell.css) over one zone panel (.card, ui-surfaces.css)
+   whose tab is the page's h1. Fields, buttons and status fields come from the
+   ui-*.css partials; this file only places them. */
+
+/* ---------- page: one column, centred on the wall ---------- */
+.auth-page {
+  min-height: 100dvh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: var(--s6) var(--gutter);
+}
+.auth-logo { margin-bottom: var(--s5); }
+
+/* the panel: a sign-in sheet is one hand wide, never a wall */
+.auth-card { width: 100%; max-width: 26rem; }
+
+/* ---------- the form ---------- */
+.auth-form { display: grid; gap: var(--s3); margin-top: var(--s3); }
+/* the primary action sits a step below the last field, like a form's Save */
+.auth-form > .btn { margin-top: var(--s1); }
+.auth-form .field-msg { margin-top: 4px; }
+
+/* prose inside the panel: body size, second ink, one readable measure */
+.auth-lede { color: var(--ink-2); font-size: var(--fs-body); line-height: 1.45; margin: var(--s2) 0 0; }
+.auth-lede + .auth-lede { margin-top: var(--s2); }
+.auth-lede.is-quiet { color: var(--ink-3); font-size: var(--fs-label); }
+
+/* the status field inside the panel keeps the panel's padding (.is-inset) */
+.auth-card > .sfield.is-inset { margin-top: var(--s3); }
+.auth-card > .sfield.is-inset + .auth-form { margin-top: var(--s3); }
+
+/* ---------- a sentence with a link in it ---------- */
+.auth-aside { margin: var(--s4) 0 0; color: var(--ink-2); font-size: var(--fs-body); }
+.auth-aside.is-tight { margin-top: var(--s3); }
+.auth-link {
+  color: var(--accent-text); font-weight: 700;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: var(--w-tag);
+  border-radius: var(--r-sign);
+  /* an inline link can't be 44px tall; the tap area comes from padding */
+  padding: var(--s2) 0; margin: calc(-1 * var(--s2)) 0;
+}
+.auth-link:hover { text-decoration-thickness: 2.5px; }
+.auth-link:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+
+/* ---------- "or": a ruled row, label style ---------- */
+.auth-or {
+  display: flex; align-items: center; gap: var(--s3);
+  margin: var(--s4) 0;
+  color: var(--ink-3); font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase;
+}
+.auth-or::before, .auth-or::after { content: ""; flex: 1 1 auto; height: var(--w-hair); background: var(--line); }
+
+/* the Google button is a line button carrying Google's own mark */
+.auth-google img { width: 18px; height: 18px; flex: none; }
+.auth-google-err { margin: var(--s2) 0 0; color: var(--bad); font-weight: 700; font-size: var(--fs-label); }
+
+/* ---------- foot: the guest door, under a hairline ---------- */
+.auth-foot { margin-top: var(--s4); padding-top: var(--s4); border-top: var(--w-hair) solid var(--line); }
+.auth-stack { display: grid; gap: var(--s2); margin-top: var(--s4); }
+
+@media (min-width: 700px) {
+  .auth-page { padding-top: var(--s7); padding-bottom: var(--s7); }
+}

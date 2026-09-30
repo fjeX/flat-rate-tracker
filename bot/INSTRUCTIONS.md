@@ -411,6 +411,23 @@ fonts and corner radius only** — no layout, wording or positions moved:
     button group (`aria-pressed`) and a "Theme and accent — Moved to
     Settings > Appearance" row with an **Open Appearance** button (this
     replaces the one-line link).
+  - **Sign in, Sign up, Forgot password, Reset password** (the signed-out
+    pages): the tower mark and FLAT RATE / TRACKER wordmark replace the logo
+    picture at the top (it links to `/`), and each page is **one panel whose
+    name tab is the page's H1** (SIGN IN / CREATE ACCOUNT / RESET YOUR
+    PASSWORD / SET A NEW PASSWORD / CHECK YOUR EMAIL). Fields have uppercase
+    labels (Email, Password, New password, Confirm new password) and every
+    label still resolves with `getByLabel`. Messages are **tagged status
+    fields**, not coloured boxes: an error is a red **FIX** field
+    (`role="alert"`), "Password updated. Sign in with your new password." is a
+    green **SAVED** field, and the "check your email" / "a reset link is on
+    its way" copy is a **NOTE** field. §8i's wording is unchanged: "Forgot
+    your password?" is still a link under the Sign in button and above the
+    OR rule, "Send reset link" / "Set new password" / "Request a new link"
+    are the button names, and "This page needs a reset link to work." /
+    "That link has expired or has already been used." are the two reset
+    sentences. Continue with Google is an outlined button with Google's mark;
+    Try as Guest sits under a hairline at the foot of Sign in.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

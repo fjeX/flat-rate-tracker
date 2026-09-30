@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { requestPasswordReset } from "@/app/actions/auth";
+import { AuthShell } from "@/components/auth/AuthShell";
+import { Field } from "@/components/ui/Field";
+import { StatusField } from "@/components/ui/StatusField";
 
 // Step 1 of password recovery: ask for the address, hand off to GoTrue.
 // Step 2 lives at /reset-password, which the emailed link lands on.
@@ -19,72 +22,55 @@ export default async function ForgotPasswordPage({
     ? "Something went wrong. Please try again."
     : null;
 
+  if (sent) {
+    return (
+      <AuthShell title="Reset your password">
+        {/* Deliberately does not confirm the address exists — see the
+            enumeration note on requestPasswordReset(). */}
+        <StatusField tag="Note" inset>
+          <p>
+            If that address has an account, a reset link is on its way. The
+            link is good for one use and expires shortly.
+          </p>
+          <p>
+            Nothing arrived after a few minutes? Check your spam folder, then
+            try again.
+          </p>
+        </StatusField>
+        <div className="auth-stack">
+          <Link href="/signin" className="btn btn-quiet btn-block">
+            Back to sign in
+          </Link>
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="mb-8">
-        <Link href="/" className="no-underline">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/frt-logo.png" alt="Flat Rate Tracker" style={{ height: 100, width: "auto" }} />
+    <AuthShell title="Reset your password">
+      <p className="auth-lede">Enter your email and we&apos;ll send you a link to set a new one.</p>
+
+      {safeError && (
+        <StatusField tag="Fix" role="alert" inset>
+          <p>{safeError}</p>
+        </StatusField>
+      )}
+
+      <form action={requestPasswordReset} className="auth-form">
+        <Field label="Email" htmlFor="email">
+          <input id="email" name="email" type="email" required autoComplete="email" className="input" />
+        </Field>
+        <button type="submit" className="btn btn-go btn-block">
+          Send reset link
+        </button>
+      </form>
+
+      <p className="auth-aside">
+        Remembered it?{" "}
+        <Link href="/signin" className="auth-link">
+          Sign in
         </Link>
-      </div>
-      <div className="card w-full max-w-sm p-6">
-        <h1 className="text-xl font-semibold mb-1">Reset your password</h1>
-
-        {sent ? (
-          <>
-            {/* Deliberately does not confirm the address exists — see the
-                enumeration note on requestPasswordReset(). */}
-            <p className="mt-3 text-sm text-[var(--fg-2)]">
-              If that address has an account, a reset link is on its way. The
-              link is good for one use and expires shortly.
-            </p>
-            <p className="mt-3 text-sm text-[var(--fg-3)]">
-              Nothing arrived after a few minutes? Check your spam folder, then
-              try again.
-            </p>
-            <div className="mt-4">
-              <Link href="/signin" className="btn btn-ghost btn-block">
-                Back to sign in
-              </Link>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="mb-4 text-sm text-[var(--fg-2)]">
-              Enter your email and we&apos;ll send you a link to set a new one.
-            </p>
-
-            {safeError && (
-              <div role="alert" className="mb-4 rounded-[var(--radius-sm)] border border-[var(--bad)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
-                {safeError}
-              </div>
-            )}
-
-            <form action={requestPasswordReset} className="space-y-3">
-              <label className="block">
-                <span className="text-sm text-[var(--fg-2)]">Email</span>
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  className="input mt-1"
-                />
-              </label>
-              <button type="submit" className="btn btn-primary btn-block">
-                Send reset link
-              </button>
-            </form>
-
-            <p className="mt-4 text-sm text-[var(--fg-2)]">
-              Remembered it?{" "}
-              <Link href="/signin" className="text-[var(--brand)] hover:opacity-80">
-                Sign in
-              </Link>
-            </p>
-          </>
-        )}
-      </div>
-    </main>
+      </p>
+    </AuthShell>
   );
 }

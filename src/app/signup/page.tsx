@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { signUp } from "@/app/actions/auth";
 import { GoogleButton } from "@/components/auth/google-button";
+import { AuthOr, AuthShell } from "@/components/auth/AuthShell";
+import { Field } from "@/components/ui/Field";
+import { StatusField } from "@/components/ui/StatusField";
 
 export default async function SignUpPage({
   searchParams,
@@ -9,90 +12,66 @@ export default async function SignUpPage({
 }) {
   const { error, check } = await searchParams;
 
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="mb-8">
-        <Link href="/" className="no-underline">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/frt-logo.png" alt="Flat Rate Tracker" style={{ height: 100, width: "auto" }} />
-        </Link>
-      </div>
-      <div className="card w-full max-w-sm p-6">
-        <h1 className="text-xl font-semibold mb-4">
-          {check ? "Check your email" : "Create account"}
-        </h1>
-
-        {/* Email confirmation is on, so signUp returns no session. Without this
-            state the redirect would land on /dashboard, bounce to /signin, and
-            read as "signing up didn't work". */}
-        {check ? (
-          <>
-            <p className="mb-3 text-sm text-[var(--fg-2)]">
-              Your account is created. We sent a confirmation link — click it to
-              finish setting up and sign in.
-            </p>
-            <p className="mb-4 text-sm text-[var(--fg-3)]">
-              Nothing after a few minutes? Check your spam folder.
-            </p>
-            <Link href="/signin" className="btn btn-ghost btn-block">
-              Back to sign in
-            </Link>
-          </>
-        ) : (
-        <>
-        {error && (
-          <div role="alert" className="mb-4 rounded-[var(--radius-sm)] border border-[var(--bad)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
-            {error}
-          </div>
-        )}
-
-        <form action={signUp} className="space-y-3">
-          <label className="block">
-            <span className="text-sm text-[var(--fg-2)]">Email</span>
-            <input
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              className="input mt-1"
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm text-[var(--fg-2)]">Password</span>
-            <input
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              className="input mt-1"
-            />
-            <span className="mt-1 block text-xs text-[var(--fg-3)]">
-              At least 8 characters.
-            </span>
-          </label>
-          <button type="submit" className="btn btn-primary btn-block">
-            Create account
-          </button>
-        </form>
-
-        <div className="my-4 flex items-center gap-3">
-          <div className="h-px flex-1 bg-[var(--line)]" />
-          <span className="text-xs text-[var(--fg-3)]">or</span>
-          <div className="h-px flex-1 bg-[var(--line)]" />
-        </div>
-
-        <GoogleButton />
-
-        <p className="mt-4 text-sm text-[var(--fg-2)]">
-          Already have an account?{" "}
-          <Link href="/signin" className="text-[var(--brand)] hover:opacity-80">
-            Sign in
+  // Email confirmation is on, so signUp returns no session. Without this
+  // state the redirect would land on /dashboard, bounce to /signin, and read
+  // as "signing up didn't work".
+  if (check) {
+    return (
+      <AuthShell title="Check your email">
+        <StatusField tag="Note" inset>
+          <p>
+            Your account is created. We sent a confirmation link — click it to
+            finish setting up and sign in.
+          </p>
+          <p>Nothing after a few minutes? Check your spam folder.</p>
+        </StatusField>
+        <div className="auth-stack">
+          <Link href="/signin" className="btn btn-quiet btn-block">
+            Back to sign in
           </Link>
-        </p>
-        </>
-        )}
-      </div>
-    </main>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell title="Create account">
+      {error && (
+        <StatusField tag="Fix" role="alert" inset>
+          <p>{error}</p>
+        </StatusField>
+      )}
+
+      <form action={signUp} className="auth-form">
+        <Field label="Email" htmlFor="email">
+          <input id="email" name="email" type="email" required autoComplete="email" className="input" />
+        </Field>
+        <Field label="Password" htmlFor="password" hint="At least 8 characters.">
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            className="input"
+          />
+        </Field>
+        <button type="submit" className="btn btn-go btn-block">
+          Create account
+        </button>
+      </form>
+
+      <AuthOr />
+
+      <GoogleButton />
+
+      <p className="auth-aside">
+        Already have an account?{" "}
+        <Link href="/signin" className="auth-link">
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

@@ -6,8 +6,12 @@
 // browser: signInWithOAuth redirects the tab to Google and relies on the
 // browser-side PKCE code verifier, which the /auth/callback handler then reads
 // back. So this uses the browser Supabase client, not the server one.
+//
+// Phase 5: a line button (the app's own edge and ink) carrying Google's mark.
+// The mark keeps Google's colours; nothing else on the button is theirs.
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
 
 export function GoogleButton() {
   const [loading, setLoading] = useState(false);
@@ -35,19 +39,16 @@ export function GoogleButton() {
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={signInWithGoogle}
-        disabled={loading}
-        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-      >
+      <Button variant="line" block busy={loading} disabled={loading} onClick={signInWithGoogle} className="auth-google">
         {/* Brand mark lives in /public — Google's colors, not ours */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/google-logo.svg" alt="" width={16} height={16} aria-hidden />
+        <img src="/google-logo.svg" alt="" width={18} height={18} aria-hidden />
         {loading ? "Redirecting…" : "Continue with Google"}
-      </button>
+      </Button>
       {error && (
-        <p className="mt-2 text-sm text-[var(--bad)]">{error}</p>
+        <p className="auth-google-err" role="alert">
+          {error}
+        </p>
       )}
     </div>
   );
