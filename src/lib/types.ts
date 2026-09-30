@@ -1,3 +1,5 @@
+import type { Accent, Theme } from "@/lib/theme";
+
 // Domain types used throughout the app.
 // These are camelCase on purpose; the DB uses snake_case and mappers
 // in src/lib/db/* convert between the two.
@@ -473,6 +475,10 @@ export type UserSettings = {
   // A tech who logs the whole day at 9pm would otherwise bank a dozen 9pm
   // timestamps that look like measurements.
   trackRoTime: boolean;
+  // Account-level look. localStorage is only the pre-paint cache; these are
+  // the source of truth. A missing column (pre-migration DB) reads as defaults.
+  theme: Theme;
+  accent: Accent;
 };
 
 // ------------------------------------------------------------------------

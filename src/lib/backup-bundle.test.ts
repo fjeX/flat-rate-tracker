@@ -34,6 +34,9 @@ function fullParts(): BackupParts {
       referenceHourlyRate: null,
       tagColors: {},
       shareLaborTimes: true,
+      trackRoTime: false,
+      theme: "light",
+      accent: "red",
     } as unknown as BackupParts["settings"],
     entries: [
       {
@@ -169,6 +172,10 @@ describe("backup manifest ↔ exported bundle", () => {
         `settings.${field} missing — restoring this file would leave the destination's value`,
       ).toBe(true);
     }
+  });
+
+  it("exports theme and accent so a restored account keeps its look", () => {
+    expect(bundle.settings).toMatchObject({ theme: "light", accent: "red" });
   });
 
   describe("null vs empty — the distinction import depends on", () => {

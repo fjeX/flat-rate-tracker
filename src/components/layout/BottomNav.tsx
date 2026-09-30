@@ -2,38 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
-
-export type BottomTab = {
-  href: string;
-  label: string;
-  icon: ReactNode;
-  match: (p: string) => boolean;
-  showDot?: boolean;
-};
+import { Icon } from "./icons";
+import { isCurrent, type NavItem } from "./nav-items";
 
 /**
- * Thumb-reachable bottom tab bar for mobile. Hidden on desktop via CSS
- * (.bottom-nav only displays under 900px, where .app-tabs is hidden).
+ * Thumb-reachable bottom bar for phones (final.html .bottomnav). The current
+ * page is an accent mark on the trim plate. Hidden from 1024px up, where the
+ * rail takes over.
  */
-export function BottomNav({ tabs }: { tabs: BottomTab[] }) {
+export function BottomNav({ items, timerRunning = false }: { items: NavItem[]; timerRunning?: boolean }) {
   const pathname = usePathname();
   return (
-    <nav className="bottom-nav" aria-label="Primary">
-      {tabs.map((tab) => {
-        const active = tab.match(pathname);
+    <nav className="bottomnav" aria-label="Main">
+      {items.map((item) => {
+        const current = isCurrent(item, pathname);
         return (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            className={`bottom-tab${active ? " active" : ""}`}
-            aria-current={active ? "page" : undefined}
-          >
-            <span className="bottom-tab-icon">
-              {tab.icon}
-              {tab.showDot && <span className="bottom-running-dot" aria-label="Timer running" />}
+          <Link key={item.href} href={item.href} aria-current={current ? "page" : undefined}>
+            <span className="bn-icon">
+              <Icon name={item.icon} />
+              {item.icon === "timer" && timerRunning && (
+                <span className="run-dot" role="img" aria-label="Timer running" />
+              )}
             </span>
-            <span className="bottom-tab-label">{tab.label}</span>
+            <span>{item.label}</span>
           </Link>
         );
       })}

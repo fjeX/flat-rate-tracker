@@ -98,6 +98,10 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
       // keeps recording times instead of silently stopping — the loss would be
       // invisible until someone noticed weeks of blank times later.
       track_ro_time: "carry",
+      // The account's look (20260929000000_appearance.sql). Cosmetic, but it is
+      // the one thing a restored account would otherwise silently reset.
+      theme: "carry",
+      accent: "carry",
       // A backup is user-supplied JSON that a user can open in a text editor.
       // Carrying this would let anyone set "is_admin": true and import their way
       // to admin. The RPC must never read it from the payload.

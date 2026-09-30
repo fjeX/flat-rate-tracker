@@ -63,6 +63,8 @@ export type ImportBundle = {
     shareLaborTimes?: boolean;
     /** v4. Absent in v1–v3 files — "keep the destination's answer". */
     trackRoTime?: boolean;
+    theme?: string;
+    accent?: string;
   };
   entries: Entry[];
   opCodes: OpCode[];
@@ -140,6 +142,8 @@ export type ImportPayload = {
     default_labor_type?: string | null;
     share_labor_times?: boolean;
     track_ro_time?: boolean;
+    theme?: string;
+    accent?: string;
   };
   op_codes: Record<string, unknown>[];
   op_code_variants: Record<string, unknown>[];
@@ -388,6 +392,9 @@ export function buildImportPayload(
         ? { share_labor_times: s.shareLaborTimes }
         : {}),
       ...(s.trackRoTime !== undefined ? { track_ro_time: s.trackRoTime } : {}),
+      // Spread-if-present like the rest: a pre-v5 file leaves the destination's look alone.
+      ...(s.theme !== undefined ? { theme: s.theme } : {}),
+      ...(s.accent !== undefined ? { accent: s.accent } : {}),
     },
 
     op_codes: opCodes.map((oc) => ({

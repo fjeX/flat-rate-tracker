@@ -596,8 +596,10 @@ export type Database = {
           period_overrides: Json
           reference_hourly_rate: number | null
           ro_template: Json | null
+          accent: string
           split_day: number
           tag_colors: Json
+          theme: string
           track_ro_time: boolean
           updated_at: string
           user_id: string
@@ -610,8 +612,10 @@ export type Database = {
           period_overrides?: Json
           reference_hourly_rate?: number | null
           ro_template?: Json | null
+          accent?: string
           split_day?: number
           tag_colors?: Json
+          theme?: string
           track_ro_time?: boolean
           updated_at?: string
           user_id: string
@@ -624,8 +628,10 @@ export type Database = {
           period_overrides?: Json
           reference_hourly_rate?: number | null
           ro_template?: Json | null
+          accent?: string
           split_day?: number
           tag_colors?: Json
+          theme?: string
           track_ro_time?: boolean
           updated_at?: string
           user_id?: string

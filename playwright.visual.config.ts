@@ -72,5 +72,14 @@ export default defineConfig({
     { name: "dark-desktop", use: { viewport: DESKTOP } },
     { name: "light-mobile", use: { viewport: MOBILE, isMobile: true, hasTouch: true } },
     { name: "light-desktop", use: { viewport: DESKTOP } },
+    // Overhaul phase 3 exit gate: the darkest theme with the one accent that
+    // sits closest to --bad, on the busiest page. Anything hard-coded shows
+    // through here first. Dashboard only, so the gate doesn't quadruple.
+    ...(["mobile", "desktop"] as const).map((size) => ({
+      name: `pitch-red-${size}`,
+      testMatch: /visual\.spec\.ts/,
+      grep: /renders like the approved dashboard$/,
+      use: size === "mobile" ? { viewport: MOBILE, isMobile: true, hasTouch: true } : { viewport: DESKTOP },
+    })),
   ],
 });

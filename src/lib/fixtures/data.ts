@@ -342,6 +342,8 @@ export const userSettings = {
   // shows its time field. The fixture clock is pinned (instrumentation.ts), so
   // the prefilled value is as deterministic as everything else here.
   track_ro_time: true,
+  theme: "dark",
+  accent: "blue",
   period_overrides: {},
   ro_template: null,
   tag_colors: {},

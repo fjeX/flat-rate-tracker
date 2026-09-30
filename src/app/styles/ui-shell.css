@@ -1,0 +1,142 @@
+/* Phase 3 shell: topbar, desktop rail, bottom bar, directory dialog, footer,
+   save bar (plans/frt-visual-overhaul-rollout.md). Mock: final.html "shell".
+   Tokens only. Breakpoints match the mock: the rail replaces the topbar and
+   bottom bar at 1024px; the save bar un-flushes at 700px. */
+
+/* ---------- pictograms ---------- */
+svg.ic { width: 22px; height: 22px; fill: currentColor; fill-rule: evenodd; flex: none; display: block; }
+svg.ic-sm { width: 16px; height: 16px; }
+
+/* ---------- frame: content offset beside the rail, clear of the bottom bar ---------- */
+.shell-frame {
+  display: flex; flex-direction: column; min-height: 100vh;
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---------- logo: the tower mark ---------- */
+.logo { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--tap); text-decoration: none; color: var(--ink); border-radius: var(--r-sign); }
+.logo svg { width: 30px; height: 30px; flex: none; }
+.logo .m-block { fill: var(--ink); }
+.logo .m-bar { fill: var(--accent-text); }
+.logo-word { display: flex; flex-direction: column; line-height: 1; }
+.logo-word b { font-weight: 700; font-size: var(--fs-control); letter-spacing: 0.02em; }
+.logo-word span { font-weight: 600; font-size: var(--fs-min); letter-spacing: 0.24em; color: var(--ink-2); margin-top: 3px; }
+.logo:hover .logo-word b { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: var(--w-tag); }
+.logo:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+
+/* ---------- topbar (phones) ---------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: var(--s2) var(--gutter);
+  border-bottom: var(--w-edge) solid var(--edge);
+  background: var(--wall);
+}
+.topbar-actions { display: flex; gap: var(--s1); }
+.iconbtn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-width: var(--tap); min-height: var(--tap); padding: 0 var(--s2);
+  background: transparent; border: 0; border-radius: var(--r-sign);
+  color: var(--ink); text-decoration: none; font-weight: 600; font-size: var(--fs-label); cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.iconbtn:hover { background: var(--quiet-hover); }
+.iconbtn:active { background: var(--quiet-active); }
+.iconbtn:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+/* current page: a trim plate carrying an accent mark. Same rule in the top
+   bar, the bottom bar and the rail. */
+.iconbtn[aria-current="page"] { background: var(--trim); color: var(--trim-ink); overflow: hidden; }
+.iconbtn[aria-current="page"]::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: var(--w-mark); background: var(--accent-mark); }
+.iconbtn[aria-current="page"]:focus-visible { outline-color: var(--focus-on-trim); }
+
+/* ---------- directory lists (rail + phone dialog) ---------- */
+.rail { display: none; }
+.dir-list form { margin: 0; }
+.dir-list a, .dir-list button {
+  display: flex; align-items: center; gap: var(--s3); width: 100%;
+  min-height: 48px; padding: 0 var(--s3);
+  background: transparent; border: 0; border-bottom: var(--w-hair) solid var(--line-soft);
+  color: var(--ink); text-decoration: none; text-align: left; font-weight: 600; font-size: var(--fs-control); cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.dir-list a:hover, .dir-list button:hover { background: var(--quiet-hover); }
+.dir-list a:active, .dir-list button:active { background: var(--quiet-active); }
+.dir-list a:focus-visible, .dir-list button:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+.dir-list a[aria-current="page"] { background: var(--trim); color: var(--trim-ink); border-bottom-color: var(--trim); font-weight: 700; }
+.dir-list a[aria-current="page"]:focus-visible { outline-color: var(--focus-on-trim); outline-offset: -5px; }
+.dir-list .here { display: none; margin-left: auto; width: 12px; height: 12px; color: var(--accent-mark); }
+.dir-list a[aria-current="page"] .here { display: block; }
+.dir-sub a, .dir-sub button { font-size: var(--fs-body); color: var(--ink-2); }
+
+/* Directory dialog body: the shared Modal pads its body by --s4; the rows want
+   to run edge to edge, so pull them out by exactly that much. */
+.dir-body { margin: calc(var(--s2) - var(--s4)) calc(-1 * var(--s4)); }
+.dir-extra { margin-top: var(--s2); padding: var(--s3) var(--s4) var(--s2); border-top: var(--w-hair) solid var(--line-soft); }
+
+/* timer running: pulses in the state colour (keyframes live in globals) */
+.run-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--good); animation: pulse-good 1.6s ease-in-out infinite; }
+.dir-list a[aria-current="page"] .run-dot { border: var(--w-hair) solid var(--trim-ink); }
+
+/* ---------- bottom bar (phones) ---------- */
+.bottomnav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--trim); border-top: var(--w-hair) solid var(--trim-line);
+}
+.bottomnav a {
+  position: relative;
+  display: grid; place-content: center; justify-items: center; gap: 3px;
+  color: var(--trim-ink-2); text-decoration: none;
+  font-size: var(--fs-min); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.1;
+  transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+.bottomnav a:hover { color: var(--trim-ink); }
+.bottomnav a:active { background: var(--trim-line); }
+.bottomnav a[aria-current="page"] { color: var(--trim-ink); }
+.bottomnav a[aria-current="page"]::before { content: ""; position: absolute; top: -1px; left: 14px; right: 14px; height: var(--w-mark); background: var(--accent-mark); }
+.bottomnav a:focus-visible { outline: var(--w-heavy) solid var(--focus-on-trim); outline-offset: -5px; }
+.bn-icon { position: relative; display: grid; place-items: center; }
+.bn-icon .run-dot { position: absolute; top: -2px; right: -5px; width: 10px; height: 10px; border: var(--w-edge) solid var(--trim-ink); }
+
+/* ---------- footer ---------- */
+.footer { width: 100%; max-width: var(--page-max); margin: var(--s6) auto 0; padding: 0 var(--gutter) var(--s4); }
+.footer-in {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s1);
+  padding-top: var(--s2); border-top: var(--w-hair) solid var(--line);
+  font-size: var(--fs-label); color: var(--ink-3);
+}
+.footer a, .footer button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s2);
+  background: transparent; border: 0; cursor: pointer; font: inherit; font-weight: 600; color: var(--ink-2); text-decoration: none; border-radius: var(--r-sign);
+}
+.footer-in > :first-child { margin-left: calc(-1 * var(--s2)); }
+.footer a:hover, .footer button:hover { color: var(--ink); background: var(--quiet-hover); }
+.footer a:focus-visible, .footer button:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+.footer .copy { margin-left: auto; padding: var(--s2) 0; }
+
+/* ---------- save bar: slim, flush on the bottom bar ---------- */
+.save-bar {
+  position: sticky; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  margin: var(--s5) calc(-1 * var(--s4)) 0; padding: 0 var(--s4); min-height: var(--save-h);
+  display: flex; align-items: center; gap: var(--s2);
+  background: var(--wall-2); border-top: var(--w-edge) solid var(--edge);
+}
+.save-bar .summary { flex: 1 1 auto; min-width: 0; font-size: var(--fs-label); font-weight: 600; color: var(--ink-2); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.save-bar .summary b { color: var(--ink); font-size: var(--fs-body); font-family: var(--font-num); }
+
+/* ---------- wider ---------- */
+@media (min-width: 700px) {
+  .save-bar { margin-left: 0; margin-right: 0; border: var(--w-edge) solid var(--edge); border-bottom: 0; border-radius: var(--r-sign) var(--r-sign) 0 0; }
+}
+@media (min-width: 1024px) {
+  .shell-frame { padding-left: var(--rail-w); padding-bottom: 0; }
+  .topbar, .bottomnav { display: none; }
+  .rail {
+    display: flex; flex-direction: column; position: fixed; left: 0; top: 0; bottom: 0; width: var(--rail-w); z-index: 30;
+    background: var(--panel); border-right: var(--w-edge) solid var(--edge); padding: var(--s4) var(--s3); overflow-y: auto;
+  }
+  .rail .logo { align-self: flex-start; margin: 0 0 var(--s5) var(--s2); }
+  .rail .dir-sub { margin-top: auto; padding-top: var(--s5); }
+  .save-bar { bottom: var(--s3); border-bottom: var(--w-edge) solid var(--edge); border-radius: var(--r-sign); }
+}

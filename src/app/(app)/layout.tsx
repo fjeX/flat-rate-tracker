@@ -10,6 +10,7 @@ import { RefreshFlusher } from "@/components/layout/RefreshFlusher";
 import { RefreshOnFocus } from "@/components/layout/RefreshOnFocus";
 import { CrossTabRefresh } from "@/components/layout/CrossTabRefresh";
 import { TimerPip } from "@/components/timer/TimerPip";
+import { AppearanceSync } from "@/components/layout/AppearanceSync";
 import { anyAccruing } from "@/lib/timer";
 import { capsForSlots } from "@/lib/timer-schedule";
 import type { Entry } from "@/lib/types";
@@ -31,10 +32,13 @@ export default async function AppLayout({
   const hasTz = cookieStore.has("frt_timezone");
   const timeZone = cookieStore.get("frt_timezone")?.value;
 
-  const [isAdmin, slotsOrNull] = await Promise.all([
+  const [isAdmin, slotsOrNull, settings] = await Promise.all([
     db.isCurrentUserAdmin(supabase),
     // Null pre-migration — the nav dot and pip simply don't render.
     db.listTimerSlotsSafe(supabase),
+    // Only for AppearanceSync: the account's look, copied into this browser on
+    // its first signed-in visit (the head script only ever reads localStorage).
+    db.getSettings(supabase),
   ]);
   const slots = slotsOrNull ?? [];
 
@@ -65,14 +69,15 @@ export default async function AppLayout({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <div className="shell-frame">
       <TimezoneSync hasTz={hasTz} />
       <RefreshFlusher />
       <RefreshOnFocus />
       {/* RefreshOnFocus covers a tab you left and came back to; this covers a
           tab that never lost focus at all. */}
       <CrossTabRefresh />
-      <Header userEmail={user.email} />
+      <AppearanceSync userId={user.id} theme={settings.theme} accent={settings.accent} />
+      <Header userEmail={user.email} timerRunning={timerRunning} />
       <Nav timerRunning={timerRunning} />
       <div style={{ flex: 1 }}>{children}</div>
       <Footer isAdmin={isAdmin} />

@@ -18,6 +18,7 @@ import {
 import { LABOR_TYPES } from "@/lib/earnings";
 import { BONUS_CATEGORIES } from "@/lib/bonuses";
 import { TIMER_STATUSES } from "@/lib/timer";
+import { THEMES, ACCENTS } from "@/lib/theme";
 import {
   BUG_CATEGORIES,
   BUG_SEVERITIES,
@@ -843,6 +844,11 @@ export const trackRoTimeSchema = z.boolean({
   error: "Time tracking preference must be true or false.",
 });
 
+export const appearanceSchema = z.object({
+  theme: z.enum(THEMES, { error: "Pick one of the available themes." }),
+  accent: z.enum(ACCENTS, { error: "Pick one of the available accent colors." }),
+});
+
 const SPLIT_MESSAGE = "Split day must be an integer between 1 and 30.";
 export const splitDaySchema = z
   .number({ error: SPLIT_MESSAGE })
@@ -912,6 +918,10 @@ export const importBundleSchema = z.looseObject({
     roTemplates: z.array(z.unknown()).nullable().optional(),
     defaultLaborType: z.string().nullable().optional(),
     shareLaborTimes: z.boolean().optional(),
+    // Unknown values are dropped by the RPC, not rejected, so a hand-edited
+    // backup can't abort a restore over a cosmetic field.
+    theme: z.string().optional(),
+    accent: z.string().optional(),
   }),
   entries: z.array(z.looseObject({}), { error: "Invalid backup format." }),
   opCodes: z.array(z.looseObject({}), { error: "Invalid backup format." }),
