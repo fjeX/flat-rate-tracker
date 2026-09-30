@@ -312,7 +312,19 @@ fonts and corner radius only** — no layout, wording or positions moved:
     shown" only while a search or tag filter is on. §8d's "tag filter chips
     show a small color dot" is now that tick; the row tick is unchanged.
   - **Insights:** same sections, same order, same sentences (§7e still
-    applies word for word), in the new language. The **window chips** are a
+    applies word for word), in the new language. The page now opens on a
+    **headline panel** (the accent-coloured block, like the dashboard's
+    Today): four figures — UNPAID THIS WINDOW (red when non-zero, "0h" with
+    "every timed job came in at book" when clean), STRONGEST DAY, LAST PERIOD
+    (the last *finished* period's efficiency, "up from / down from" the one
+    before) and SOLD (share of flagged hours upsold) — with the old opening
+    sentence ("Nothing unpaid in this window." / "Xh you weren't paid for.")
+    as the note under them. Those four figures are derived from the same
+    numbers the sections below print; **if the panel and a section disagree,
+    that is a bug.** Each zone's head also carries a small figure at the right
+    (What's costing you: the total; Best days: the best day; Trend: the last
+    finished period with ↑/↓; What you sold: hours; Claims: recovered). On
+    desktop the shorter zones sit **two across**. The **window chips** are a
     button group labelled WINDOW with `aria-pressed` (Week / Period / Month /
     All). Every section is a **zone** with its name in small capitals; the
     "All time — Ignores the window above" divider is a heavy rule with the

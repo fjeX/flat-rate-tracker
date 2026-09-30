@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Lightbulb } from "lucide-react";
 import { Zone } from "@/components/ui/Zone";
 import { Badge } from "@/components/ui/Badge";
+import { Head, HeadCell, HeadCells, HeadNote } from "@/components/ui/Card";
 import { withPt } from "@/components/ui/Figure";
 import { MixSection } from "@/components/insights/MixSection";
 import {
@@ -289,42 +290,83 @@ function leakWhy(leak: Leak): string {
  * instead makes the reader do the concluding, which is what the old chips-first
  * layout did. An empty board is a real finding too, and a better one.
  *
- * Leads with the total because that is the number a tech can act on — "which
+ * Phase 5 (Liem: "section after section of data, nothing stands out"): the
+ * claim is now the page's headline panel, like the dashboard's Today and Pay
+ * Period's totals — four figures a tech can read before any evidence. The
+ * unpaid total leads because that is the number a tech can act on; "which
  * job" is the follow-up question, not the first one.
  */
-function FindingLede({ board }: { board: LeakBoard }) {
-  if (board.leaks.length === 0) {
-    return (
-      <div className="ins-lede">
-        <p className="ins-lead">Nothing unpaid in this window.</p>
-        <p className="ins-sub">
-          Every job you timed came in at or under its book time, no comeback
-          hours went unflagged, and your unpaid-time ledger is empty for this
-          window.
-        </p>
-      </div>
-    );
-  }
-
+function FindingLede({
+  board,
+  bestDay,
+  trend,
+  soldShare,
+}: {
+  board: LeakBoard;
+  bestDay: WeekdayEfficiency | null;
+  trend: { to: PeriodTrendPoint; toPct: number; fromPct: number | null } | null;
+  soldShare: number | null;
+}) {
+  const clean = board.leaks.length === 0;
+  const trendDelta = trend && trend.fromPct != null ? trend.toPct - trend.fromPct : null;
   return (
-    <div className="ins-lede">
-      <div className="ins-lede-fig">
-        <span className="num ins-bad">
-          {withPt(fmtHours(board.totalHours))}
-          <span className="unit">h</span>
-        </span>
-        <span className="ins-lead">you weren&rsquo;t paid for</span>
-      </div>
+    <Head className="ins-verdict">
+      <HeadCells className="ins-verdict-cells">
+        <HeadCell
+          label="Unpaid this window"
+          className={clean ? undefined : "is-bad"}
+          value={clean ? "0" : withPt(fmtHours(board.totalHours))}
+          unit="h"
+          sub={
+            clean
+              ? "every timed job came in at book"
+              : `${board.leaks.length} ${board.leaks.length === 1 ? "source" : "sources"}, ranked below`
+          }
+        />
+        <HeadCell
+          label="Strongest day"
+          value={bestDay ? withPt(fmtPct(bestDay.efficiency)) : "—"}
+          sub={bestDay ? `${WEEKDAY_LABELS[bestDay.weekday]}s, over ${bestDay.days} ${bestDay.days === 1 ? "day" : "days"}` : "no measured days yet"}
+        />
+        <HeadCell
+          label="Last period"
+          value={trend ? withPt(fmtPct(trend.toPct)) : "—"}
+          sub={
+            trend
+              ? trendDelta === null
+                ? trend.to.label
+                : `${trendDelta > 0 ? "up from" : trendDelta < 0 ? "down from" : "level with"} ${fmtPct(trend.fromPct)}`
+              : "no finished period yet"
+          }
+        />
+        <HeadCell
+          label="Sold"
+          value={soldShare === null ? "—" : withPt(`${Math.round(soldShare * 100)}`)}
+          unit={soldShare === null ? undefined : "%"}
+          sub={soldShare === null ? "nothing marked as an upsell" : "of everything you flagged"}
+        />
+      </HeadCells>
       {/* Names the three sources instead of claiming "every source the app can
           measure". The old wording was an affirmative claim about coverage the
           board did not have — the unpaid-time ledger was structurally
           unreachable from it — and a claim like that is worse than a gap,
           because it tells the tech to stop looking. Say what is in the number. */}
-      <p className="ins-sub">
-        Jobs that ran past their book time, comebacks that flagged zero, and
-        every hour in your unpaid-time ledger — ranked by what it cost you.
-      </p>
-    </div>
+      <HeadNote>
+        {clean ? (
+          <>
+            <b>Nothing unpaid in this window.</b> Every job you timed came in at
+            or under its book time, no comeback hours went unflagged, and your
+            unpaid-time ledger is empty for this window.
+          </>
+        ) : (
+          <>
+            <b>{fmtHours(board.totalHours)}h you weren&rsquo;t paid for.</b>{" "}
+            Jobs that ran past their book time, comebacks that flagged zero, and
+            every hour in your unpaid-time ledger — ranked by what it cost you.
+          </>
+        )}
+      </HeadNote>
+    </Head>
   );
 }
 
@@ -336,7 +378,10 @@ export function LeakSection({ board }: { board: LeakBoard }) {
   const worst = board.leaks[0]?.hours ?? 0;
 
   return (
-    <Zone name="What's costing you">
+    <Zone
+      name="What's costing you"
+      aside={<span className="ins-aside ins-bad"><Hours value={fmtHours(board.totalHours)} /></span>}
+    >
       {/* The bar is scaled to the worst row rather than to the total, so the
           top row always fills it and the rest read as a share of the worst
           offender instead of as slivers. */}
@@ -398,8 +443,12 @@ export function LeakSection({ board }: { board: LeakBoard }) {
  */
 function GainSection({ gains }: { gains: Gain[] }) {
   const shown = gains.slice(0, 3);
+  const total = shown.reduce((s, g) => s + g.hours, 0);
   return (
-    <Zone name="Where you're winning">
+    <Zone
+      name="Where you're winning"
+      aside={<span className="ins-aside ins-good">+<Hours value={fmtHours(total)} /></span>}
+    >
       <ul className="ins-gains">
         {shown.map((gain) => (
           <li key={gain.key}>
@@ -445,7 +494,10 @@ export function TimeGoesSection({
   const reworkHours = rework.reduce((sum, r) => sum + r.unpaidHours, 0);
 
   return (
-    <Zone name="Where your time goes">
+    <Zone
+      name="Where your time goes"
+      aside={<span className="ins-aside"><span className="num">{rows.length}</span> codes · <span className="num">{timed}</span> timed</span>}
+    >
       {/* Phone form. Same `shown` array, same sort state — a 5-column table
           clips its last column at 390px, and that column is the ratio this
           whole section exists to show. Pressing a sort button is exactly the
@@ -625,7 +677,16 @@ function BestDaysSection({
   }, [rows, sort]);
 
   return (
-    <Zone name="Best days">
+    <Zone
+      name="Best days"
+      aside={
+        best ? (
+          <span className="ins-aside">
+            <span className="num ins-good">{withPt(fmtPct(best.efficiency))}</span> {WEEKDAY_LABELS[best.weekday]}
+          </span>
+        ) : undefined
+      }
+    >
       <Seg
         label="Sort"
         value={sort}
@@ -769,7 +830,21 @@ export function TrendSection({
   const delta = toPct != null && fromPct != null ? toPct - fromPct : null;
 
   return (
-    <Zone name="Trend">
+    <Zone
+      name="Trend"
+      aside={
+        toPct != null ? (
+          <span className="ins-aside">
+            <span className="num">{withPt(fmtPct(toPct))}</span>
+            {delta !== null && Math.abs(delta) >= 1 && (
+              <span className={delta > 0 ? "ins-good" : "ins-bad"} aria-hidden="true">
+                {" "}{delta > 0 ? "↑" : "↓"}
+              </span>
+            )}
+          </span>
+        ) : undefined
+      }
+    >
       <div className="ins-trend">
         <div className="ins-trend-plot">
           <div
@@ -900,7 +975,10 @@ function UpsellSection({
   const peak = Math.max(0.1, ...points.map((p) => p.share ?? 0));
 
   return (
-    <Zone name="What you sold">
+    <Zone
+      name="What you sold"
+      aside={<span className="ins-aside ins-good"><Hours value={fmtHours(totalHours)} /></span>}
+    >
       <p className="ins-sub">
         <b>{fmtHours(totalHours)}h</b> upsold across these {points.length}{" "}
         {points.length === 1 ? "period" : "periods"}
@@ -990,7 +1068,16 @@ function RecoverySection({
   }
 
   return (
-    <Zone name="Claims and recovery">
+    <Zone
+      name="Claims and recovery"
+      aside={
+        <span className="ins-aside ins-good">
+          {lifetime.recoveredDollars !== null
+            ? <span className="num">{withPt(fmtMoney(lifetime.recoveredDollars))}</span>
+            : <Hours value={fmtHours(lifetime.recoveredHours)} />}
+        </span>
+      }
+    >
       <dl className="ins-spec">
         <div>
           <dt className="ins-k">Claims closed</dt>
@@ -1268,16 +1355,50 @@ export function InsightsView({
     );
   }
 
+  // The headline panel's figures, derived from the same aggregates the
+  // sections below draw, so the top of the page can never disagree with the
+  // evidence under it.
+  const bestDay = weekdays.reduce<WeekdayEfficiency | null>(
+    (acc, r) =>
+      r.efficiency === null ? acc : acc === null || r.efficiency > acc.efficiency! ? r : acc,
+    null,
+  );
+  const verdictTrend = (() => {
+    // Finished periods with a printable figure only — the same rule as the
+    // Trend caption (see TrendSection).
+    const complete = trend
+      .filter((p) => p.end < today)
+      .map((p) => ({ p, d: trendEfficiencyDisplay(p) }))
+      .filter((x) => x.d.kind === "shown");
+    if (complete.length === 0) return null;
+    const to = complete[complete.length - 1];
+    const from = complete.length >= 2 ? complete[complete.length - 2] : null;
+    return {
+      to: to.p,
+      toPct: (to.d as { pct: number }).pct,
+      fromPct: from ? (from.d as { pct: number }).pct : null,
+    };
+  })();
+  const soldTotal = upsells.reduce((s, p) => s + p.upsellHours, 0);
+  const soldFlag = upsells.reduce((s, p) => s + p.flagHours, 0);
+  const soldShare = soldTotal > 0 && soldFlag > 0 ? soldTotal / soldFlag : null;
+
   return (
     <div>
       {/* Conclusion, then the control that scopes it, then the evidence. */}
-      {hasWindowContent && <FindingLede board={leaks} />}
+      {hasWindowContent && (
+        <FindingLede
+          board={leaks}
+          bestDay={bestDay}
+          trend={verdictTrend}
+          soldShare={soldShare}
+        />
+      )}
       {chipRow}
 
       {hasWindowContent ? (
         <>
           {leaks.leaks.length > 0 && <LeakSection board={leaks} />}
-          {gains.length > 0 && <GainSection gains={gains} />}
           {opCodes.length > 0 && (
             <TimeGoesSection
               rows={sortedOpCodes}
@@ -1286,13 +1407,17 @@ export function InsightsView({
               onSort={handleSort}
             />
           )}
-          {hasWorkedDays && (
-            <BestDaysSection
-              rows={weekdays}
-              sort={weekdaySort}
-              onSort={setWeekdaySort}
-            />
-          )}
+          {/* the two short ones share a row on desktop */}
+          <div className="ins-grid">
+            {hasWorkedDays && (
+              <BestDaysSection
+                rows={weekdays}
+                sort={weekdaySort}
+                onSort={setWeekdaySort}
+              />
+            )}
+            {gains.length > 0 && <GainSection gains={gains} />}
+          </div>
         </>
       ) : (
         <Zone name="This window">
@@ -1312,23 +1437,28 @@ export function InsightsView({
           <span>Ignores the window above</span>
         </div>
       )}
-      {mix.days.length > 0 && (
-        <MixSection
-          days={mix.days}
-          bands={mix.bands}
-          drivers={mix.drivers}
-          summary={mix.summary}
-        />
-      )}
-      <BigJobsSection rows={bigJobs.rows} coverage={bigJobs.coverage} />
-      <MaintenanceTimesSection inference={inference} />
-      {trend.length > 0 && <TrendSection points={trend} today={today} />}
-      <UpsellSection points={upsells} codes={upsoldCodes} today={today} />
-      {/* Gated only on the migration having landed — the section handles
-          "nothing recovered yet" itself. */}
-      {lifetime !== null && (
-        <RecoverySection lifetime={lifetime} insights={insights} />
-      )}
+      {/* Same order as before, read left-to-right then down on desktop: the
+          mix pair, the job-time pair, then Trend beside What you sold, then
+          Claims. Each pair is two zones the old page stacked. */}
+      <div className="ins-grid">
+        {mix.days.length > 0 && (
+          <MixSection
+            days={mix.days}
+            bands={mix.bands}
+            drivers={mix.drivers}
+            summary={mix.summary}
+          />
+        )}
+        <BigJobsSection rows={bigJobs.rows} coverage={bigJobs.coverage} />
+        <MaintenanceTimesSection inference={inference} />
+        {trend.length > 0 && <TrendSection points={trend} today={today} />}
+        <UpsellSection points={upsells} codes={upsoldCodes} today={today} />
+        {/* Gated only on the migration having landed — the section handles
+            "nothing recovered yet" itself. */}
+        {lifetime !== null && (
+          <RecoverySection lifetime={lifetime} insights={insights} />
+        )}
+      </div>
     </div>
   );
 }
