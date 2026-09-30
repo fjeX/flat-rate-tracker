@@ -84,7 +84,9 @@ const UI = 3; // WCAG AA, non-text: control outlines, bars, marks
 
 type Pair = [fg: string, bg: string, min: number];
 
-const SURFACES = ["--wall", "--wall-2", "--panel", "--plate"];
+// --zone-fill: the section panel (2026-09-30). Text and accent land on it
+// directly, so it is a surface like the others.
+const SURFACES = ["--wall", "--wall-2", "--panel", "--plate", "--zone-fill"];
 
 const PAIRS: Pair[] = [
   // base text on every surface it can land on
@@ -103,6 +105,8 @@ const PAIRS: Pair[] = [
   ["--good", "--panel", TEXT],
   ["--bad", "--wall", TEXT],
   ["--bad", "--panel", TEXT],
+  ["--good", "--zone-fill", TEXT],
+  ["--bad", "--zone-fill", TEXT],
   ["--good-ink", "--good", TEXT],
   // inverse blocks and the shell
   ["--zone-ink", "--zone-line", TEXT],

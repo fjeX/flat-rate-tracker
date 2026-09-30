@@ -195,8 +195,9 @@ fonts and corner radius only** — no layout, wording or positions moved:
     bottom (saved to that browser only).
 - Phase 4 rebuilt **Dashboard, Log RO, Quick Add and Pay Period** (same
   features, re-arranged). What this file calls a *card* on these pages is now a
-  **zone**: a heavy top rule with a name tab (e.g. "PAY PERIOD PACE", "BEFORE
-  YOU START"). Warnings are **tagged fields**: a word tag (NOTE / COST / FIX /
+  **zone**: a panel one shade lighter than the page, with a heavy top rule
+  and a name tab (e.g. "PAY PERIOD PACE", "BEFORE YOU START"); on phones it
+  runs edge to edge. Warnings are **tagged fields**: a word tag (NOTE / COST / FIX /
   SAVED) on a full-width strip; FIX and COST are red, SAVED green, NOTE grey.
   - **Dashboard:** greeting → page head (avatar, date, "N ROs logged…"; the
     pace status is a tag at the right: **On track / Near goal / Behind / Getting
@@ -204,7 +205,8 @@ fonts and corner radius only** — no layout, wording or positions moved:
     FLAG and pace/efficiency) + the **Clocked** field (accessible name
     "Clocked hours today") + a separate **Quick Add RO** button: tapping the
     flag figure no longer opens Quick Add. **Pay Period Pace** = a zone with a
-    track (Today and Goal markers; no ring) and a "Pay Period" link. The This
+    track (the "Today" label above it, the "Goal N" label below its right end,
+    so the two never overlap; no ring) and a "Pay Period" link. The This
     Week / Pay Period / This Month **tiles are now rows** of a **Flagged to
     date** table (Span / Flagged / Efficiency; the cell says "53%", not "53%
     efficiency"), with **Period earnings** under it. Open tickets and **Empty

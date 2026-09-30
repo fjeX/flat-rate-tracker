@@ -14,14 +14,19 @@ export type PaceTick = { key: string; label: string; left: number; cls: string }
 export function paceTicks(actualFrac: number, goalHours: number): PaceTick[] {
   const pct = Math.round(actualFrac * 100);
   const fill = Math.min(actualFrac, 1) * 100;
-  const goal = String(goalHours);
+  // The goal's label lives here, under the end of the track, not above it:
+  // above, it shared a row with the Today label and the two printed over each
+  // other late in the period (Today at 93% ran into "GOAL 88").
+  const goal = `Goal ${goalHours}`;
   if (fill < 12) {
     return [
       { key: "pct", label: `${pct}%`, left: 0, cls: "done first" },
       { key: "goal", label: goal, left: 100, cls: "last" },
     ];
   }
-  if (fill > 88) {
+  // "Goal 88" is ~60px wide; at phone width a centred "80%" tick past ~72%
+  // runs into it, so fold the percent into the goal label from there.
+  if (fill > 72) {
     return [
       { key: "zero", label: "0", left: 0, cls: "first" },
       { key: "goal", label: `${goal} · ${pct}%`, left: 100, cls: "last done" },
@@ -92,19 +97,21 @@ export function PaceZone({
         <i className="mk now pre" style={{ left: `${today}%` }}>
           <span>Today</span>
         </i>
-        {hasGoal && (
-          <i className="mk end" style={{ left: "100%" }}>
-            <span>
-              Goal <span className="num">{goalHours}</span>
-            </span>
-          </i>
-        )}
+        {hasGoal && <i className="mk end" style={{ left: "100%" }} />}
       </div>
       {hasGoal && (
         <div className="ticks" aria-hidden="true">
           {paceTicks(actualFrac, goalHours).map((t) => (
             <span key={t.key} className={t.cls} style={{ left: `${t.left}%` }}>
-              {t.label}
+              {/* The row is set in the number font; the one word in it isn't a number. */}
+              {t.label.startsWith("Goal ") ? (
+                <>
+                  <span className="w">Goal</span>
+                  {t.label.slice(4)}
+                </>
+              ) : (
+                t.label
+              )}
             </span>
           ))}
         </div>

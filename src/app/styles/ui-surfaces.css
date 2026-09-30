@@ -59,7 +59,32 @@
    an optional link or count at the right of .zone-head. No fill, no side
    borders: it holds its own panels. Card (above) is the filled variant.
    ===================================================================== */
-.zone { border-top: var(--w-heavy) solid var(--zone-line); margin-top: var(--s5); min-width: 0; }
+/* Section panel. The mock drew zones straight on the wall (rule + tab, no
+   fill); in use that made sections hard to tell apart, because the wall and the
+   cards inside a zone are nearly the same tone (Liem, 2026-09-30). So a zone is
+   a filled panel, --zone-fill, one step off the wall, and its cards sit on it.
+   Phones: a full-width band, so content keeps the page gutter and nothing
+   reflows. Wider: a bounded panel with a hairline edge. --zone-pad is what a
+   full-bleed child (.sfield) bleeds by. */
+.zone {
+  --zone-pad: var(--gutter);
+  background: var(--zone-fill);
+  border-top: var(--w-heavy) solid var(--zone-line);
+  margin: var(--s5) calc(-1 * var(--gutter)) 0;
+  padding: 0 var(--gutter) var(--s4);
+  min-width: 0;
+}
+.zone > .zone-head .zone-name { margin-left: calc(-1 * var(--zone-pad)); }
+@media (min-width: 700px) {
+  .zone {
+    --zone-pad: var(--s4);
+    margin-left: 0; margin-right: 0;
+    padding: 0 var(--s4) var(--s4);
+    border: var(--w-hair) solid var(--line);
+    border-top: var(--w-heavy) solid var(--zone-line);
+    border-radius: 0 0 var(--r-panel) var(--r-panel);
+  }
+}
 .zone-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); min-height: 36px; margin-bottom: var(--s2); }
 .zone-aside { margin-left: auto; padding-top: var(--s1); color: var(--ink-3); font-size: var(--fs-label); }
 .zone-aside + .zone-link { margin-left: 0; }
@@ -284,7 +309,7 @@
    ===================================================================== */
 .sfield {
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); align-items: start;
-  margin: 0 calc(-1 * var(--gutter)); padding: var(--s3) var(--gutter);
+  margin: 0 calc(-1 * var(--zone-pad, var(--gutter))); padding: var(--s3) var(--zone-pad, var(--gutter));
   background: var(--note-bg); color: var(--ink-2); font-size: var(--fs-body);
   border-top: var(--w-hair) solid var(--line); border-bottom: var(--w-hair) solid var(--line);
 }

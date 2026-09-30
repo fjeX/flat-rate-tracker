@@ -94,6 +94,7 @@
   --edge: #14181b;          /* control and panel outline */
   --zone-line: #4a545a;
   --zone-ink: #ffffff;
+  --zone-fill: #f3f5f4;     /* section panel: a step up from the wall, below the white cards */
 
   --block: #14181b;         /* neutral inverse block: step numbers, initials */
   --block-ink: #ffffff;
@@ -145,8 +146,9 @@
   --line: #34413f;
   --line-soft: #2c3836;
   --edge: #8b9a96;
-  --zone-line: #040706;
+  --zone-line: #3e4d4a;     /* was #040706: invisible on the wall */
   --zone-ink: #edf2ee;
+  --zone-fill: #212b2a;     /* section panel: lighter than the wall and the cards in it */
 
   --block: #edf2ee;
   --block-ink: #0b100f;
@@ -195,8 +197,9 @@
   --line: #373c42;
   --line-soft: #2e3338;
   --edge: #8e959c;
-  --zone-line: #050607;
+  --zone-line: #454b52;     /* was #050607: invisible on the wall */
   --zone-ink: #eef0f2;
+  --zone-fill: #272a2f;
   --block: #eef0f2;
   --block-ink: #0e1012;
   --note-bg: #0e1012;
@@ -235,6 +238,7 @@
   --edge: #969a9e;
   --zone-line: #3a3e42;
   --zone-ink: #f2f3f4;
+  --zone-fill: #1b1d20;
   --block: #f2f3f4;
   --block-ink: #000000;
   --note-bg: #000000;

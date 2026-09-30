@@ -81,13 +81,14 @@
 .dash-page .track .mk > span .num { font-size: inherit; letter-spacing: var(--track-num); }
 .dash-page .track.has-labels { margin-top: 26px; }
 .dash-page .ticks { position: relative; height: 22px; font-family: var(--font-num); font-weight: 500; font-size: var(--fs-min); letter-spacing: var(--track-num); color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.dash-page .ticks span { position: absolute; top: 0; padding-top: 6px; transform: translateX(-50%); white-space: nowrap; }
-.dash-page .ticks span::before { content: ""; position: absolute; left: 50%; top: 0; width: var(--w-tag); height: 5px; background: var(--ink-3); }
-.dash-page .ticks span.done { color: var(--ink); font-weight: 700; }
-.dash-page .ticks span.last { transform: translateX(-100%); }
-.dash-page .ticks span.last::before { left: auto; right: 0; }
-.dash-page .ticks span.first { transform: none; }
-.dash-page .ticks span.first::before { left: 0; }
+.dash-page .ticks > span { position: absolute; top: 0; padding-top: 6px; transform: translateX(-50%); white-space: nowrap; }
+.dash-page .ticks > span::before { content: ""; position: absolute; left: 50%; top: 0; width: var(--w-tag); height: 5px; background: var(--ink-3); }
+.dash-page .ticks > span.done { color: var(--ink); font-weight: 700; }
+.dash-page .ticks > span .w { font-family: var(--font-ui); font-weight: 700; letter-spacing: 0; }
+.dash-page .ticks > span.last { transform: translateX(-100%); }
+.dash-page .ticks > span.last::before { left: auto; right: 0; }
+.dash-page .ticks > span.first { transform: none; }
+.dash-page .ticks > span.first::before { left: 0; }
 .dash-page .pace-words { margin-top: var(--s2); }
 
 /* ---------- ruled table on the headline panel ---------- */

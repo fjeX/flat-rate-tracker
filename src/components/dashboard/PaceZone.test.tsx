@@ -15,19 +15,24 @@ const labels = (frac: number, goal = 45) => paceTicks(frac, goal).map((t) => t.l
 
 describe("paceTicks", () => {
   it("prints 0, the percent at the end of the fill, and the goal", () => {
-    expect(labels(0.8)).toEqual(["0", "80%", "45"]);
+    expect(labels(0.6)).toEqual(["0", "60%", "Goal 45"]);
+  });
+
+  it("folds the percent into the goal before it can reach the wider goal label", () => {
+    // "Goal 45" is ~60px; a centred "80%" at phone width would run into it.
+    expect(labels(0.8)).toEqual(["0", "Goal 45 · 80%"]);
   });
 
   it("drops the 0 when the fill is too close to the start to fit it", () => {
-    expect(labels(0.03)).toEqual(["3%", "45"]);
+    expect(labels(0.03)).toEqual(["3%", "Goal 45"]);
   });
 
   it("folds the percent into the goal when the fill reaches the end", () => {
-    expect(labels(0.95)).toEqual(["0", "45 · 95%"]);
+    expect(labels(0.95)).toEqual(["0", "Goal 45 · 95%"]);
   });
 
   it("reports the real percent past the goal, not a clamped one", () => {
-    expect(labels(1.12)).toEqual(["0", "45 · 112%"]);
+    expect(labels(1.12)).toEqual(["0", "Goal 45 · 112%"]);
     // ...but the tick sits at the end of the track
     expect(paceTicks(1.12, 45).at(-1)?.left).toBe(100);
   });
@@ -63,7 +68,12 @@ describe("PaceZone", () => {
     expect(track?.getAttribute("aria-label")).toContain("36.0 of 45 flag hours, 80 percent of goal");
     expect(track?.querySelector(".mk.now")?.textContent).toBe("Today");
     expect(track?.querySelector(".mk.now")?.getAttribute("style")).toContain("left: 60%");
-    expect(track?.querySelector(".mk.end")?.textContent).toBe("Goal 45");
+    // The goal is marked on the track but labelled in the tick row below it,
+    // so late in the period Today (above) and Goal (below) can never overlap:
+    // day 14 of 15 printed "TODAY" over "GOAL 88" (Liem, 2026-09-30).
+    expect(track?.querySelector(".mk.end")).toBeTruthy();
+    expect(track?.querySelector(".mk.end")?.textContent).toBe("");
+    expect(document.querySelector(".ticks .last")?.textContent).toBe("Goal 45 · 80%");
   });
 
   it("clamps the fill at the end of the track but keeps the real number", () => {
