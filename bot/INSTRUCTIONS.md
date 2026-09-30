@@ -369,6 +369,19 @@ fonts and corner radius only** — no layout, wording or positions moved:
     ruled rows with a quiet Remove. §8c's wording ("amber 'empty?' days",
     "the legend under the grid") means this accent-marked day and the legend
     above the grid.
+  - **Snapshots:** the H1 is "Snapshots" (was the "Portfolio snapshots"
+    section title) with the next-unlock sentence under it and a quiet
+    **Dashboard** button at the right. The sheets sit in a **Work records**
+    zone ("N on record" at its right), two across on desktop, newest first.
+    **The sheet itself changed everywhere it appears** (this page and the
+    dashboard's snapshot row): a plain panel with a heavy top rule, the
+    eyebrow "FLAT RATE TRACKER · WORK RECORD", the title "Snapshot #N", a
+    green **ON RECORD** tag (was the tilted stamp), the four figures as a
+    spec row (ROs documented / Hours flagged / Avg vs book / Photos on
+    file), the Top operations / Overall efficiency / Range lines, and a
+    label-style footer "GENERATED <date> · RO #<threshold> LINE". Every
+    figure and every sentence is unchanged; §8b's checks still apply word
+    for word.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

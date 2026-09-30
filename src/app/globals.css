@@ -18,6 +18,7 @@
 @import "./styles/page-op-codes.css";
 @import "./styles/page-insights.css";
 @import "./styles/page-schedule.css";
+@import "./styles/page-snapshots.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1
@@ -1089,48 +1090,7 @@ a { color: inherit; }
 
 /* — Career odometer (quiet number + milestone road) — */
 
-/* — Portfolio snapshot build sheet — */
-.gami-sheet {
-  background: var(--bg-1); border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--fg-3) 25%, transparent);
-  box-shadow: var(--shadow-card);
-  padding: 18px; position: relative; overflow: hidden;
-  font-family: var(--font-num);
-}
-/* Dashed brand strip — a plain dashed border, not a new gradient technique
-   (the approved gradient set stays closed; see design-review 2026-07-14). */
-.gami-sheet::before {
-  content: ""; position: absolute; left: 0; right: 0; top: 0;
-  border-top: 4px dashed var(--brand);
-}
-.gami-sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-top: 4px; }
-.gami-sheet-eyebrow { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fg-3); }
-.gami-sheet-title { font-size: 16px; font-weight: 700; margin-top: 3px; letter-spacing: 0.01em; }
-.gami-stamp {
-  display: inline-flex; align-items: center; gap: 3px;
-  transform: rotate(4deg);
-  border: 2px solid var(--good); color: var(--good);
-  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-  padding: 4px 8px; border-radius: 4px; opacity: 0.9; white-space: nowrap;
-}
-.gami-sheet-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
-  background: var(--line); border: 1px solid var(--line);
-  border-radius: 8px; overflow: hidden; margin-top: 14px;
-}
-@media (min-width: 600px) { .gami-sheet-grid { grid-template-columns: repeat(4, 1fr); } }
-.gami-sheet-cell { background: var(--bg-2); padding: 10px 12px; }
-/* .k labels are load-bearing (they name the stat) — fg-2, not decorative fg-3 */
-.gami-sheet-cell .k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-2); }
-.gami-sheet-cell .v { font-size: 16px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.gami-sheet-cell .v small { font-size: 11px; color: var(--fg-2); font-weight: 500; }
-.gami-sheet-specs { margin-top: 12px; font-size: 11px; color: var(--fg-2); line-height: 1.7; }
-.gami-sheet-specs b { color: var(--fg-0); }
-.gami-sheet-foot {
-  display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px;
-  border-top: 1px dashed var(--line); font-size: 11px; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--fg-3);
-}
+/* — Portfolio snapshot build sheet: .gami-sheet in ui-page.css (phase 5) — */
 
 /* — Snapshot dashboard card (progress to next unlock) — */
 

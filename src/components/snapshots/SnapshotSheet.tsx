@@ -1,12 +1,18 @@
-// Portfolio snapshot rendered as a vehicle build sheet (design 8B,
+// Portfolio snapshot rendered as a work record (design 8B,
 // docs/gamification.md). Stats were frozen at generation time and are
 // immutable — this component only formats, never recomputes.
-import { Check } from "lucide-react";
+//
+// Phase 5: the sheet is the app's one "hard copy" object (a filled panel with
+// the heavy top rule, a spec row of four figures, the specs as a ruled note,
+// a label-style footer). The class names `.gami-sheet-cell .k / .v` and
+// `.gami-sheet-specs` are kept: the colocated test reads them.
 import type { PortfolioSnapshot } from "@/lib/types";
 import { formatDateShort } from "@/lib/periods";
 import { MIN_PLAUSIBLE_AVG_VS_BOOK } from "@/lib/snapshots";
 import { fmtHoursGrouped } from "@/lib/format";
 import { efficiencyDisplay } from "@/lib/efficiency-display";
+import { Badge } from "@/components/ui/Badge";
+import { withPt } from "@/components/ui/Figure";
 
 // created_at is a UTC timestamp — format it in the user's timezone (the
 // frt_timezone cookie), not the server's, or a late-evening unlock shows
@@ -53,45 +59,45 @@ export function SnapshotSheet({
       <div className="gami-sheet-head">
         <div>
           <div className="gami-sheet-eyebrow">Flat Rate Tracker · Work Record</div>
-          <div className="gami-sheet-title">SNAPSHOT #{snapshot.seq}</div>
+          <div className="gami-sheet-title">
+            Snapshot <span className="num">#{snapshot.seq}</span>
+          </div>
         </div>
-        <div className="gami-stamp">
-          <Check size={11} aria-hidden="true" /> On record
-        </div>
+        <Badge tone="good">On record</Badge>
       </div>
-      <div className="gami-sheet-grid">
+      <dl className="spec">
         <div className="gami-sheet-cell">
-          <div className="k">ROs documented</div>
-          <div className="v">{s.roCount}</div>
+          <dt className="k">ROs documented</dt>
+          <dd className="v">{s.roCount}</dd>
         </div>
         <div className="gami-sheet-cell">
-          <div className="k">Hours flagged</div>
+          <dt className="k">Hours flagged</dt>
           {/* Grouped: a snapshot cut at a later RO threshold sits thousands of
               hours in. Trailing zero kept — this sheet is handed to a service
               manager, so it should read like every other surface, and the old
               private formatter dropped it ("2" for 2.0h). */}
-          <div className="v">{fmtHoursGrouped(s.totalFlagHours)}</div>
+          <dd className="v">{withPt(fmtHoursGrouped(s.totalFlagHours))}</dd>
         </div>
         <div className="gami-sheet-cell">
-          <div className="k">Avg vs book</div>
-          <div className="v">
+          <dt className="k">Avg vs book</dt>
+          <dd className="v">
             {/* Trust floor: snapshots frozen before the builder's junk-data
                 guard can carry implausible ratios (0.01×) — show "—" instead. */}
             {s.avgVsBook !== null && s.avgVsBook >= MIN_PLAUSIBLE_AVG_VS_BOOK ? (
               <>
-                {s.avgVsBook.toFixed(2)}
+                {withPt(s.avgVsBook.toFixed(2))}
                 <small>×</small>
               </>
             ) : (
               "—"
             )}
-          </div>
+          </dd>
         </div>
         <div className="gami-sheet-cell">
-          <div className="k">Photos on file</div>
-          <div className="v">{s.photoCount}</div>
+          <dt className="k">Photos on file</dt>
+          <dd className="v">{s.photoCount}</dd>
         </div>
-      </div>
+      </dl>
       <div className="gami-sheet-specs">
         {s.topOps.length > 0 && (
           <>
@@ -141,7 +147,7 @@ export function SnapshotSheet({
       </div>
       <div className="gami-sheet-foot">
         <span>Generated {fmtGenerated(snapshot.createdAt, timeZone)}</span>
-        <span>RO #{snapshot.roThreshold} line</span>
+        <span>RO <span className="num">#{snapshot.roThreshold}</span> line</span>
       </div>
     </article>
   );
