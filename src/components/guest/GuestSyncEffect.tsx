@@ -138,7 +138,8 @@ export function GuestSyncEffect() {
       };
 
       try {
-        await saveEntry(newEntry);
+        const saved = await saveEntry(newEntry);
+        if ("error" in saved) throw new Error(saved.error);
       } catch (err) {
         console.error("[GuestSync] Failed to save entry:", entry.roNumber, err);
         // Don't clear sessionStorage — data is not fully synced

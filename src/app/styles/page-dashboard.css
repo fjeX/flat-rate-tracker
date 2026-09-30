@@ -1,0 +1,247 @@
+/* =====================================================================
+   page-dashboard.css: phase 4, the Dashboard, built from final.html
+   (#screen-dashboard, markup 1060-1192; page language 473-740; dashboard
+   rules 741-786; responsive 933-947). plans/frt-visual-overhaul-rollout.md.
+
+   Tokens only: no raw colour appears in this file.
+
+   EVERYTHING is scoped under .dash-page. The page language the mock shares
+   between screens (pagehead, tracks, tags, rows) is
+   written here under that scope on purpose:
+     - this file loads BEFORE globals.css, which still has legacy rules on the
+       same short names (.stat, .pace, .ro-row...); the extra class makes these
+       win without touching globals;
+     - the Log RO and Pay Period pages write their own copies of the parts
+       they need, and an unscoped copy here would collide with theirs.
+   When all three pages have landed, the shared parts can be hoisted into one
+   partial and the scope dropped.
+
+   Shared components (Head, Badge, Button, DurationBar, Card, Field...) keep
+   their look from ui-*.css; nothing here restyles them except layout.
+   ===================================================================== */
+
+/* ---------- the page ---------- */
+.dash-page {
+  width: 100%; max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s4) var(--gutter) var(--s5);
+}
+.dash-page th { font-weight: inherit; text-align: left; }
+/* a word beside a figure: the UI font, not the figure font. :where() keeps this
+   at the lowest specificity so the headline panel's own .head-v .unit wins. */
+:where(.dash-page) .unit { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0; margin-left: 2px; }
+.dash-page .fine { color: var(--ink-3); font-size: var(--fs-label); }
+.dash-page .lead { font-weight: 700; font-size: var(--fs-control); }
+.dash-page .sub { color: var(--ink-2); font-size: var(--fs-body); max-width: 68ch; }
+/* state colour on a figure (efficiency, recovered): green good, warm red bad */
+.dash-page .is-good:not(.sfield) { color: var(--good); }
+.dash-page .head .is-bad, .dash-page .rows .is-bad, .dash-page .tbl .is-bad { color: var(--bad); }
+
+/* ---------- page title ---------- */
+.dash-page .pagehead { display: flex; align-items: center; gap: var(--s3); min-height: 48px; }
+.dash-page .pagehead h1 { font-size: var(--fs-head); font-weight: 700; line-height: 1.1; text-wrap: balance; letter-spacing: 0; margin: 0; }
+.dash-page .pagehead p { color: var(--ink-2); font-size: var(--fs-label); margin: 2px 0 0; }
+.dash-page .who {
+  width: 40px; height: 40px; display: grid; place-items: center; flex: none;
+  background: var(--block); color: var(--block-ink); border-radius: var(--r-sign);
+  font-weight: 700; font-size: var(--fs-title); line-height: 1;
+}
+.dash-page .grow { flex: 1 1 auto; min-width: 0; }
+
+/* ---------- zones: the shared ui/Zone (ui-surfaces.css) ---------- */
+/* a link that closes a block of rows: right-aligned, tucked under the last row */
+.dash-page .rows-link { display: flex; justify-content: flex-end; margin-top: var(--s1); }
+
+/* ---------- Today ---------- */
+.dash-page .today-tools { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: var(--s3); align-items: end; margin-top: var(--s3); }
+.dash-page .today-tools.is-solo { grid-template-columns: 116px; }
+.dash-page .clock-field { position: relative; display: block; }
+.dash-page .clock-field .input { padding-right: 30px; text-align: right; appearance: textfield; -moz-appearance: textfield; }
+.dash-page .clock-field .input::-webkit-outer-spin-button,
+.dash-page .clock-field .input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.dash-page .clock-field .unit { position: absolute; right: var(--s3); top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; margin: 0; }
+.dash-page .today-saving { margin-top: var(--s2); }
+/* the headline panel's second cell can carry state colour on its figure */
+.dash-page .head-s .num { font-size: inherit; }
+
+/* ---------- pace ---------- */
+.dash-page .bigline { display: flex; align-items: baseline; gap: 6px var(--s2); flex-wrap: wrap; }
+.dash-page .bigline b.num { font-size: var(--fs-fig); font-weight: 600; letter-spacing: var(--track-fig); line-height: 1.1; }
+.dash-page .bigline span { font-weight: 600; color: var(--ink-2); }
+.dash-page .bigline .end { margin-left: auto; font-weight: 400; color: var(--ink-3); }
+.dash-page .track { position: relative; height: 14px; background: var(--bar-track); }
+.dash-page .track i.fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bar); animation: pace-grow 720ms var(--ease) both; }
+.dash-page .track .mk { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; background: var(--ink); }
+.dash-page .track .mk.now { background: var(--accent-text); }
+.dash-page .track .mk.end { margin-left: -3px; }
+.dash-page .track .mk > span {
+  position: absolute; bottom: 100%; right: 0; padding-bottom: 3px; white-space: nowrap; color: var(--ink); font-style: normal;
+  font-size: var(--fs-min); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; line-height: 1.3;
+}
+.dash-page .track .mk.pre > span { padding-right: 6px; }
+.dash-page .track .mk > span .num { font-size: inherit; letter-spacing: var(--track-num); }
+.dash-page .track.has-labels { margin-top: 26px; }
+.dash-page .ticks { position: relative; height: 22px; font-family: var(--font-num); font-weight: 500; font-size: var(--fs-min); letter-spacing: var(--track-num); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.dash-page .ticks span { position: absolute; top: 0; padding-top: 6px; transform: translateX(-50%); white-space: nowrap; }
+.dash-page .ticks span::before { content: ""; position: absolute; left: 50%; top: 0; width: var(--w-tag); height: 5px; background: var(--ink-3); }
+.dash-page .ticks span.done { color: var(--ink); font-weight: 700; }
+.dash-page .ticks span.last { transform: translateX(-100%); }
+.dash-page .ticks span.last::before { left: auto; right: 0; }
+.dash-page .ticks span.first { transform: none; }
+.dash-page .ticks span.first::before { left: 0; }
+.dash-page .pace-words { margin-top: var(--s2); }
+
+/* ---------- ruled table on the headline panel ---------- */
+.dash-page .tbl td, .dash-page .tbl thead th + th { text-align: right; }
+.dash-page .tbl td.num { font-size: var(--fs-num); }
+.dash-page .tbl .tbl-alt { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 400; letter-spacing: 0; color: var(--head-ink-2); white-space: nowrap; }
+.dash-page .tbl .tbl-alt .num { font-size: var(--fs-num); color: var(--head-ink); }
+.dash-page .tbl .tbl-sub td { height: auto; padding: 0 var(--s3) var(--s2); text-align: right; font-size: var(--fs-label); color: var(--head-ink-2); border-top: 0; }
+/* the row above a note has no rule of its own; the note carries it */
+.dash-page .tbl tr:has(+ .tbl-sub) th, .dash-page .tbl tr:has(+ .tbl-sub) td { border-bottom: 0; }
+.dash-page .tbl .tbl-sub .num { font-size: var(--fs-label); color: var(--head-ink); }
+.dash-page .tbl-sub .num { font-weight: 600; }
+.dash-page .after-head { margin-top: var(--s1); }
+
+/* ---------- plain rows on the wall ---------- */
+.dash-page .rows > * { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line); min-height: 48px; }
+.dash-page .rows > *:last-child { border-bottom: 0; }
+.dash-page .rows + .rows { border-top: var(--w-hair) solid var(--line); margin-top: 0; }
+.dash-page .rows .k { font-weight: 600; color: var(--ink-2); }
+.dash-page .rows .v { text-align: right; font-size: var(--fs-num); }
+
+/* ---------- status field: the shared ui/StatusField (ui-surfaces.css) ----------
+   Only the page's spacing lives here: a field on the wall sits s3 under what
+   is above it (an inset one is positioned by its panel). */
+.dash-page .sfield:not(.is-inset) { margin-top: var(--s3); }
+.dash-page .sfield + .sfield { margin-top: 0; }
+
+/* ---------- RO tags: one repair order each ---------- */
+.dash-page .scale-note { display: flex; align-items: center; gap: 6px; font-size: var(--fs-min); color: var(--ink-3); }
+.dash-page .scale-note i { display: block; width: var(--hour); height: 6px; background: var(--bar); flex: none; }
+.dash-page .tags { display: grid; gap: var(--s2); margin-top: var(--s2); }
+.dash-page .tag {
+  position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0 var(--s2); align-items: start;
+  background: var(--panel); padding: 0 var(--s3) var(--s3) 0;
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+  border-radius: 0 var(--r-sign) var(--r-sign) 0;
+}
+.dash-page .tag-hole { grid-column: 1; grid-row: 1 / span 2; align-self: center; justify-self: end; width: 14px; height: 14px; border-radius: 50%; background: var(--wall); border: var(--w-edge) solid var(--ink-3); }
+.dash-page .tag-head { grid-column: 2 / 4; grid-row: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); padding-right: 76px; }
+.dash-page .ro-link {
+  display: inline-flex; align-items: center; min-height: var(--tap); min-width: var(--tap); padding: 0; background: transparent; border: 0; border-radius: var(--r-sign);
+  color: var(--accent-text); cursor: pointer;
+  font-family: var(--font-num); font-weight: 600; font-size: var(--fs-body); letter-spacing: var(--track-num); font-variant-numeric: tabular-nums;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: var(--w-tag);
+}
+.dash-page .ro-link:hover { background: var(--quiet-hover); text-decoration-thickness: 2.5px; }
+.dash-page .ro-link:active { background: var(--quiet-active); }
+.dash-page .ro-link:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.dash-page .tag-when { font-size: var(--fs-label); color: var(--ink-3); }
+.dash-page .tag-hrs-cell { grid-column: 2 / 4; grid-row: 1; justify-self: end; padding-top: 10px; }
+.dash-page .tag-hrs { font-family: var(--font-num); font-weight: 600; font-size: var(--fs-fig-row); letter-spacing: var(--track-fig); line-height: 1; font-variant-numeric: tabular-nums; }
+.dash-page .tag-hrs .unit { font-size: var(--fs-label); }
+.dash-page .tag-body { grid-column: 2 / 4; grid-row: 2; min-width: 0; }
+.dash-page .tag-body.has-act { grid-column: 2; }
+.dash-page .tag-act { grid-column: 3; grid-row: 2; align-self: end; }
+.dash-page .tag-veh { font-weight: 700; font-size: var(--fs-control); margin-top: -6px; line-height: 1.25; }
+.dash-page .tag-veh.is-unset { color: var(--ink-3); font-weight: 600; }
+.dash-page .tag-meta { color: var(--ink-2); font-size: var(--fs-label); margin: 2px 0 var(--s2); }
+.dash-page .tag-meta .num { font-size: var(--fs-label); }
+.dash-page .ops { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 var(--s2); }
+.dash-page .ops li .num { font-weight: 500; }
+/* the placeholder tags in loading.tsx */
+.dash-page .tag-skel { background: var(--panel); padding: 0 var(--s3) var(--s3) 40px; min-height: 112px; }
+
+/* ---------- streak, career, snapshot ---------- */
+.dash-page .recs > div { padding: var(--s3) 0; border-bottom: var(--w-hair) solid var(--line); }
+.dash-page .recs > div:first-child { padding-top: var(--s1); }
+.dash-page .recs > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.dash-page .rec-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); }
+.dash-page .rec-name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); min-width: 0; }
+.dash-page .rec-top h3 { font-size: var(--fs-control); font-weight: 700; }
+.dash-page .rec-top .num { font-size: var(--fs-title); letter-spacing: var(--track-fig); white-space: nowrap; }
+.dash-page .rec-top .unit { color: var(--ink-2); }
+.dash-page .recs .track { margin-top: var(--s2); }
+.dash-page .recs p { font-size: var(--fs-label); color: var(--ink-2); margin-top: 2px; }
+.dash-page .recs p b { color: var(--ink); }
+.dash-page .recs p .num { font-size: var(--fs-min); }
+.dash-page .recs p b.num { font-weight: 700; }
+.dash-page .recs .rec-snap { margin-top: var(--s2); }
+.dash-page .rec-sheet { margin-top: var(--s3); }
+
+/* ---------- empty days ---------- */
+.dash-page .days { margin-top: var(--s1); }
+.dash-page .days > li { padding: var(--s3) 0; border-bottom: var(--w-hair) solid var(--line); }
+.dash-page .days > li:last-child { border-bottom: 0; }
+.dash-page .days-act { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
+.dash-page .days-form { margin-top: var(--s3); padding: var(--s3); display: grid; gap: var(--s3); }
+.dash-page .days-form-row { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; }
+.dash-page .days-form .days-act { margin-top: 0; }
+.dash-page .days-hours { flex: 0 0 100px; }
+.dash-page .days-kind { flex: 1 1 190px; }
+.dash-page .days-more { margin-top: var(--s1); }
+
+/* ---------- chart ---------- */
+.dash-page .chart-ctl { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; justify-content: space-between; }
+.dash-page .seg { display: inline-flex; border: var(--w-edge) solid var(--edge); border-radius: var(--r-sign); overflow: hidden; }
+.dash-page .seg button {
+  min-height: var(--tap); min-width: 56px; padding: 0 var(--s3); background: transparent; color: var(--ink); border: 0;
+  border-right: var(--w-hair) solid var(--line); font-weight: 700; font-size: var(--fs-label); cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.dash-page .seg button:last-child { border-right: 0; }
+.dash-page .seg button:hover { background: var(--quiet-hover); }
+.dash-page .seg button:active { background: var(--quiet-active); }
+.dash-page .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.dash-page .seg button[aria-pressed="true"]:hover { background: var(--accent-hover); }
+.dash-page .seg button[aria-pressed="true"]:active { background: var(--accent-active); }
+.dash-page .seg button:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -5px; }
+.dash-page .seg button[aria-pressed="true"]:focus-visible { outline-color: var(--accent-ink); }
+
+.dash-page .chart-headline { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; margin: var(--s3) 0 0; }
+.dash-page .chart-headline .when { font-weight: 700; color: var(--ink-2); }
+.dash-page .chart-headline b { font-size: var(--fs-fig); font-weight: 600; letter-spacing: var(--track-fig); line-height: 1.1; }
+.dash-page .chart-headline .what { color: var(--ink-3); font-size: var(--fs-label); }
+.dash-page .chart { position: relative; padding-left: 30px; margin-top: var(--s5); }
+.dash-page .chart-plot { position: relative; height: 152px; border-bottom: var(--w-edge) solid var(--ink); }
+.dash-page .chart-grid { position: absolute; left: 0; right: 0; border-top: var(--w-hair) solid var(--line-soft); }
+.dash-page .chart-grid span { position: absolute; right: 100%; top: -8px; width: 30px; padding-right: 6px; text-align: right; font-family: var(--font-num); letter-spacing: var(--track-num); font-size: var(--fs-min); color: var(--ink-3); }
+.dash-page .chart-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 3px; }
+.dash-page .chart-bars div { flex: 1 1 0; min-width: 0; position: relative; background: var(--bar); min-height: 2px; max-width: 72px; margin: 0 auto; transform-origin: bottom; animation: bar-rise 520ms var(--ease) both; }
+.dash-page .chart-bars div.zero { background: var(--bar-dim); }
+.dash-page .chart-bars.dim div { background: var(--bar-dim); }
+.dash-page .chart-bars div.hot, .dash-page .chart-bars.dim div.hot { background: var(--ink); }
+.dash-page .chart-bars div.now, .dash-page .chart-bars.dim div.now { background: var(--accent-text); min-height: var(--w-mark); }
+.dash-page .chart-bars div > span { position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); font-family: var(--font-num); letter-spacing: var(--track-num); font-size: var(--fs-min); font-weight: 600; white-space: nowrap; color: var(--ink); }
+/* transparent columns over the bars: hover and touch move the readout */
+.dash-page .chart-hit { position: absolute; inset: 0; display: flex; gap: 3px; }
+.dash-page .chart-hit span { flex: 1 1 0; min-width: 0; }
+.dash-page .chart-x { display: flex; gap: 3px; margin-top: 6px; }
+.dash-page .chart-x span { flex: 1 1 0; min-width: 0; text-align: center; font-size: var(--fs-min); font-weight: 600; color: var(--ink-3); white-space: nowrap; min-height: 1.3em; }
+.dash-page .chart-x span small { display: block; font-size: var(--fs-min); font-weight: 400; color: var(--ink-3); }
+.dash-page .chart-x span.now { color: var(--ink); font-weight: 700; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.dash-page .chart-foot { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); margin-top: var(--s3); padding-top: var(--s2); border-top: var(--w-hair) solid var(--line); font-size: var(--fs-label); color: var(--ink-2); }
+.dash-page .chart-foot b { color: var(--ink); }
+.dash-page .chart-foot b.num { font-size: var(--fs-label); }
+.dash-page .insight { display: flex; gap: var(--s2); align-items: flex-start; margin-top: var(--s2); color: var(--ink-2); }
+.dash-page .insight svg { margin-top: 3px; }
+.dash-page .insight b { color: var(--ink); }
+.dash-page .insight .num { font-size: var(--fs-label); }
+
+/* ---------- the two columns ---------- */
+.dash-page .dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--s6); }
+.dash-page .dash > div { min-width: 0; }
+
+/* ---------- wider ---------- */
+@media (min-width: 700px) {
+  .dash-page .pagehead h1 { font-size: var(--fs-head-wide); }
+}
+@media (min-width: 1024px) {
+  .dash-page { padding: var(--s5) var(--gutter) var(--s6); }
+  .dash-page .dash { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+  .dash-page .chart-plot { height: 200px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-page .track i.fill, .dash-page .chart-bars div { animation: none; }
+}

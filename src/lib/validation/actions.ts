@@ -19,6 +19,7 @@ import { LABOR_TYPES } from "@/lib/earnings";
 import { BONUS_CATEGORIES } from "@/lib/bonuses";
 import { TIMER_STATUSES } from "@/lib/timer";
 import { THEMES, ACCENTS } from "@/lib/theme";
+import { RO_DIGITS_ERROR, RO_DIGITS_RE } from "@/lib/ro-number";
 import {
   BUG_CATEGORIES,
   BUG_SEVERITIES,
@@ -161,6 +162,16 @@ export const roNumberQuerySchema = z
   .string({ error: "RO number must be text." })
   .max(TEXT_LIMITS.roNumber, { error: "That RO number is too long." });
 
+/**
+ * The RO number on a new or edited RO / open ticket: required, digits only.
+ * Not used by the import path (importBundleSchema) or the duplicate lookup.
+ * `required` fires first for an empty value, so firstMessage() reports it.
+ */
+const roNumberField = requiredText("RO number is required.", TEXT_LIMITS.roNumber).regex(
+  RO_DIGITS_RE,
+  { error: RO_DIGITS_ERROR },
+);
+
 const vehicleSchema = z
   .object({
     year: freeText(TEXT_LIMITS.vehicleField).optional().default(""),
@@ -232,7 +243,7 @@ export const newEntrySchema = z.object({
     })
     .nullable()
     .optional(),
-  roNumber: requiredText("RO number is required.", TEXT_LIMITS.roNumber),
+  roNumber: roNumberField,
   vehicle: vehicleSchema,
   notes: freeText(TEXT_LIMITS.notes).optional().default(""),
   opCodes: z
@@ -277,7 +288,7 @@ const hhmm = z
 
 /** Opening a ticket: the RO number is the only required field (decision 2). */
 export const openTicketSchema = z.object({
-  roNumber: requiredText("RO number is required.", TEXT_LIMITS.roNumber),
+  roNumber: roNumberField,
   vehicle: vehicleSchema,
   notes: freeText(TEXT_LIMITS.notes).optional().default(""),
   // Same absent-vs-null contract as newEntrySchema.loggedTime; only the

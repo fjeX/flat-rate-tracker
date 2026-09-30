@@ -26,9 +26,12 @@
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RetroTimePrompt } from "@/components/forms/RetroTimePrompt";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import type { Entry, LaborType, NewEntry, OpCode, RoTemplate } from "@/lib/types";
 import type { OpCodeDraft } from "./OpCodeModals";
+import { Button } from "@/components/ui/Button";
+import { Zone } from "@/components/ui/Zone";
+import { Field } from "@/components/ui/Field";
+import { withPt } from "@/components/ui/Figure";
 import { PillInput } from "@/components/ui/PillInput";
 import { Switch } from "@/components/ui/Switch";
 import { DuplicateRoDialog } from "./DuplicateRoDialog";
@@ -37,6 +40,9 @@ import { RoScanSection } from "./RoScanSection";
 import { OpCodeLines } from "./OpCodeLines";
 import { ComebackSection } from "./ComebackSection";
 import { VehicleFields } from "./VehicleFields";
+import { LogIcon } from "./logParts";
+import { StatusField } from "@/components/ui/StatusField";
+import { roBlockedStatus } from "@/lib/ro-number";
 import { CLOSE_DEFAULTS_TIMEOUT_MS, reloadPage } from "./closeDefaultsStall";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { fmtHours } from "@/lib/stats";
@@ -301,7 +307,7 @@ export function LogRoForm({
     isEdit, savedRoNumber, abandonedRoNumber, date, setDate, roNumber, setRoNumber, error, setError, roInputRef,
     loggedTime, setLoggedTime, trackRoTime: timeFieldShown,
     library, handleScanResult, lines, search, setSearch, pickerOpen, setPickerOpen,
-    pickerRef, filteredLibrary, totalFlag, quickChips, customOpen, setCustomOpen,
+    pickerRef, filteredLibrary, totalFlag, quickChips, roState, customOpen, setCustomOpen,
     newLibraryOpen, setNewLibraryOpen, newLibraryPending, subPickerOc, setSubPickerOc,
     addFromLibrary, confirmSubPick, addCustomLine, addNewLibraryLine, updateLine, removeLine,
     hasComebackLines, comebackKind, comebackOfEntryId, selectedOriginal,
@@ -514,472 +520,500 @@ export function LogRoForm({
               ? "Save Changes"
               : "Save RO";
 
-  return (
-    <main className="mx-auto max-w-xl p-4 pb-32">
+  // "Four steps. Only the RO number is required." — the count follows the steps
+  // that actually render (ticket mode drops the op-code step). New RO only:
+  // an edit has no such promise to make.
+  const STEP_WORDS = ["", "One step", "Two steps", "Three steps", "Four steps"];
+  const subtitle = !isEdit
+    ? `${STEP_WORDS[steps.length] ?? `${steps.length} steps`}. Only the RO number is required.`
+    : null;
 
+  // The "Before you start" zone holds what is set up before the RO itself:
+  // date and time, the open-ticket switch, the close details, the scan. It is
+  // left out when none of them apply (editing an open ticket).
+  const showWhen = !ticketMode;
+  const showOpenToggle = !isEdit && openTicketEnabled;
+  const showScan = !isEdit && !openCreate;
+  const hasBefore = showWhen || showOpenToggle || closing || showScan;
+
+  // Empty or non-digit RO blocks Save (and Save & New). The status text says which.
+  const roBlocked = roBlockedStatus(roState);
+
+  const vehicleTail = vehicleSummary ? ` · ${vehicleSummary}` : "";
+
+  return (
+    <main className="log-page">
       {/* ---- Save & New confirmation ---- */}
       {savedRoNumber && (
-        <div style={{
-          borderRadius: 8,
-          border: "1px solid color-mix(in oklab, var(--good) 40%, transparent)",
-          background: "color-mix(in oklab, var(--good) 10%, transparent)",
-          padding: "8px 12px",
-          fontSize: 13,
-          color: "var(--good)",
-          marginBottom: 12,
-        }}>
-          RO #{savedRoNumber} saved ✓
-        </div>
+        <StatusField tag="Saved" className="log-flow is-top">
+          <p>RO #{savedRoNumber} saved ✓</p>
+        </StatusField>
       )}
 
-      {/* ---- Section title ---- */}
-      <h1 className="sr-only">{title}</h1>
-      <div className="section-title" style={{ marginBottom: 16 }}>
-        <span aria-hidden="true">{title}</span>
-        {/* No date on a ticket: the opened day is the server's today and the
-            flag day is chosen at close. In close mode this IS the flag day. */}
-        {!ticketMode && (
-          <>
-            <label htmlFor="ro-date" className="sr-only">{closing ? "Close date" : "Date"}</label>
-            <PillInput
-              id="ro-date"
-              type="date"
-              value={date}
-              disabled={dateTimeLocked}
-              aria-describedby={dateTimeLocked ? "close-defaults-loading" : undefined}
-              onChange={(e) => {
-                setDate(e.target.value);
-                // An empty value is not a choice. A date input reports "" both
-                // when cleared and while a typed date is incomplete, and
-                // reading that as "custom" meant clear-then-retype the flag
-                // date went custom → keep: a "change" of choice that restamped
-                // the stored time over one the tech had typed by hand. Leave
-                // the choice (and the time) where it was until there's a date.
-                if (e.target.value === "") return;
-                // On a reopened close the radios are on screen beside this
-                // pill, and the pill is what actually gets saved. Editing it
-                // used to leave a radio checked that contradicted the saved
-                // date ("Keep flag date Sep 12" ticked over a pill reading Sep
-                // 16). Keep the radios honest about the date instead.
-                // Keep wins a tie: if the ticket was reopened and closed again
-                // the same day, "keep" is the default and the safer reading.
-                const next =
-                  e.target.value === currentFlagDate
-                    ? "keep"
-                    : e.target.value === today
-                      ? "move"
-                      : "custom";
-                // Typing a date that lands on one of the radios IS choosing
-                // that radio, so it carries that radio's time too. Otherwise
-                // Move (time = now) then typing the flag date back by hand
-                // ticked Keep while saving the flag day at NOW — the original
-                // half-a-keep bug through a side door.
-                //
-                // Only when the choice actually CHANGES: re-typing the date the
-                // choice already describes must not wipe a time the tech typed.
-                // And "custom" leaves the time alone: neither the stored time
-                // (a moment on the flag day) nor now (a moment on today) is
-                // known to belong to an arbitrary third day, and the tech is
-                // looking at the time pill right beside the date they just
-                // typed — whatever it reads is the least surprising thing to
-                // save. Reopened only: on a first close the radios aren't
-                // shown and currentFlagTime was never loaded.
-                if (reopened && timeFieldShown && next !== dateChoice) {
-                  if (next === "keep") setLoggedTime(currentFlagTime);
-                  else if (next === "move") setLoggedTime(defaultLoggedTime);
-                }
-                setDateChoice(next);
-              }}
-              required
-              aria-required="true"
-            />
-          </>
-        )}
-        {/* Sits beside the date because it IS part of the date — a wall-clock
-            time on that day, not an independent fact. Not `required`: clearing
-            it is a legitimate answer ("I don't remember when"), and an empty box
-            saves as no time rather than blocking the RO. */}
-        {timeFieldShown && !ticketMode && (
-          <>
-            <label htmlFor="ro-time" className="sr-only">Time</label>
-            <PillInput
-              id="ro-time"
-              type="time"
-              value={loggedTime}
-              disabled={dateTimeLocked}
-              aria-describedby={dateTimeLocked ? "close-defaults-loading" : undefined}
-              onChange={(e) => setLoggedTime(e.target.value)}
-            />
-          </>
-        )}
+      {/* ---- Page title ---- */}
+      <div className="log-head">
+        <div className="log-head-txt">
+          <h1 id="log-h1">{title}</h1>
+          {subtitle && <p>{subtitle}</p>}
+        </div>
       </div>
 
-      {/* ---- Open-ticket toggle (new RO, signed in) ---- */}
-      {!isEdit && openTicketEnabled && (
-        <div className="step-card active" style={{ marginBottom: 12 }}>
-          <div className="step-body" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div>
-              <div className="step-title">Open ticket — no op codes yet</div>
-              <div style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 2 }}>
-                For a job that spans days. Log the hours per day; flag it when the codes are known.
-              </div>
-            </div>
-            <Switch
-              checked={openToggle}
-              onChange={setOpenToggle}
-              // MUST match the visible label word for word (WCAG 2.5.3).
-              label="Open ticket — no op codes yet"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ---- Close-mode prefill banner ---- */}
-      {closing && (
-        <div className="step-card active" style={{ marginBottom: 12 }} data-testid="close-prefill">
-          <div className="step-body">
-            <div className="step-title">Closing this ticket</div>
-            <p style={{ fontSize: 13, color: "var(--fg-2)", marginTop: 4 }}>
-              Add the op codes and flag hours below. The flag lands on the close
-              date above.
-            </p>
-            {/* Second close (decision 11): keep the flag date the first close
-                set, or move it to today. KEEP is the default — a reopen must
-                never silently move paid hours off the day they were paid. The
-                date pill above stays editable either way; these just pick
-                which day it starts on. */}
-            {reopened && currentFlagDate && today && (
-              <div
-                style={{ marginTop: 8, display: "grid", gap: 6 }}
-                data-testid="reopen-date-choice"
-              >
-                <div style={{ fontSize: 13 }}>
-                  This ticket was reopened. Keep the flag date, or move it to today?
-                </div>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                  <input
-                    type="radio"
-                    name="close-date-choice"
-                    // Unchecked while the date pill is empty (see dateCleared).
-                    checked={!dateCleared && dateChoice === "keep"}
-                    onChange={() => {
-                      setDateChoice("keep");
-                      setDate(currentFlagDate);
-                      // The whole flag timestamp, not just its day.
-                      if (timeFieldShown) setLoggedTime(currentFlagTime);
+      <div className={`log-grid${hasBefore ? "" : " is-solo"}`}>
+        {hasBefore && (
+          <Zone name="Before you start" className="log-before">
+            {/* No date on a ticket: the opened day is the server's today and the
+                flag day is chosen at close. In close mode this IS the flag day. */}
+            {showWhen && (
+              <div className="log-when">
+                <Field label={closing ? "Close date" : "Date"} htmlFor="ro-date">
+                  <PillInput
+                    id="ro-date"
+                    type="date"
+                    value={date}
+                    disabled={dateTimeLocked}
+                    aria-describedby={dateTimeLocked ? "close-defaults-loading" : undefined}
+                    onChange={(e) => {
+                      setDate(e.target.value);
+                      // An empty value is not a choice. A date input reports "" both
+                      // when cleared and while a typed date is incomplete, and
+                      // reading that as "custom" meant clear-then-retype the flag
+                      // date went custom → keep: a "change" of choice that restamped
+                      // the stored time over one the tech had typed by hand. Leave
+                      // the choice (and the time) where it was until there's a date.
+                      if (e.target.value === "") return;
+                      // On a reopened close the radios are on screen beside this
+                      // pill, and the pill is what actually gets saved. Editing it
+                      // used to leave a radio checked that contradicted the saved
+                      // date ("Keep flag date Sep 12" ticked over a pill reading Sep
+                      // 16). Keep the radios honest about the date instead.
+                      // Keep wins a tie: if the ticket was reopened and closed again
+                      // the same day, "keep" is the default and the safer reading.
+                      const next =
+                        e.target.value === currentFlagDate
+                          ? "keep"
+                          : e.target.value === today
+                            ? "move"
+                            : "custom";
+                      // Typing a date that lands on one of the radios IS choosing
+                      // that radio, so it carries that radio's time too. Otherwise
+                      // Move (time = now) then typing the flag date back by hand
+                      // ticked Keep while saving the flag day at NOW — the original
+                      // half-a-keep bug through a side door.
+                      //
+                      // Only when the choice actually CHANGES: re-typing the date the
+                      // choice already describes must not wipe a time the tech typed.
+                      // And "custom" leaves the time alone: neither the stored time
+                      // (a moment on the flag day) nor now (a moment on today) is
+                      // known to belong to an arbitrary third day, and the tech is
+                      // looking at the time pill right beside the date they just
+                      // typed — whatever it reads is the least surprising thing to
+                      // save. Reopened only: on a first close the radios aren't
+                      // shown and currentFlagTime was never loaded.
+                      if (reopened && timeFieldShown && next !== dateChoice) {
+                        if (next === "keep") setLoggedTime(currentFlagTime);
+                        else if (next === "move") setLoggedTime(defaultLoggedTime);
+                      }
+                      setDateChoice(next);
                     }}
+                    required
+                    aria-required="true"
                   />
-                  Keep flag date {formatDateLong(currentFlagDate)}
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                  <input
-                    type="radio"
-                    name="close-date-choice"
-                    checked={!dateCleared && dateChoice === "move"}
-                    onChange={() => {
-                      setDateChoice("move");
-                      setDate(today);
-                      // A moved flag is a fresh close: the same now-time a
-                      // first close opens with.
-                      if (timeFieldShown) setLoggedTime(defaultLoggedTime);
-                    }}
-                  />
-                  Move to today ({formatDateLong(today)})
-                </label>
-              </div>
-            )}
-            {closeDefaultsState === "failed" ? (
-              // Replaces the prefill text, which would otherwise claim "no
-              // hours were logged" — the fetch that failed is the one that
-              // carries the hours, so the honest statement is "unknown".
-              <div
-                id="close-defaults-error"
-                role="alert"
-                style={{ marginTop: 8, fontSize: 13, color: "var(--bad)" }}
-              >
-                Couldn&apos;t load this ticket&apos;s close details, so closing is
-                paused — FRT can&apos;t tell yet whether it was reopened.
-                {closeDefaultsStalled ? (
-                  // Not "Try again": the stuck request still holds Next's
-                  // server-action queue, so a retry would wait behind it.
-                  <>
-                    {" "}The connection stopped answering, and FRT can&apos;t ask
-                    again until the page reloads. Reloading clears anything
-                    typed on this form.
-                    <div style={{ marginTop: 6 }}>
-                      <button type="button" className="btn btn-sm" onClick={reloadPage}>
-                        Reload page
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                <div style={{ marginTop: 6 }}>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={() => {
-                      // No result for this id ⇒ "loading" again; then refetch.
-                      setCloseDefaultsResult(null);
-                      setCloseDefaultsAttempt((n) => n + 1);
-                    }}
-                  >
-                    Try again
-                  </button>
-                </div>
-                )}
-              </div>
-            ) : closeDefaultsState === "loading" ? (
-              <p id="close-defaults-loading" role="status" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 6 }}>
-                Loading this ticket&apos;s timeline…
-              </p>
-            ) : prefill && prefill.actualHours > 0 ? (
-              <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
-                <div style={{ fontSize: 13 }}>
-                  Timeline says <b>{fmtHours(prefill.actualHours)}h</b> worked
-                  {prefill.actualSource === "estimate" && (
-                    <span style={{ color: "var(--fg-3)" }}> (typed, so it&apos;s an estimate)</span>
-                  )}
-                  . Put it on:
-                </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <label style={{ fontSize: 12, color: "var(--fg-3)" }}>
-                    Line
-                    <select
-                      className="input"
-                      style={{ marginLeft: 6 }}
-                      value={prefillLine ?? (lines.length > 0 ? defaultPrefillLineIndex(lines) : 0)}
-                      onChange={(e) => setPrefillLine(Number(e.target.value))}
-                      disabled={lines.length === 0}
-                      aria-label="Line to receive the timeline hours"
-                    >
-                      {lines.length === 0 ? (
-                        <option value={0}>add an op code first</option>
-                      ) : (
-                        lines.map((l, i) => (
-                          <option key={i} value={i}>
-                            {i + 1}. {(l.custom ? l.customCode : library.find((oc) => oc.id === l.opCodeId)?.code) || "line"} · {fmtHours(l.flagHours)}h flag
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </label>
-                  <label style={{ fontSize: 12, color: "var(--fg-3)" }}>
-                    Actual hours
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      inputMode="decimal"
-                      className="input mono tabular"
-                      style={{ marginLeft: 6, width: 90 }}
-                      value={prefillHours}
-                      onChange={(e) => setPrefillHours(e.target.value)}
-                      aria-label="Actual hours to put on that line"
+                </Field>
+                {/* Sits beside the date because it IS part of the date — a wall-clock
+                    time on that day, not an independent fact. Not `required`: clearing
+                    it is a legitimate answer ("I don't remember when"), and an empty box
+                    saves as no time rather than blocking the RO. */}
+                {timeFieldShown && (
+                  <Field label="Time" htmlFor="ro-time">
+                    <PillInput
+                      id="ro-time"
+                      type="time"
+                      value={loggedTime}
+                      disabled={dateTimeLocked}
+                      aria-describedby={dateTimeLocked ? "close-defaults-loading" : undefined}
+                      onChange={(e) => setLoggedTime(e.target.value)}
                     />
-                  </label>
-                </div>
-                {prefill.excludedHoldHours > 0 && (
-                  <div style={{ fontSize: 12, color: "var(--fg-3)" }}>
-                    Waiting isn&apos;t wrenching: {fmtHours(prefill.excludedHoldHours)}h of hold time on this
-                    ticket is not in that figure.
-                  </div>
+                  </Field>
                 )}
               </div>
-            ) : (
-              <p style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 6 }}>
-                No hours were logged on this ticket&apos;s timeline, so nothing is prefilled.
-              </p>
+            )}
+
+            {/* ---- Close-mode prefill banner ---- */}
+            {closing && (
+              <div className="log-tool is-stack" data-testid="close-prefill">
+                <div className="log-tool-txt">
+                  <p className="log-lead">Closing this ticket</p>
+                  <p className="log-sub">
+                    Add the op codes and flag hours below. The flag lands on the close
+                    date above.
+                  </p>
+                </div>
+                {/* Second close (decision 11): keep the flag date the first close
+                    set, or move it to today. KEEP is the default — a reopen must
+                    never silently move paid hours off the day they were paid. The
+                    date pill above stays editable either way; these just pick
+                    which day it starts on. */}
+                {reopened && currentFlagDate && today && (
+                  <fieldset className="log-fieldset log-tool-row" data-testid="reopen-date-choice">
+                    <legend className="log-sub log-legend">
+                      This ticket was reopened. Keep the flag date, or move it to today?
+                    </legend>
+                    <div className="log-opts">
+                      <label className="log-opt">
+                        <input
+                          type="radio"
+                          name="close-date-choice"
+                          // Unchecked while the date pill is empty (see dateCleared).
+                          checked={!dateCleared && dateChoice === "keep"}
+                          onChange={() => {
+                            setDateChoice("keep");
+                            setDate(currentFlagDate);
+                            // The whole flag timestamp, not just its day.
+                            if (timeFieldShown) setLoggedTime(currentFlagTime);
+                          }}
+                        />
+                        <span className="log-opt-box">
+                          <span className="log-opt-txt">
+                            <span className="log-opt-name">Keep flag date {formatDateLong(currentFlagDate)}</span>
+                          </span>
+                          <LogIcon name="check" small className="log-opt-check" />
+                        </span>
+                      </label>
+                      <label className="log-opt">
+                        <input
+                          type="radio"
+                          name="close-date-choice"
+                          checked={!dateCleared && dateChoice === "move"}
+                          onChange={() => {
+                            setDateChoice("move");
+                            setDate(today);
+                            // A moved flag is a fresh close: the same now-time a
+                            // first close opens with.
+                            if (timeFieldShown) setLoggedTime(defaultLoggedTime);
+                          }}
+                        />
+                        <span className="log-opt-box">
+                          <span className="log-opt-txt">
+                            <span className="log-opt-name">Move to today ({formatDateLong(today)})</span>
+                          </span>
+                          <LogIcon name="check" small className="log-opt-check" />
+                        </span>
+                      </label>
+                    </div>
+                  </fieldset>
+                )}
+                {closeDefaultsState === "failed" ? (
+                  // Replaces the prefill text, which would otherwise claim "no
+                  // hours were logged" — the fetch that failed is the one that
+                  // carries the hours, so the honest statement is "unknown".
+                  <StatusField
+                    tone="bad"
+                    tag="Fix"
+                    inset
+                    id="close-defaults-error"
+                    role="alert"
+                    className="log-tool-row"
+                  >
+                    <p>
+                      Couldn&apos;t load this ticket&apos;s close details, so closing is
+                      paused — FRT can&apos;t tell yet whether it was reopened.
+                      {closeDefaultsStalled && (
+                        // Not "Try again": the stuck request still holds Next's
+                        // server-action queue, so a retry would wait behind it.
+                        <>
+                          {" "}The connection stopped answering, and FRT can&apos;t ask
+                          again until the page reloads. Reloading clears anything
+                          typed on this form.
+                        </>
+                      )}
+                    </p>
+                    <div className="sfield-act">
+                      {closeDefaultsStalled ? (
+                        <Button variant="line" size="sm" onClick={reloadPage}>
+                          Reload page
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="line"
+                          size="sm"
+                          onClick={() => {
+                            // No result for this id ⇒ "loading" again; then refetch.
+                            setCloseDefaultsResult(null);
+                            setCloseDefaultsAttempt((n) => n + 1);
+                          }}
+                        >
+                          Try again
+                        </Button>
+                      )}
+                    </div>
+                  </StatusField>
+                ) : closeDefaultsState === "loading" ? (
+                  <p id="close-defaults-loading" role="status" className="log-sub log-tool-row">
+                    Loading this ticket&apos;s timeline…
+                  </p>
+                ) : prefill && prefill.actualHours > 0 ? (
+                  <div className="log-prefill log-tool-row">
+                    <div className="log-sub">
+                      Timeline says <b>{fmtHours(prefill.actualHours)}h</b> worked
+                      {prefill.actualSource === "estimate" && (
+                        <span> (typed, so it&apos;s an estimate)</span>
+                      )}
+                      . Put it on:
+                    </div>
+                    <div className="log-prefill-fields">
+                      <label className="field">
+                        <span className="field-label">Line</span>
+                        <select
+                          className="input"
+                          value={prefillLine ?? (lines.length > 0 ? defaultPrefillLineIndex(lines) : 0)}
+                          onChange={(e) => setPrefillLine(Number(e.target.value))}
+                          disabled={lines.length === 0}
+                          aria-label="Line to receive the timeline hours"
+                        >
+                          {lines.length === 0 ? (
+                            <option value={0}>add an op code first</option>
+                          ) : (
+                            lines.map((l, i) => (
+                              <option key={i} value={i}>
+                                {i + 1}. {(l.custom ? l.customCode : library.find((oc) => oc.id === l.opCodeId)?.code) || "line"} · {fmtHours(l.flagHours)}h flag
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span className="field-label">Actual hours</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          inputMode="decimal"
+                          className="input mono"
+                          value={prefillHours}
+                          onChange={(e) => setPrefillHours(e.target.value)}
+                          aria-label="Actual hours to put on that line"
+                        />
+                      </label>
+                    </div>
+                    {prefill.excludedHoldHours > 0 && (
+                      <p className="log-sub">
+                        Waiting isn&apos;t wrenching: {fmtHours(prefill.excludedHoldHours)}h of hold time on this
+                        ticket is not in that figure.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="log-sub log-tool-row">
+                    No hours were logged on this ticket&apos;s timeline, so nothing is prefilled.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ---- Open-ticket toggle (new RO, signed in) ---- */}
+            {showOpenToggle && (
+              <div className="log-tool">
+                <div className="log-tool-txt">
+                  <p className="log-lead">Open ticket — no op codes yet</p>
+                  <p className="log-sub">
+                    For a job that spans days. Log the hours per day; flag it when the codes are known.
+                  </p>
+                </div>
+                <Switch
+                  checked={openToggle}
+                  onChange={setOpenToggle}
+                  // MUST match the visible label word for word (WCAG 2.5.3).
+                  label="Open ticket — no op codes yet"
+                />
+              </div>
+            )}
+
+            {/* ---- Scan (new RO only) ---- */}
+            {showScan && (
+              <RoScanSection
+                library={library}
+                templates={roTemplates ?? []}
+                onResult={handleScanResult}
+                onPhotoCaptured={photosEnabled ? handlePhotoCaptured : undefined}
+                photoAttached={photosEnabled && photoAttached}
+                onPhotoRemove={photosEnabled ? clearCapturedPhoto : undefined}
+              />
+            )}
+          </Zone>
+        )}
+
+        <Zone name={ticketMode ? "Open ticket" : "Repair order"} className="log-steps">
+          <div className="log-panel">
+          {/* ---- RO number (step 1 in every mode) ---- */}
+          <div className="log-step">
+            <div className="log-step-head">
+              <span className="log-step-no">{stepNum("ro")}</span>
+              <h3 className="log-step-title">Enter the RO number</h3>
+              <span className="log-step-aside">required</span>
+            </div>
+            <div className="log-step-body">
+              <label htmlFor="ro-number" className="sr-only">RO number</label>
+              <div className="log-ro">
+                <span aria-hidden="true">#</span>
+                <input
+                  id="ro-number"
+                  ref={roInputRef}
+                  type="text"
+                  value={roNumber}
+                  onChange={(e) => {
+                    // Synchronously, ahead of the state update: an open-check that
+                    // resolves before React commits must still see the new number.
+                    roNumberRef.current = e.target.value;
+                    setRoNumber(e.target.value);
+                    // A new number is a new question — including the sentence, not
+                    // just the buttons under it. The warning names the OLD RO, so
+                    // leaving it up accuses a number the tech is no longer typing.
+                    setOpenDup(null);
+                    setOpenDupAcknowledged(false);
+                    clearOpenDupWarning();
+                  }}
+                  required
+                  aria-required="true"
+                  aria-invalid={roState === "invalid" || Boolean(error)}
+                  aria-describedby={
+                    roState === "invalid" ? "ro-digits-error" : error ? "ro-save-error" : undefined
+                  }
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="12345"
+                  className="input mono"
+                />
+              </div>
+              {/* The FIX state, directly under the field (mock #ro-err). role=alert
+                  is announced when it mounts. Digits only: lib/ro-number.ts. */}
+              {roState === "invalid" && (
+                <StatusField tag="Fix" inset id="ro-digits-error" role="alert">
+                  <p>RO numbers are digits only. Take out the letters, then save.</p>
+                </StatusField>
+              )}
+            </div>
+          </div>
+
+          {/* ---- Op codes (hidden while the ticket is open, which renumbers what follows) ---- */}
+          {!ticketMode && (
+            <OpCodeLines
+              step={stepNum("opCodes")}
+              library={library}
+              lines={lines}
+              search={search}
+              setSearch={setSearch}
+              pickerOpen={pickerOpen}
+              setPickerOpen={setPickerOpen}
+              pickerRef={pickerRef}
+              filteredLibrary={filteredLibrary}
+              totalFlag={totalFlag}
+              quickChips={quickChips}
+              customOpen={customOpen}
+              setCustomOpen={setCustomOpen}
+              newLibraryOpen={newLibraryOpen}
+              setNewLibraryOpen={setNewLibraryOpen}
+              newLibraryPending={newLibraryPending}
+              subPickerOc={subPickerOc}
+              setSubPickerOc={setSubPickerOc}
+              addFromLibrary={addFromLibrary}
+              confirmSubPick={confirmSubPick}
+              addCustomLine={addCustomLine}
+              addNewLibraryLine={addNewLibraryLine}
+              updateLine={updateLine}
+              removeLine={removeLine}
+              toggleLineComeback={toggleLineComeback}
+              laborTypeEnabled={laborTypeShown}
+            />
+          )}
+
+          {/* Appears only once a line is marked — a normal paid RO never sees it. */}
+          {!ticketMode && hasComebackLines && (
+            <ComebackSection
+              comebackKind={comebackKind}
+              comebackOfEntryId={comebackOfEntryId}
+              selectedOriginal={selectedOriginal}
+              originalRoSearch={originalRoSearch}
+              setOriginalRoSearch={setOriginalRoSearch}
+              originalRoMatches={originalRoMatches}
+              isFindingOriginal={isFindingOriginal}
+              changeComebackKind={changeComebackKind}
+              findOriginalRo={findOriginalRo}
+              chooseOriginalRo={chooseOriginalRo}
+              clearOriginalRo={clearOriginalRo}
+            />
+          )}
+
+          {/* ---- Vehicle (collapsible) ---- */}
+          <VehicleFields
+            step={stepNum("vehicle")}
+            isEdit={isEdit}
+            vehicleOpen={vehicleOpen}
+            setVehicleOpen={setVehicleOpen}
+            vehicleSummary={vehicleSummary}
+            year={year}
+            setYear={setYear}
+            make={make}
+            handleMakeChange={handleMakeChange}
+            model={model}
+            setModel={setModel}
+            vin={vin}
+            setVin={setVin}
+            mileage={mileage}
+            setMileage={setMileage}
+            autoFill={autoFill}
+            handleAutoFillToggle={handleAutoFillToggle}
+          />
+
+          {/* ---- Notes (collapsible) ---- */}
+          <div className={`log-step is-fold${notesOpen ? " is-open" : ""}`}>
+            <button
+              type="button"
+              className="log-step-head"
+              onClick={() => setNotesOpen((v) => !v)}
+              aria-expanded={notesOpen}
+              aria-controls="notes-step-body"
+            >
+              <span className="log-step-no">{stepNum("notes")}</span>
+              <span className="log-step-title">Write notes</span>
+              <span className="log-step-aside">
+                {notes && !notesOpen ? <span className="log-step-sum">{notes}</span> : "optional"}
+                <LogIcon name="chev" small className="chev" />
+              </span>
+            </button>
+
+            {notesOpen && (
+              <div className="log-step-body" id="notes-step-body">
+                <label htmlFor="ro-notes" className="sr-only">Notes</label>
+                <textarea
+                  id="ro-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Customer concern, parts ordered, follow-up needed…"
+                  className="input"
+                />
+              </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* ---- Scan banner (new RO only) ---- */}
-      {!isEdit && !openCreate && (
-        <RoScanSection
-          library={library}
-          templates={roTemplates ?? []}
-          onResult={handleScanResult}
-          onPhotoCaptured={photosEnabled ? handlePhotoCaptured : undefined}
-          photoAttached={photosEnabled && photoAttached}
-          onPhotoRemove={photosEnabled ? clearCapturedPhoto : undefined}
-        />
-      )}
-
-      {/* ---- RO number (step 1 in every mode) ---- */}
-      <div className="step-card active">
-        <div className="step-head" style={{ cursor: "default" }}>
-          <div className="step-num">{stepNum("ro")}</div>
-          <div className="step-title">RO number</div>
-          <div className="step-summary">required</div>
-        </div>
-        <div className="step-body">
-          <label htmlFor="ro-number" className="sr-only">RO number</label>
-          <div className="ro-hero">
-            <span className="hash" aria-hidden="true">#</span>
-            <input
-              id="ro-number"
-              ref={roInputRef}
-              type="text"
-              value={roNumber}
-              onChange={(e) => {
-                // Synchronously, ahead of the state update: an open-check that
-                // resolves before React commits must still see the new number.
-                roNumberRef.current = e.target.value;
-                setRoNumber(e.target.value);
-                // A new number is a new question — including the sentence, not
-                // just the buttons under it. The warning names the OLD RO, so
-                // leaving it up accuses a number the tech is no longer typing.
-                setOpenDup(null);
-                setOpenDupAcknowledged(false);
-                clearOpenDupWarning();
-              }}
-              required
-              aria-required="true"
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? "ro-save-error" : undefined}
-              inputMode="numeric"
-              placeholder="12345"
-            />
           </div>
-        </div>
-      </div>
-
-      {/* ---- Op codes (hidden while the ticket is open, which renumbers what follows) ---- */}
-      {!ticketMode && (
-        <OpCodeLines
-          step={stepNum("opCodes")}
-          library={library}
-          lines={lines}
-          search={search}
-          setSearch={setSearch}
-          pickerOpen={pickerOpen}
-          setPickerOpen={setPickerOpen}
-          pickerRef={pickerRef}
-          filteredLibrary={filteredLibrary}
-          totalFlag={totalFlag}
-          quickChips={quickChips}
-          customOpen={customOpen}
-          setCustomOpen={setCustomOpen}
-          newLibraryOpen={newLibraryOpen}
-          setNewLibraryOpen={setNewLibraryOpen}
-          newLibraryPending={newLibraryPending}
-          subPickerOc={subPickerOc}
-          setSubPickerOc={setSubPickerOc}
-          addFromLibrary={addFromLibrary}
-          confirmSubPick={confirmSubPick}
-          addCustomLine={addCustomLine}
-          addNewLibraryLine={addNewLibraryLine}
-          updateLine={updateLine}
-          removeLine={removeLine}
-          toggleLineComeback={toggleLineComeback}
-          laborTypeEnabled={laborTypeShown}
-        />
-      )}
-
-      {/* Appears only once a line is marked — a normal paid RO never sees it. */}
-      {!ticketMode && hasComebackLines && (
-        <ComebackSection
-          comebackKind={comebackKind}
-          comebackOfEntryId={comebackOfEntryId}
-          selectedOriginal={selectedOriginal}
-          originalRoSearch={originalRoSearch}
-          setOriginalRoSearch={setOriginalRoSearch}
-          originalRoMatches={originalRoMatches}
-          isFindingOriginal={isFindingOriginal}
-          changeComebackKind={changeComebackKind}
-          findOriginalRo={findOriginalRo}
-          chooseOriginalRo={chooseOriginalRo}
-          clearOriginalRo={clearOriginalRo}
-        />
-      )}
-
-      {/* ---- Vehicle (collapsible) ---- */}
-      <VehicleFields
-        step={stepNum("vehicle")}
-        isEdit={isEdit}
-        vehicleOpen={vehicleOpen}
-        setVehicleOpen={setVehicleOpen}
-        vehicleSummary={vehicleSummary}
-        year={year}
-        setYear={setYear}
-        make={make}
-        handleMakeChange={handleMakeChange}
-        model={model}
-        setModel={setModel}
-        vin={vin}
-        setVin={setVin}
-        mileage={mileage}
-        setMileage={setMileage}
-        autoFill={autoFill}
-        handleAutoFillToggle={handleAutoFillToggle}
-      />
-
-      {/* ---- Notes (collapsible) ---- */}
-      <div className={`step-card${notesOpen ? " active" : " collapsed"}`}>
-        <button
-          type="button"
-          className="step-head"
-          onClick={() => setNotesOpen((v) => !v)}
-          aria-expanded={notesOpen}
-          aria-controls="notes-step-body"
-        >
-          <div className="step-num">{stepNum("notes")}</div>
-          <div className="step-title">
-            Notes
-            <span className="optional-badge">optional</span>
-          </div>
-          {notes && !notesOpen && (
-            <div className="step-summary" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
-              {notes}
-            </div>
-          )}
-          {notesOpen ? <ChevronUp size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} />}
-        </button>
-
-        {notesOpen && (
-          <div className="step-body" id="notes-step-body">
-            <label htmlFor="ro-notes" className="sr-only">Notes</label>
-            <textarea
-              id="ro-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              placeholder="Customer concern, parts ordered, follow-up needed…"
-              className="input"
-              style={{ width: "100%", resize: "vertical" }}
-            />
-          </div>
-        )}
+        </Zone>
       </div>
 
       {/* ---- Error ---- */}
       {error && (
-        <div
-          id="ro-save-error"
-          role="alert"
-          style={{
-            borderRadius: 8,
-            border: "1px solid color-mix(in oklab, var(--bad) 40%, transparent)",
-            background: "color-mix(in oklab, var(--bad) 10%, transparent)",
-            padding: "8px 12px",
-            fontSize: 13,
-            color: "var(--bad)",
-            marginBottom: 12,
-          }}
-        >
-          {error}
+        <StatusField tag="Fix" id="ro-save-error" role="alert" className="log-flow">
+          <p>{error}</p>
           {/* The "already open" warning offers the jump and the override the
               plan asks for. Both sit inside the alert so a screen reader hears
               the choice with the sentence. */}
           {openCreate && openDup && (
-            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              <button type="button" className="btn btn-sm" onClick={() => setViewDup(true)}>
+            <div className="sfield-act">
+              <Button variant="line" size="sm" onClick={() => setViewDup(true)}>
                 View open ticket
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
+              </Button>
+              <Button
+                variant="quiet"
+                size="sm"
                 onClick={() => {
                   setOpenDupAcknowledged(true);
                   setOpenDup(null);
@@ -989,92 +1023,88 @@ export function LogRoForm({
                 }}
               >
                 Open another under #{openDup.roNumber}
-              </button>
+              </Button>
             </div>
           )}
-        </div>
+        </StatusField>
       )}
 
       {/* ---- Backed out of the duplicate prompt: the RO was NOT saved ----
            Sits directly above the save bar because that is where the tech is
-           looking when they expect the green banner. Warn, not error: nothing
+           looking when they expect the confirmation. A NOTE, not a FIX: nothing
            failed, but nothing was written either. ---- */}
       {abandonedRoNumber && (
-        <div
-          role="status"
-          style={{
-            borderRadius: 8,
-            border: "1px solid color-mix(in oklab, var(--warn) 40%, transparent)",
-            background: "var(--warn-bg)",
-            padding: "8px 12px",
-            fontSize: 13,
-            color: "var(--warn)",
-            marginBottom: 12,
-          }}
-        >
-          Not saved — RO #{abandonedRoNumber} already exists. Save again to pick
-          Edit or Log as new, or change the RO number.
-        </div>
+        <StatusField tag="Note" role="status" className="log-flow">
+          <p>
+            Not saved — RO #{abandonedRoNumber} already exists. Save again to pick
+            Edit or Log as new, or change the RO number.
+          </p>
+        </StatusField>
       )}
 
-      {/* ---- Sticky save bar ---- */}
-      <div className="save-bar">
-        <div className="summary">
-          {roNumber ? (
+      {/* ---- Save bar ---- */}
+      <div className={`save-bar${isEdit ? " is-edit" : ""}`}>
+        <div className="summary" aria-live="polite">
+          {roBlocked === null ? (
             ticketMode ? (
-              <>{openCreate ? "Open ticket" : "Ticket"} <b>#{roNumber}</b>{vehicleSummary ? ` · ${vehicleSummary}` : ""}</>
+              <>
+                <b>{openCreate ? "Open ticket" : "Ticket"}</b>
+                <span>RO <span className="num">#{roNumber}</span>{vehicleTail}</span>
+              </>
             ) : (
-              <>RO <b>#{roNumber}</b>{vehicleSummary ? ` · ${vehicleSummary}` : ""}{lines.length > 0 ? ` · ${lines.length} op code${lines.length !== 1 ? "s" : ""}` : ""}</>
+              <>
+                <b>
+                  <span className="num">{withPt(`${fmtHours(totalFlag)}h`)}</span> · {lines.length} line{lines.length !== 1 ? "s" : ""}
+                </b>
+                <span>RO <span className="num">#{roNumber}</span>{vehicleTail}</span>
+              </>
             )
           ) : (
-            <span style={{ color: "var(--fg-3)" }}>Fill in RO # to save</span>
+            roBlocked
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {isEdit && (
-            <button
-              type="button"
-              onClick={handleDeleteRo}
-              disabled={isDeleting || isSubmitting}
-              className="btn btn-sm btn-danger"
-              style={{ marginRight: "auto" }}
-            >
-              <Trash2 style={{ width: 14, height: 14 }} />
-              {isDeleting ? "Deleting…" : editingOpen ? "Delete ticket" : "Delete RO"}
-            </button>
-          )}
-          {isEdit && (
-            <Link href="/dashboard" className="btn btn-ghost btn-sm">
-              Cancel
-            </Link>
-          )}
-          {!isEdit && !openCreate && (
-            <button
-              type="button"
-              onClick={handleSaveAndNew}
-              disabled={isSubmitting || isChecking}
-              className="btn btn-ghost btn-sm"
-            >
-              Save & New
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => handleSave()}
-            // closeBlocked: see closeDefaultsState. Same `disabled` idiom as
-            // the in-flight states, plus aria-busy while the fetch runs and a
-            // pointer to the reason when it failed.
-            disabled={isSubmitting || isChecking || closeBlocked}
-            aria-busy={closing && closeDefaultsState === "loading" ? true : undefined}
-            aria-describedby={
-              closing && closeDefaultsState === "failed" ? "close-defaults-error" : undefined
-            }
-            className="btn btn-primary btn-sm"
-            data-testid="ro-save"
+        {isEdit && (
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={handleDeleteRo}
+            disabled={isDeleting || isSubmitting}
+            className="log-del"
           >
-            {saveLabel}
-          </button>
-        </div>
+            {isDeleting ? "Deleting…" : editingOpen ? "Delete ticket" : "Delete RO"}
+          </Button>
+        )}
+        {isEdit && (
+          <Link href="/dashboard" className="btn btn-quiet btn-sm">
+            Cancel
+          </Link>
+        )}
+        {!isEdit && !openCreate && (
+          <Button
+            variant="line"
+            size="sm"
+            onClick={handleSaveAndNew}
+            disabled={isSubmitting || isChecking || roState !== "ok"}
+          >
+            Save & New
+          </Button>
+        )}
+        <Button
+          variant="go"
+          size="sm"
+          onClick={() => handleSave()}
+          // closeBlocked: see closeDefaultsState. Same `disabled` idiom as
+          // the in-flight states, plus aria-busy while the fetch runs and a
+          // pointer to the reason when it failed.
+          disabled={isSubmitting || isChecking || closeBlocked || roState !== "ok"}
+          busy={closing && closeDefaultsState === "loading"}
+          aria-describedby={
+            closing && closeDefaultsState === "failed" ? "close-defaults-error" : undefined
+          }
+          data-testid="ro-save"
+        >
+          {saveLabel}
+        </Button>
       </div>
 
       {/* ---- "How long did that take?" — fires only for 2h+ lines, after the

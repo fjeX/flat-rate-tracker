@@ -14,11 +14,11 @@
 // The hard constraint carried over from wage-check.ts is unchanged — NUMBERS
 // ONLY. No verdicts, no legal framing, no hardcoded wage figure. The only
 // reference rate is one the user typed into Settings.
-import { useState, useTransition } from "react";
+import { useState, useTransition, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { InfoBubble } from "@/components/ui/InfoBubble";
+import { withPt } from "@/components/ui/Figure";
 import { fmtHours } from "@/lib/stats";
 import { fmtHours2 } from "@/lib/format";
 import { fmtMoney, fmtMoney2 } from "@/lib/earnings";
@@ -35,6 +35,8 @@ import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
 import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import { reportError } from "@/lib/report-error";
 import { deleteUnpaidTimeAction } from "@/app/actions/unpaid-time";
+import { Fold, N, PpIcon } from "./PpParts";
+import { StatusField } from "@/components/ui/StatusField";
 
 // Two-decimal currency for an hourly figure ("$27.40/hr") — whole dollars are
 // too coarse for a rate, unlike the period totals fmtMoney handles elsewhere.
@@ -69,18 +71,18 @@ function fmtRate(n: number): string {
 function MissingDayLinks({ days }: { days: string[] }) {
   if (days.length === 0) return null;
   return (
-    <p className="missing-day-links">
-      <span className="field-label">Fix on the schedule</span>
+    <div className="sfield-act">
+      <span>Fix on the schedule</span>
       {days.map((d) => (
         <Link
           key={d}
           href={`/schedule?m=${d.slice(0, 7)}`}
-          className="missing-day-link"
+          className="btn btn-line"
         >
           {formatDateShort(d)}
         </Link>
       ))}
-    </p>
+    </div>
   );
 }
 
@@ -185,21 +187,10 @@ function DeleteUnpaidRowButton({
       aria-label={
         desc ? `Delete unpaid record — ${desc}` : "Delete unpaid record"
       }
-      className="relative shrink-0 rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 after:absolute after:-inset-1.5 after:content-['']"
+      className="iconbtn pp-del"
     >
-      <Trash2 className="h-3.5 w-3.5" />
+      <PpIcon name="trash" />
     </button>
-  );
-}
-
-function Cell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-      <div className="field-label">{label}</div>
-      <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--fg-1)]">
-        {value}
-      </div>
-    </div>
   );
 }
 
@@ -328,591 +319,576 @@ export function WorkCostCard({
         ? "you're ahead of your normal shift."
         : "you're ahead of your normal shift on those days.");
 
+  // Bars for the three-way comparison, all drawn to ONE scale so their lengths
+  // compare: the longest of the three is the full track. Presentation only —
+  // the figures printed beside them are the ones computed above, untouched.
+  const cmpScale = Math.max(result.denomHours, result.countedFlagHours, Math.abs(gap), 0);
+  const cmpPct = (hours: number) =>
+    cmpScale > 0 ? Math.min(100, (Math.abs(hours) / cmpScale) * 100) : 0;
+  // One division is 10 hours, as a share of the track. Above the scale there is
+  // no division to draw, so the ticks fall off the track rather than crowd it.
+  const cmpTick = cmpScale > 0 ? (10 / cmpScale) * 100 : 100;
+  const gapLabel = aheadOnHours ? (hoursAreComplete ? "Ahead" : "Difference") : "Gap";
+  // A positive gap is time at the shop that flagged nothing: the bad state,
+  // drawn as an outline instead of a fill. Ahead and even are not.
+  const gapIsBad = gap > 0 && !gapIsSubResolution;
+
   return (
-    <section className="card padded space-y-3">
-      <div className="card-head-row">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex min-h-[44px] flex-1 items-center justify-between gap-2 text-left"
-      >
-        <div>
-          <h2 className="text-sm font-medium text-[var(--fg-1)]">
-            What did the work cost me?
-          </h2>
-          <p className="text-xs text-[var(--fg-3)]">
-            Effective hourly, and the time this period that flagged nothing.
+    <Fold
+      id="pp-fold-cost"
+      title="What did the work cost me?"
+      sub="Effective hourly, and the time this period that flagged nothing."
+      state={
+        hasUnpaid ? (
+          <>
+            <N v={`${fmtHours(unpaid.totalHours)}h`} /> unpaid
+          </>
+        ) : result.hourly !== null ? (
+          <N v={`${fmtRate(result.hourly)}/hr`} />
+        ) : undefined
+      }
+      open={open}
+      onToggle={() => setOpen((v) => !v)}
+      info={
+        <InfoBubble title="What did the work cost me?">
+          <p>
+            Flag hours tell you what you were paid for. This card is about
+            everything else — the hours you were at the shop that flagged nothing,
+            and what your pay works out to once those hours are counted.
           </p>
-        </div>
-        <span className="flex items-center gap-2 text-[var(--fg-3)]">
-          {!open && hasUnpaid && (
-            <span className="mono text-sm font-semibold tabular-nums text-[var(--warn)]">
-              {fmtHours(unpaid.totalHours)}h unpaid
-            </span>
-          )}
-          {!open && !hasUnpaid && result.hourly !== null && (
-            <span className="text-sm font-semibold tabular-nums text-[var(--fg-1)]">
-              {fmtRate(result.hourly)}/hr
-            </span>
-          )}
-          {open ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-        </span>
-      </button>
-
-      <InfoBubble title="What did the work cost me?">
-        <p>
-          Flag hours tell you what you were paid for. This card is about
-          everything else — the hours you were at the shop that flagged nothing,
-          and what your pay works out to once those hours are counted.
-        </p>
-        <h3>Effective hourly</h3>
-        {/* This paragraph said "your total pay for the period" until the
-            numerator became `countedPay`. It was then describing a division
-            the code does not perform: totalPay covers the whole period,
-            including a shift still in progress, while the denominator has no
-            hours for that shift yet (escalation `costcard-total-pay-mismatch`).
-            The caption under the headline was corrected and this was not, so
-            the explanation of the number contradicted the arithmetic printed
-            three inches below it. Keep the two in step. */}
-        <p>
-          Your pay on the days counted — flag pay plus spiffs — divided by the
-          hours you were at the shop on those same days. It answers a question
-          flag pay alone cannot: for every hour of your life the shop had, how
-          much did you earn? A 130% efficiency week can still be a bad week if
-          you sat around for six hours waiting on parts.
-        </p>
-        <p>
-          A shift still in progress is left out of <em>both</em> sides — its
-          flagged work and its spiffs are not in the pay, and its hours are not
-          in the denominator, because you have not clocked out of it yet.
-          Otherwise today&apos;s flagged work would be divided by hours that do
-          not exist yet and the rate would drift all day. It joins the figure
-          once the day is done.
-        </p>
-        <h3>Where the hours come from</h3>
-        <p>
-          Clocked hours if you logged them. If you did not, FRT falls back to
-          your normal shift from the Schedule page, because a day with flagged
-          work on it was obviously a day you worked. A day whose repair orders
-          all flagged zero hours is not one of those days — until you mark it a
-          real zero, FRT does not know whether you were there, so it is left out
-          of both sides rather than guessed at. A day you marked as a real zero
-          counts its whole shift too — you were there, it just flagged
-          nothing, and that is the time this card is about. You can correct any
-          single day with a shift override on the dashboard or schedule page.
-        </p>
-        <h3>The gap, and what is in it</h3>
-        <p>
-          The difference between hours at the shop and hours flagged. Rework you
-          were not paid for, waiting on parts or approval, and shop time all get
-          listed separately so the gap is not just a mystery number.
-        </p>
-        <p>
-          These hours are shown <strong>beside</strong> your efficiency and are
-          never subtracted from it. Hiding unpaid time inside efficiency would
-          defeat the point of tracking it.
-        </p>
-        <h3>Why flat rate makes this matter</h3>
-        <p>
-          Flat-rate (piece-rate) pay rewards flagged jobs, but a workday also
-          includes time that flags nothing. Under California&apos;s piece-rate
-          rules that non-productive time and rest periods are their own category
-          of paid time, rather than something flag pay can average over.
-        </p>
-        <h3>The reference comparison</h3>
-        <p>
-          If you enter a reference hourly rate in Settings — your local minimum
-          wage, or a rate you would take elsewhere — this shows whether you came
-          in above or below it. FRT never fills in a wage figure for you:
-          minimum wage changes every year and differs by city and county, so the
-          number you compare against is always one you chose.
-        </p>
-        <p>
-          California&apos;s Department of Industrial Relations publishes a
-          plain-language explanation of piece-rate pay:{" "}
-          <a
-            href="https://www.dir.ca.gov/pieceratebackpayelection/AB_1513_FAQs.html"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            DIR piece-rate FAQ
-          </a>
-          .
-        </p>
-        <p className="card-inset px-3 py-2">
-          This shows numbers from your own records for your information. It does
-          not provide legal advice or reach any legal conclusion. For your
-          specific situation, consult a qualified attorney or the California
-          Labor Commissioner&apos;s Office.
-        </p>
-      </InfoBubble>
-      </div>
-
-      {open && (
-        <div className="space-y-3 border-t border-[var(--line)] pt-3">
-          {/* Effective hourly — the headline, or an honest reason it's absent.
-              Never a silent blank: every branch names what's missing and where
-              to fix it. */}
-          {result.hourly !== null ? (
+          <h3>Effective hourly</h3>
+          {/* This paragraph said "your total pay for the period" until the
+              numerator became `countedPay`. It was then describing a division
+              the code does not perform: totalPay covers the whole period,
+              including a shift still in progress, while the denominator has no
+              hours for that shift yet (escalation `costcard-total-pay-mismatch`).
+              The caption under the headline was corrected and this was not, so
+              the explanation of the number contradicted the arithmetic printed
+              three inches below it. Keep the two in step. */}
+          <p>
+            Your pay on the days counted — flag pay plus spiffs — divided by the
+            hours you were at the shop on those same days. It answers a question
+            flag pay alone cannot: for every hour of your life the shop had, how
+            much did you earn? A 130% efficiency week can still be a bad week if
+            you sat around for six hours waiting on parts.
+          </p>
+          <p>
+            A shift still in progress is left out of <em>both</em> sides — its
+            flagged work and its spiffs are not in the pay, and its hours are not
+            in the denominator, because you have not clocked out of it yet.
+            Otherwise today&apos;s flagged work would be divided by hours that do
+            not exist yet and the rate would drift all day. It joins the figure
+            once the day is done.
+          </p>
+          <h3>Where the hours come from</h3>
+          <p>
+            Clocked hours if you logged them. If you did not, FRT falls back to
+            your normal shift from the Schedule page, because a day with flagged
+            work on it was obviously a day you worked. A day whose repair orders
+            all flagged zero hours is not one of those days — until you mark it a
+            real zero, FRT does not know whether you were there, so it is left out
+            of both sides rather than guessed at. A day you marked as a real zero
+            counts its whole shift too — you were there, it just flagged
+            nothing, and that is the time this card is about. You can correct any
+            single day with a shift override on the dashboard or schedule page.
+          </p>
+          <h3>The gap, and what is in it</h3>
+          <p>
+            The difference between hours at the shop and hours flagged. Rework you
+            were not paid for, waiting on parts or approval, and shop time all get
+            listed separately so the gap is not just a mystery number.
+          </p>
+          <p>
+            These hours are shown <strong>beside</strong> your efficiency and are
+            never subtracted from it. Hiding unpaid time inside efficiency would
+            defeat the point of tracking it.
+          </p>
+          <h3>Why flat rate makes this matter</h3>
+          <p>
+            Flat-rate (piece-rate) pay rewards flagged jobs, but a workday also
+            includes time that flags nothing. Under California&apos;s piece-rate
+            rules that non-productive time and rest periods are their own category
+            of paid time, rather than something flag pay can average over.
+          </p>
+          <h3>The reference comparison</h3>
+          <p>
+            If you enter a reference hourly rate in Settings — your local minimum
+            wage, or a rate you would take elsewhere — this shows whether you came
+            in above or below it. FRT never fills in a wage figure for you:
+            minimum wage changes every year and differs by city and county, so the
+            number you compare against is always one you chose.
+          </p>
+          <p>
+            California&apos;s Department of Industrial Relations publishes a
+            plain-language explanation of piece-rate pay:{" "}
+            <a
+              href="https://www.dir.ca.gov/pieceratebackpayelection/AB_1513_FAQs.html"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              DIR piece-rate FAQ
+            </a>
+            .
+          </p>
+          <p className="card-inset px-3 py-2">
+            This shows numbers from your own records for your information. It does
+            not provide legal advice or reach any legal conclusion. For your
+            specific situation, consult a qualified attorney or the California
+            Labor Commissioner&apos;s Office.
+          </p>
+        </InfoBubble>
+      }
+    >
+      {/* Effective hourly — the headline, or an honest reason it's absent.
+          Never a silent blank: every branch names what's missing and where
+          to fix it. */}
+      {result.hourly !== null ? (
+        <div>
+          <dl className="pp-rows">
             <div>
-              <div className="field-label">Effective hourly this period</div>
-              <div className="mono mt-0.5 text-xl font-semibold tabular-nums text-[var(--fg-0)]">
-                {fmtRate(result.hourly)}
-                <span className="text-base font-normal text-[var(--fg-3)]">
-                  /hr
-                </span>
-              </div>
-              {/* The arithmetic that produces the headline, so it has to be
-                  the arithmetic the headline actually used: countedPay, not
-                  totalPay. totalPay is the FULL period and includes an
-                  in-progress day; denomHours has no hours for that day yet, so
-                  printing one over the other divided a full-period numerator
-                  by a counted-days-only denominator and did not come out to
-                  the rate directly above it (escalation
-                  `costcard-total-pay-mismatch`). The two are equal whenever
-                  nothing is in progress, which is why it read fine most of the
-                  time and wrong on exactly the days a tech is watching it. */}
-              <p className="mt-1 text-xs text-[var(--fg-3)]">
-                {result.ongoingDays.length > 0
-                  ? "Pay on the days counted "
-                  : "Total pay "}
-                {/* The PRINTED figure is countedPayDisplay (rounded terms,
-                    then summed) — SpiffsCard prints the same period's total
-                    through periodTotalPay's identical rule, and $518 there
-                    beside $517 here is the same class of bug as
-                    `costcard-total-pay-mismatch`: a caption that does not
-                    reconcile with what is on screen. The RATE above still
-                    divides the exact countedPay; only this caption rounds. */}
-                {result.countedPayDisplay !== null
-                  ? fmtMoney(result.countedPayDisplay)
-                  : "—"}{" "}
-                ÷ {fmtHours(result.denomHours)}{" "}
-                {result.denomSource === "scheduled"
-                  ? "scheduled hours"
-                  : result.denomSource === "mixed"
-                    ? "hours at the shop"
-                    : "clocked hours"}
-                .
-              </p>
-              {/* Say plainly when a figure leans on the schedule rather than a
-                  real clock entry — the number is a good default, not a
-                  measurement, and the tech can override any day. */}
-              {result.scheduledDays.length > 0 && (
-                <p className="mt-1 text-xs text-[var(--fg-3)]">
-                  {/* Deliberately no longer says "had flagged work": since
-                      confirmed real-zero days are filled from the schedule too
-                      (they have no RO on them by definition), that clause
-                      would be false for exactly the days that flagged
-                      nothing. */}
-                  {result.scheduledDays.length === 1
-                    ? "1 day had no clock entry"
-                    : `${result.scheduledDays.length} days had no clock entry`}
-                  , so your normal scheduled shift was used for{" "}
-                  {result.scheduledDays.length === 1 ? "it" : "them"}. Set a
-                  shift override on any day that wasn&apos;t normal.
-                </p>
-              )}
+              <dt className="k">Effective hourly this period</dt>
+              <dd className="v is-fig num">
+                {withPt(fmtRate(result.hourly))}
+                <span className="pp-unit">/hr</span>
+              </dd>
             </div>
-          ) : (
-            <div className="card-inset px-3 py-2 text-sm text-[var(--fg-2)]">
-              {/* These only fire for days with NEITHER a clock entry NOR a
-                  schedule to fall back on. Once a work schedule exists, a
-                  normal shift fills the day automatically — so the fix being
-                  offered is the schedule, not 10 days of manual clock entry. */}
-              {result.status === "no_clock" &&
-                (missingCount > 0 ? (
-                  <>
-                    {missingCount === 1
-                      ? "1 day this period has flagged work but no hours on it"
-                      : `${missingCount} days this period have flagged work but no hours on them`}
-                    , so there&apos;s no effective hourly yet. Set your normal
-                    shift on the schedule page and days like these fill in
-                    automatically — or add clock hours for them on the dashboard.
-                  </>
-                ) : (
-                  <>
-                    No hours logged for this period yet. Effective hourly needs
-                    the time you spent at the shop — set your normal shift on the
-                    schedule page, or add clock hours on the dashboard.
-                  </>
-                ))}
-              {result.status === "incomplete_clock" && (
+          </dl>
+          {/* The arithmetic that produces the headline, so it has to be
+              the arithmetic the headline actually used: countedPay, not
+              totalPay. totalPay is the FULL period and includes an
+              in-progress day; denomHours has no hours for that day yet, so
+              printing one over the other divided a full-period numerator
+              by a counted-days-only denominator and did not come out to
+              the rate directly above it (escalation
+              `costcard-total-pay-mismatch`). The two are equal whenever
+              nothing is in progress, which is why it read fine most of the
+              time and wrong on exactly the days a tech is watching it. */}
+          <p className="pp-fine pp-fine-top">
+            {result.ongoingDays.length > 0
+              ? "Pay on the days counted "
+              : "Total pay "}
+            {/* The PRINTED figure is countedPayDisplay (rounded terms,
+                then summed) — SpiffsCard prints the same period's total
+                through periodTotalPay's identical rule, and $518 there
+                beside $517 here is the same class of bug as
+                `costcard-total-pay-mismatch`: a caption that does not
+                reconcile with what is on screen. The RATE above still
+                divides the exact countedPay; only this caption rounds. */}
+            {result.countedPayDisplay !== null
+              ? fmtMoney(result.countedPayDisplay)
+              : "—"}{" "}
+            ÷ {fmtHours(result.denomHours)}{" "}
+            {result.denomSource === "scheduled"
+              ? "scheduled hours"
+              : result.denomSource === "mixed"
+                ? "hours at the shop"
+                : "clocked hours"}
+            .
+          </p>
+          {/* Say plainly when a figure leans on the schedule rather than a
+              real clock entry — the number is a good default, not a
+              measurement, and the tech can override any day. */}
+          {result.scheduledDays.length > 0 && (
+            <p className="pp-fine pp-fine-top">
+              {/* Deliberately no longer says "had flagged work": since
+                  confirmed real-zero days are filled from the schedule too
+                  (they have no RO on them by definition), that clause
+                  would be false for exactly the days that flagged
+                  nothing. */}
+              {result.scheduledDays.length === 1
+                ? "1 day had no clock entry"
+                : `${result.scheduledDays.length} days had no clock entry`}
+              , so your normal scheduled shift was used for{" "}
+              {result.scheduledDays.length === 1 ? "it" : "them"}. Set a
+              shift override on any day that wasn&apos;t normal.
+            </p>
+          )}
+        </div>
+      ) : (
+        <StatusField tag="Note">
+          {/* These only fire for days with NEITHER a clock entry NOR a
+              schedule to fall back on. Once a work schedule exists, a
+              normal shift fills the day automatically — so the fix being
+              offered is the schedule, not 10 days of manual clock entry. */}
+          <p>
+            {result.status === "no_clock" &&
+              (missingCount > 0 ? (
                 <>
                   {missingCount === 1
                     ? "1 day this period has flagged work but no hours on it"
                     : `${missingCount} days this period have flagged work but no hours on them`}
-                  , so the effective hourly isn&apos;t shown — it would average
-                  over an incomplete number of hours.{" "}
-                  {missingCount === 1 ? "It falls" : "They fall"} outside your
-                  scheduled shifts, so add clock hours or a shift override.
+                  , so there&apos;s no effective hourly yet. Set your normal
+                  shift on the schedule page and days like these fill in
+                  automatically — or add clock hours for them on the dashboard.
                 </>
-              )}
-              {missingCount > 0 && <MissingDayLinks days={result.missingClockDays} />}
-              {result.status === "no_rates" && (
+              ) : (
                 <>
-                  Set a pay rate in Settings to see your effective hourly in
-                  dollars. Your clocked-vs-flagged hours are below in the
-                  meantime.
+                  No hours logged for this period yet. Effective hourly needs
+                  the time you spent at the shop — set your normal shift on the
+                  schedule page, or add clock hours on the dashboard.
                 </>
-              )}
+              ))}
+            {result.status === "incomplete_clock" && (
+              <>
+                {missingCount === 1
+                  ? "1 day this period has flagged work but no hours on it"
+                  : `${missingCount} days this period have flagged work but no hours on them`}
+                , so the effective hourly isn&apos;t shown — it would average
+                over an incomplete number of hours.{" "}
+                {missingCount === 1 ? "It falls" : "They fall"} outside your
+                scheduled shifts, so add clock hours or a shift override.
+              </>
+            )}
+            {result.status === "no_rates" && (
+              <>
+                Set a pay rate in Settings to see your effective hourly in
+                dollars. Your clocked-vs-flagged hours are below in the
+                meantime.
+              </>
+            )}
+          </p>
+          {missingCount > 0 && <MissingDayLinks days={result.missingClockDays} />}
+        </StatusField>
+      )}
+
+      {/* Reference comparison — ONLY when a reference rate is set AND there
+          is a figure to compare. Never invents a wage number. */}
+      {comparison !== null && (
+        <StatusField tag="Note"><p>
+          Your effective rate this period was{" "}
+          <N v={`${fmtRate(comparison.effective)}/hr`} /> against your reference
+          of <N v={`${fmtRate(comparison.reference)}/hr`} />
+          {" — "}
+          <N v={`${fmtRate(Math.abs(comparison.delta))}/hr`} />{" "}
+          {comparison.atOrAbove ? "above" : "below"} your reference.
+        </p></StatusField>
+      )}
+
+      {/* Degrade out loud: a figure exists but there's nothing to measure it
+          against. Says so rather than silently omitting the comparison. */}
+      {comparison === null && result.hourly !== null && (
+        <StatusField tag="Note"><p>
+          No reference rate set, so there&apos;s nothing to compare this
+          against. You can add one in Settings.
+        </p></StatusField>
+      )}
+
+      {/* Hours at the shop vs flagged — always available, hours-only, no
+          rates needed. Uses the resolved denominator, so a day filled from
+          the schedule counts.
+
+          That denominator now agrees with the efficiency tile's, because
+          effectiveHourly fills the same day set pairDay counts —
+          `flag > 0 || confirmedZero.has(date)`. It did NOT when this
+          comment first claimed it: the fill iterated days carrying an RO
+          only, so a confirmed real-zero day (a full shift that flagged
+          nothing, and by definition has no RO) was in the 88h on the
+          efficiency tile and missing from the hours here. The sentence was
+          a true-sounding claim about behaviour the code did not have, which
+          is worse than no comment (escalation
+          `payperiod-scheduled-hours-two-figures`). It is true as written
+          now; if the two fills ever diverge again, this is a lie again —
+          the shared rule is pairDay in lib/stats.ts. */}
+      <div>
+        <div className="pp-cmp">
+          <div className="pp-cmp-r">
+            <span className="k">
+              {result.denomSource === "scheduled" ? "Scheduled" : "At the shop"}
+            </span>
+            <div className="trk" style={{ "--tick": `${cmpTick}%` } as CSSProperties} aria-hidden="true">
+              <i style={{ "--p": cmpPct(result.denomHours) } as CSSProperties} />
             </div>
-          )}
-
-          {/* Reference comparison — ONLY when a reference rate is set AND there
-              is a figure to compare. Never invents a wage number. */}
-          {comparison !== null && (
-            <p className="card-inset px-3 py-2 text-sm text-[var(--fg-2)]">
-              Your effective rate this period was{" "}
-              <span className="font-semibold text-[var(--fg-1)]">
-                {fmtRate(comparison.effective)}/hr
-              </span>{" "}
-              against your reference of{" "}
-              <span className="font-semibold text-[var(--fg-1)]">
-                {fmtRate(comparison.reference)}/hr
-              </span>
-              {" — "}
-              <span className="font-medium">
-                {fmtRate(Math.abs(comparison.delta))}/hr{" "}
-                {comparison.atOrAbove ? "above" : "below"} your reference
-              </span>
-              .
-            </p>
-          )}
-
-          {/* Degrade out loud: a figure exists but there's nothing to measure it
-              against. Says so rather than silently omitting the comparison. */}
-          {comparison === null && result.hourly !== null && (
-            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-3)]">
-              No reference rate set, so there&apos;s nothing to compare this
-              against. You can add one in Settings.
-            </p>
-          )}
-
-          {/* Hours at the shop vs flagged — always available, hours-only, no
-              rates needed. Uses the resolved denominator, so a day filled from
-              the schedule counts.
-
-              That denominator now agrees with the efficiency tile's, because
-              effectiveHourly fills the same day set pairDay counts —
-              `flag > 0 || confirmedZero.has(date)`. It did NOT when this
-              comment first claimed it: the fill iterated days carrying an RO
-              only, so a confirmed real-zero day (a full shift that flagged
-              nothing, and by definition has no RO) was in the 88h on the
-              efficiency tile and missing from the hours here. The sentence was
-              a true-sounding claim about behaviour the code did not have, which
-              is worse than no comment (escalation
-              `payperiod-scheduled-hours-two-figures`). It is true as written
-              now; if the two fills ever diverge again, this is a lie again —
-              the shared rule is pairDay in lib/stats.ts. */}
-          <div className="grid grid-cols-3 gap-2">
-            <Cell
-              label={
-                result.denomSource === "scheduled" ? "Scheduled" : "At the shop"
-              }
-              value={`${fmtHours(result.denomHours)}h`}
-            />
-            <Cell
-              label="Flagged"
-              value={`${fmtHours(result.countedFlagHours)}h`}
-            />
-            {/* A negative gap is GOOD news — flag hours outran the clock — but
-                a bare "−48.3h" under a headline asking what the work COST you
-                reads as a debt. So the direction lives in the label wherever
-                the label can carry it, and the value drops its sign there.
-                Where the label can't — the sub-resolution band, which stays
-                "Gap" — the sign stays on the number (see the Cell below).
-
-                "Ahead" is a CLAIM, so it only appears when the hours behind it
-                are complete. When they aren't, the label goes neutral rather
-                than asserting either direction: "Difference" says what the
-                number is (flagged minus hours at the shop) and nothing about
-                whether it is good or bad news. A neutral label under missing
-                data is worth more than a confident wrong one. */}
-            <Cell
-              label={
-                aheadOnHours ? (hoursAreComplete ? "Ahead" : "Difference") : "Gap"
-              }
-              // The sign is dropped only where the LABEL carries the direction
-              // instead. Below half a display step the label stays "Gap", so
-              // an unsigned value there made 40.0 clocked / 40.04 flagged and
-              // 40.0 / 39.96 the same string — opposite directions, telling
-              // the reader nothing, on a card whose entire subject is which
-              // way the number points. Signed, this is HEAD~2's behaviour for
-              // that band, epsilon-sized float noise included: "−<0.1" says
-              // negligible AND which side of even it fell on, which is strictly
-              // more than "<0.1" says.
-              value={`${aheadOnHours || gap >= 0 ? "" : "−"}${gapMagnitude}h`}
-            />
+            <span className="v num">
+              {withPt(fmtHours(result.denomHours))}
+              <span className="pp-unit">h</span>
+            </span>
           </div>
-
-          {/* One line saying which way that points, because "Ahead" alone still
-              leaves a tech doing the subtraction in their head. Negative branch
-              only — the positive gap is what the rest of the card explains.
-
-              The "nothing to explain" half is conditional on there being
-              nothing recorded. Unpaid time routinely runs ALONGSIDE flagged
-              work on the same day (wage-check's own overTracked case), so a
-              tech over 100% efficiency can have both a negative gap and real
-              unpaid hours — and this sentence used to deny them three lines
-              above the drill-down listing them. */}
-          {aheadOnHours && hoursAreComplete && (
-            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-              {aheadSentence}
-              {!shopTimeIsMeasured &&
-                " No clock entries were logged, so that's against your schedule, not hours measured at the shop."}{" "}
-              {hasUnpaid
-                ? "That doesn't cancel the unpaid time below — those hours ran alongside work you flagged."
-                : "There's no unpaid gap to explain."}
-            </p>
-          )}
-
-          {/* Same number, no claim attached. The days with no hours on them are
-              named again here because this is the line sitting under the
-              figure, and a tech reading the tiles is not necessarily reading
-              the block at the top of the card. */}
-          {aheadOnHours && !hoursAreComplete && (
-            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-              {missingCount > 0
-                ? missingCount === 1
-                  ? "1 day here has flagged work but no hours on it"
-                  : `${missingCount} days here have flagged work but no hours on them`
-                : "No hours at the shop are on record for this period"}
-              , so this is flagged time against an incomplete set of shop hours.
-              It isn&apos;t a gap, and it isn&apos;t a lead — add the hours and
-              it will mean something.
-            </p>
-          )}
-
-          {/* An in-progress day is excluded from both sides of the average, so
-              say so. Without this the gap looks wrong all day and only settles
-              once the tech clocks out — which reads as a bug, not as design.
-
-              "that day", not "that shift": an ongoing day can be a lone spiff
-              dated today with no RO and no shift on it (wage-check derives
-              ongoingDays from work days UNION bonus dates), and the old wording
-              named a shift that doesn't exist and flagged work that is zero. */}
-          {result.ongoingDays.length > 0 && (
-            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-              {result.ongoingDays.length === 1
-                ? `${formatDateShort(result.ongoingDays[0])} isn't counted yet`
-                : `${result.ongoingDays.map(formatDateShort).join(", ")} aren't counted yet`}
-              {" — "}
-              {result.ongoingDays.length === 1 ? "that day is" : "those days are"}{" "}
-              still in progress. Flagged work and spiffs on{" "}
-              {result.ongoingDays.length === 1 ? "it" : "them"} are left out of
-              the figures above until there are hours to divide them by, so the
-              gap will move once you clock out.
-            </p>
-          )}
-
-          {/* What that gap is MADE OF. Purely explanatory — the gap figure above
-              is unchanged and nothing here re-derives the effective hourly. */}
-          {gapParts !== null && (
-            <div className="card-inset space-y-1 px-3 py-2 text-sm text-[var(--fg-2)]">
-              <p className="text-[var(--fg-1)]">
-                What&apos;s in that {fmtHours(gapParts.gapHours)}h gap
-              </p>
-              <ul className="m-0 list-none space-y-0.5 p-0 text-xs">
-                {gapParts.comebackHours > 0 && (
-                  <li className="flex justify-between gap-3">
-                    <span>Unpaid rework</span>
-                    <span className="mono tabular-nums">
-                      {fmtHours(gapParts.comebackHours)}h
-                    </span>
-                  </li>
-                )}
-                {gapParts.waitingHours > 0 && (
-                  <li className="flex justify-between gap-3">
-                    <span>Waiting on parts or approval</span>
-                    <span className="mono tabular-nums">
-                      {fmtHours(gapParts.waitingHours)}h
-                    </span>
-                  </li>
-                )}
-                {gapParts.shopHours > 0 && (
-                  <li className="flex justify-between gap-3">
-                    <span>Shop time</span>
-                    <span className="mono tabular-nums">
-                      {fmtHours(gapParts.shopHours)}h
-                    </span>
-                  </li>
-                )}
-                {!gapParts.overTracked && (
-                  <li className="flex justify-between gap-3 text-[var(--fg-3)]">
-                    <span>Not accounted for yet</span>
-                    <span className="mono tabular-nums">
-                      {fmtHours(gapParts.unaccountedHours)}h
-                    </span>
-                  </li>
-                )}
-              </ul>
-              {gapParts.overTracked && (
-                // Recorded unpaid time can legitimately exceed the gap — comeback
-                // hours run alongside flagged work on the same day. Say that
-                // rather than printing a negative remainder.
-                <p className="text-xs text-[var(--fg-3)]">
-                  Your recorded unpaid time ({fmtHours(gapParts.trackedHours)}h)
-                  covers the whole gap — some of it overlapped days you also
-                  flagged work.
-                </p>
-              )}
+          <div className="pp-cmp-r">
+            <span className="k">Flagged</span>
+            <div className="trk" style={{ "--tick": `${cmpTick}%` } as CSSProperties} aria-hidden="true">
+              <i style={{ "--p": cmpPct(result.countedFlagHours) } as CSSProperties} />
             </div>
-          )}
+            <span className="v num">
+              {withPt(fmtHours(result.countedFlagHours))}
+              <span className="pp-unit">h</span>
+            </span>
+          </div>
+          {/* A negative gap is GOOD news — flag hours outran the clock — but
+              a bare "−48.3h" under a headline asking what the work COST you
+              reads as a debt. So the direction lives in the label wherever
+              the label can carry it, and the value drops its sign there.
+              Where the label can't — the sub-resolution band, which stays
+              "Gap" — the sign stays on the number.
 
-          {/* The evidence behind the gap: every unpaid record, one row each.
-              A drill-down rather than a peer card — this is detail you open
-              when you want to check the claim above.
+              "Ahead" is a CLAIM, so it only appears when the hours behind it
+              are complete. When they aren't, the label goes neutral rather
+              than asserting either direction: "Difference" says what the
+              number is (flagged minus hours at the shop) and nothing about
+              whether it is good or bad news. A neutral label under missing
+              data is worth more than a confident wrong one.
 
-              It is also the audit view rather than the glance: it itemises
-              every row and then totals them, so a reader can and will add it
-              up. At 1dp they don't reconcile — eleven 2dp rows rounded
-              individually summed to 2.8h under a 2.7h total (2026-08-13) — so
-              everything inside here is shown at the resolution hours are
-              stored at. The card headline above stays at 1dp, where nothing is
-              being itemised.
-
-              The DOLLAR column had the identical defect and kept it eight
-              months longer, because it was the hours that got noticed: rows at
-              whole dollars round individually, the total rounds separately, and
-              four rework rows of $44.80/$41.60/$44.80/$35.20 print 45/42/45/35
-              — $167 against a total printing $166. Every figure individually
-              correct, the page still contradicting itself. So the money in here
-              is fmtMoney2 (escalation `disputepack-money-column-rounding`,
-              same fix, other surface). fmtMoney itself is unchanged and still
-              right everywhere a dollar figure is glanced at rather than added
-              up. */}
-          {hasUnpaid && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setRecordsOpen((v) => !v)}
-                aria-expanded={recordsOpen}
-                className="flex min-h-[44px] w-full items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--bg-2)] px-3 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
-              >
-                <span>Every unpaid record</span>
-                <span className="flex-1" />
-                <span className="mono text-sm font-semibold tabular-nums text-[var(--warn)]">
-                  {fmtHours2(unpaid.totalHours)}h
-                </span>
-                {recordsOpen ? (
-                  <ChevronUp className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
-                )}
-              </button>
-
-              {recordsOpen && (
-                <div className="space-y-3 pt-3">
-                  <ul className="m-0 list-none p-0">
-                    {unpaid.lines.map((l, i) => (
-                      <li
-                        key={l.id ?? `${l.source}-${l.entryId ?? "x"}-${i}`}
-                        className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-dashed border-[var(--line-soft)] py-2 text-sm first:border-t-0"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="text-[var(--fg-1)]">
-                            {UNPAID_TIME_KIND_LABELS[l.kind]}
-                          </span>
-                          {l.roNumber && (
-                            <span className="text-[var(--fg-3)]">
-                              {" "}
-                              · RO #{l.roNumber}
-                            </span>
-                          )}
-                          {l.code && (
-                            <span className="text-[var(--fg-3)]"> · {l.code}</span>
-                          )}
-                          <span className="block truncate text-xs text-[var(--fg-3)]">
-                            {formatDateShort(l.date)}
-                            {l.description ? ` — ${l.description}` : ""}
-                          </span>
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1.5">
-                          <span className="mono tabular-nums text-[var(--fg-1)]">
-                            {fmtHours2(l.hours)}h
-                            {l.dollars !== null && (
-                              <span className="text-[var(--fg-3)]">
-                                {" "}
-                                · {fmtMoney2(l.dollars)}
-                              </span>
-                            )}
-                          </span>
-                          {/* Ledger rows only — an RO-side line belongs to its
-                              repair order. DeleteUnpaidRowButton returns null
-                              when there is no ledger id to target. */}
-                          <DeleteUnpaidRowButton
-                            line={l}
-                            onDeleted={() => {
-                              router.refresh();
-                              // Same stale-tree hazard SpiffsCard documents
-                              // (c655c010): without the flush the row stays on
-                              // screen after a successful delete, which reads
-                              // as "the delete didn't work".
-                              window.dispatchEvent(new Event(FLUSH_EVENT));
-                              notifyDataChanged(); // and the other open tabs
-                            }}
-                          />
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--line)] pt-2">
-                    <span className="text-sm font-medium text-[var(--fg-1)]">
-                      Total unpaid
-                    </span>
-                    <span className="mono text-sm font-semibold tabular-nums text-[var(--warn)]">
-                      {fmtHours2(unpaid.totalHours)}h
-                      {unpaid.totalDollars !== null && (
-                        <span className="text-[var(--fg-2)]">
-                          {" "}
-                          · {fmtMoney2(unpaid.totalDollars)}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-
-                  {unpaid.totalDollars !== null && unpaid.unpricedHours > 0 && (
-                    // Never let the dollar figure read as if it covered every
-                    // hour above.
-                    <p className="text-xs text-[var(--fg-3)]">
-                      {fmtHours2(unpaid.unpricedHours)}h of this has no rate on
-                      file and is counted in hours only.
-                    </p>
-                  )}
-
-                  <p className="text-xs text-[var(--fg-3)]">
-                    These hours are reported beside your efficiency, never
-                    subtracted from it — your flagged-hours figure is unchanged.
-                  </p>
-                </div>
-              )}
+              The sign is dropped only where the LABEL carries the direction
+              instead. Below half a display step the label stays "Gap", so an
+              unsigned value there made 40.0 clocked / 40.04 flagged and
+              40.0 / 39.96 the same string — opposite directions, telling
+              the reader nothing, on a card whose entire subject is which
+              way the number points. Signed, "−<0.1" says negligible AND
+              which side of even it fell on, which is strictly more than
+              "<0.1" says. */}
+          <div className={`pp-cmp-r${gapIsBad ? " gap" : ""}`}>
+            <span className="k">{gapLabel}</span>
+            <div className="trk" style={{ "--tick": `${cmpTick}%` } as CSSProperties} aria-hidden="true">
+              <i style={{ "--p": cmpPct(gap) } as CSSProperties} />
             </div>
-          )}
-
-          {/* Breadcrumb for days that couldn't be resolved at all, even when a
-              figure IS shown. Scheduled days are deliberately absent here —
-              they're accounted for, and listing them would read as a problem. */}
-          {missingCount > 0 && result.status !== "incomplete_clock" && (
-            <p className="text-xs text-[var(--fg-3)]">
-              Days with flagged work but no hours and no scheduled shift:{" "}
-              {result.missingClockDays.map(formatDateShort).join(", ")}.
-            </p>
-          )}
-
-          <div className="flex items-center justify-end gap-2 border-t border-[var(--line)] pt-2">
-            <span className="text-xs text-[var(--fg-3)]">
-              Informational only — not legal advice.
+            <span className="v num">
+              {aheadOnHours || gap >= 0 ? "" : "−"}
+              {withPt(gapMagnitude)}
+              <span className="pp-unit">h</span>
             </span>
           </div>
         </div>
+        <p className="pp-fine pp-fine-top">
+          Bars drawn to one scale. One division is{" "}
+          <span className="num">10h</span>.
+        </p>
+      </div>
+
+      {/* One line saying which way that points, because "Ahead" alone still
+          leaves a tech doing the subtraction in their head. Negative branch
+          only — the positive gap is what the rest of the card explains.
+
+          The "nothing to explain" half is conditional on there being
+          nothing recorded. Unpaid time routinely runs ALONGSIDE flagged
+          work on the same day (wage-check's own overTracked case), so a
+          tech over 100% efficiency can have both a negative gap and real
+          unpaid hours — and this sentence used to deny them three lines
+          above the drill-down listing them. */}
+      {aheadOnHours && hoursAreComplete && (
+        <StatusField tag="Note"><p>
+          {aheadSentence}
+          {!shopTimeIsMeasured &&
+            " No clock entries were logged, so that's against your schedule, not hours measured at the shop."}{" "}
+          {hasUnpaid
+            ? "That doesn't cancel the unpaid time below — those hours ran alongside work you flagged."
+            : "There's no unpaid gap to explain."}
+        </p></StatusField>
       )}
 
-    </section>
+      {/* Same number, no claim attached. The days with no hours on them are
+          named again here because this is the line sitting under the
+          figure, and a tech reading the tiles is not necessarily reading
+          the block at the top of the card. */}
+      {aheadOnHours && !hoursAreComplete && (
+        <StatusField tag="Note"><p>
+          {missingCount > 0
+            ? missingCount === 1
+              ? "1 day here has flagged work but no hours on it"
+              : `${missingCount} days here have flagged work but no hours on them`
+            : "No hours at the shop are on record for this period"}
+          , so this is flagged time against an incomplete set of shop hours.
+          It isn&apos;t a gap, and it isn&apos;t a lead — add the hours and
+          it will mean something.
+        </p></StatusField>
+      )}
+
+      {/* An in-progress day is excluded from both sides of the average, so
+          say so. Without this the gap looks wrong all day and only settles
+          once the tech clocks out — which reads as a bug, not as design.
+
+          "that day", not "that shift": an ongoing day can be a lone spiff
+          dated today with no RO and no shift on it (wage-check derives
+          ongoingDays from work days UNION bonus dates), and the old wording
+          named a shift that doesn't exist and flagged work that is zero. */}
+      {result.ongoingDays.length > 0 && (
+        <StatusField tag="Note"><p>
+          {result.ongoingDays.length === 1
+            ? `${formatDateShort(result.ongoingDays[0])} isn't counted yet`
+            : `${result.ongoingDays.map(formatDateShort).join(", ")} aren't counted yet`}
+          {" — "}
+          {result.ongoingDays.length === 1 ? "that day is" : "those days are"}{" "}
+          still in progress. Flagged work and spiffs on{" "}
+          {result.ongoingDays.length === 1 ? "it" : "them"} are left out of
+          the figures above until there are hours to divide them by, so the
+          gap will move once you clock out.
+        </p></StatusField>
+      )}
+
+      {/* What that gap is MADE OF. Purely explanatory — the gap figure above
+          is unchanged and nothing here re-derives the effective hourly. */}
+      {gapParts !== null && (
+        <div className="pp-well">
+          <p className="pp-lead">
+            What&apos;s in that <span className="num">{fmtHours(gapParts.gapHours)}h</span> gap
+          </p>
+          <ul className="pp-kv">
+            {gapParts.comebackHours > 0 && (
+              <li>
+                <span>Unpaid rework</span>
+                <span className="num">{fmtHours(gapParts.comebackHours)}h</span>
+              </li>
+            )}
+            {gapParts.waitingHours > 0 && (
+              <li>
+                <span>Waiting on parts or approval</span>
+                <span className="num">{fmtHours(gapParts.waitingHours)}h</span>
+              </li>
+            )}
+            {gapParts.shopHours > 0 && (
+              <li>
+                <span>Shop time</span>
+                <span className="num">{fmtHours(gapParts.shopHours)}h</span>
+              </li>
+            )}
+            {!gapParts.overTracked && (
+              <li className="is-dim">
+                <span>Not accounted for yet</span>
+                <span className="num">{fmtHours(gapParts.unaccountedHours)}h</span>
+              </li>
+            )}
+          </ul>
+          {gapParts.overTracked && (
+            // Recorded unpaid time can legitimately exceed the gap — comeback
+            // hours run alongside flagged work on the same day. Say that
+            // rather than printing a negative remainder.
+            <p className="pp-fine pp-fine-top">
+              Your recorded unpaid time (<span className="num">{fmtHours(gapParts.trackedHours)}h</span>)
+              covers the whole gap — some of it overlapped days you also
+              flagged work.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* The evidence behind the gap: every unpaid record, one row each.
+          A drill-down rather than a peer card — this is detail you open
+          when you want to check the claim above.
+
+          It is also the audit view rather than the glance: it itemises
+          every row and then totals them, so a reader can and will add it
+          up. At 1dp they don't reconcile — eleven 2dp rows rounded
+          individually summed to 2.8h under a 2.7h total (2026-08-13) — so
+          everything inside here is shown at the resolution hours are
+          stored at. The card headline above stays at 1dp, where nothing is
+          being itemised.
+
+          The DOLLAR column had the identical defect and kept it eight
+          months longer, because it was the hours that got noticed: rows at
+          whole dollars round individually, the total rounds separately, and
+          four rework rows of $44.80/$41.60/$44.80/$35.20 print 45/42/45/35
+          — $167 against a total printing $166. Every figure individually
+          correct, the page still contradicting itself. So the money in here
+          is fmtMoney2 (escalation `disputepack-money-column-rounding`,
+          same fix, other surface). fmtMoney itself is unchanged and still
+          right everywhere a dollar figure is glanced at rather than added
+          up. */}
+      {hasUnpaid && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setRecordsOpen((v) => !v)}
+            aria-expanded={recordsOpen}
+            className="pp-rowbtn"
+          >
+            <span>Every unpaid record</span>
+            <span>
+              <b className="num">{withPt(fmtHours2(unpaid.totalHours))}h</b>
+              <PpIcon name="chev" className="chev" />
+            </span>
+          </button>
+
+          {recordsOpen && (
+            <div className="pp-records">
+              <ul className="pp-lines">
+                {unpaid.lines.map((l, i) => (
+                  <li key={l.id ?? `${l.source}-${l.entryId ?? "x"}-${i}`}>
+                    <span className="pp-line-main">
+                      <span className="pp-line-title">
+                        {UNPAID_TIME_KIND_LABELS[l.kind]}
+                        {l.roNumber && (
+                          <span className="pp-dim">
+                            {" "}
+                            · RO <span className="num">#{l.roNumber}</span>
+                          </span>
+                        )}
+                        {l.code && <span className="pp-dim"> · {l.code}</span>}
+                      </span>
+                      <span className="pp-line-sub">
+                        {formatDateShort(l.date)}
+                        {l.description ? ` — ${l.description}` : ""}
+                      </span>
+                    </span>
+                    <span className="pp-line-end">
+                      <span className="num">
+                        {withPt(fmtHours2(l.hours))}h
+                        {l.dollars !== null && (
+                          <span className="pp-dim">
+                            {" "}
+                            · {withPt(fmtMoney2(l.dollars))}
+                          </span>
+                        )}
+                      </span>
+                      {/* Ledger rows only — an RO-side line belongs to its
+                          repair order. DeleteUnpaidRowButton returns null
+                          when there is no ledger id to target. */}
+                      <DeleteUnpaidRowButton
+                        line={l}
+                        onDeleted={() => {
+                          router.refresh();
+                          // Same stale-tree hazard SpiffsCard documents
+                          // (c655c010): without the flush the row stays on
+                          // screen after a successful delete, which reads
+                          // as "the delete didn't work".
+                          window.dispatchEvent(new Event(FLUSH_EVENT));
+                          notifyDataChanged(); // and the other open tabs
+                        }}
+                      />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="pp-total">
+                <span className="pp-lead">Total unpaid</span>
+                <span className="num">
+                  {withPt(fmtHours2(unpaid.totalHours))}h
+                  {unpaid.totalDollars !== null && (
+                    <span className="pp-dim">
+                      {" "}
+                      · {withPt(fmtMoney2(unpaid.totalDollars))}
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              {unpaid.totalDollars !== null && unpaid.unpricedHours > 0 && (
+                // Never let the dollar figure read as if it covered every
+                // hour above.
+                <p className="pp-fine">
+                  <span className="num">{fmtHours2(unpaid.unpricedHours)}h</span>{" "}
+                  of this has no rate on file and is counted in hours only.
+                </p>
+              )}
+
+              <p className="pp-fine">
+                These hours are reported beside your efficiency, never
+                subtracted from it — your flagged-hours figure is unchanged.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Breadcrumb for days that couldn't be resolved at all, even when a
+          figure IS shown. Scheduled days are deliberately absent here —
+          they're accounted for, and listing them would read as a problem. */}
+      {missingCount > 0 && result.status !== "incomplete_clock" && (
+        <p className="pp-fine">
+          Days with flagged work but no hours and no scheduled shift:{" "}
+          {result.missingClockDays.map(formatDateShort).join(", ")}.
+        </p>
+      )}
+
+      <p className="pp-fine pp-fine-end">Informational only — not legal advice.</p>
+    </Fold>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { actionErrorMessage } from "@/lib/action-error";
+import { StatusField } from "@/components/ui/StatusField";
 
 // ------------------------------------------------------------------------
 // Shared: a small op-code form used by both modals.
@@ -30,9 +31,9 @@ function OpCodeFields({
   idPrefix?: string;
 }) {
   return (
-    <div className="space-y-3">
-      <label className="block" htmlFor={`${idPrefix}-code`}>
-        <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
+    <div className="log-modal-fields">
+      <label className="field" htmlFor={`${idPrefix}-code`}>
+        <span className="field-label">
           Code <span aria-hidden="true">*</span>
           <span className="sr-only"> (required)</span>
         </span>
@@ -46,13 +47,11 @@ function OpCodeFields({
           aria-required="true"
           aria-invalid={invalid}
           aria-describedby={errorId}
-          className="mt-1 input font-mono"
+          className="input"
         />
       </label>
-      <label className="block" htmlFor={`${idPrefix}-description`}>
-        <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
-          Description
-        </span>
+      <label className="field" htmlFor={`${idPrefix}-description`}>
+        <span className="field-label">Description</span>
         <input
           id={`${idPrefix}-description`}
           type="text"
@@ -60,13 +59,11 @@ function OpCodeFields({
           onChange={(e) =>
             onChange({ ...draft, description: e.target.value })
           }
-          className="mt-1 input"
+          className="input"
         />
       </label>
-      <label className="block" htmlFor={`${idPrefix}-flag-hours`}>
-        <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
-          Flag hours
-        </span>
+      <label className="field log-modal-hrs" htmlFor={`${idPrefix}-flag-hours`}>
+        <span className="field-label">Flag hours</span>
         <input
           id={`${idPrefix}-flag-hours`}
           type="number"
@@ -80,7 +77,7 @@ function OpCodeFields({
             })
           }
           aria-describedby={errorId}
-          className="mt-1 w-32 rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
+          className="input mono"
         />
       </label>
     </div>
@@ -127,24 +124,28 @@ function CustomOpCodeBody({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <p className="text-xs text-[var(--fg-2)]">
+    <form onSubmit={onSubmit} className="log-modal-form">
+      <p className="log-sub">
         This won&apos;t be saved to your library. It&apos;s attached to this RO
         only.
       </p>
       <OpCodeFields draft={draft} onChange={setDraft} idPrefix="custom-opc" errorId={error ? "custom-opc-error" : undefined} invalid={Boolean(error)} />
-      {error && <p id="custom-opc-error" role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
-      <div className="flex justify-end gap-2 pt-2">
+      {error && (
+        <StatusField tag="Fix" inset id="custom-opc-error" role="alert">
+          <p>{error}</p>
+        </StatusField>
+      )}
+      <div className="log-modal-act">
         <button
           type="button"
           onClick={onClose}
-          className="btn btn-ghost"
+          className="btn btn-quiet"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="btn btn-primary"
+          className="btn btn-go"
         >
           Add to RO
         </button>
@@ -216,25 +217,29 @@ function NewLibraryBody({
   }
 
   return (
-    <form onSubmit={handle} className="space-y-4">
-      <p className="text-xs text-[var(--fg-2)]">
+    <form onSubmit={handle} className="log-modal-form">
+      <p className="log-sub">
         This will be saved to your library and added to this RO.
       </p>
       <OpCodeFields draft={draft} onChange={setDraft} idPrefix="new-lib-opc" errorId={error ? "new-lib-opc-error" : undefined} invalid={Boolean(error)} />
-      {error && <p id="new-lib-opc-error" role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
-      <div className="flex justify-end gap-2 pt-2">
+      {error && (
+        <StatusField tag="Fix" inset id="new-lib-opc-error" role="alert">
+          <p>{error}</p>
+        </StatusField>
+      )}
+      <div className="log-modal-act">
         <button
           type="button"
           onClick={onClose}
           disabled={isPending}
-          className="btn btn-ghost"
+          className="btn btn-quiet"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isPending}
-          className="btn btn-primary"
+          className="btn btn-go"
         >
           {isPending ? "Saving…" : "Save & add"}
         </button>

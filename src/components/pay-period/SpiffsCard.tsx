@@ -8,10 +8,11 @@
 // the note here heads off "my check is bigger than flagged pay" confusion.
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Plus, Link2, Pencil, Trash2 } from "lucide-react";
 import { InfoBubble } from "@/components/ui/InfoBubble";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { withPt } from "@/components/ui/Figure";
 import type { Bonus } from "@/lib/types";
 import { fmtMoney } from "@/lib/earnings";
 import { sumBonuses, periodTotalPay, BONUS_CATEGORY_LABELS } from "@/lib/bonuses";
@@ -22,6 +23,8 @@ import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import { reportError } from "@/lib/report-error";
 import { deleteBonusAction } from "@/app/actions/bonuses";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Fold, N, PpIcon } from "./PpParts";
+import { StatusField } from "@/components/ui/StatusField";
 
 // One sentence that names a row, shared by the confirm dialog AND the two icon
 // buttons' aria-labels. It lives in one place on purpose: on 2026-08-19 the
@@ -65,102 +68,75 @@ export function SpiffsCard({
   const totals = periodTotalPay(flagPay, bonusTotal);
 
   return (
-    <section className="card padded space-y-3">
-      <div className="card-head-row">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex min-h-[44px] flex-1 items-center justify-between gap-2 text-left"
-      >
-        <h2 className="text-sm font-medium text-[var(--fg-2)]">Spiffs &amp; Bonuses</h2>
-        <span className="flex items-center gap-2 text-[var(--fg-3)]">
-          {!open && bonuses.length > 0 && (
-            <span className="font-mono text-sm font-medium tabular-nums text-[var(--good)]">
-              {fmtMoney(bonusTotal)}
-            </span>
-          )}
-          {open ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-        </span>
-      </button>
-
-      <InfoBubble title="Spiffs & Bonuses">
-        <p>
-          Money you earned this period that did not come from flag hours —
-          tire sales, alignments, battery or wiper spiffs, a monthly CSI bonus,
-          anything your shop pays on top of the labour rate.
-        </p>
-        <h3>Why log it here</h3>
-        <p>
-          Spiffs are part of your pay, so leaving them out makes you look like
-          you earn less than you do. They are added into your total pay when
-          your effective hourly is worked out, which is the number that answers
-          &ldquo;what am I really making per hour I am at the shop?&rdquo;
-        </p>
-        <h3>They are kept separate from flag pay on purpose</h3>
-        <p>
-          Your efficiency and flag hours never change when you add a spiff — a
-          $60 tire bonus is not two hours of flagged work. Keeping the two apart
-          means you can see how much of your pay depends on production and how
-          much comes from selling, which is worth knowing before you accept a
-          change to your pay plan.
-        </p>
-      </InfoBubble>
-      </div>
-
-      {open && (
-      <div className="space-y-3 border-t border-[var(--line)] pt-3">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="btn btn-sm btn-ghost min-h-11"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add
-        </button>
-      </div>
-
+    <>
+    <Fold
+      id="pp-fold-spiffs"
+      title="Spiffs & Bonuses"
+      state={bonuses.length > 0 ? <N v={fmtMoney(bonusTotal)} /> : undefined}
+      open={open}
+      onToggle={() => setOpen((v) => !v)}
+      info={
+        <InfoBubble title="Spiffs & Bonuses">
+          <p>
+            Money you earned this period that did not come from flag hours —
+            tire sales, alignments, battery or wiper spiffs, a monthly CSI bonus,
+            anything your shop pays on top of the labour rate.
+          </p>
+          <h3>Why log it here</h3>
+          <p>
+            Spiffs are part of your pay, so leaving them out makes you look like
+            you earn less than you do. They are added into your total pay when
+            your effective hourly is worked out, which is the number that answers
+            &ldquo;what am I really making per hour I am at the shop?&rdquo;
+          </p>
+          <h3>They are kept separate from flag pay on purpose</h3>
+          <p>
+            Your efficiency and flag hours never change when you add a spiff — a
+            $60 tire bonus is not two hours of flagged work. Keeping the two apart
+            means you can see how much of your pay depends on production and how
+            much comes from selling, which is worth knowing before you accept a
+            change to your pay plan.
+          </p>
+        </InfoBubble>
+      }
+    >
+      <div className="pp-stack">
       {bonuses.length === 0 ? (
-        <p className="text-sm text-[var(--fg-3)]">
+        <p className="pp-sub">
           No spiffs or bonuses logged this period. Log them the moment you earn
           them — they&apos;re easy to forget by payday.
         </p>
       ) : (
         <>
-          <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
+          <ul className="pp-lines">
             {bonuses.map((b) => {
               const desc = describeBonus(b);
               return (
-              <li
-                key={b.id}
-                className="flex items-center justify-between gap-3 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-[var(--fg-1)]">
-                      {b.source?.trim() || BONUS_CATEGORY_LABELS[b.category]}
-                    </span>
-                    <Badge>
+              <li key={b.id}>
+                <span className="pp-line-main">
+                  <span className="pp-line-title">
+                    {b.source?.trim() || BONUS_CATEGORY_LABELS[b.category]}
+                    {" "}
+                    <Badge chip>
                       {BONUS_CATEGORY_LABELS[b.category]}
                     </Badge>
                     {b.entryId && (
-                      <Link2 className="h-3 w-3 text-[var(--brand)]" aria-label="Linked to an RO" />
+                      <span
+                        className="pp-linked"
+                        role="img"
+                        aria-label="Linked to an RO"
+                      >
+                        <PpIcon name="link" />
+                      </span>
                     )}
-                  </div>
-                  <div className="text-xs text-[var(--fg-3)]">
+                  </span>
+                  <span className="pp-line-sub">
                     {formatDateLong(b.date)}
                     {b.note ? ` · ${b.note}` : ""}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-sm font-medium text-[var(--good)]">
-                    {fmtMoney(b.amount)}
                   </span>
+                </span>
+                <span className="pp-line-end">
+                  <span className="num">{withPt(fmtMoney(b.amount))}</span>
                   <button
                     type="button"
                     onClick={() => setEditing(b)}
@@ -168,9 +144,9 @@ export function SpiffsCard({
                     // names across a list is how you end up editing row 3
                     // while looking at row 1.
                     aria-label={desc ? `Edit bonus — ${desc}` : "Edit bonus"}
-                    className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--fg-1)] active:scale-[0.96] after:absolute after:-inset-1.5 after:content-['']"
+                    className="iconbtn"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <PpIcon name="pencil" />
                   </button>
                   <DeleteButton
                     bonus={b}
@@ -183,38 +159,43 @@ export function SpiffsCard({
                       notifyDataChanged(); // and the other open tabs
                     }}
                   />
-                </div>
+                </span>
               </li>
               );
             })}
           </ul>
 
-          <div className="flex items-center justify-between border-t border-[var(--line)] pt-2 text-sm">
-            <span className="text-[var(--fg-2)]">Spiffs total</span>
-            <span className="font-mono font-medium text-[var(--good)]">
-              {fmtMoney(bonusTotal)}
-            </span>
+          <div className="pp-total">
+            <span className="pp-lead">Spiffs total</span>
+            <span className="num">{withPt(fmtMoney(bonusTotal))}</span>
           </div>
 
           {totals.showBreakdown && (
-            <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+            <StatusField tag="Note"><p>
               Total pay:{" "}
-              <span className="font-medium">Flag pay {fmtMoney(totals.flagPay ?? 0)}</span>
+              <span className="pp-strong">Flag pay <N v={fmtMoney(totals.flagPay ?? 0)} /></span>
               {" + "}
-              <span className="font-medium">Spiffs {fmtMoney(totals.bonusTotal)}</span>
+              <span className="pp-strong">Spiffs <N v={fmtMoney(totals.bonusTotal)} /></span>
               {" = "}
-              <span className="font-semibold text-[var(--good)]">{fmtMoney(totals.total)}</span>
-            </p>
+              <N v={fmtMoney(totals.total)} />
+            </p></StatusField>
           )}
         </>
       )}
 
-      <p className="text-xs text-[var(--fg-3)]">
+      <div className="pp-btnrow">
+        <Button variant="line" onClick={() => setAdding(true)}>
+          <PpIcon name="plus" />
+          Add spiff / bonus
+        </Button>
+      </div>
+
+      <p className="pp-fine">
         Spiffs aren&apos;t part of hours reconciliation — they show in dollar
         totals only.
       </p>
       </div>
-      )}
+    </Fold>
 
       {adding && (
         <Modal open onClose={() => setAdding(false)} title="Add spiff / bonus">
@@ -237,7 +218,7 @@ export function SpiffsCard({
           />
         </Modal>
       )}
-    </section>
+    </>
   );
 }
 
@@ -281,9 +262,9 @@ function DeleteButton({
       // The dialog is the last line of defence; this label is the targeting.
       // Both name the same row from the same helper so they can't disagree.
       aria-label={desc ? `Delete bonus — ${desc}` : "Delete bonus"}
-      className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 after:absolute after:-inset-1.5 after:content-['']"
+      className="iconbtn pp-del"
     >
-      <Trash2 className="h-3.5 w-3.5" />
+      <PpIcon name="trash" />
     </button>
   );
 }

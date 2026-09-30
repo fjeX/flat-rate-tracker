@@ -1,9 +1,11 @@
 // Dashboard entry point for portfolio snapshots: progress to the next
 // unlock, plus the latest build sheet (docs/gamification.md, design 8B).
+// The last row of the "Streak, career, snapshot" zone.
 import Link from "next/link";
 import type { PortfolioSnapshot } from "@/lib/types";
-import { EntranceGrid } from "@/components/ui/EntranceGrid";
 import { SnapshotSheet } from "@/components/snapshots/SnapshotSheet";
+import { Track } from "./Track";
+import { DashIcon } from "./DashIcon";
 
 export function SnapshotsCard({
   snapshots,
@@ -25,37 +27,39 @@ export function SnapshotsCard({
   const toGo = Math.max(nextSnapshotAt - roCount, 0);
 
   return (
-    <section>
-      <div className="section-title">
-        Portfolio snapshots
-        {snapshots.length > 0 && (
-          <Link href="/snapshots" className="link">
-            View all ({snapshots.length}) →
-          </Link>
-        )}
+    <div className="rec" data-testid="snapshots-row">
+      <div className="rec-top">
+        <div className="rec-name">
+          <h3>Portfolio snapshots</h3>
+        </div>
+        <span className="num rec-val">
+          {roCount}
+          <span className="unit">/ {nextSnapshotAt} ROs</span>
+        </span>
       </div>
-      <EntranceGrid className="card padded gami-snap" animationName="pace-grow">
-        <div className="gami-snap-head">
-          <span className="gami-snap-title">
-            {latest ? `Next: Snapshot #${latest.seq + 1}` : "Your first snapshot"}
-          </span>
-          <span className="gami-snap-count">
-            <b>{roCount}</b> / {nextSnapshotAt} ROs
-          </span>
+      <Track
+        fill={frac * 100}
+        endMark
+        label={`${roCount} of ${nextSnapshotAt} repair orders`}
+      />
+      <p className="rec-snap">
+        <b>{latest ? `Next: Snapshot #${latest.seq + 1}.` : "Your first snapshot."}</b> Log{" "}
+        <span className="num">{toGo}</span> more RO{toGo === 1 ? "" : "s"} to freeze a dated
+        record of everything you&apos;ve documented so far.
+      </p>
+      {snapshots.length > 0 && (
+        <div className="rows-link">
+          <Link href="/snapshots" className="zone-link">
+            View all (<span className="num">{snapshots.length}</span>)
+            <DashIcon name="chev" />
+          </Link>
         </div>
-        <div className="gami-snap-bar">
-          <i style={{ width: `${frac * 100}%` }} />
+      )}
+      {latest && (
+        <div className="rec-sheet">
+          <SnapshotSheet snapshot={latest} timeZone={timeZone} />
         </div>
-        <p className="gami-snap-sub">
-          Log {toGo} more RO{toGo === 1 ? "" : "s"}{" "}
-          to freeze a dated record of everything you&apos;ve documented so far.
-        </p>
-        {latest && (
-          <div className="gami-snap-sheetwrap">
-            <SnapshotSheet snapshot={latest} timeZone={timeZone} />
-          </div>
-        )}
-      </EntranceGrid>
-    </section>
+      )}
+    </div>
   );
 }

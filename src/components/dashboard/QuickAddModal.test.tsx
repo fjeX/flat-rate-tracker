@@ -239,3 +239,77 @@ describe("QuickAddModal — a duplicate check that lands late is inert", () => {
     expect(savedRoNumbers()).toEqual(["111"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 4: RO numbers are digits only, and the op-code chips are toggles.
+// ---------------------------------------------------------------------------
+
+const CHIP_LIBRARY = [
+  { id: "oc-1", userId: "u", code: "LOF", description: "Lube oil filter", flagHours: 0.5, notes: "", tags: [], sortOrder: 0, createdAt: "", subOpCodes: [] },
+  { id: "oc-2", userId: "u", code: "TR4", description: "Tire rotate", flagHours: 0.4, notes: "", tags: [], sortOrder: 1, createdAt: "", subOpCodes: [] },
+];
+
+function renderWithChips() {
+  onClose.mockClear();
+  render(<QuickAddModal library={CHIP_LIBRARY} open onClose={onClose} />);
+}
+
+const saveRo = () => clickButton("Save RO") as HTMLButtonElement;
+const footerStatus = () => document.querySelector(".log-status")!.textContent;
+
+describe("QuickAddModal — RO numbers are digits only", () => {
+  it("reads 'Fill in RO # to save' and disables Save while the RO is empty", () => {
+    renderQuickAdd();
+    expect(footerStatus()).toBe("Fill in RO # to save");
+    expect(saveRo().disabled).toBe(true);
+  });
+
+  it("shows the FIX field, flags the input, and blocks Save for '48x'", () => {
+    renderQuickAdd();
+    typeRo("48x");
+
+    const fix = screen.getByRole("alert");
+    expect(fix.textContent).toMatch(/Fix/);
+    expect(fix.textContent).toMatch(/RO numbers are digits only/);
+
+    const input = document.getElementById("quick-add-ro-number")!;
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")).toBe(fix.id);
+    expect(saveRo().disabled).toBe(true);
+    expect(footerStatus()).toBe("Fix the RO # to save");
+  });
+
+  it("clears the FIX field and enables Save once only digits remain", () => {
+    renderQuickAdd();
+    typeRo("48x");
+    typeRo("48");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(document.getElementById("quick-add-ro-number")!.getAttribute("aria-invalid")).toBe("false");
+    expect(saveRo().disabled).toBe(false);
+    expect(footerStatus()).toMatch(/0 lines/);
+  });
+});
+
+describe("QuickAddModal — op-code chips are toggles", () => {
+  const chip = (code: string) =>
+    screen.getByRole("button", { name: new RegExp(`^${code}`) });
+
+  it("presses a chip when tapped, keeps it visible, and adds one line", () => {
+    renderWithChips();
+    expect(chip("LOF").getAttribute("aria-pressed")).toBe("false");
+    act(() => { chip("LOF").click(); });
+    expect(chip("LOF").getAttribute("aria-pressed")).toBe("true");
+    expect(chip("TR4").getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getAllByRole("button", { name: /Remove/i }).length).toBeGreaterThan(0);
+  });
+
+  it("tapping a pressed chip removes its line and unpresses it", () => {
+    renderWithChips();
+    act(() => { chip("LOF").click(); });
+    typeRo("123");
+    expect(footerStatus()).toMatch(/1 line/);
+    act(() => { chip("LOF").click(); });
+    expect(chip("LOF").getAttribute("aria-pressed")).toBe("false");
+    expect(footerStatus()).toMatch(/0 lines/);
+  });
+});

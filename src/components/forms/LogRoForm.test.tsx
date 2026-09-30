@@ -143,7 +143,7 @@ describe("LogRoForm — backing out of the duplicate prompt", () => {
 // ---------------------------------------------------------------------------
 
 function stepNumbers() {
-  return Array.from(document.querySelectorAll(".step-num")).map((el) =>
+  return Array.from(document.querySelectorAll(".log-step-no:not(.is-icon)")).map((el) =>
     el.textContent?.trim(),
   );
 }
@@ -1118,4 +1118,75 @@ describe("LogRoForm — a close-defaults fetch that never answers", () => {
   // precisely to make effect order deterministic for tests, which forecloses
   // the passive-effect race window this fix closes in real (non-`act`)
   // runtime code. No jsdom-expressible test distinguishes the two idioms.
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4: RO numbers are digits only, and the op-code chips are toggles.
+// ---------------------------------------------------------------------------
+
+const CHIP_LIBRARY = [
+  { id: "oc-1", userId: "u", code: "LOF", description: "Lube oil filter", flagHours: 0.5, notes: "", tags: [], sortOrder: 0, createdAt: "", subOpCodes: [] },
+  { id: "oc-2", userId: "u", code: "TR4", description: "Tire rotate", flagHours: 0.4, notes: "", tags: [], sortOrder: 1, createdAt: "", subOpCodes: [] },
+];
+
+const logSaveBtn = () => screen.getByTestId("ro-save") as HTMLButtonElement;
+const logStatus = () => document.querySelector(".save-bar .summary")!.textContent;
+
+describe("LogRoForm — RO numbers are digits only", () => {
+  it("empty RO: Save and Save & New are disabled and the bar says to fill it in", () => {
+    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    expect(logSaveBtn().disabled).toBe(true);
+    expect((clickButton("Save & New") as HTMLButtonElement).disabled).toBe(true);
+    expect(logStatus()).toBe("Fill in RO # to save");
+  });
+
+  it("'48x' shows the FIX field under the RO, marks it invalid and blocks both saves", () => {
+    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    typeRo("48x");
+
+    const fix = document.getElementById("ro-digits-error")!;
+    expect(fix.getAttribute("role")).toBe("alert");
+    expect(fix.textContent).toMatch(/RO numbers are digits only/);
+
+    const input = document.getElementById("ro-number")!;
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")).toBe("ro-digits-error");
+    expect(logSaveBtn().disabled).toBe(true);
+    expect((clickButton("Save & New") as HTMLButtonElement).disabled).toBe(true);
+    expect(logStatus()).toBe("Fix the RO # to save");
+  });
+
+  it("digits only clears the FIX field, enables Save and shows the summary", () => {
+    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    typeRo("48x");
+    typeRo("48");
+    expect(document.getElementById("ro-digits-error")).toBeNull();
+    expect(logSaveBtn().disabled).toBe(false);
+    expect(logStatus()).toMatch(/0\.0h.*0 lines/);
+  });
+});
+
+describe("LogRoForm — op-code chips are toggles", () => {
+  const chip = (code: string) =>
+    screen.getByRole("button", { name: new RegExp(`^${code}`) });
+
+  it("a tapped chip stays, renders pressed, and adds one line; tapping again removes it", () => {
+    render(<LogRoForm initialOpCodes={CHIP_LIBRARY} roTemplates={[]} />);
+    typeRo("123");
+    expect(chip("LOF").getAttribute("aria-pressed")).toBe("false");
+
+    act(() => { chip("LOF").click(); });
+    expect(chip("LOF").getAttribute("aria-pressed")).toBe("true");
+    expect(chip("TR4").getAttribute("aria-pressed")).toBe("false");
+    expect(logStatus()).toMatch(/0\.5h.*1 line/);
+
+    act(() => { chip("LOF").click(); });
+    expect(chip("LOF").getAttribute("aria-pressed")).toBe("false");
+    expect(logStatus()).toMatch(/0\.0h.*0 lines/);
+  });
+
+  it("shows the Flagged total as 0.0h before any line exists", () => {
+    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    expect(document.querySelector("[data-total]")!.textContent).toBe("0.0h");
+  });
 });

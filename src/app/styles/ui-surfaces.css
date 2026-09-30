@@ -53,6 +53,26 @@
 }
 .card > .zone-name:first-child { margin: calc(-1 * var(--card-pad)) 0 var(--s3) calc(-1 * var(--card-pad)); }
 
+/* =====================================================================
+   ZONE (ui/Zone.tsx) = a bounded, named region of the WALL
+   Mock `.zone` 484-498: a heavy top rule, the name tab hanging from it,
+   an optional link or count at the right of .zone-head. No fill, no side
+   borders: it holds its own panels. Card (above) is the filled variant.
+   ===================================================================== */
+.zone { border-top: var(--w-heavy) solid var(--zone-line); margin-top: var(--s5); min-width: 0; }
+.zone-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); min-height: 36px; margin-bottom: var(--s2); }
+.zone-aside { margin-left: auto; padding-top: var(--s1); color: var(--ink-3); font-size: var(--fs-label); }
+.zone-aside + .zone-link { margin-left: 0; }
+.zone-link {
+  display: inline-flex; align-items: center; gap: 4px; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s2); margin-right: calc(-1 * var(--s2)); margin-left: auto;
+  color: var(--accent-text); font-weight: 700; font-size: var(--fs-body); border-radius: var(--r-sign);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: var(--w-tag);
+}
+.zone-link:hover { background: var(--quiet-hover); text-decoration-thickness: 2.5px; }
+.zone-link:active { background: var(--quiet-active); }
+.zone-link:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.zone-link svg { transform: rotate(-90deg); }
+
 /* Inset well inside a panel. --plate is the recessed token in every theme
    (darker than --panel in light and dark), so the well reads as cut into the
    panel rather than laid on it. Hairline + --r-sign, no shadow. */
@@ -253,4 +273,34 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .skel { animation: none; opacity: 1; }
+}
+
+/* =====================================================================
+   STATUS FIELD (ui/StatusField.tsx), mock `.stat` / `.stat-tag` 574-597
+   A full-width field tagged with a word. It bleeds to the page gutter
+   (--gutter, set on :root in globals.css) up to 700px, then sits inside
+   the column with its own padding. `.is-inset` = inside a panel, well or
+   dialog, where it keeps its own padding. Colour is state only.
+   ===================================================================== */
+.sfield {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); align-items: start;
+  margin: 0 calc(-1 * var(--gutter)); padding: var(--s3) var(--gutter);
+  background: var(--note-bg); color: var(--ink-2); font-size: var(--fs-body);
+  border-top: var(--w-hair) solid var(--line); border-bottom: var(--w-hair) solid var(--line);
+}
+.sfield + .sfield { border-top: 0; }
+.sfield b { color: var(--ink); font-weight: 700; }
+.sfield-body { min-width: 0; }
+.sfield-body p { max-width: 72ch; margin: 0; }
+.sfield-body p + p { margin-top: var(--s1); }
+.sfield .sfield-tag { min-width: 52px; justify-content: center; margin-top: 1px; }
+.sfield.is-bad { background: var(--bad-bg); color: var(--ink); }
+.sfield.is-bad b.m { color: var(--bad); }
+.sfield.is-good { background: var(--good-bg); color: var(--ink); }
+.sfield .num { font-size: var(--fs-label); }
+.sfield-act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin-top: var(--s2); font-weight: 700; color: var(--ink); }
+.sfield.is-inset { margin: var(--s3) 0 0; padding-left: var(--s3); padding-right: var(--s3); }
+@media (min-width: 700px) {
+  .sfield { margin-left: 0; margin-right: 0; padding-left: var(--s4); padding-right: var(--s4); }
+  .sfield.is-inset { padding-left: var(--s3); padding-right: var(--s3); }
 }

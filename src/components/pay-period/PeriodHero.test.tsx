@@ -79,7 +79,7 @@ afterEach(cleanup);
 const EFFICIENCY_FIGURE = /\d+% efficiency/;
 
 function support(): HTMLElement {
-  const el = document.querySelector(".period-hero-support");
+  const el = document.querySelector(".pp-hero-support");
   if (!el) throw new Error("hero has no support line");
   return el as HTMLElement;
 }
@@ -153,7 +153,8 @@ describe("InProgressHero — the control: a real 0% still shows", () => {
     );
 
     expect(support().textContent).toMatch(EFFICIENCY_FIGURE);
-    expect(screen.getByText(/0% efficiency/)).toBeTruthy();
+    // The figure is its own <b class="num"> now, so match it alone.
+    expect(screen.getByText("0%")).toBeTruthy();
     expect(screen.queryByText(/No efficiency yet/)).toBeNull();
     expect(screen.queryByText(/Efficiency isn't shown/)).toBeNull();
   });
@@ -174,7 +175,7 @@ describe("InProgressHero — the control: a real 0% still shows", () => {
     );
 
     expect(support().textContent).toMatch(EFFICIENCY_FIGURE);
-    expect(screen.getByText(/62% efficiency/)).toBeTruthy();
+    expect(screen.getByText("62%")).toBeTruthy();
   });
 });
 
@@ -244,7 +245,7 @@ describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly onc
   const edit = (value: string) =>
     fireEvent.change(field(), { target: { value } });
 
-  const errorLine = () => document.querySelector(".period-hero-error");
+  const errorLine = () => document.querySelector(".pp-hero-error");
 
   // WHY THESE TWO HELPERS DO NOT USE fireEvent.submit().
   //
@@ -414,6 +415,8 @@ describe("AwaitingPayHero — the paid-hours figure commits on blur, exactly onc
       fireEvent.blur(field());
     });
     expect(screen.getByText("Paid hours can't be more than 200.")).toBeTruthy();
+    // Control for every `expect(errorLine()).toBeNull()` below: the locator finds the message when there is one.
+    expect(errorLine()?.textContent).toBe("Paid hours can't be more than 200.");
     expect(onSaved).not.toHaveBeenCalled();
 
     nextError = null;

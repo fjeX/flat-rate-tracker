@@ -17,8 +17,8 @@ export function SubOpCodePickerModal({
 }) {
   return (
     <Modal open onClose={onClose} title={`Sub op code for ${opCode.code}`}>
-      <div className="space-y-1">
-        <p className="text-xs text-[var(--fg-2)] pb-2">
+      <div className="log-picks">
+        <p className="log-sub">
           Select which procedure was performed on this vehicle.
         </p>
         {opCode.subOpCodes.map((sub) => (
@@ -26,19 +26,13 @@ export function SubOpCodePickerModal({
             key={sub.id}
             type="button"
             onClick={() => onSelect(sub)}
-            className="flex w-full items-center justify-between gap-3 min-h-[44px] rounded-[var(--radius-sm)] px-3 py-2.5 text-left hover:bg-[var(--bg-3)]"
+            className="log-pick"
           >
-            <span className="min-w-0">
-              <span className="font-mono text-sm font-medium text-[var(--brand)]">
-                {sub.code}
-              </span>
-              {sub.description && (
-                <span className="ml-2 text-sm text-[var(--fg-1)]">{sub.description}</span>
-              )}
+            <span className="log-pick-txt">
+              <b className="log-code">{sub.code}</b>
+              {sub.description && <span className="log-pick-desc">{sub.description}</span>}
             </span>
-            <span className="shrink-0 font-mono text-sm text-[var(--fg-2)]">
-              {fmtHours(sub.flagHours)}h
-            </span>
+            <span className="num">{fmtHours(sub.flagHours)}h</span>
           </button>
         ))}
       </div>

@@ -15,10 +15,11 @@
 //
 // Hidden entirely until at least one line is marked, so the log form is
 // unchanged for the overwhelmingly common case of a normal paid RO.
-import { Check, Link2, RotateCcw, Search, X } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { COMEBACK_KINDS, COMEBACK_KIND_LABELS } from "@/lib/types";
 import type { ComebackKind, RoMatch } from "@/lib/types";
 import { formatDateLong } from "@/lib/periods";
+import { LogIcon } from "./logParts";
 
 const KIND_HINTS: Record<ComebackKind, string> = {
   comeback_own: "You're redoing a job you flagged before.",
@@ -52,42 +53,28 @@ export function ComebackSection({
   clearOriginalRo: () => void;
 }) {
   return (
-    <div className="step-card active">
-      <div className="step-head" style={{ cursor: "default" }}>
-        <div className="step-num" aria-hidden="true">
-          <RotateCcw size={13} />
-        </div>
-        <div className="step-title">Unpaid rework</div>
-        <div className="step-summary">flags 0h</div>
+    <div className="log-step">
+      <div className="log-step-head">
+        <span className="log-step-no is-icon" aria-hidden="true">
+          <RotateCcw size={14} />
+        </span>
+        <h3 className="log-step-title">Unpaid rework</h3>
+        <span className="log-step-aside">flags <span className="num">0h</span></span>
       </div>
-      <div className="step-body">
-        <p style={{ fontSize: 12, color: "var(--fg-2)", marginBottom: 10 }}>
+      <div className="log-step-body">
+        <p className="log-help">
           These lines flag zero. Log the actual hours anyway — that&apos;s the
           number that shows what the redo really cost you.
         </p>
 
         {/* Kind */}
-        <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend
-            style={{
-              fontSize: 11,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: "var(--fg-3)",
-              marginBottom: 6,
-            }}
-          >
-            Whose work
-          </legend>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <fieldset className="log-fieldset">
+          <legend className="field-label">Whose work</legend>
+          <div className="log-opts">
             {COMEBACK_KINDS.map((kind) => {
               const on = comebackKind === kind;
               return (
-                <label
-                  key={kind}
-                  className="cmb-kind"
-                  data-on={on ? "true" : undefined}
-                >
+                <label key={kind} className="log-opt">
                   <input
                     type="radio"
                     name="comeback-kind"
@@ -95,11 +82,12 @@ export function ComebackSection({
                     checked={on}
                     onChange={() => changeComebackKind(kind)}
                   />
-                  <span>
-                    <span className="cmb-kind-label">
-                      {COMEBACK_KIND_LABELS[kind]}
+                  <span className="log-opt-box">
+                    <span className="log-opt-txt">
+                      <span className="log-opt-name">{COMEBACK_KIND_LABELS[kind]}</span>
+                      <span className="log-opt-note">{KIND_HINTS[kind]}</span>
                     </span>
-                    <span className="cmb-kind-hint">{KIND_HINTS[kind]}</span>
+                    <LogIcon name="check" small className="log-opt-check" />
                   </span>
                 </label>
               );
@@ -109,23 +97,12 @@ export function ComebackSection({
 
         {/* Redo-of link — own work only */}
         {comebackKind === "comeback_own" && (
-          <div style={{ marginTop: 14 }}>
-            <div
-              style={{
-                fontSize: 11,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "var(--fg-3)",
-                marginBottom: 6,
-              }}
-            >
-              Redo of (optional)
-            </div>
+          <div className="log-redo">
+            <div className="field-label">Redo of (optional)</div>
 
             {comebackOfEntryId ? (
-              <div className="cmb-linked">
-                <Link2 size={14} aria-hidden="true" />
-                <span className="grow">
+              <div className="log-linked">
+                <span className="log-linked-txt">
                   {selectedOriginal
                     ? `RO #${originalRoSearch.trim()} · ${formatDateLong(selectedOriginal.date)}${
                         selectedOriginal.vehicleSummary
@@ -137,15 +114,15 @@ export function ComebackSection({
                 <button
                   type="button"
                   onClick={clearOriginalRo}
-                  className="cmb-unlink"
+                  className="iconbtn"
                   aria-label="Remove link to original RO"
                 >
-                  <X size={14} />
+                  <LogIcon name="x" small />
                 </button>
               </div>
             ) : (
               <>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div className="log-find">
                   <label htmlFor="cmb-original-ro" className="sr-only">
                     Original RO number
                   </label>
@@ -164,17 +141,15 @@ export function ComebackSection({
                       }
                     }}
                     placeholder="Original RO #"
-                    className="input"
-                    style={{ flex: 1 }}
+                    className="input mono"
                   />
                   <button
                     type="button"
                     onClick={findOriginalRo}
                     disabled={!originalRoSearch.trim() || isFindingOriginal}
-                    className="btn btn-ghost"
-                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    className="btn btn-line btn-field"
                   >
-                    <Search size={14} aria-hidden="true" />
+                    <LogIcon name="search" small />
                     {isFindingOriginal ? "Finding…" : "Find"}
                   </button>
                 </div>
@@ -184,36 +159,30 @@ export function ComebackSection({
                     exists. Show date + vehicle so they're tellable apart. */}
                 {originalRoMatches !== null &&
                   (originalRoMatches.length === 0 ? (
-                    <p
-                      style={{
-                        fontSize: 12,
-                        color: "var(--fg-3)",
-                        marginTop: 8,
-                      }}
-                    >
+                    <p className="log-help">
                       No RO matching that number. You can still save — the
                       comeback is recorded either way.
                     </p>
                   ) : (
-                    <div className="cmb-matches">
+                    <div className="log-matches">
                       {originalRoMatches.map((m) => (
                         <button
                           key={m.id}
                           type="button"
-                          className="cmb-match"
+                          className="log-match"
                           onClick={() => chooseOriginalRo(m)}
                         >
-                          <span className="grow">
-                            <span className="cmb-match-date">
+                          <span className="log-match-txt">
+                            <span className="log-match-date">
                               {formatDateLong(m.date)}
                             </span>
                             {m.vehicleSummary && (
-                              <span className="cmb-match-vehicle">
+                              <span className="log-match-veh">
                                 {m.vehicleSummary}
                               </span>
                             )}
                           </span>
-                          <Check size={14} aria-hidden="true" />
+                          <LogIcon name="check" small />
                         </button>
                       ))}
                     </div>

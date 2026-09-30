@@ -1,20 +1,24 @@
 "use client";
 
-// Step 2 of the log form: the op-code section — search/picker dropdown, the list
-// of added lines with flag/actual hour inputs, quick-add chips, the running
+// Step 2 of the log form: the op-code section — search/picker dropdown, quick
+// chips, the list of added lines with flag/actual hour inputs, the running
 // total, and the three op-code modals (custom line, new library code, sub-op-code
 // picker). Presentational — all state and handlers live in useLogRoForm.
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import type { LaborType, OpCode, SubOpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { LABOR_TYPES, LABOR_TYPE_LABELS } from "@/lib/earnings";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { DurationBar } from "@/components/ui/DurationBar";
+import { withPt } from "@/components/ui/Figure";
 import {
   CustomOpCodeModal,
   NewLibraryOpCodeModal,
   type OpCodeDraft,
 } from "./OpCodeModals";
 import { SubOpCodePickerModal } from "./SubOpCodePickerModal";
+import { FlaggedTotal, LogIcon, OpCodeChips } from "./logParts";
 import type { LineDraft } from "./useLogRoForm";
 
 function lineLabel(
@@ -112,26 +116,25 @@ export function OpCodeLines({
 
   return (
     <>
-      <div className="step-card active">
-        <div className="step-head" style={{ cursor: "default" }}>
-          <div className="step-num">{step}</div>
-          <div className="step-title">Op codes</div>
+      <div className="log-step">
+        <div className="log-step-head">
+          <span className="log-step-no">{step}</span>
+          <h3 className="log-step-title">Add the op codes</h3>
           {lines.length > 0 && (
-            <div className="step-summary">
-              {lines.length} line{lines.length !== 1 ? "s" : ""} · {fmtHours(totalFlag)}h
-            </div>
+            <span className="log-step-aside">
+              {lines.length} line{lines.length !== 1 ? "s" : ""} ·{" "}
+              <span className="num">{withPt(`${fmtHours(totalFlag)}h`)}</span>
+            </span>
           )}
         </div>
-        <div className="step-body">
+        <div className="log-step-body">
           {/* Search / picker */}
-          <div className="opc-search" ref={pickerRef}>
-            <span className="icon">
-              <Search size={15} />
-            </span>
+          <div className="log-search" ref={pickerRef}>
+            <LogIcon name="search" className="log-search-ic" />
             <label htmlFor="opc-search" className="sr-only">Search or add op code</label>
             <input
               id="opc-search"
-              type="text"
+              type="search"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -139,297 +142,241 @@ export function OpCodeLines({
               }}
               onFocus={() => setPickerOpen(true)}
               placeholder="Search or add op code…"
+              autoComplete="off"
               className="input"
-              style={{ width: "100%", paddingRight: search ? 36 : undefined }}
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch("")}
-                className="opc-clear"
+                className="iconbtn log-search-clear"
                 aria-label="Clear"
               >
-                <X size={14} />
+                <LogIcon name="x" small />
               </button>
             )}
 
             {pickerOpen && (
-              <div className="opc-dropdown">
-                <div style={{ maxHeight: 256, overflowY: "auto" }}>
+              <div className="opc-dropdown log-dd">
+                <div className="log-dd-list">
                   {filteredLibrary.length === 0 ? (
-                    <div className="opc-dropdown-item" style={{ color: "var(--fg-3)", cursor: "default" }}>
-                      No matches in your library.
-                    </div>
+                    <div className="log-dd-empty">No matches in your library.</div>
                   ) : (
                     filteredLibrary.map((oc) => (
                       <button
                         key={oc.id}
                         type="button"
-                        className="opc-dropdown-item"
+                        className="opc-dropdown-item log-dd-item"
                         onClick={() => addFromLibrary(oc)}
                       >
-                        <span>
-                          <span className="opc-code">{oc.code}</span>
-                          <span style={{ marginLeft: 8, fontSize: 12, color: "var(--fg-2)" }}>
-                            {oc.description}
-                          </span>
+                        <span className="log-dd-main">
+                          <b className="log-code">{oc.code}</b>
+                          <span className="log-dd-desc">{oc.description}</span>
                           {oc.subOpCodes.length > 0 && (
-                            <span style={{
-                              marginLeft: 6,
-                              fontSize: 11,
-                              letterSpacing: "0.06em",
-                              textTransform: "uppercase",
-                              color: "var(--fg-3)",
-                              background: "var(--bg-3)",
-                              padding: "1px 5px",
-                              borderRadius: 4,
-                            }}>
+                            <Badge chip>
                               {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
-                            </span>
+                            </Badge>
                           )}
                         </span>
-                        <span style={{ fontSize: 12, color: "var(--fg-3)", fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
+                        <span className="log-dd-hrs num">
                           {oc.subOpCodes.length > 0 ? "select →" : `${fmtHours(oc.flagHours)}h`}
                         </span>
                       </button>
                     ))
                   )}
                 </div>
-                <div className="opc-dropdown-footer">
-                  <div className="opc-dropdown-footer-label">Other</div>
+                <div className="log-dd-foot">
+                  <div className="log-dd-label">Other</div>
                   <button
                     type="button"
-                    className="opc-dropdown-item"
+                    className="opc-dropdown-item log-dd-item"
                     onClick={() => setCustomOpen(true)}
-                    style={{ borderRadius: 6 }}
                   >
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Plus size={13} />
+                    <span className="log-dd-main">
+                      <LogIcon name="plus" small />
                       Other op code (one-time)
                     </span>
                   </button>
                   <button
                     type="button"
-                    className="opc-dropdown-item"
+                    className="opc-dropdown-item log-dd-item"
                     onClick={() => setNewLibraryOpen(true)}
-                    style={{ borderRadius: 6 }}
                   >
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Plus size={13} />
+                    <span className="log-dd-main">
+                      <LogIcon name="plus" small />
                       Create new library op code
                     </span>
                   </button>
-                </div>
-                <div style={{ borderTop: "1px solid var(--line)", padding: "6px 12px", textAlign: "right" }}>
-                  <button
-                    type="button"
-                    onClick={() => setPickerOpen(false)}
-                    className="opc-dropdown-close"
-                  >
-                    Close
-                  </button>
+                  <div className="log-dd-close">
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen(false)}
+                      className="btn btn-quiet btn-sm"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
+          {/* Quick-add chips */}
+          <OpCodeChips chips={quickChips} lines={lines} onAdd={addFromLibrary} onRemoveLine={removeLine} />
+
           {/* Op code lines */}
           {lines.length === 0 ? (
-            <p style={{ textAlign: "center", fontSize: 13, color: "var(--fg-3)", padding: "16px 0" }}>
-              No op codes yet. Search above or tap a chip below.
-            </p>
+            <p className="log-lines-empty">No op codes yet. Search above or tap a chip.</p>
           ) : (
-            <div style={{ marginTop: 8 }}>
-              {lines.map((line) => {
-                const { code, description, subCode } = lineLabel(line, library);
-                return (
-                  <div key={line.key} className="opc-line">
-                    <div className="grow">
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                        <span className="opc-code">{code}</span>
+            <div className="log-lines">
+              <div className="log-lines-head" aria-hidden="true">
+                <span>Code</span>
+                <span className="r">Flag</span>
+                <span className="r">Actual</span>
+                <span />
+              </div>
+              <ul>
+                {lines.map((line) => {
+                  const { code, description, subCode } = lineLabel(line, library);
+                  return (
+                    <li key={line.key} className="log-line">
+                      <div className="log-line-code">
+                        <b className="log-code">{code}</b>
                         {subCode && (
-                          <span style={{
-                            fontSize: 11,
-                            letterSpacing: "0.06em",
-                            textTransform: "uppercase",
-                            color: "var(--brand)",
-                            background: "color-mix(in oklab, var(--brand) 15%, transparent)",
-                            padding: "1px 5px",
-                            borderRadius: 4,
-                          }}>
+                          <Badge chip mono>
                             {subCode}
-                          </span>
+                          </Badge>
                         )}
-                        {line.custom && (
-                          <span style={{
-                            fontSize: 11,
-                            letterSpacing: "0.06em",
-                            textTransform: "uppercase",
-                            color: "var(--fg-3)",
-                            background: "var(--bg-3)",
-                            padding: "1px 5px",
-                            borderRadius: 4,
-                          }}>
-                            Other
-                          </span>
-                        )}
+                        {line.custom && <Badge chip>Other</Badge>}
                       </div>
-                      <div className="opc-desc" style={{ fontSize: 12, color: "var(--fg-2)" }}>
-                        {description}
-                      </div>
-                      {laborTypeEnabled && (
-                        <>
-                          <label htmlFor={`labor-type-${line.key}`} className="sr-only">
-                            Labor type for {code || "op code line"}
-                          </label>
-                          {/* Legacy null lines predate labor types and are priced
-                              as Customer Pay (earnings.ts), so they must DISPLAY as
-                              Customer Pay — otherwise a line reads "Untyped" while
-                              still earning money. Only an explicit "untyped"
-                              selection is deliberately unpriced. */}
-                          <select
-                            id={`labor-type-${line.key}`}
-                            value={line.laborType ?? "customer_pay"}
-                            onChange={(e) =>
-                              updateLine(line.key, {
-                                laborType: e.target.value as LaborType | "untyped",
-                              })
-                            }
-                            className="input"
-                            style={{
-                              marginTop: 4,
-                              fontSize: 11,
-                              padding: "2px 6px",
-                              height: "auto",
-                              width: "auto",
-                              maxWidth: 150,
-                            }}
-                          >
-                            <option value="untyped">Untyped</option>
-                            {LABOR_TYPES.map((t) => (
-                              <option key={t} value={t}>
-                                {LABOR_TYPE_LABELS[t]}
-                              </option>
-                            ))}
-                          </select>
-                        </>
-                      )}
-                      {/* Comeback toggle. Per-LINE because a comeback is often
-                          extra lines appended to the original ticket, not a
-                          whole new RO — marking the entry would overstate it. */}
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={
+                          line.isComeback
+                            ? 0
+                            : Number.isFinite(line.flagHours)
+                              ? line.flagHours
+                              : ""
+                        }
+                        onChange={(e) =>
+                          updateLine(line.key, {
+                            flagHours: e.target.value === "" ? 0 : Number(e.target.value),
+                          })
+                        }
+                        // Locked, not just zeroed. A comeback flags nothing by
+                        // definition; leaving the field editable invites someone
+                        // to "correct" it back to the book time, which is the
+                        // exact wrong number.
+                        disabled={line.isComeback}
+                        className="input mono log-hrs"
+                        title={
+                          line.isComeback
+                            ? "Comebacks flag zero hours"
+                            : "Flag hours"
+                        }
+                        aria-label={`Flag hours for ${code || "op code line"}`}
+                        placeholder="flag"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={line.actualHours ?? ""}
+                        onChange={(e) =>
+                          updateLine(line.key, {
+                            actualHours: e.target.value === "" ? null : Number(e.target.value),
+                          })
+                        }
+                        className="input mono log-hrs"
+                        title="Actual hours"
+                        aria-label={`Actual hours for ${code || "op code line"}`}
+                        placeholder="act"
+                      />
                       <button
                         type="button"
-                        onClick={() => toggleLineComeback(line.key, !line.isComeback)}
-                        aria-pressed={line.isComeback ?? false}
-                        className="opc-comeback-toggle"
-                        data-on={line.isComeback ? "true" : undefined}
+                        className="iconbtn"
+                        onClick={() => removeLine(line.key)}
+                        // Named like the two hours inputs beside it. This is the
+                        // only control in the row that used to announce the same
+                        // string on every line, so it was the only one a script
+                        // had to pick positionally — the 2026-08-19 failure mode.
+                        aria-label={code ? `Remove line ${code}` : "Remove line"}
                       >
-                        <RotateCcw size={11} aria-hidden="true" />
-                        {line.isComeback ? "Comeback — unpaid" : "Mark as comeback"}
+                        <LogIcon name="x" small />
                       </button>
-                    </div>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={
-                        line.isComeback
-                          ? 0
-                          : Number.isFinite(line.flagHours)
-                            ? line.flagHours
-                            : ""
-                      }
-                      onChange={(e) =>
-                        updateLine(line.key, {
-                          flagHours: e.target.value === "" ? 0 : Number(e.target.value),
-                        })
-                      }
-                      // Locked, not just zeroed. A comeback flags nothing by
-                      // definition; leaving the field editable invites someone
-                      // to "correct" it back to the book time, which is the
-                      // exact wrong number.
-                      disabled={line.isComeback}
-                      className="opc-hours-input"
-                      title={
-                        line.isComeback
-                          ? "Comebacks flag zero hours"
-                          : "Flag hours"
-                      }
-                      aria-label={`Flag hours for ${code || "op code line"}`}
-                      placeholder="flag"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={line.actualHours ?? ""}
-                      onChange={(e) =>
-                        updateLine(line.key, {
-                          actualHours: e.target.value === "" ? null : Number(e.target.value),
-                        })
-                      }
-                      className="opc-hours-input"
-                      title="Actual hours"
-                      aria-label={`Actual hours for ${code || "op code line"}`}
-                      placeholder="act"
-                    />
-                    <button
-                      type="button"
-                      className="remove"
-                      onClick={() => removeLine(line.key)}
-                      // Named like the two hours inputs beside it. This is the
-                      // only control in the row that used to announce the same
-                      // string on every line, so it was the only one a script
-                      // had to pick positionally — the 2026-08-19 failure mode.
-                      aria-label={code ? `Remove line ${code}` : "Remove line"}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Quick-add chips */}
-          {quickChips.length > 0 && (
-            <div className="opc-quick">
-              {quickChips.map((oc) => (
-                <button
-                  key={oc.id}
-                  type="button"
-                  className="opc-chip"
-                  onClick={() => addFromLibrary(oc)}
-                >
-                  <span className="c">{oc.code}</span>
-                  <span className="h">
-                    {oc.subOpCodes.length > 0 ? "→" : `${fmtHours(oc.flagHours)}h`}
-                  </span>
-                </button>
-              ))}
+                      {description && <div className="log-line-desc">{description}</div>}
+                      <div className="log-line-dur">
+                        <DurationBar hours={line.isComeback ? 0 : line.flagHours} />
+                      </div>
+                      <div className="log-line-opts">
+                        {laborTypeEnabled && (
+                          <>
+                            <label htmlFor={`labor-type-${line.key}`} className="sr-only">
+                              Labor type for {code || "op code line"}
+                            </label>
+                            {/* Legacy null lines predate labor types and are priced
+                                as Customer Pay (earnings.ts), so they must DISPLAY as
+                                Customer Pay — otherwise a line reads "Untyped" while
+                                still earning money. Only an explicit "untyped"
+                                selection is deliberately unpriced. */}
+                            <select
+                              id={`labor-type-${line.key}`}
+                              value={line.laborType ?? "customer_pay"}
+                              onChange={(e) =>
+                                updateLine(line.key, {
+                                  laborType: e.target.value as LaborType | "untyped",
+                                })
+                              }
+                              className="input log-labor"
+                            >
+                              <option value="untyped">Untyped</option>
+                              {LABOR_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                  {LABOR_TYPE_LABELS[t]}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+                        {/* Comeback toggle. Per-LINE because a comeback is often
+                            extra lines appended to the original ticket, not a
+                            whole new RO — marking the entry would overstate it. */}
+                        <Button
+                          variant="quiet"
+                          size="sm"
+                          onClick={() => toggleLineComeback(line.key, !line.isComeback)}
+                          aria-pressed={line.isComeback ?? false}
+                          className="log-toggle"
+                        >
+                          {line.isComeback ? "Comeback — unpaid" : "Mark as comeback"}
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 
           {/* Total */}
-          {lines.length > 0 && (
-            <div className="opc-total">
-              <span className="label">Total flag hours</span>
-              <span className="val">{fmtHours(totalFlag)}h</span>
-            </div>
-          )}
+          {/* Always drawn, "0.0h" included (mock lines-total): the headline row is
+              part of the list, not a reward for adding a line. */}
+          <FlaggedTotal hours={totalFlag} />
 
           {/* Unpaid rework sits BESIDE the flag total, never subtracted from it
               — the whole point is to make free work visible without quietly
               rewriting the efficiency number it sits next to. */}
           {comebackLineCount > 0 && (
-            <div className="opc-total opc-total-unpaid">
-              <span className="label">
+            <div className="log-foot-row">
+              <span className="log-foot-k">
                 Unpaid rework · {comebackLineCount} line
                 {comebackLineCount !== 1 ? "s" : ""}
               </span>
-              <span className="val">
+              <span className="num">
                 {comebackActualHours > 0
-                  ? `${fmtHours(comebackActualHours)}h`
+                  ? withPt(`${fmtHours(comebackActualHours)}h`)
                   : "— add actual hrs"}
               </span>
             </div>

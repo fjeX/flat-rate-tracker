@@ -26,6 +26,8 @@ import { fmtHours } from "@/lib/stats";
 import { StatCard } from "./StatCard";
 import { TodayCard } from "./TodayCard";
 import { RoList } from "@/components/ro/RoList";
+import { RecentRos } from "./RecentRos";
+import { FlaggedToDate } from "./FlaggedToDate";
 import { RollingNumber } from "@/components/ui/RollingNumber";
 import type { Entry } from "@/lib/types";
 
@@ -78,14 +80,24 @@ function entry(flagHours: number): Entry {
   } as unknown as Entry;
 }
 
-/** The tile's headline, digits + unit, as a reader sees it. */
-function headline(): string {
-  const el = document.querySelector(".stat-value");
-  if (!el) throw new Error("no .stat-value rendered");
+/**
+ * The headline of whichever readout `selector` names, digits + unit, as a
+ * reader sees it. Each surface has its own container: the guest page's
+ * StatCard is `.stat-value`, the Today zone's headline panel is
+ * `.today-flag .head-v`, a Flagged to date row is the flag cell of its row.
+ */
+// Where each dashboard surface prints its flag hours.
+const TODAY = ".today-flag .head-v";
+// Flagged to date: the flag cell of the Pay Period row (second row of the body).
+const PERIOD_ROW = "tbody tr:nth-child(2) td.num";
+
+function headline(selector = ".stat-value"): string {
+  const el = document.querySelector(selector);
+  if (!el) throw new Error(`no ${selector} rendered`);
   // The digit strips render every 0-9 cell, so textContent of the whole node is
   // noise. The plain-text equivalent RollingNumber exposes to AT is the value.
   const sr = el.querySelector(".sr-only");
-  if (!sr) throw new Error("no sr-only readout inside .stat-value");
+  if (!sr) throw new Error(`no sr-only readout inside ${selector}`);
   const unit = el.querySelector(".unit")?.textContent ?? "";
   return `${sr.textContent ?? ""}${unit}`;
 }
@@ -103,7 +115,7 @@ describe("dashboard flag hours agree with fmtHours", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         <TodayCard date="2026-08-20" stats={stats(v) as any} initialHours={8} library={[]} />,
       );
-      expect(headline()).toBe(`${fmtHours(v)}h`);
+      expect(headline(TODAY)).toBe(`${fmtHours(v)}h`);
     });
 
     it(`TodayCard prints ${fmtHours(v)}h for a stored ${v} (quick-add on)`, () => {
@@ -119,7 +131,24 @@ describe("dashboard flag hours agree with fmtHours", () => {
       );
       // Quick add is opt-out, so this branch is what most techs actually see.
       expect(document.querySelector(".today-card button")).toBeTruthy();
-      expect(headline()).toBe(`${fmtHours(v)}h`);
+      expect(headline(TODAY)).toBe(`${fmtHours(v)}h`);
+    });
+  }
+
+  for (const v of [...DIVERGENT, ...CONTROLS]) {
+    it(`Flagged to date prints ${fmtHours(v)}h for a stored ${v}`, () => {
+      render(
+        <FlaggedToDate
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          week={stats(0) as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          period={stats(v) as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          month={stats(0) as any}
+          earnings={null}
+        />,
+      );
+      expect(headline(PERIOD_ROW)).toBe(`${fmtHours(v)}h`);
     });
   }
 
@@ -136,7 +165,22 @@ describe("dashboard flag hours agree with fmtHours", () => {
     );
     const row = document.querySelector(".hours");
     expect(row).toBeTruthy();
-    expect(headline()).toBe(row!.textContent);
+    expect(headline(TODAY)).toBe(row!.textContent);
+  });
+
+  // The dashboard's own list is the tag list now (RoList still serves History,
+  // Pay Period and the guest page). Same contract, same screen.
+  it("the Today headline and the RO tag under it show the same figure", () => {
+    render(
+      <div>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <TodayCard date="2026-08-20" stats={stats(5.35) as any} initialHours={8} library={[]} />
+        <RecentRos entries={[entry(5.35)]} />
+      </div>,
+    );
+    const tag = document.querySelector(".tag-hrs");
+    expect(tag).toBeTruthy();
+    expect(headline(TODAY)).toBe(tag!.textContent);
   });
 
   // fmtHours never prints a flat "0.0" for a genuinely nonzero value — that is
@@ -146,6 +190,21 @@ describe("dashboard flag hours agree with fmtHours", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     render(<StatCard label="Pay Period" stats={stats(0.04) as any} />);
     expect(headline()).toBe("<0.1h");
+  });
+
+  it("a sub-resolution nonzero renders as <0.1 in the Flagged to date table too", () => {
+    render(
+      <FlaggedToDate
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        week={stats(0) as any}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        period={stats(0.04) as any}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        month={stats(0) as any}
+        earnings={null}
+      />,
+    );
+    expect(headline(PERIOD_ROW)).toBe("<0.1h");
   });
 });
 

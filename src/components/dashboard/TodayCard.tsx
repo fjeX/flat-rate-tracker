@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Plus } from "lucide-react";
 import { upsertDailyClockHoursAction } from "@/app/actions/daily-clock";
 import { minutesNowInTz, shiftPace } from "@/lib/pace";
 import { shiftPaidHours, type ShiftDef } from "@/lib/schedule";
@@ -11,9 +10,13 @@ import type { OpCode } from "@/lib/types";
 import { QuickAddModal } from "./QuickAddModal";
 import { useQuickAddEnabled } from "@/lib/quick-add-pref";
 import { RollingNumber } from "@/components/ui/RollingNumber";
+import { Button } from "@/components/ui/Button";
+import { Head, HeadCell, HeadCells } from "@/components/ui/Card";
+import { withPt } from "@/components/ui/Figure";
 import { actionErrorMessage } from "@/lib/action-error";
-
-
+import { DashIcon } from "./DashIcon";
+import { Zone } from "@/components/ui/Zone";
+import { StatusField } from "@/components/ui/StatusField";
 
 function toText(hours: number): string {
   return hours > 0 ? String(hours) : "";
@@ -25,6 +28,10 @@ function parseHoursText(text: string): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+/**
+ * The Today zone: the headline panel (flag hours, then efficiency or live
+ * pace), the Clocked field, and the Quick Add RO button.
+ */
 export function TodayCard({
   date,
   stats,
@@ -89,7 +96,7 @@ export function TodayCard({
             ? "shift over"
             : `${fmtHours(pace.elapsedPaidHours)}h in`;
   const effGood = shownPct !== null && shownPct >= 100;
-  const effBad  = shownPct !== null && shownPct < 85;
+  const effBad = shownPct !== null && shownPct < 85;
 
   function commit() {
     if (!dirty) return;
@@ -108,75 +115,50 @@ export function TodayCard({
 
   return (
     <>
-      <div className="stat featured today-card">
-        {/* Top section — tappable when quick add is on */}
-        {showTrigger ? (
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            style={{
-              display: "block",
-              width: "100%",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              textAlign: "left",
-              padding: 0,
-            }}
-            title="Quick add RO"
-          >
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
-              <div>
-                <div className="stat-label">Today · Flag</div>
-                <div className="stat-value tabular">
-                  <RollingNumber value={fmtHours(stats.flagHours)} /><span className="unit">h</span>
-                </div>
-              </div>
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                color: "var(--brand)",
-                fontSize: 16,
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-                flexShrink: 0,
-              }}>
-                <Plus size={18} />
-                <span>Quick Add RO</span>
-              </div>
-            </div>
-          </button>
-        ) : (
-          <>
-            <div className="stat-label">Today · Flag</div>
-            <div className="stat-value tabular">
-              <RollingNumber value={fmtHours(stats.flagHours)} /><span className="unit">h</span>
-            </div>
-          </>
-        )}
+      <Zone id="z-today" name="Today" className="today-card">
+        <Head>
+          <HeadCells>
+            <HeadCell
+              className="today-flag"
+              label="Today · Flag"
+              value={<RollingNumber value={fmtHours(stats.flagHours)} />}
+              unit="h"
+              // Hours on open tickets today — beside the flag, never in it
+              // (Open Tickets, decision 7). A 0.0h flag day with 8.0h here is a
+              // worked day whose pay is still coming.
+              sub={
+                stats.openTicketHours > 0 ? (
+                  <span data-testid="open-ticket-line">
+                    <span className="num">{withPt(fmtHours(stats.openTicketHours))}h</span> on{" "}
+                    <span className="num">{stats.openTicketCount}</span> open ticket
+                    {stats.openTicketCount === 1 ? "" : "s"}
+                  </span>
+                ) : undefined
+              }
+            />
+            <HeadCell
+              secondary
+              label={shownLabel}
+              value={
+                <span className={effGood ? "is-good" : effBad ? "is-bad" : undefined}>
+                  {shownPct !== null ? withPt(fmtPct(shownPct)) : "—"}
+                </span>
+              }
+              sub={efficiency === null && paceCaption ? paceCaption : undefined}
+            />
+          </HeadCells>
+        </Head>
 
-        {/* Hours on open tickets today — beside the flag, never in it (Open
-            Tickets, decision 7). A 0.0h flag day with 8.0h here is a worked
-            day whose pay is still coming. */}
-        {stats.openTicketHours > 0 && (
-          <div className="stat-delta neutral" style={{ marginTop: 4 }} data-testid="open-ticket-line">
-            {fmtHours(stats.openTicketHours)}h on {stats.openTicketCount} open ticket
-            {stats.openTicketCount === 1 ? "" : "s"}
-          </div>
-        )}
-
-        <div style={{ height: 1, background: "var(--line)", margin: "10px 0" }} />
-
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
-          <div>
-            <label style={{ display: "block" }}>
-              <span className="stat-label" style={{ display: "block", marginBottom: 4 }}>Clocked</span>
+        <div className={`today-tools${showTrigger ? "" : " is-solo"}`}>
+          <label className="field">
+            <span className="field-label">Clocked</span>
+            <span className="clock-field">
               <input
                 type="number"
                 min={0}
                 max={24}
                 step={0.1}
+                inputMode="decimal"
                 value={hoursText}
                 onChange={(e) => setHoursText(e.target.value)}
                 onBlur={commit}
@@ -189,35 +171,33 @@ export function TodayCard({
                 // Placeholder = today's scheduled paid hours: a hint at what
                 // the day is planned to be, never treated as entered data.
                 placeholder={todayShift ? fmtHours(shiftPaidHours(todayShift)) : "0"}
-                className="input mono tabular"
-                style={{ width: 72, fontSize: 13 }}
+                aria-label="Clocked hours today"
+                className="input num"
               />
-            </label>
-            {error && <p style={{ marginTop: 2, fontSize: 11, color: "var(--bad)", margin: 0 }}>{error}</p>}
-            {!error && isPending && <p style={{ marginTop: 2, fontSize: 11, color: "var(--fg-3)", margin: 0 }}>Saving…</p>}
-          </div>
-
-          <div style={{ textAlign: "right" }}>
-            <div className="stat-label" style={{ marginBottom: 4 }}>{shownLabel}</div>
-            <div
-              className="tabular"
-              style={{
-                fontSize: 20,
-                fontWeight: 650,
-                letterSpacing: "-0.02em",
-                color: effGood ? "var(--good)" : effBad ? "var(--bad)" : "var(--fg-1)",
-              }}
+              <span className="unit" aria-hidden="true">
+                h
+              </span>
+            </span>
+          </label>
+          {showTrigger && (
+            <Button
+              variant="go"
+              className="btn-field"
+              onClick={() => setModalOpen(true)}
+              title="Quick add RO"
             >
-              {shownPct !== null ? fmtPct(shownPct) : "—"}
-            </div>
-            {efficiency === null && paceCaption && (
-              <div style={{ marginTop: 2, fontSize: 11, color: "var(--fg-3)" }}>
-                {paceCaption}
-              </div>
-            )}
-          </div>
+              <DashIcon name="plus" />
+              Quick Add RO
+            </Button>
+          )}
         </div>
-      </div>
+        {error && (
+          <StatusField tag="Fix" inset role="alert">
+            <p>{error}</p>
+          </StatusField>
+        )}
+        {!error && isPending && <p className="fine today-saving">Saving…</p>}
+      </Zone>
 
       {/* The key changes on open, so React discards the previous instance and
           every useState initialiser runs fresh — replacing eleven by-hand

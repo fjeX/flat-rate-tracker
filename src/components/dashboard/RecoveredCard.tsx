@@ -8,6 +8,10 @@ import {
   type LifetimeRecovery,
 } from "@/lib/disputes";
 import type { Dispute } from "@/lib/types";
+import { withPt } from "@/components/ui/Figure";
+import { DashIcon } from "./DashIcon";
+import { StatusField } from "@/components/ui/StatusField";
+import { FiguresInText } from "./Figures";
 
 // Days a submitted claim can sit before the card nudges. A shop needs a payroll
 // cycle to react; nagging on day 2 would train the tech to ignore this.
@@ -22,7 +26,8 @@ function headline(l: LifetimeRecovery): string {
 }
 
 /**
- * Lifetime dispute recovery — the "this app paid for itself" line.
+ * Lifetime dispute recovery — the "this app paid for itself" line. It sits in
+ * the Flagged to date zone as a row of its own, under the period earnings.
  *
  * Deliberately a SEPARATE ledger from every other dashboard number: recovered
  * money is not added into flag pay or period earnings (when a short gets paid,
@@ -37,10 +42,11 @@ function headline(l: LifetimeRecovery): string {
  *
  * The nudges stay. They are not lifetime figures, they are a to-do — "you have
  * a response waiting to be recorded" is time-sensitive and belongs where the
- * tech looks daily, not on a page they visit when curious.
+ * tech looks daily, not on a page they visit when curious. They are Note
+ * fields: something to know and act on, not something broken.
  *
  * Renders nothing when there is neither a figure nor a nudge, so a new user
- * never sees an empty "recovered $0" tile.
+ * never sees an empty "recovered $0" row.
  */
 export function RecoveredCard({
   disputes,
@@ -70,37 +76,43 @@ export function RecoveredCard({
   }
 
   return (
-    // Own top margin rather than a wrapper div in the page: the card decides
-    // whether it renders at all, and an empty wrapper would leave a stray gap.
-    <section className="card padded-lg mt-4 space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium">Recovered with FRT</h2>
-        <Link href="/insights" className="link text-xs">
-          Insights →
+    <div data-testid="recovered-card">
+      <div className="rows after-head">
+        <div>
+          <span className="k">Recovered with FRT</span>
+          {!nothingRecovered && <span className="v num is-good">{withPt(headline(lifetime))}</span>}
+        </div>
+      </div>
+      <div className="rows-link">
+        <Link href="/insights" className="zone-link">
+          Insights
+          <DashIcon name="chev" />
         </Link>
       </div>
 
-      {!nothingRecovered && (
-        <div className="mono text-2xl font-semibold tabular-nums text-[var(--good)]">
-          {headline(lifetime)}
-        </div>
-      )}
-
       {needsOutcome.length > 0 && (
-        <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-xs text-[var(--warn)]">
-          {needsOutcome.length} claim
-          {needsOutcome.length === 1 ? " has" : "s have"} a response waiting to
-          be recorded.
-        </p>
+        <StatusField tag="Note" inset>
+          <p>
+            <FiguresInText
+              text={`${needsOutcome.length} claim${needsOutcome.length === 1 ? " has" : "s have"} a response waiting to be recorded.`}
+            />
+          </p>
+        </StatusField>
       )}
 
       {stale.length > 0 && (
-        <p className="rounded-[var(--radius-sm)] bg-[var(--bg-1)] px-3 py-2 text-xs text-[var(--fg-2)]">
-          {stale.length === 1
-            ? `1 claim has been out for ${daysWaiting(stale[0])} days with no answer.`
-            : `${stale.length} claims have been out over a week with no answer.`}
-        </p>
+        <StatusField tag="Note" inset>
+          <p>
+            <FiguresInText
+              text={
+                stale.length === 1
+                  ? `1 claim has been out for ${daysWaiting(stale[0])} days with no answer.`
+                  : `${stale.length} claims have been out over a week with no answer.`
+              }
+            />
+          </p>
+        </StatusField>
       )}
-    </section>
+    </div>
   );
 }

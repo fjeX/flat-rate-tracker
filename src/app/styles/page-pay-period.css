@@ -1,0 +1,376 @@
+/* Phase 4: pay-period page, built from final.html screen-pay-period
+   (plans/frt-visual-overhaul-rollout.md). Tokens only.
+
+   Every class here is prefixed `pp-` on purpose. The mock's own names (.rows, .spec, .fold, .tag, .cmp, .picker) collide with old rules in
+   globals.css that other pages still use, and this partial loads BEFORE
+   globals.css, so a same-specificity old rule would win. A private prefix
+   means nothing here can be overridden by, or override, another page.
+
+   Shared parts come from the ui partials and are not restated here: .head*,
+   .zone, .zone-name, .sfield, .badge, .btn*, .input/.field, .dur/.scale-note, .num, .iconbtn,
+   the modal and dlg classes, .card-inset, .switch, .select. */
+
+/* ===========================================================================
+   PAGE
+   =========================================================================== */
+.pp-page {
+  max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s4) var(--gutter) var(--s6);
+}
+@media (min-width: 1024px) { .pp-page { padding-top: var(--s5); } }
+
+/* A visible focus ring for anything below that does not declare its own.
+   :where() keeps this at zero specificity, so every component rule wins. */
+:where(.pp-page) :focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+
+.pp-grow { flex: 1 1 auto; min-width: 0; }
+
+/* two columns from the desktop rail up (mock: 1024) */
+.pp-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--s6); }
+.pp-grid > div { min-width: 0; }
+@media (min-width: 1024px) {
+  .pp-grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: start; }
+}
+
+/* ---------- page title and status marker ---------- */
+.pp-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); min-height: 48px; }
+.pp-head h1 { font-size: var(--fs-head); font-weight: 700; line-height: 1.1; text-wrap: balance; margin: 0; }
+@media (min-width: 700px) { .pp-head h1 { font-size: var(--fs-head-wide); } }
+
+/* status marker: green with a drawn check for a live or paid period, a plain
+   outline while a closed period waits on its stub */
+.pp-marker {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: var(--w-tag) solid var(--good); border-radius: var(--r-tag);
+  padding: 1px 8px 2px;
+  font-size: var(--fs-label); font-weight: 700; color: var(--good); white-space: nowrap;
+}
+.pp-marker.is-note { border-color: currentColor; color: var(--ink-2); }
+
+/* ---------- picker row ---------- */
+.pp-picker-wrap { position: relative; }
+.pp-picker { display: grid; grid-template-columns: var(--field-h) minmax(0, 1fr) var(--field-h); gap: var(--s2); margin-top: var(--s3); }
+.pp-picker .btn { padding: 0; }
+.pp-picker .btn .lbl { display: none; }
+.pp-pick {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  min-height: var(--field-h); min-width: 0; padding: 0 var(--s3);
+  background: var(--field); border: var(--w-hair) solid var(--field-line); border-radius: var(--r-sign);
+  box-shadow: var(--field-cut); color: var(--ink); text-align: left; cursor: pointer;
+  font-family: var(--font-ui); font-size: var(--fs-title); font-weight: 700; white-space: nowrap;
+  transition: border-color var(--fast) var(--ease);
+}
+.pp-pick > span { overflow: hidden; text-overflow: ellipsis; }
+.pp-pick:hover { border-color: var(--ink); }
+.pp-pick:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 1px; border-color: var(--ink); }
+.pp-picker-more { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s2); }
+@media (min-width: 520px) {
+  .pp-picker { grid-template-columns: auto minmax(0, 360px) auto; justify-content: start; }
+  .pp-picker .btn { padding: 0 var(--s3); }
+  .pp-picker .btn .lbl { display: inline; }
+}
+
+/* the jump list behind the period button */
+.pp-menu-scrim { position: fixed; inset: 0; z-index: 40; background: transparent; border: 0; cursor: default; }
+.pp-menu {
+  position: absolute; z-index: 41; left: 0; top: calc(100% + var(--s1));
+  width: min(24rem, 100%);
+  background: var(--panel); color: var(--ink);
+  border: var(--w-edge) solid var(--edge); border-radius: var(--r-panel);
+  box-shadow: var(--lift); overflow: hidden;
+}
+.pp-menu-list { max-height: 15rem; overflow-y: auto; }
+.pp-menu-actions { border-top: var(--w-hair) solid var(--line); }
+.pp-menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  width: 100%; min-height: var(--tap); padding: 0 var(--s3);
+  background: transparent; border: 0; border-bottom: var(--w-hair) solid var(--line-soft);
+  color: var(--ink); text-align: left; cursor: pointer;
+  font-family: var(--font-ui); font-size: var(--fs-control); font-weight: 600;
+  transition: background-color var(--fast) var(--ease);
+}
+.pp-menu-item:last-child { border-bottom: 0; }
+.pp-menu-item:hover:not(:disabled) { background: var(--quiet-hover); }
+.pp-menu-item:active:not(:disabled) { background: var(--quiet-active); }
+.pp-menu-item:disabled { color: var(--disabled-ink); cursor: not-allowed; }
+.pp-menu-item[data-active="true"] { background: var(--plate); font-weight: 700; box-shadow: inset 0 calc(-1 * var(--w-heavy)) 0 var(--ink); }
+.pp-menu-item:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+.pp-menu-tag { flex: none; font-size: var(--fs-label); font-weight: 600; color: var(--ink-2); }
+
+/* the same chevron turns over on anything that opens */
+.pp-page svg.chev { transition: transform 180ms var(--ease); }
+.pp-page [aria-expanded="true"] > svg.chev, .pp-page [aria-expanded="true"] > span > svg.chev { transform: rotate(180deg); }
+
+/* ---------- headline panel: page-side pieces (the panel itself is .head) ---------- */
+.pp-head-main { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--s4); }
+.pp-head-main .head-k { align-self: flex-start; }
+.pp-head-main .head-v { margin-top: 0; margin-left: auto; }
+.head-note.pp-hero-support b { color: var(--head-ink); }
+.pp-hero-action {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3);
+  padding: var(--s3) var(--s4) var(--s4); border-top: var(--w-hair) solid var(--head-rule);
+}
+.pp-hero-action .field { flex: 1 1 12rem; max-width: 20rem; }
+.pp-hero-action .field-label { color: var(--head-ink-2); }
+@media (min-width: 700px) {
+  .pp-head-main { padding: var(--s4) var(--s5); }
+  .pp-hero-action { padding-left: var(--s5); padding-right: var(--s5); }
+}
+
+/* a note that sits straight under a headline panel */
+.pp-after-head { margin-top: var(--s3); }
+.pp-error-note { margin-top: var(--s3); }
+
+/* the status field itself is the shared ui/StatusField (ui-surfaces.css) */
+
+/* ---------- headline rows, the spec row, remarks ---------- */
+.pp-rows { margin: 0; }
+.pp-rows > div {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: var(--s2) 0; min-height: 48px; border-bottom: var(--w-hair) solid var(--line);
+}
+.pp-rows > div:last-child { border-bottom: 0; }
+.pp-rows .k { font-weight: 600; color: var(--ink-2); }
+.pp-rows .v { margin: 0; text-align: right; font-size: var(--fs-num); }
+.pp-rows .v.is-fig { font-size: var(--fs-fig); letter-spacing: var(--track-fig); line-height: 1.1; }
+.pp-rows .v.is-bad { color: var(--bad); }
+.pp-rows .v.is-good { color: var(--good); }
+.pp-rows .v.is-dim { color: var(--ink-3); }
+.pp-rows .v small { display: block; font-family: var(--font-ui); font-weight: 400; font-size: var(--fs-min); letter-spacing: 0; color: var(--ink-2); }
+.pp-rows.pp-after-head { margin-top: var(--s1); }
+.pp-unit { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0; margin-left: 2px; }
+
+.pp-spec {
+  display: grid; grid-template-columns: repeat(var(--pp-cols, 4), minmax(0, 1fr)); margin: 0;
+  border-top: var(--w-hair) solid var(--line); border-bottom: var(--w-hair) solid var(--line);
+}
+.pp-spec > div { padding: var(--s2) var(--s2) var(--s3) var(--s3); border-left: var(--w-hair) solid var(--line); min-width: 0; }
+.pp-spec > div:first-child { border-left: 0; padding-left: 0; }
+.pp-spec dt { color: var(--ink-2); min-height: 2.6em; }
+.pp-spec dd { margin: 0; font-size: var(--fs-num); line-height: 1.2; white-space: nowrap; }
+.pp-spec dd small { display: block; font-family: var(--font-ui); font-weight: 400; font-size: var(--fs-min); color: var(--ink-2); letter-spacing: 0; line-height: 1.3; margin-top: 2px; white-space: normal; }
+@media (min-width: 700px) { .pp-spec dt { min-height: 0; } }
+.pp-remarks { margin-top: var(--s4); }
+
+/* the one label style, for the labels this page owns */
+.pp-spec dt, .pp-foot-k {
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label);
+  text-transform: uppercase; line-height: 1.3;
+}
+
+/* ===========================================================================
+   FOLDS (Check the pay, Reference)
+   =========================================================================== */
+.pp-fold { border-bottom: var(--w-hair) solid var(--line); }
+.zone > .pp-fold:last-child { border-bottom: 0; }
+.pp-fold-head { display: flex; align-items: center; gap: var(--s1); }
+.pp-fold-h { flex: 1 1 auto; min-width: 0; margin: 0; font: inherit; }
+.pp-fold-btn {
+  display: flex; align-items: center; gap: var(--s3); width: 100%; min-height: 56px; padding: var(--s2) 0;
+  background: transparent; border: 0; border-radius: var(--r-sign); text-align: left; color: var(--ink); cursor: pointer;
+  font-family: var(--font-ui);
+}
+.pp-fold-btn:hover .pp-fold-title { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: var(--w-tag); }
+.pp-fold-btn:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.pp-fold-txt { display: block; flex: 1 1 auto; min-width: 0; }
+.pp-fold-title { display: block; font-size: var(--fs-title); font-weight: 700; line-height: 1.2; }
+.pp-fold-sub { display: block; font-size: var(--fs-label); font-weight: 400; color: var(--ink-2); }
+.pp-fold-state { margin-left: auto; flex: none; text-align: right; font-size: var(--fs-label); font-weight: 700; color: var(--ink-2); }
+.pp-fold-state.is-bad { color: var(--bad); }
+.pp-fold-state.is-good { color: var(--good); }
+.pp-fold-btn > svg.chev { flex: none; }
+.pp-fold-body { padding: 0 0 var(--s4); }
+.pp-fold-body > * + * { margin-top: var(--s3); }
+
+/* the (i) beside a fold title: the shared InfoBubble, kept at the tap floor */
+/* the info button keeps the shared look (ink disc, wall-colour "i"); only its hover is here */
+.pp-fold-head .info-bubble:hover { background: var(--quiet-hover); }
+
+/* ---------- small building blocks inside a fold ---------- */
+.pp-stack { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.pp-stack > * { min-width: 0; }
+.pp-btnrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.pp-btnrow.is-end { justify-content: flex-end; }
+.pp-btnrow.is-tags { gap: var(--s2) var(--s3); }
+.pp-well { background: var(--plate); border: var(--w-hair) solid var(--line); border-radius: var(--r-sign); padding: var(--s3); }
+.pp-lead { margin: 0; font-weight: 700; font-size: var(--fs-control); }
+.pp-sub { margin: 0; color: var(--ink-2); font-size: var(--fs-body); max-width: 68ch; }
+.pp-empty { padding: var(--s3) 0; }
+.pp-fine { margin: 0; color: var(--ink-3); font-size: var(--fs-label); }
+.pp-fine-top { margin-top: var(--s2); }
+.pp-fine-end { text-align: right; }
+.pp-block { display: block; }
+.pp-strong { color: var(--ink); font-weight: 700; }
+.pp-dim { color: var(--ink-2); font-weight: 400; }
+.pp-link {
+  display: inline-flex; align-items: center; min-height: var(--tap); font-weight: 700; color: var(--accent-text);
+  text-underline-offset: 3px; text-decoration-thickness: var(--w-tag); border-radius: var(--r-sign);
+}
+.pp-link:hover { background: var(--quiet-hover); text-decoration-thickness: 2.5px; }
+.pp-del:hover { color: var(--bad); }
+.pp-linked { display: inline-flex; vertical-align: middle; margin-left: var(--s1); color: var(--ink-2); }
+
+.pp-kv { list-style: none; margin: var(--s2) 0 0; padding: 0; }
+.pp-kv li { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding: 6px 0; border-bottom: var(--w-hair) solid var(--line-soft); color: var(--ink-2); }
+.pp-kv li:last-child { border-bottom: 0; }
+.pp-kv li.is-dim { color: var(--ink-3); }
+.pp-kv .num { color: var(--ink); font-size: var(--fs-num); }
+.pp-kv li.is-dim .num { color: var(--ink-3); }
+
+/* a row that opens something */
+.pp-sub-h { margin: 0; font: inherit; }
+.pp-rowbtn {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  width: 100%; min-height: 48px; padding: 0 var(--s3);
+  background: var(--wall-2); border: 0; border-radius: var(--r-sign);
+  font-family: var(--font-ui); font-size: var(--fs-body); font-weight: 600; text-align: left; color: var(--ink); cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.pp-rowbtn:hover { background: var(--quiet-hover); }
+.pp-rowbtn:active { background: var(--quiet-active); }
+.pp-rowbtn:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.pp-rowbtn-title { flex: 1 1 auto; min-width: 0; }
+.pp-rowbtn > span:last-child { display: inline-flex; align-items: center; gap: var(--s2); color: var(--ink-2); font-weight: 400; font-size: var(--fs-label); }
+.pp-rowbtn > span:last-child b { color: var(--ink); font-size: var(--fs-num); }
+.pp-rowbtn > span:last-child b.is-bad { color: var(--bad); }
+.pp-sub-body.is-ruled { border-top: var(--w-hair) solid var(--line); padding-top: var(--s3); }
+.pp-sub-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2); }
+.pp-sub-title { margin: 0; font-size: var(--fs-control); font-weight: 700; }
+
+.pp-tool { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-top: var(--w-hair) solid var(--line); }
+.pp-tool-txt { flex: 1 1 auto; min-width: 0; }
+.pp-tool-txt .pp-sub { font-size: var(--fs-label); }
+.pp-tool-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s3); }
+.pp-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+.pp-plain { list-style: none; margin: 0; padding: 0; font-size: var(--fs-label); color: var(--ink-2); display: grid; gap: var(--s1); }
+.pp-plain li { display: flex; flex-wrap: wrap; gap: 0 var(--s1); }
+.pp-check {
+  display: flex; align-items: flex-start; gap: var(--s3); min-height: var(--tap); padding: var(--s2) var(--s3);
+  background: var(--plate); border: var(--w-hair) solid var(--line); border-radius: var(--r-sign); cursor: pointer;
+  font-size: var(--fs-label); color: var(--ink-2);
+}
+.pp-check-box { flex: none; width: 24px; height: 24px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+
+/* ---------- pay stub check ---------- */
+.pp-stub-field { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); }
+.pp-stub-field .field { flex: 0 1 180px; }
+
+/* ---------- effective hourly: at the shop, flagged, gap ---------- */
+.pp-cmp { border-top: var(--w-hair) solid var(--line); }
+.pp-cmp-r {
+  display: grid; grid-template-columns: 88px minmax(0, 1fr) minmax(70px, auto); align-items: center; gap: var(--s2);
+  min-height: 44px; border-bottom: var(--w-hair) solid var(--line);
+}
+.pp-cmp-r .k { font-weight: 600; color: var(--ink-2); font-size: var(--fs-label); }
+.pp-cmp-r .v { text-align: right; font-size: var(--fs-num); }
+.pp-cmp-r .trk {
+  position: relative; padding-bottom: 6px;
+  background: repeating-linear-gradient(to right, transparent 0, transparent calc(var(--tick) - 1.5px), var(--ink-3) calc(var(--tick) - 1.5px), var(--ink-3) var(--tick)) 0 100% / 100% 4px no-repeat;
+}
+.pp-cmp-r i { display: block; height: 14px; width: calc(var(--p) * 1%); background: var(--bar); }
+.pp-cmp-r.gap i { background: transparent; border: var(--w-edge) solid var(--bad); margin-left: calc((100 - var(--p)) * 1%); }
+.pp-cmp-r.gap .k { color: var(--bad); font-weight: 700; }
+
+/* ---------- ledger rows: unpaid records, spiffs ---------- */
+.pp-records { display: flex; flex-direction: column; gap: var(--s3); padding-top: var(--s3); }
+.pp-lines { list-style: none; margin: 0; padding: 0; }
+.pp-lines > li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s1) var(--s3);
+  padding: var(--s2) 0; min-height: 48px; border-bottom: var(--w-hair) solid var(--line);
+}
+.pp-lines > li:last-child { border-bottom: 0; }
+.pp-line-main { flex: 1 1 12rem; min-width: 0; }
+.pp-line-title { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.pp-line-sub { display: block; font-size: var(--fs-label); color: var(--ink-2); overflow-wrap: anywhere; }
+.pp-line-end { display: inline-flex; align-items: center; gap: var(--s1); flex: none; }
+.pp-line-end > .num { font-size: var(--fs-num); }
+.pp-total { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding-top: var(--s2); border-top: var(--w-edge) solid var(--edge); }
+.pp-total > .num { font-size: var(--fs-num); }
+
+/* ---------- reconciliation rows and the export line ---------- */
+.pp-recon-row {
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s2) var(--s3); padding: var(--s3);
+  background: var(--panel); border: var(--w-hair) solid var(--line); border-radius: var(--r-sign);
+}
+.pp-recon-row.is-done { background: var(--wall-2); }
+.pp-recon-main { flex: 1 1 10rem; min-width: 0; }
+.pp-recon-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.pp-recon-top > .num { font-size: var(--fs-num); }
+.pp-recon-label { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.pp-recon-paid { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: var(--s1); }
+.pp-recon-paid .field-label { margin: 0; }
+.pp-recon-paid .input { width: 104px; text-align: right; }
+.pp-sort { display: flex; align-items: center; gap: var(--s2); }
+.pp-sort .field-label { margin: 0; flex: none; }
+.pp-sort .select-wrap { flex: 1 1 auto; max-width: 24rem; }
+.pp-export { border-top: var(--w-hair) solid var(--line); padding-top: var(--s3); }
+.pp-export-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3); }
+.pp-export-txt { flex: 1 1 14rem; min-width: 0; }
+.pp-export-txt .pp-sub { font-size: var(--fs-label); }
+
+/* ===========================================================================
+   RO TAGS (mock variant 1 rows): one repair order each
+   =========================================================================== */
+.pp-tags { list-style: none; display: grid; gap: var(--s2); margin: var(--s2) 0 0; padding: 0; }
+.pp-tag {
+  position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0 var(--s2); align-items: start;
+  background: var(--panel); padding: 0 var(--s3) var(--s3) 0;
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+  border-radius: 0 var(--r-sign) var(--r-sign) 0;
+  transition: background-color var(--fast) var(--ease);
+}
+.pp-tag:hover { background: var(--quiet-hover); }
+.pp-tag:has(.pp-ro-link:focus-visible) { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.pp-tag-hole { grid-column: 1; grid-row: 1 / span 2; align-self: center; justify-self: end; width: 14px; height: 14px; border-radius: 50%; background: var(--wall); border: var(--w-edge) solid var(--ink-3); }
+.pp-tag-head { grid-column: 2 / 4; grid-row: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); padding-right: 76px; }
+/* the RO number is the control; its hit area stretches over the whole tag */
+.pp-ro-link {
+  display: inline-flex; align-items: center; min-height: var(--tap); min-width: var(--tap); padding: 0; background: transparent; border: 0; border-radius: var(--r-sign);
+  font-family: var(--font-num); font-weight: 600; font-size: var(--fs-body); letter-spacing: var(--track-num); font-variant-numeric: tabular-nums;
+  color: var(--accent-text); text-underline-offset: 3px; text-decoration: underline; text-decoration-thickness: var(--w-tag); cursor: pointer;
+}
+.pp-ro-link::after { content: ""; position: absolute; inset: 0; }
+.pp-ro-link:hover { text-decoration-thickness: 2.5px; }
+.pp-ro-link:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.pp-tag-when { font-size: var(--fs-label); color: var(--ink-3); }
+.pp-tag-hrs-cell { grid-column: 2 / 4; grid-row: 1; justify-self: end; padding-top: 10px; pointer-events: none; }
+.pp-tag-hrs { font-family: var(--font-num); font-weight: 600; font-size: var(--fs-fig-row); letter-spacing: var(--track-fig); line-height: 1; font-variant-numeric: tabular-nums; }
+.pp-tag-body { grid-column: 2 / 4; grid-row: 2; min-width: 0; }
+.pp-tag-veh { font-weight: 700; font-size: var(--fs-control); margin-top: -6px; line-height: 1.25; }
+/* op-code chips use the shared `.ops li` look; this is only their layout */
+.pp-ops { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 var(--s2); padding: 0; list-style: none; }
+.pp-ops li .num { font-weight: 500; }
+.pp-tags-foot { margin-top: var(--s2); }
+.pp-foot-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding: var(--s2) var(--s3); }
+.pp-foot-row > .num { font-size: var(--fs-num); }
+.pp-foot-k { color: var(--ink-2); }
+.head .pp-foot-k { color: var(--head-ink-2); }
+.pp-tags-foot .head-row .unit { font-family: var(--font-ui); font-weight: 600; letter-spacing: 0; margin-left: 2px; }
+.pp-more { display: flex; justify-content: center; margin-top: var(--s1); }
+.pp-more-btn {
+  display: inline-flex; align-items: center; gap: 4px; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s2);
+  background: transparent; border: 0; border-radius: var(--r-sign); cursor: pointer;
+  font-family: var(--font-ui); font-weight: 700; font-size: var(--fs-body); color: var(--accent-text);
+  text-underline-offset: 3px; text-decoration: underline; text-decoration-thickness: var(--w-tag);
+}
+.pp-more-btn:hover { background: var(--quiet-hover); text-decoration-thickness: 2.5px; }
+
+/* ===========================================================================
+   CUSTOM DATES DIALOG (PeriodOverrideModal)
+   =========================================================================== */
+.pp-dlg-actions { margin: var(--s4) calc(-1 * var(--s4)) calc(-1 * var(--s4)); justify-content: flex-end; }
+.pp-delta { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line-soft); }
+.pp-delta:last-child { border-bottom: 0; }
+.pp-delta .k { color: var(--ink-2); font-weight: 600; }
+.pp-delta .v { display: inline-flex; align-items: baseline; gap: var(--s2); font-size: var(--fs-num); }
+.pp-delta .v s { color: var(--ink-3); text-decoration-thickness: var(--w-tag); }
+.pp-delta .v .to { color: var(--ink); }
+.pp-delta .v .arrow { color: var(--ink-3); font-family: var(--font-ui); }
+
+/* ===========================================================================
+   LOADING (shape of the layout above)
+   =========================================================================== */
+.pp-skel-picker { display: grid; grid-template-columns: var(--field-h) minmax(0, 1fr) var(--field-h); gap: var(--s2); margin-top: var(--s3); }
+@media (min-width: 520px) { .pp-skel-picker { grid-template-columns: var(--field-h) minmax(0, 360px) var(--field-h); justify-content: start; } }
+.pp-skel-stack { display: grid; gap: var(--s3); }
+.pp-skel-tags { list-style: none; display: grid; gap: var(--s2); margin: var(--s2) 0 0; padding: 0; }

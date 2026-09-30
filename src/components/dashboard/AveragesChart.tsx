@@ -6,6 +6,10 @@ import { fmtHours, type DayDenom } from "@/lib/stats";
 import { getPeriodForDate, addDays } from "@/lib/periods";
 import { flagHoursByDate } from "@/lib/forecast";
 import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
+import { Icon } from "@/components/layout/icons";
+import { withPt } from "@/components/ui/Figure";
+import { Zone } from "@/components/ui/Zone";
+import { FiguresInText } from "./Figures";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -336,145 +340,108 @@ function computeInsight(
   return "Log more ROs to see insights here.";
 }
 
+
 // ---------------------------------------------------------------------------
-// SVG Bar Chart — Roomier Classic
+// The chart (mock `.chart`): plain bars on a ruled plot, the current bar in the
+// accent, gridlines labelled on the left. Bars are the data; the hit layer over
+// them only moves the readout, so a tech can run a finger along the week.
 // ---------------------------------------------------------------------------
 
-const CHART_W = 358;
-const CHART_H = 130;
-const PAD_L = 4, PAD_R = 4, PAD_T = 6;
-const INNER_W = CHART_W - PAD_L - PAD_R;
+/** Gridline spacing: the smallest round step that keeps the plot to ~5 lines. */
+function niceStep(max: number): number {
+  for (const step of [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]) {
+    if (max / step <= 5) return step;
+  }
+  return 1000;
+}
 
-// Period needs extra bottom padding for its two label rows (date + Wk 1/2)
-function getPadB(tab: TabId) { return tab === "period" ? 42 : 26; }
-
-function RoomierBarChart({
+function HoursChart({
   bars,
   hover,
   setHover,
   tab,
+  mode,
+  ariaLabel,
 }: {
   bars: BarData[];
   hover: number | null;
   setHover: (i: number | null) => void;
   tab: TabId;
+  mode: Mode;
+  ariaLabel: string;
 }) {
   const n = bars.length;
   if (n === 0) return null;
 
-  const PAD_B = getPadB(tab);
-  const INNER_H = CHART_H - PAD_T - PAD_B;
-  const baseline = CHART_H - PAD_B;
+  const max = Math.max(...bars.map((b) => b.value), 0);
+  const step = niceStep(max);
+  const top = Math.max(Math.ceil((max + 0.01) / step) * step, step);
+  const grid: number[] = [];
+  for (let g = step; g <= top; g += step) grid.push(g);
 
-  const maxVal = Math.max(...bars.map((b) => b.value), 0.01);
-  const slot = INNER_W / n;
-  const barW = Math.max(8, Math.min(slot * 0.70, 42));
-
-  // Month tab still uses sparse labels; others have custom logic per-bar
+  // A value on every bar while there are few of them; otherwise only the best.
+  const few = n <= 7;
+  // Month tab still uses sparse x labels; the other tabs label every bar.
   const labelEvery = Math.max(1, Math.ceil(n / 5));
+  const lastRegularIdx = Math.floor((n - 1) / labelEvery) * labelEvery;
 
   return (
-    <div className="r-chart-wrap">
-      <svg
-        className="r-chart"
-        viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-        overflow="visible"
-        aria-hidden="true"
+    <div className="chart" role="img" aria-label={ariaLabel}>
+      <div
+        className="chart-plot"
         onMouseLeave={() => setHover(null)}
         onTouchEnd={() => setHover(null)}
       >
-        {/* Baseline */}
-        <line
-          x1={PAD_L} x2={CHART_W - PAD_R}
-          y1={baseline + 0.5} y2={baseline + 0.5}
-          stroke="var(--line)" strokeWidth="1"
-        />
-
+        {grid.map((g) => (
+          <div key={g} className="chart-grid" style={{ bottom: `${(g / top) * 100}%` }}>
+            <span>{g}</span>
+          </div>
+        ))}
+        <div className={`chart-bars${mode === "avg" ? " dim" : ""}`}>
+          {bars.map((bar, i) => {
+            const showValue = (few || bar.isBest) && bar.value > 0;
+            const cls = [
+              bar.value === 0 ? "zero" : "",
+              bar.isCurrent ? "now" : "",
+              hover === i && !bar.isCurrent && bar.value > 0 ? "hot" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <div key={i} className={cls || undefined} style={{ height: `${(bar.value / top) * 100}%` }}>
+                {showValue && <span>{withPt(fmtHours(bar.value))}</span>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="chart-hit" aria-hidden="true">
+          {bars.map((_, i) => (
+            <span key={i} onMouseEnter={() => setHover(i)} onTouchStart={() => setHover(i)} />
+          ))}
+        </div>
+      </div>
+      <div className="chart-x" aria-hidden="true">
         {bars.map((bar, i) => {
-          const cx = PAD_L + slot * (i + 0.5);
-          const h = Math.max(3, (bar.value / maxVal) * INNER_H);
-          const x = cx - barW / 2;
-          const y = baseline - h;
-          const isHover = hover === i;
-          const highlight = isHover || bar.isCurrent;
-
-          // ── Per-tab label logic ──────────────────────────────────
-          let primaryLabel: string | null = null;
-          let secondaryLabel: string | null = null;
-
+          let primary: string | null = null;
+          let secondary: string | null = null;
           if (tab === "week") {
-            // One bar per weekday of the current week — short weekday label
-            primaryLabel = bar.label;
-
+            primary = bar.label;
           } else if (tab === "period") {
-            // Always show period date; always show Wk 1 / Wk 2
-            primaryLabel = bar.label;
-            secondaryLabel = bar.subLabel ?? null;
-
+            // Always show the period date and Wk 1 / Wk 2.
+            primary = bar.label;
+            secondary = bar.subLabel ?? null;
           } else {
-            // Month tab: sparse labels
-            const lastRegularIdx = Math.floor((n - 1) / labelEvery) * labelEvery;
             const show = i % labelEvery === 0 || (i === n - 1 && n - 1 - lastRegularIdx >= 2);
-            if (show) primaryLabel = bar.label;
+            if (show) primary = bar.label;
           }
-
-          const labelFontSize = 11;
-
           return (
-            <g key={i}>
-              {/* Touch / hover hit zone */}
-              <rect
-                x={PAD_L + slot * i} y={0} width={slot} height={baseline}
-                fill="transparent"
-                onMouseEnter={() => setHover(i)}
-                onTouchStart={() => setHover(i)}
-              />
-              {/* Bar — no glow, just color change on highlight. pointer-events
-                  off so it never occludes the full-height hit zone behind it
-                  (hovering a bar must still register on the hit rect). */}
-              <rect
-                x={x} y={y} width={barW} height={h}
-                rx={bar.value > 0 ? Math.min(barW / 2, 6) : 0}
-                // Empty bars (future/zero days) never take the brand highlight —
-                // otherwise hovering an empty day paints its stub orange while
-                // the label stays un-bolded, which reads as a phantom data bar.
-                fill={highlight && bar.value > 0 ? "var(--brand)" : "var(--bg-4)"}
-                pointerEvents="none"
-              />
-              {/* Primary axis label */}
-              {primaryLabel && (
-                <text
-                  x={cx} y={baseline + 14}
-                  textAnchor="middle"
-                  fontSize={labelFontSize}
-                  fontFamily="ui-monospace, Menlo, monospace"
-                  fill={bar.isCurrent ? "var(--brand)" : "var(--fg-3)"}
-                  fontWeight={bar.isCurrent ? 600 : 400}
-                >
-                  {primaryLabel}
-                </text>
-              )}
-              {/* Secondary axis label (month transitions for week; Wk 1/2 for period) */}
-              {secondaryLabel && (
-                <text
-                  x={cx} y={baseline + 28}
-                  textAnchor="middle"
-                  fontSize={11}
-                  fontFamily="ui-monospace, Menlo, monospace"
-                  fill="var(--fg-3)"
-                  opacity={0.65}
-                >
-                  {secondaryLabel}
-                </text>
-              )}
-              {/* Hover indicator dot */}
-              {isHover && bar.value > 0 && (
-                <circle cx={cx} cy={y - 7} r={2.2} fill="var(--brand)" pointerEvents="none" />
-              )}
-            </g>
+            <span key={i} className={bar.isCurrent ? "now" : undefined}>
+              {primary}
+              {secondary && <small>{secondary}</small>}
+            </span>
           );
         })}
-      </svg>
+      </div>
     </div>
   );
 }
@@ -482,6 +449,16 @@ function RoomierBarChart({
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "week", label: "Week" },
+  { id: "period", label: "Period" },
+  { id: "month", label: "Month" },
+];
+const MODES: { id: Mode; label: string }[] = [
+  { id: "total", label: "Total" },
+  { id: "avg", label: "Avg" },
+];
 
 export function AveragesChart({
   entries,
@@ -527,119 +504,81 @@ export function AveragesChart({
 
   const insightText = computeInsight(entries, windowStart, windowEnd, activeTab, bars, mode);
 
-  const tabs: { id: TabId; label: string }[] = [
-    { id: "week", label: "Week" },
-    { id: "period", label: "Period" },
-    { id: "month", label: "Month" },
-  ];
+  const ariaLabel =
+    `Flagged hours, ${unitNames[activeTab]}, ${mode === "total" ? "total" : "average per day"}. ` +
+    bars.map((b) => `${b.longLabel} ${fmtHours(b.value)}`).join(", ") +
+    ".";
 
   return (
-    <>
-      <section>
-        <div className="section-title">Flagged Hours</div>
-        <div className="card padded">
-          {/* HEADER — tabs only */}
-          <div className="r-tabbar" role="tablist">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                role="tab"
-                aria-selected={activeTab === t.id}
-                className={`r-tab${activeTab === t.id ? " active" : ""}`}
-                onClick={() => setActiveTab(t.id)}
-                type="button"
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* READOUT ROW — value always lives here, never over the bars */}
-          <div className="r-readout">
-            <div className="r-readout-main">
-              <span className="r-readout-label">
-                {activeBar?.longLabel ?? "—"}
-              </span>
-              <span className="r-readout-value">
-                {activeBar ? `${fmtHours(activeBar.value)}h` : "—"}
-              </span>
-              <span className="r-readout-unit">{unitLabel}</span>
-              {/* Day efficiency — total mode only (avg bars are synthetic) */}
-              {mode === "total" && activeBar?.date && (
-                <ReadoutEfficiency
-                  flagHours={activeBar.value}
-                  denom={denomByDay?.[activeBar.date]}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* MODE ROW — Total/Avg pill; Worked/All only visible in Avg mode */}
-          <div className="r-modewrap">
-            <div className="r-mode-toggle" role="tablist" aria-label="Total or average">
-              <button
-                role="tab"
-                aria-selected={mode === "total"}
-                className={`r-mode-btn${mode === "total" ? " on" : ""}`}
-                onClick={() => setMode("total")}
-                type="button"
-              >
-                Total
-              </button>
-              <button
-                role="tab"
-                aria-selected={mode === "avg"}
-                className={`r-mode-btn${mode === "avg" ? " on" : ""}`}
-                onClick={() => setMode("avg")}
-                type="button"
-              >
-                Avg
-              </button>
-            </div>
-          </div>
-
-          {/* CHART — keyed by tab+mode so bar-rise replays on a user-initiated
-              tab/mode switch (new data by intent) but NOT when an unrelated
-              parent re-render (e.g. a dashboard quick-add refresh) just
-              updates bar heights for the same view. */}
-          <RoomierBarChart key={`${activeTab}-${mode}`} bars={bars} hover={hover} setHover={setHover} tab={activeTab} />
-
-          {/* FOOTER */}
-          <div className="r-footer">
-            <span className="r-footer-stat">
-              <span className="r-footer-num">{fmtHours(total90d)}h</span>
-              <span className="r-footer-cap">last 90d</span>
-            </span>
-            <span className="r-footer-dot" />
-            <span className="r-footer-stat">
-              <span className="r-footer-num">{bestBar?.longLabel ?? "—"}</span>
-              <span className="r-footer-cap">best {unitNames[activeTab]}</span>
-            </span>
-          </div>
+    <Zone id="z-chart" name="Flagged Hours">
+      <div className="chart-ctl">
+        <div className="seg" role="group" aria-label="Chart range">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={activeTab === t.id}
+              onClick={() => setActiveTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
-      </section>
-
-      {/* Insight bubble */}
-      <div
-        className="card brand-tinted"
-        style={{ padding: "14px 16px", marginTop: -6 }}
-      >
-        <div
-          style={{
-            fontSize: 11,
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            color: "var(--brand)",
-            fontWeight: 550,
-            marginBottom: 6,
-          }}
-        >
-          Insight
+        <div className="seg" role="group" aria-label="Chart measure">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              aria-pressed={mode === m.id}
+              onClick={() => setMode(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
-        <p style={{ margin: 0, fontSize: 14, color: "var(--fg-1)", lineHeight: 1.5 }}>
-          {insightText}
-        </p>
       </div>
-    </>
+
+      {/* READOUT — the value always lives here, never over the bars */}
+      <div className="chart-headline" aria-live="polite">
+        <span className="when">{activeBar?.longLabel ?? "—"}</span>
+        <b className="num">
+          {activeBar ? withPt(fmtHours(activeBar.value)) : "—"}
+          {activeBar && <span className="unit">h</span>}
+        </b>
+        <span className="what">{unitLabel}</span>
+        {/* Day efficiency — total mode only (avg bars are synthetic) */}
+        {mode === "total" && activeBar?.date && (
+          <ReadoutEfficiency flagHours={activeBar.value} denom={denomByDay?.[activeBar.date]} />
+        )}
+      </div>
+
+      {/* Keyed by tab+mode so the bars rise again on a user-initiated switch
+          (new data by intent) but NOT when an unrelated parent re-render (a
+          dashboard quick-add refresh) just updates bar heights. */}
+      <HoursChart
+        key={`${activeTab}-${mode}`}
+        bars={bars}
+        hover={hover}
+        setHover={setHover}
+        tab={activeTab}
+        mode={mode}
+        ariaLabel={ariaLabel}
+      />
+
+      <div className="chart-foot">
+        <span>
+          <b className="num">{withPt(fmtHours(total90d))}h</b> last 90d
+        </span>
+        <span>
+          <b>{bestBar?.longLabel ?? "—"}</b> best {unitNames[activeTab]}
+        </span>
+      </div>
+      <p className="insight">
+        <Icon name="insights" small />
+        <span>
+          <b>Insight.</b> <FiguresInText text={insightText} />
+        </span>
+      </p>
+    </Zone>
   );
 }

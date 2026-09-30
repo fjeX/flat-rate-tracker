@@ -33,10 +33,10 @@ afterEach(cleanup);
  * be able to compare the two independently.
  */
 function visibleReadout(): string {
-  const val = document.querySelector(".gami-odo-val");
-  if (!val) throw new Error("no .gami-odo-val rendered");
+  const val = document.querySelector(".rec-val");
+  if (!val) throw new Error("no .rec-val rendered");
   const shown = val.querySelector<HTMLElement>('[aria-hidden="true"]');
-  if (!shown) throw new Error("no aria-hidden visual layer inside .gami-odo-val");
+  if (!shown) throw new Error("no aria-hidden visual layer inside .rec-val");
   return Array.from(shown.children)
     .map((el) => {
       if (el.classList.contains("rn-sep")) return el.textContent ?? "";
@@ -51,8 +51,8 @@ function visibleReadout(): string {
 
 /** The plain-text equivalent RollingNumber exposes to assistive tech. */
 function srReadout(): string {
-  const sr = document.querySelector(".gami-odo-val .sr-only");
-  if (!sr) throw new Error("no sr-only readout inside .gami-odo-val");
+  const sr = document.querySelector(".rec-val .sr-only");
+  if (!sr) throw new Error("no sr-only readout inside .rec-val");
   return sr.textContent ?? "";
 }
 
@@ -109,7 +109,7 @@ describe("CareerOdometerCard formats hours the way the rest of the app does", ()
   it("uses one formatter for both of the card's hours figures", () => {
     renderCard(0.04);
     expect(visibleReadout()).toBe(fmtHoursGrouped(0.04));
-    const legend = document.querySelector(".gami-road-legend")?.textContent ?? "";
+    const legend = document.querySelector(".rec-legend")?.textContent ?? "";
     expect(legend).toContain(`${fmtHours(100 - 0.04)} hrs`);
   });
 });
@@ -184,7 +184,7 @@ describe("CareerOdometerCard names the window its delta actually covers", () => 
   const CALENDAR_WEEK = 29.1; // Sep 6–7, what the "This Week" tile showed
 
   function deltaText(): string {
-    return document.querySelector(".gami-odo-delta")?.textContent ?? "";
+    return document.querySelector(".rec-delta")?.textContent ?? "";
   }
 
   it("labels a rolling-window delta as the last 7 days, not the week", () => {
@@ -204,6 +204,6 @@ describe("CareerOdometerCard names the window its delta actually covers", () => 
 
   it("still says nothing at all when the window is empty", () => {
     renderCard(1240.2); // weekDelta = 0
-    expect(document.querySelector(".gami-odo-delta")).toBeNull();
+    expect(document.querySelector(".rec-delta")).toBeNull();
   });
 });

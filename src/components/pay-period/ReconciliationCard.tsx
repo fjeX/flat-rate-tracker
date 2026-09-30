@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Entry, EntryOpCode, OpCode, UnpaidTime } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { fmtMoney, hasAnyRate, type RateMap } from "@/lib/earnings";
@@ -18,6 +17,11 @@ import {
 import { formatDateLong } from "@/lib/periods";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { withPt } from "@/components/ui/Figure";
+import { N, PpIcon } from "./PpParts";
+import { StatusField } from "@/components/ui/StatusField";
 import { buildDisputePack, formatDisputePackText } from "@/lib/dispute-pack";
 import { buildUnpaidSummary } from "@/lib/unpaid-summary";
 import { recordExport, useExportedAt } from "@/lib/dispute-exports";
@@ -46,11 +50,14 @@ function lineLabel(
 // How a row's status reads, and whether the row is still asking for work.
 // "Done" rows only ever appear with the show-all toggle on, and they are dimmed
 // and greyed so a long list can't read as a long to-do list.
-const STATUS_PILL: Record<PayStatus, { text: string; className: string }> = {
-  pending: { text: "Pending", className: "pill" },
-  short: { text: "Short", className: "pill bad" },
-  paid: { text: "Paid", className: "pill neutral" },
-  over: { text: "Over", className: "pill neutral" },
+//
+// Tagged status words, outlined and never filled. Warm red is reserved for the
+// one state that is bad (a line paid short); every other state is a neutral tag.
+const STATUS_PILL: Record<PayStatus, { text: string; tone: "neutral" | "bad" }> = {
+  pending: { text: "Pending", tone: "neutral" },
+  short: { text: "Short", tone: "bad" },
+  paid: { text: "Paid", tone: "neutral" },
+  over: { text: "Over", tone: "neutral" },
 };
 
 function needsWork(status: PayStatus): boolean {
@@ -196,25 +203,23 @@ function ReconLineRow({
   const done = !needsWork(status);
 
   return (
-    <div
-      className={`flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--line)] px-3 py-2 ${
-        done ? "bg-[var(--bg-0)] opacity-75" : "bg-[var(--bg-1)]"
-      }`}
-    >
-      <div className="min-w-0 grow">
-        <div className="flex items-center gap-2">
-          <span className="ro-num">#{entry.roNumber}</span>
-          <span className="text-sm font-medium text-[var(--fg-1)] truncate">
-            {label}
-          </span>
-          <span className={pill.className}>{pill.text}</span>
+    <div className={`pp-recon-row${done ? " is-done" : ""}`}>
+      <div className="pp-recon-main">
+        <div className="pp-recon-top">
+          <span className="num">#{entry.roNumber}</span>
+          <span className="pp-recon-label">{label}</span>
+          <Badge tone={pill.tone}>{pill.text}</Badge>
         </div>
-        <div className="mt-0.5 text-xs text-[var(--fg-3)]">
-          Flag {fmtHours(line.flagHours)}h
+        <div className="pp-fine">
+          Flag <N v={`${fmtHours(line.flagHours)}h`} />
         </div>
-        {error && <p className="mt-1 text-xs text-[var(--bad)]">{error}</p>}
+        {error && (
+          <StatusField tag="Fix" role="alert" inset><p>
+            {error}
+          </p></StatusField>
+        )}
       </div>
-      <label className="shrink-0 text-right">
+      <label className="pp-recon-paid">
         <span className="field-label">Paid hrs</span>
         <input
           type="number"
@@ -246,13 +251,9 @@ function ReconLineRow({
           placeholder="Pending"
           disabled={isPending}
           aria-label={`Paid flag hours for RO ${entry.roNumber} ${label}`}
-          className="input mt-1 w-24 text-right text-base font-semibold"
+          className="input mono"
         />
-        {saved !== null && (
-          <span className="mt-0.5 block text-[10px] text-[var(--fg-3)]">
-            Clear = Pending
-          </span>
-        )}
+        {saved !== null && <span className="pp-fine">Clear = Pending</span>}
       </label>
     </div>
   );
@@ -471,86 +472,72 @@ export function ReconciliationCard({
   const Root = embedded ? "div" : "section";
 
   return (
-    <Root className={embedded ? "space-y-3" : "card padded-lg space-y-3"}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className={
-          embedded
-            ? "flex min-h-[44px] w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] bg-[var(--bg-2)] px-3 py-2 text-left hover:bg-[var(--bg-3)]"
-            : "flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
-        }
-      >
-        <h2 className="text-sm font-medium">{title}</h2>
-        <span className="flex items-center gap-2 text-[var(--fg-3)]">
-          {!open && summary.shortedHours > 0 && (
-            <span className="mono text-sm font-medium tabular-nums text-[var(--bad)]">
-              {fmtHours(summary.shortedHours)}h short
-            </span>
-          )}
-          {open ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-        </span>
-      </button>
+    <Root className={embedded ? "pp-stack" : "card padded-lg pp-stack"}>
+      <h4 className="pp-sub-h">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="pp-rowbtn"
+        >
+          <span className="pp-rowbtn-title">{title}</span>
+          <span>
+            {!open && summary.shortedHours > 0 && (
+              <b className="num is-bad">
+                {withPt(fmtHours(summary.shortedHours))}h short
+              </b>
+            )}
+            <PpIcon name="chev" className="chev" />
+          </span>
+        </button>
+      </h4>
 
       {open && (
-      <div className="space-y-3 border-t border-[var(--line)] pt-3">
+      <div className="pp-stack pp-sub-body">
       {pendingRows.length > 0 && (
-        <div className="flex justify-end">
-          <button
-            type="button"
+        <div className="pp-btnrow is-end">
+          <Button
+            variant="quiet"
             onClick={markAllPaid}
             disabled={markingAll}
-            className="btn btn-sm btn-ghost min-h-11"
           >
             {markingAll ? "Marking…" : "Mark all remaining as paid in full"}
-          </button>
+          </Button>
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-          <div className="field-label">Shorted hrs</div>
-          <div
-            className={`mono mt-1 text-base font-semibold tabular-nums ${summary.shortedHours > 0 ? "text-[var(--bad)]" : "text-[var(--fg-1)]"}`}
-          >
-            {fmtHours(summary.shortedHours)}h
-          </div>
+      <dl className="pp-rows">
+        <div>
+          <dt className="k">Shorted hrs</dt>
+          <dd className={`v num${summary.shortedHours > 0 ? " is-bad" : ""}`}>
+            {withPt(fmtHours(summary.shortedHours))}
+            <span className="pp-unit">h</span>
+          </dd>
         </div>
-        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-          <div className="field-label">Pending lines</div>
-          <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--fg-1)]">
-            {summary.pendingCount}
-          </div>
+        <div>
+          <dt className="k">Pending lines</dt>
+          <dd className="v num">{summary.pendingCount}</dd>
         </div>
         {dollars !== null && (
-          <div className="rounded-[var(--radius-sm)] border border-[color-mix(in_oklab,var(--bad)_30%,transparent)] bg-[var(--bad-bg)] px-3 py-2">
-            <div className="field-label">Left on the table</div>
-            <div
-              className={`mono mt-1 text-base font-semibold tabular-nums ${dollars > 0 ? "text-[var(--bad)]" : "text-[var(--fg-1)]"}`}
-            >
-              {fmtMoney(dollars)}
-            </div>
+          <div>
+            <dt className="k">Left on the table</dt>
+            <dd className={`v num${dollars > 0 ? " is-bad" : ""}`}>
+              {withPt(fmtMoney(dollars))}
+            </dd>
           </div>
         )}
-      </div>
+      </dl>
 
       {/* Only worth offering when there is something hidden to reveal. */}
       {doneCount > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-[var(--fg-1)]">
-              Show all lines
-            </div>
-            <div className="text-xs text-[var(--fg-3)]">
-              Include the {doneCount} already reconciled{" "}
-              {doneCount === 1 ? "line" : "lines"} — to fix a paid figure entered
-              wrong.
-            </div>
+        <div className="pp-tool">
+          <div className="pp-tool-txt">
+            <p className="pp-lead">Show all lines</p>
+            <p className="pp-sub">
+              Include the <span className="num">{doneCount}</span> already
+              reconciled {doneCount === 1 ? "line" : "lines"} — to fix a paid
+              figure entered wrong.
+            </p>
           </div>
           <Switch
             checked={showAll}
@@ -568,20 +555,20 @@ export function ReconciliationCard({
           above a full list of rows and read as a bug, so it says why they're
           there. */}
       {rows.length === 0 && (
-        <p className="rounded-[var(--radius-sm)] bg-[var(--good-bg)] px-3 py-2 text-sm text-[var(--good)]">
+        <StatusField tag="Done" tone="good"><p>
           All jobs reconciled for this period.
           {displayRows.length > 0 &&
             " The lines below are already reconciled — edit one to correct it."}
-        </p>
+        </p></StatusField>
       )}
 
       {displayRows.length > 0 && (
-        <div className="space-y-2">
+        <div className="pp-stack">
           {/* Ordering matters more here than anywhere else on the page: most
               shops hand out a printed sheet of ROs and flagged lines in RO-number
               order, and working down that sheet against a date-sorted list means
               hunting for every line. RO order is the default for that reason. */}
-          <div className="recon-sort">
+          <div className="pp-sort">
             <label className="field-label" htmlFor="recon-sort">
               Sort by
             </label>
@@ -589,7 +576,6 @@ export function ReconciliationCard({
               id="recon-sort"
               value={sort}
               onChange={(e) => setSort(e.target.value as ReconcileSort)}
-              className="text-sm"
             >
               <option value="ro">RO number — matches your shop&apos;s sheet</option>
               <option value="date">Date — newest first</option>
@@ -609,19 +595,21 @@ export function ReconciliationCard({
         </div>
       )}
 
-      {markError && <p className="text-xs text-[var(--bad)]">{markError}</p>}
+      {markError && (
+        <StatusField tag="Fix" role="alert"><p>
+          {markError}
+        </p></StatusField>
+      )}
 
       {/* Always mounted — see canExport above. Nothing here is hidden; when
           there is genuinely nothing to export the buttons are disabled and the
           copy says why, so the tech learns the feature exists on a clean period
           instead of discovering it only on a bad one. */}
-      <div className="border-t border-[var(--line)] pt-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-medium text-[var(--fg-1)]">
-                Export discrepancies
-              </div>
-              <div className="text-xs text-[var(--fg-3)]">
+      <div className="pp-export">
+          <div className="pp-export-row">
+            <div className="pp-export-txt">
+              <p className="pp-lead">Export discrepancies</p>
+              <p className="pp-sub">
                 {canExport ? (
                   <>Flagged vs. paid variance report for {periodLabel || "this period"}</>
                 ) : (
@@ -633,7 +621,7 @@ export function ReconciliationCard({
                 {exportedAt && (
                   <>
                     {" · "}
-                    <span className="text-[var(--fg-2)]">
+                    <span className="pp-strong">
                       Exported{" "}
                       {new Date(exportedAt).toLocaleDateString("en-US", {
                         month: "short",
@@ -642,11 +630,11 @@ export function ReconciliationCard({
                     </span>
                   </>
                 )}
-              </div>
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
+            <div className="pp-btnrow">
+              <Button
+                variant="line"
                 onClick={copyDisputeText}
                 disabled={!canExport}
                 title={
@@ -654,13 +642,19 @@ export function ReconciliationCard({
                     ? undefined
                     : "Nothing to export — no shorted lines and no unpaid rework in this period."
                 }
-                className="btn btn-sm btn-ghost min-h-11"
               >
-                {copied ? "Copied ✓" : "Copy text"}
-              </button>
+                {copied ? (
+                  <>
+                    <PpIcon name="check" />
+                    Copied
+                  </>
+                ) : (
+                  "Copy text"
+                )}
+              </Button>
               {periodKey && (
-                <button
-                  type="button"
+                <Button
+                  variant="go"
                   onClick={openPrintView}
                   disabled={!canExport}
                   title={
@@ -668,15 +662,16 @@ export function ReconciliationCard({
                       ? undefined
                       : "Nothing to export — no shorted lines and no unpaid rework in this period."
                   }
-                  className="btn btn-sm btn-primary min-h-11"
                 >
                   Print / PDF
-                </button>
+                </Button>
               )}
             </div>
           </div>
           {copyError && (
-            <p className="mt-1 text-xs text-[var(--bad)]">{copyError}</p>
+            <StatusField tag="Fix" role="alert" inset><p>
+              {copyError}
+            </p></StatusField>
           )}
       </div>
       </div>
