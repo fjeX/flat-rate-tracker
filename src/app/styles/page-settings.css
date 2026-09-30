@@ -16,6 +16,30 @@
 /* settings read as one column; a 1180px-wide row of prose is not a setting */
 .stg-page .stg-col { max-width: 52rem; }
 
+/* ---------- the mock's layout: one setting on display, the rest listed ---------- */
+.stg-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--s6); }
+.stg-grid > div { min-width: 0; }
+.stg-pick { margin-top: var(--s3); }
+.stg-pick .input { width: 100%; }
+.stg-shown .stg-row:first-child { padding-top: var(--s1); }
+@media (min-width: 1024px) {
+  .stg-grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: start; }
+  .stg-pick { display: none; }
+}
+@media (max-width: 1023px) {
+  /* the list is the dropdown above the setting on a phone; keep the zone
+     too, further down, for anyone who scrolls */
+  .stg-more { margin-top: var(--s4); }
+}
+/* in the shown zone the single-setting rows never need the split; a wide
+   control keeps the row */
+.stg-shown .stg-row:not(.is-wide) { grid-template-columns: minmax(0, 1fr); }
+.stg-shown .stg-row:not(.is-wide) .stg-ctl { justify-self: start; max-width: none; }
+@media (min-width: 700px) {
+  .stg-shown .stg-row:not(.is-wide) { grid-template-columns: minmax(0, 1fr) auto; }
+  .stg-shown .stg-row:not(.is-wide) .stg-ctl { justify-self: end; max-width: 22rem; }
+}
+
 /* ---------- one setting ---------- */
 .stg-row {
   display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2) var(--s5); align-items: start;

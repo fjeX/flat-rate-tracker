@@ -96,6 +96,23 @@
 }
 .gami-sheet-foot .num { font-size: inherit; color: var(--ink-2); }
 
+/* ---------- row buttons: a list of things that open (mock .rowlist / .rowbtn) ----------
+   Pay Period still carries its own `pp-rowbtn` copy. */
+.rowlist { list-style: none; display: grid; gap: var(--s1); margin: 0; padding: 0; }
+.rowbtn {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  width: 100%; min-height: 48px; padding: 0 var(--s3);
+  background: var(--wall-2); border: 0; border-radius: var(--r-sign);
+  font-family: var(--font-ui); font-size: var(--fs-body); font-weight: 600; text-align: left; color: var(--ink); cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--fast) var(--ease);
+}
+.rowbtn:hover { background: var(--quiet-hover); }
+.rowbtn:active { background: var(--quiet-active); }
+.rowbtn:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.rowbtn > span:first-child { flex: 1 1 auto; min-width: 0; }
+.rowbtn > .ic { flex: none; transform: rotate(-90deg); color: var(--ink-2); }
+
 /* ---------- plain rows on the wall ---------- */
 .rows > * { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line); min-height: 48px; }
 .rows > *:last-child { border-bottom: 0; }

@@ -382,15 +382,22 @@ fonts and corner radius only** — no layout, wording or positions moved:
     label-style footer "GENERATED <date> · RO #<threshold> LINE". Every
     figure and every sentence is unchanged; §8b's checks still apply word
     for word.
-  - **Settings and Account:** the eleven settings cards are now **rows**
-    inside four zones — APPEARANCE (unchanged from phase 3), TRACKING (Pay
-    Period Goal, Pay Rates, Default type for new lines, Reference hourly
-    rate, Pay Period Defaults, Timezone, Contribute to True Time, Work
-    Schedule & Days Off), LOGGING (Quick Add RO, Time of day on each RO, RO
-    Scan Templates) and DATA (Backup — was titled "Data" — and Danger Zone).
-    Each row is the setting's name and sentence on the left with its control
-    on the right (under it on phones): a switch, a field plus a blue Save, or
-    a button. Every heading, label, id, switch name and sentence is unchanged
+  - **Settings and Account:** /settings shows **one setting at a time**. On
+    desktop: the setting on display sits at the left inside a zone named for
+    its group (TRACKING / LOGGING / APPEARANCE / DATA), and a **MORE
+    SETTINGS** zone at the right lists every other setting as a row button
+    with a chevron — tap one and it takes the display. On a phone the list is
+    a **"Setting" dropdown** above the display (the MORE SETTINGS zone is
+    still there, below). **Pay Rates opens by default**; `/settings#appearance`
+    (the Account page's link) opens Appearance. The list, in order: Pay
+    Rates, Pay Period Goal, Pay Period Defaults, Reference hourly rate, Work
+    Schedule & Days Off, Timezone, Contribute to True Time, Quick Add RO,
+    Time of day on each RO, RO Scan Templates, Appearance, Backup (was
+    titled "Data"), Danger Zone. **So to reach any setting named in this
+    file, pick it from that list or dropdown first** — nothing is on screen
+    until it is picked. Each setting is a row: its name and sentence on the
+    left, its control on the right (under it on phones): a switch, a field
+    plus a blue Save, or a button. Every heading, label, id, switch name and sentence is unchanged
     (§1b, §1c, §7d, §8k, the Data/Import checks all apply as written); the
     only wording changes are the Data row's title ("Backup") and the "Default
     type for new lines" select, which is its own row now. Danger Zone has a
