@@ -1,0 +1,70 @@
+/* ==========================================================================
+   ui-fields.css — phase 2, group B: fields (mock final.html 660-685, label 367)
+   .input / textarea.input, .field, .select, .pill-input.
+   A field is a recess cut into the surface: --field fill, hairline, inset cut.
+   ========================================================================== */
+
+/* ---------- field wrapper ---------- */
+.field { display: flex; flex-direction: column; min-width: 0; }
+.field-label { display: block; color: var(--ink-2); margin-bottom: 6px; }
+/* the one label style (mock 367), restated so the label is right on its own */
+.field-label {
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label);
+  text-transform: uppercase; line-height: 1.3;
+}
+.field-msg { font-size: var(--fs-label); color: var(--ink-2); margin-top: 6px; }
+.field-msg-error { color: var(--bad); font-weight: 700; }
+/* Field sets `error` -> the control looks invalid without needing aria-invalid */
+.field-error .input,
+.field-error .pill-input,
+.field-error .input:focus-visible,
+.field-error .pill-input:focus-visible { border-color: var(--bad); border-width: var(--w-edge); }
+
+/* ---------- the field ---------- */
+.input {
+  width: 100%; min-height: var(--field-h); padding: 0 var(--s3);
+  background: var(--field); border: var(--w-hair) solid var(--field-line); border-radius: var(--r-sign);
+  box-shadow: var(--field-cut);
+  font-family: inherit; font-size: var(--fs-control); color: var(--ink);
+  transition: border-color var(--fast) var(--ease);
+}
+.input.num,
+.input.mono { font-family: var(--font-num); font-size: var(--fs-num); font-weight: 500; }
+.input::placeholder { color: var(--ink-3); opacity: 1; }
+.input:hover { border-color: var(--ink); }
+.input:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 1px; border-color: var(--ink); }
+.input:disabled { border-style: dashed; box-shadow: none; color: var(--disabled-ink); cursor: not-allowed; }
+.input[aria-invalid="true"] { border-color: var(--bad); border-width: var(--w-edge); }
+textarea.input { padding: var(--s3); min-height: 96px; resize: vertical; line-height: 1.4; display: block; }
+
+/* ---------- select: same field, real chevron ---------- */
+.select-wrap { position: relative; display: block; min-width: 0; }
+.select { appearance: none; padding-right: 38px; cursor: pointer; }
+.select-chev {
+  position: absolute; right: var(--s3); top: 50%; transform: translateY(-50%);
+  color: var(--ink-2); pointer-events: none;
+}
+
+/* ---------- date / time control (PillInput): the field look, not a pill ----------
+   Its two homes (RO date/time in the log form's section-title row, Quick Add's
+   time) have room for the full 48px field. color-scheme keeps the UA popup
+   matched to the theme. Width stays auto: it sizes to its value. */
+.pill-input {
+  appearance: none;
+  min-height: var(--field-h); padding: 0 var(--s3);
+  background: var(--field); border: var(--w-hair) solid var(--field-line); border-radius: var(--r-sign);
+  box-shadow: var(--field-cut);
+  font-family: var(--font-num); font-size: var(--fs-num); font-weight: 500; color: var(--ink);
+  cursor: pointer;
+  color-scheme: light;
+  transition: border-color var(--fast) var(--ease);
+}
+:root[data-theme^="dark"] .pill-input { color-scheme: dark; }
+.pill-input:hover { border-color: var(--ink); }
+.pill-input:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 1px; border-color: var(--ink); }
+.pill-input:disabled { border-style: dashed; box-shadow: none; color: var(--disabled-ink); cursor: not-allowed; }
+.pill-input::-webkit-calendar-picker-indicator {
+  cursor: pointer; opacity: 0.7; margin-left: 6px; padding: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+.pill-input:hover::-webkit-calendar-picker-indicator { opacity: 1; }

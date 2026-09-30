@@ -1,0 +1,81 @@
+/* ui-controls.css: buttons and the switch. Phase 2, group A.
+   Source of truth: final.html 500-523 (buttons), 687-693 (switch).
+   Old names are aliases of the new look:
+     .btn (bare) = line   .btn-primary = go   .btn-ghost = quiet
+     .btn-good   = go in the state colour     .btn-danger = line in --bad
+   Tokens only. No press-scale on buttons: press is the darker fill. */
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s4);
+  border-radius: var(--r-sign); border: var(--w-edge) solid var(--edge); background: transparent; color: var(--ink);
+  font-family: var(--font-ui); font-weight: 700; font-size: var(--fs-body); line-height: 1.1;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.btn:hover { background: var(--quiet-hover); }
+.btn:active { background: var(--quiet-active); }
+.btn:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+
+/* go: the one primary action */
+.btn-go, .btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn-go:hover, .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-go:active, .btn-primary:active { background: var(--accent-active); border-color: var(--accent-active); }
+
+/* good: go-shaped, but in the state colour (positive confirmations, timer start) */
+.btn-good { background: var(--good); color: var(--good-ink); border-color: var(--good); }
+.btn-good:hover, .btn-good:active { background: var(--good); border-color: var(--good); filter: brightness(0.92); }
+
+/* line: outlined, the default */
+.btn-line { border-color: var(--edge); }
+
+/* danger: line look, warm red ink and edge */
+.btn-danger { color: var(--bad); border-color: var(--bad); }
+.btn-danger:hover { background: var(--bad-bg); }
+.btn-danger:active { background: var(--bad-bg); filter: brightness(0.95); }
+
+/* quiet: hairline border, tighter side padding. .btn-ghost keeps the hairline
+   (not transparent) so a ghost button in a row still shows its 44px edge. */
+.btn-quiet, .btn-ghost { border-color: var(--line); padding-left: var(--s3); padding-right: var(--s3); }
+.btn-quiet:hover, .btn-ghost:hover { background: var(--quiet-hover); border-color: var(--ink-3); }
+.btn-quiet:active, .btn-ghost:active { background: var(--quiet-active); }
+
+/* sizes: sm keeps the 44px tap floor and trims padding and type */
+.btn-sm { min-height: var(--tap); padding: 0 var(--s3); font-size: var(--fs-label); }
+.btn-lg { min-height: var(--field-h); padding: 0 var(--s5); font-size: var(--fs-control); }
+.btn-block { width: 100%; }
+.btn-field { min-height: var(--field-h); }
+
+/* disabled: dashed and flat, never just faded */
+.btn:disabled, .btn[aria-disabled="true"] {
+  background: transparent; color: var(--disabled-ink); border-color: var(--ink-3); border-style: dashed;
+  cursor: not-allowed; filter: none;
+}
+/* busy: solid, filled quiet, progress cursor */
+.btn[aria-busy="true"] { border-style: solid; background: var(--quiet-active); color: var(--ink); border-color: var(--edge); cursor: progress; filter: none; }
+/* saved: confirmation state, wins over disabled */
+.btn.is-saved, .btn.is-saved:disabled { background: var(--good); border-color: var(--good); color: var(--good-ink); border-style: solid; }
+
+/* ---------- switch: both positions named ---------- */
+.switch {
+  display: inline-flex; border: var(--w-edge) solid var(--edge); border-radius: var(--r-sign);
+  overflow: hidden; background: transparent; padding: 0; flex: none; cursor: pointer;
+  font-family: var(--font-ui);
+}
+.switch span {
+  min-width: 46px; min-height: calc(var(--tap) - 4px); display: grid; place-items: center;
+  font-weight: 700; font-size: var(--fs-label); letter-spacing: var(--track-label); color: var(--ink-3);
+  transition: background-color var(--fast) var(--ease);
+}
+.switch:hover span { background: var(--quiet-hover); color: var(--ink); }
+.switch[aria-checked="false"] .off, .switch[aria-checked="false"]:hover .off {
+  background: var(--plate); color: var(--ink); box-shadow: inset 0 calc(-1 * var(--w-heavy)) 0 var(--ink);
+}
+.switch[aria-checked="true"] .on { background: var(--accent); color: var(--accent-ink); }
+.switch[aria-checked="true"]:hover .on { background: var(--accent-hover); color: var(--accent-ink); }
+.switch:disabled { border-style: dashed; border-color: var(--ink-3); cursor: not-allowed; }
+/* (0,3,1): must out-rank the [aria-checked] .on/.off fills above */
+.switch:disabled[aria-checked] span { background: transparent; color: var(--disabled-ink); box-shadow: none; }
+/* focus on the whole control: outside the edge, so overflow:hidden can't clip it */
+.switch:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }

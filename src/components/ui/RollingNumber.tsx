@@ -85,8 +85,15 @@ export function RollingNumber({
       <span aria-hidden="true" style={{ display: "contents" }}>
         {chars.map((ch, i) => {
           if (ch < "0" || ch > "9") {
+            // A decimal point/comma between two digits gets `.pt` so it pulls
+            // in (--pt-pull). Visual only: this strip is aria-hidden and the
+            // sr-only span below carries the plain "8.5".
+            const isPoint =
+              (ch === "." || ch === ",") &&
+              chars[i - 1] >= "0" && chars[i - 1] <= "9" &&
+              chars[i + 1] >= "0" && chars[i + 1] <= "9";
             return (
-              <span key={i} className="rn-sep">
+              <span key={i} className={isPoint ? "rn-sep pt" : "rn-sep"}>
                 {ch}
               </span>
             );

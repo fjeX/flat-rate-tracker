@@ -1,0 +1,256 @@
+/* =====================================================================
+   ui-surfaces.css — FRT visual overhaul, phase 2, group C (surfaces)
+   Card / zone panel, headline panel, Badge / op-code chip, Table,
+   Modal (dialog), EmptyState, Skeleton.
+
+   Tokens only: no raw colour appears in this file. Old class names stay
+   alive as aliases of the new look (selector lists below).
+   Source of truth: docs/design-directions/2026-09-overhaul/final.html
+   (zones 484-498, head 541-562, tbl 564-572, stat-tag 574-597,
+   ops 649-652, dialogs 916-928, breakpoints 945-947).
+   ===================================================================== */
+
+/* ---------- the one label style, for the classes this file owns ---------- */
+.zone-name, .head-k, .badge, .table th, .tbl thead th, .dlg-head h2 {
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label);
+  text-transform: uppercase; line-height: 1.3;
+}
+
+/* =====================================================================
+   CARD = ZONE PANEL
+   A named, bounded region: --panel fill, a heavy top rule, a hairline on
+   the other three sides (the light theme's page and panel are close in
+   value, so the hairline is what separates them), no shadow.
+   Radius is on the BOTTOM corners only: a rounded corner on a 3px top
+   border tapers the rule to a sliver, and the mock's zones and headline
+   panel are square-topped for the same reason.
+   ===================================================================== */
+.card {
+  --card-pad: 0px;
+  background: var(--panel); color: var(--ink);
+  border: var(--w-hair) solid var(--line);
+  border-top: var(--w-heavy) solid var(--zone-line);
+  border-radius: 0 0 var(--r-panel) var(--r-panel);
+  box-shadow: none;
+  min-width: 0;
+}
+.card.flush { padding: 0; overflow: hidden; }
+.card.padded { --card-pad: 14px; padding: var(--card-pad); }
+.card.padded-lg { --card-pad: 16px; padding: var(--card-pad); }
+
+/* Callout surface. --accent-tint is the pale field the headline panel uses,
+   designed for --ink text (--head-ink), so text on it stays ink. The top rule
+   switches to --accent so a tinted card reads as "picked out", not as a zone. */
+.card.brand-tinted { background: var(--accent-tint); color: var(--ink); border-color: var(--line); border-top-color: var(--accent); }
+
+/* Zone name tab: hangs from the top rule at the panel's left edge. Cancels the
+   panel's own padding so the tab is flush with the rule and the corner. */
+.zone-name {
+  display: block; width: fit-content; max-width: 100%;
+  background: var(--zone-line); color: var(--zone-ink);
+  padding: 3px 10px 4px;
+  border-radius: 0 0 var(--r-sign) var(--r-sign);
+}
+.card > .zone-name:first-child { margin: calc(-1 * var(--card-pad)) 0 var(--s3) calc(-1 * var(--card-pad)); }
+
+/* Inset well inside a panel. --plate is the recessed token in every theme
+   (darker than --panel in light and dark), so the well reads as cut into the
+   panel rather than laid on it. Hairline + --r-sign, no shadow. */
+.card-inset {
+  background: var(--plate); color: var(--ink);
+  border: var(--w-hair) solid var(--line);
+  border-radius: var(--r-sign);
+}
+
+/* =====================================================================
+   HEADLINE PANEL (Card.tsx: Head, HeadCells, HeadCell, HeadNote, HeadRow)
+   Its look is driven by the data-panel tokens (--head-*), Accent by default.
+   ===================================================================== */
+.head {
+  background: var(--head-bg); color: var(--head-ink);
+  border: var(--head-side-w) solid var(--head-side);
+  border-top: var(--head-top-w) solid var(--head-top);
+  border-radius: var(--head-radius);
+  min-width: 0;
+}
+.head-cells { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.head-cell { padding: var(--s3) var(--s4); min-width: 0; }
+.head-cell + .head-cell { border-left: var(--w-hair) solid var(--head-rule); }
+.head-k { color: var(--head-ink-2); }
+.head-v { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--fs-sign); letter-spacing: var(--track-fig); line-height: 1; margin-top: 6px; white-space: nowrap; }
+/* a unit is a word, not a figure (mock 361). Scoped to the panel: a global
+   .unit would restyle 12 existing spans that belong to their pages' phases. */
+.head-v .unit { font-family: var(--font-ui); font-weight: 600; letter-spacing: 0; font-size: var(--fs-title); color: var(--head-ink-2); margin-left: 4px; }
+.head-v.is-2 { font-size: var(--fs-fig); margin-top: 14px; }
+.head-s { font-size: var(--fs-label); color: var(--head-ink-2); margin-top: 4px; }
+.head-note { padding: var(--s2) var(--s4) var(--s3); border-top: var(--w-hair) solid var(--head-rule); color: var(--head-ink-2); }
+.head-note b { color: var(--head-ink); }
+.head-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding: var(--s2) var(--s3); }
+.head-row > .num { font-size: var(--fs-title); letter-spacing: var(--track-fig); }
+.head-row .unit { color: var(--head-ink-2); }
+.head .tbl th, .head .tbl td, .head .table th, .head .table td { border-bottom-color: var(--head-rule); }
+.head .tbl thead th, .head .table thead th { color: var(--head-ink-2); }
+
+@media (min-width: 700px) {
+  .head-cell { padding: var(--s4) var(--s5); }
+  .head-note { padding-left: var(--s5); padding-right: var(--s5); }
+}
+
+/* =====================================================================
+   BADGE = the tagged status word (mock .stat-tag) and the op-code chip
+   (mock .ops li). Outlined, never filled, except `selected`.
+   Colour = the outline and the word together (currentColor).
+   ===================================================================== */
+.badge {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  padding: 1px 6px 2px;
+  font-size: var(--fs-min);
+  border: var(--w-tag) solid currentColor; border-radius: var(--r-tag);
+  background: transparent; color: var(--ink);
+  white-space: nowrap;
+}
+.badge-neutral { color: var(--ink); }
+.badge-good { color: var(--good); }
+.badge-bad { color: var(--bad); }
+/* warn: NOTE-style neutral by the phase-1 decision (--warn -> --ink-2); each
+   page retags its own warnings later. */
+.badge-warn { color: var(--ink-2); }
+.badge-brand, .badge-info { color: var(--accent-text); }
+
+/* Machine identifiers (op codes) are not figures, so `mono` does NOT switch to
+   --font-num: it stays on --font-ui, bold, 0.02em tracking (mock `.ops li b`),
+   and keeps the code's own case instead of the label style's uppercase. */
+.badge.mono { font-family: var(--font-ui); font-weight: 700; letter-spacing: 0.02em; text-transform: none; }
+
+/* Op-code chip: quiet hairline outline, ink-2 word, not uppercase. */
+.badge-chip, .ops li {
+  display: inline-flex; align-items: center;
+  padding: 1px 7px 2px;
+  font-size: var(--fs-min); font-weight: 400; letter-spacing: 0; text-transform: none; line-height: 1.4;
+  color: var(--ink-2); background: transparent;
+  border: var(--w-tag) solid var(--line); border-radius: var(--r-tag);
+  white-space: nowrap;
+}
+.badge-chip.mono { font-weight: 700; letter-spacing: 0.02em; color: var(--ink); }
+.ops li b { color: var(--ink); font-weight: 700; margin-right: 5px; letter-spacing: 0.02em; }
+/* selected = accent fill */
+.badge.is-selected, .badge-chip.is-selected, .badge[data-selected="true"] {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+}
+
+/* =====================================================================
+   TABLE = mock .tbl. Ruled rows, 46px, figures right-aligned.
+   Numeric columns were centred because a centred tabular-nums column reads
+   as a column and header/cell shared one alignment. Both still hold when the
+   pair is right-aligned (header and cells share `.table-num`), and the mock
+   right-aligns figures so the decimal points stack: so right it is. The
+   `.table th.table-num` qualifier stays for specificity against `.table th`.
+   ===================================================================== */
+.table, .tbl { width: 100%; border-collapse: collapse; }
+.table th, .table td, .tbl th, .tbl td {
+  padding: 0 var(--s3); height: 46px; vertical-align: middle;
+  border-bottom: var(--w-hair) solid var(--line);
+}
+.table tr:last-child th, .table tr:last-child td,
+.tbl tr:last-child th, .tbl tr:last-child td { border-bottom: 0; }
+.table thead th, .tbl thead th { height: 30px; color: var(--ink-2); text-align: left; border-bottom: var(--w-hair) solid var(--line); background: transparent; }
+.table tbody th, .tbl tbody th { font-weight: 600; text-transform: none; letter-spacing: 0; font-size: var(--fs-body); }
+.table td, .tbl td { font-size: var(--fs-body); }
+
+/* numeric column: header and figures share one right edge */
+.table-num, .table th.table-num, .table td.table-num, .tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.table td.table-num { font-family: var(--font-num); font-size: var(--fs-num); font-weight: 600; letter-spacing: var(--track-num); }
+/* a cell that carries its own pill/tag keeps the pill's font */
+.table td.table-num .pill, .table td.table-num .badge { font-family: var(--font-ui); }
+.table-dim { color: var(--ink-3); }
+
+/* total row: closes the ledger with a full-strength rule */
+.table .table-foot td {
+  border-top: var(--w-edge) solid var(--edge); border-bottom: 0;
+  font-size: var(--fs-label); font-weight: 700; color: var(--ink-2);
+}
+
+/* sortable header: the button fills the cell so the whole heading is the
+   target and clears the 44px tap floor */
+.table th:has(.table-sort) { padding: 0; }
+.table .table-sort {
+  appearance: none; background: none; border: 0; border-radius: 0; color: inherit; font: inherit;
+  letter-spacing: inherit; text-transform: inherit;
+  display: inline-flex; align-items: center; gap: 5px;
+  width: 100%; min-height: var(--tap); padding: var(--s1) var(--s3);
+  cursor: pointer; text-align: inherit;
+}
+.table th.table-num .table-sort { justify-content: flex-end; }
+.table .table-sort:hover { color: var(--ink); background: var(--quiet-hover); }
+.table .table-sort:active { background: var(--quiet-active); }
+/* inset: the flush Card clips anything drawn outside the cell */
+.table .table-sort:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: calc(-1 * var(--w-heavy)); }
+.table .table-sort[data-active="true"] { color: var(--accent-text); }
+.table .table-sort-arrow { font-size: var(--fs-min); opacity: 0.75; }
+.table .table-sort[data-active="true"] .table-sort-arrow { opacity: 1; }
+
+/* =====================================================================
+   MODAL = mock dialog. --panel, --edge outline, --lift, --backdrop.
+   Bottom sheet below 640px (square top corners are the sheet's, radius on the
+   top edge), centred dialog from 640px. Header and footer bars are sticky
+   inside the scrolling panel, so the close button and actions never scroll off.
+   The entrance animation (.modal-panel / .modal-backdrop) stays in globals.
+   ===================================================================== */
+.modal-backdrop { background: var(--backdrop); }
+.modal-panel {
+  background: var(--panel); color: var(--ink);
+  border: var(--w-edge) solid var(--edge);
+  border-radius: var(--r-panel) var(--r-panel) 0 0;
+  box-shadow: var(--lift);
+}
+@media (min-width: 640px) {
+  .modal-panel { border-radius: var(--r-panel); }
+}
+.dlg-head {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: var(--s2);
+  padding: 0 var(--s1) 0 var(--s3); min-height: 52px;
+  background: var(--wall-2); border-bottom: var(--w-edge) solid var(--edge);
+}
+.dlg-head h2 { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--ink); }
+.dlg-body { padding: var(--s4); }
+.dlg-foot {
+  position: sticky; bottom: 0; z-index: 1;
+  display: flex; align-items: center; gap: var(--s2);
+  padding: 0 var(--s3); min-height: var(--save-h);
+  background: var(--wall-2); border-top: var(--w-edge) solid var(--edge);
+}
+.dlg-close {
+  display: grid; place-items: center; flex: none;
+  width: var(--tap); height: var(--tap);
+  background: transparent; color: var(--ink); border: var(--w-edge) solid transparent; border-radius: var(--r-sign);
+}
+.dlg-close:hover { background: var(--quiet-hover); }
+.dlg-close:active { background: var(--quiet-active); }
+.dlg-close:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+
+/* =====================================================================
+   EMPTY STATE: recoloured only. Plate tile, hairline, no shadow.
+   ===================================================================== */
+.empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; padding: 30px 20px; }
+.empty-state-icon {
+  width: 46px; height: 46px; display: grid; place-items: center; margin-bottom: var(--s2);
+  background: var(--plate); color: var(--ink-2);
+  border: var(--w-hair) solid var(--line); border-radius: var(--r-sign);
+}
+.empty-state-title { margin: 0; font-size: var(--fs-body); font-weight: 700; color: var(--ink); }
+.empty-state-desc { margin: 0; font-size: var(--fs-label); color: var(--ink-2); max-width: 280px; line-height: 1.45; }
+.empty-state-action { margin-top: var(--s3); }
+
+/* =====================================================================
+   SKELETON: flat --plate block, opacity pulse, no shadow.
+   ===================================================================== */
+.skel { background: var(--bar-track); border-radius: var(--r-sign); box-shadow: none; animation: skel-pulse 1.4s ease-in-out infinite; }
+.skel-circle { border-radius: 50%; }
+@keyframes skel-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; opacity: 1; }
+}

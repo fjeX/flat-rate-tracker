@@ -1,0 +1,44 @@
+/* ==========================================================================
+   ui-figures.css — phase 2, group D: figures (mock final.html 360-362, 553, 599-624)
+   RollingNumber, Figure/withPt, PaceRing, ReadoutEfficiency, DurationBar.
+   ========================================================================== */
+
+/* ---------- figures: Azeret Mono, tabular, tight ---------- */
+.num, .rn, .pace-ring-value {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600;
+  letter-spacing: var(--track-num);
+}
+/* decimal pull: the point/comma sits closer to its digits (mock 362) */
+.rn-sep.pt, span.pt {
+  display: inline-block; position: static; transform: none; padding: 0;
+  margin: 0 var(--pt-pull); background: none; color: inherit; font: inherit;
+}
+/* rolling digits are fixed cells; fold the tracking into the cell width */
+.rn-digit { width: calc(1ch + var(--track-num)); }
+.rn-sep { display: inline-block; }
+span.pt:not(.rn-sep) { display: inline; }
+
+/* ---------- ReadoutEfficiency: good / neutral / bad / none (colour set by tier in the component) ---------- */
+.r-readout-eff {
+  margin-left: auto; cursor: default;
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-label); font-weight: 600; letter-spacing: var(--track-num);
+}
+
+/* ---------- PaceRing (geometry untouched) ---------- */
+.pace-ring-value { font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-fig); color: var(--ink); line-height: 1; }
+.pace-ring-sub {
+  font-size: var(--fs-min); font-weight: 700; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--ink-3); margin-top: 0;
+}
+
+/* ---------- duration bar: exact flagged time, one block per hour (mock 617-624) ---------- */
+.dur {
+  display: block; height: 10px; width: calc(var(--h) * var(--hour)); max-width: 100%;
+  background:
+    repeating-linear-gradient(to right, transparent 0, transparent calc(var(--hour) - 2px), var(--dur-gap, var(--panel)) calc(var(--hour) - 2px), var(--dur-gap, var(--panel)) var(--hour)),
+    var(--bar);
+}
+/* --hour's 64px desktop value lives in globals.css beside the token block. */
+.scale-note { font-size: var(--fs-min); color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.scale-note i { display: block; width: var(--hour); height: 6px; background: var(--bar); flex: none; }

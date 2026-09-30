@@ -62,6 +62,7 @@ export function Modal({
   title,
   children,
   size = "md",
+  footer,
 }: {
   open: boolean;
   onClose: () => void;
@@ -82,6 +83,11 @@ export function Modal({
    * and max height are tuned together with it.
    */
   size?: "md" | "lg" | "xl";
+  /**
+   * Optional footer bar (`.dlg-foot`, sticky at the panel's bottom) for the
+   * dialog's actions. Omit it and the dialog is header + body, as before.
+   */
+  footer?: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -158,7 +164,7 @@ export function Modal({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="modal-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center"
+      className="modal-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -166,20 +172,16 @@ export function Modal({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={`modal-panel max-h-[90vh] w-full ${PANEL_MAX_W[size]} overflow-y-auto rounded-t-[var(--radius)] border border-[var(--line)] bg-[var(--bg-1)] outline-none sm:rounded-[var(--radius)]`}
+        className={`modal-panel max-h-[90vh] w-full ${PANEL_MAX_W[size]} overflow-y-auto outline-none`}
       >
-        <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
-          <h2 className="text-base font-semibold text-[var(--fg-0)]">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-11 w-11 place-items-center rounded-full text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
-            aria-label="Close"
-          >
+        <div className="dlg-head">
+          <h2>{title}</h2>
+          <button type="button" onClick={onClose} className="dlg-close" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="p-4">{children}</div>
+        <div className="dlg-body">{children}</div>
+        {footer != null && <div className="dlg-foot">{footer}</div>}
       </div>
     </div>
   );

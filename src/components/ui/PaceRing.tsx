@@ -57,10 +57,10 @@ export function PaceRing({
     tier === "good"
       ? "var(--good)"
       : tier === "warn"
-      ? "var(--warn)"
+      ? "var(--ink-2)"
       : tier === "bad"
       ? "var(--bad)"
-      : "var(--brand)";
+      : "var(--accent-text)";
 
   return (
     <div
@@ -75,7 +75,7 @@ export function PaceRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="var(--bg-3)"
+          stroke="var(--bar-track)"
           strokeWidth={strokeWidth}
         />
         <circle
@@ -85,7 +85,7 @@ export function PaceRing({
           fill="none"
           stroke={strokeColor}
           strokeWidth={strokeWidth}
-          strokeLinecap="round"
+          strokeLinecap="butt"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}

@@ -5,7 +5,7 @@ import { efficiencyTier, fmtPct, type DayDenom } from "@/lib/stats";
 
 const TIER_COLOR = {
   good: "var(--good)",
-  warn: "var(--warn)",
+  warn: "var(--ink-2)",
   bad: "var(--bad)",
 } as const;
 
@@ -22,7 +22,7 @@ export function ReadoutEfficiency({
   return (
     <span
       className="r-readout-eff"
-      style={{ color: tier ? TIER_COLOR[tier] : "var(--fg-3)" }}
+      style={{ color: tier ? TIER_COLOR[tier] : "var(--ink-3)" }}
       title={
         denom.source === "scheduled"
           ? "Efficiency measured against scheduled hours"

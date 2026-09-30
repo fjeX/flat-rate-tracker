@@ -3,14 +3,14 @@
 import type { ComponentPropsWithoutRef } from "react";
 
 /**
- * A date or time input drawn as a pill, whose WHOLE surface opens the picker.
+ * A date or time input drawn as a field, whose WHOLE surface opens the picker.
  *
  * TWO THINGS THIS FIXES, BOTH OF WHICH READ AS BUGS
  *
  * 1. By default only the little calendar/clock glyph opens the picker. Clicking
  *    the date text just puts a caret in the field, so the control looks dead
  *    unless you happen to hit a 16px target at its right edge. `showPicker()` on
- *    click makes the whole pill the affordance it already looked like.
+ *    click makes the whole field the affordance it already looked like.
  *
  * 2. The browser's popup is not stylable — no selector reaches inside it — so a
  *    white calendar over a dark page can only be fixed with `color-scheme`,

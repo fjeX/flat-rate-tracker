@@ -1,7 +1,7 @@
 /**
  * Skeleton loaders — shape-accurate placeholders for the server-fetched
  * views (dashboard, history, pay period). Boring on purpose: no glow, no
- * brand color, just a subtle shimmer sweep across bg-3/bg-4. Neutralized to
+ * brand color, just an opacity pulse on the --plate fill. Neutralized to
  * a static block under prefers-reduced-motion (see globals.css guard).
  */
 
@@ -43,7 +43,7 @@ export function DashboardSkeleton() {
           <div className="pace">
             <Skeleton style={{ width: "40%", height: 14 }} />
             <Skeleton style={{ width: "60%", height: 22 }} />
-            <Skeleton style={{ width: "100%", height: 12, borderRadius: 999 }} />
+            <Skeleton style={{ width: "100%", height: 12, borderRadius: "var(--r-tag)" }} />
           </div>
         </div>
 
@@ -93,7 +93,7 @@ export function ChartSkeleton() {
       <Skeleton style={{ width: 110, height: 11, marginBottom: 8 }} />
       <div className="card padded">
         <Skeleton style={{ width: "45%", height: 28, marginBottom: 14 }} />
-        <Skeleton style={{ width: "100%", height: 130, borderRadius: "var(--radius-sm)" }} />
+        <Skeleton style={{ width: "100%", height: 130, borderRadius: "var(--r-sign)" }} />
         <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
           <Skeleton style={{ width: 70, height: 13 }} />
           <Skeleton style={{ width: 90, height: 13 }} />

@@ -164,3 +164,29 @@ describe("Modal body scroll lock", () => {
     expect(document.body.style.overflow).toBe("hidden");
   });
 });
+
+describe("Modal dialog structure", () => {
+  it("renders header, body and close button, and no footer by default", () => {
+    render(
+      <Modal open onClose={() => {}} title="Plain">
+        <p>body</p>
+      </Modal>,
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.querySelector(".dlg-head h2")?.textContent).toBe("Plain");
+    expect(dialog.querySelector(".dlg-body")?.textContent).toBe("body");
+    expect(dialog.querySelector(".dlg-foot")).toBeNull();
+    expect(screen.getByRole("button", { name: "Close" }).className).toContain("dlg-close");
+  });
+
+  it("renders the optional footer bar and keeps its actions in the focus trap's reach", () => {
+    render(
+      <Modal open onClose={() => {}} title="With actions" footer={<button type="button">Save</button>}>
+        <p>body</p>
+      </Modal>,
+    );
+    const foot = screen.getByRole("dialog").querySelector(".dlg-foot");
+    expect(foot).not.toBeNull();
+    expect(foot?.querySelector("button")?.textContent).toBe("Save");
+  });
+});

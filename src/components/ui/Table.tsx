@@ -1,8 +1,9 @@
 import type { HTMLAttributes, ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 
 /**
- * Data table on design-system rules: sentence-case dim headers, hairline
- * row rules, tabular numerals via the `num` cell prop. Wrap it in
+ * Ruled data table (mock `.tbl`): 46px rows, label-style headers, hairline
+ * rules, figures right-aligned and set in the figure font via the `num` cell
+ * prop. Wrap it in
  * <Card flush> and it reads as one surface.
  */
 export function Table({ className, ...rest }: HTMLAttributes<HTMLTableElement>) {

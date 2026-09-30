@@ -151,6 +151,23 @@ fonts and corner radius only** — no layout, wording or positions moved:
   schedule days, the amber efficiency tier, the "Unpaid rework · N lines"
   row). Check the element is present and says the right thing; do not report
   it for not being amber. Green = good and red = bad are unchanged.
+- Phase 2 restyled the shared controls. Nothing moved and no wording changed,
+  but these look different:
+  - **Every on/off switch** is now a labelled `OFF | ON` block (about 92px
+    wide) instead of a small sliding pill. The lit side is the current state.
+    Still `role="switch"` with the same accessible name, so the Quick Add RO,
+    time-of-day, True Time sharing, "Show all lines" and "Open ticket"
+    switches are found the same way.
+  - **Buttons** are square-cornered signs with a 2px outline. The main action
+    is a solid accent fill. **Disabled buttons have a dashed outline**
+    instead of looking faded.
+  - **Status pills** (period status, dispute status, `unpaid rework`, …) are
+    now **outlined word tags with no fill**. "Pill" in this file means that
+    tag.
+  - The **date and time "pills"** on Log RO and Quick Add are now full-size
+    input fields, and they still open the picker on tap.
+  - **Cards** have a thick rule along the top. **Dialogs** have a grey title
+    bar with an ✕ close button.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

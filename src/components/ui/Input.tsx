@@ -1,7 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
-  /** Tabular numerals in JetBrains Mono — RO numbers, VINs, hours. */
+  /** Figures font (Azeret Mono, --font-num): RO numbers, hours, money. */
   mono?: boolean;
 };
 
