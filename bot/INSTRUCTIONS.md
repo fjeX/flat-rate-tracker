@@ -344,6 +344,31 @@ fonts and corner radius only** — no layout, wording or positions moved:
     (they were one card with a sub-card). **What you sold**: per-period rows
     with green bars, then a MOST UPSOLD list. **Claims and recovery**: four
     labelled figures in a spec row.
+  - **Schedule:** the H1 is "Schedule" with the two-sentence lede; the month
+    picker (‹ › outlined buttons, the month name between them, a quiet
+    **Today** button when you are off the current month) sits at the top
+    right of the page head. The calendar is a **zone named after the month**
+    ("MARCH 2026") with "Nh scheduled" at its right; the legend sits above
+    the grid. **The "amber dot" is gone**: a day that needs a decision carries
+    a small **accent (blue) dot** in its top-right corner, and the legend
+    names it "Needs a decision". Scheduled days are plate cells with the
+    hours under the number (dim = scheduled, bright = logged), today's number
+    is accent, the selected day has an accent outline, a one-day override
+    still shows `*`. When unsettled days exist, a **FIX** status field above
+    the calendar reads "N days need a decision — scheduled, nothing logged."
+    with the ‹ N of M › stepper at its right (was the "unsettled" strip). The
+    day panel is an outlined panel inside the zone (still sticky above the
+    thumb bar on phones): date, a status tag (red "Needs a decision", green
+    "Nh logged", plain otherwise), the **Actual hours worked** field with a
+    blue Save, then Day off / Worked, zero flag / Undo zero day / Change
+    shift as outlined buttons; the shift editor opens under a rule with Save
+    shift (blue) and Reset to pattern. **Weekly pattern** is a zone with
+    "Nh/week" at its right; the Every week / 2-week rotation choice is a
+    button group with `aria-pressed`; the day rows are ruled with a checkbox,
+    the hrs / starts / lunch fields and "out ≈ HH:MM"; the version list is
+    ruled rows with a quiet Remove. §8c's wording ("amber 'empty?' days",
+    "the legend under the grid") means this accent-marked day and the legend
+    above the grid.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

@@ -17,6 +17,7 @@
 @import "./styles/page-timer.css";
 @import "./styles/page-op-codes.css";
 @import "./styles/page-insights.css";
+@import "./styles/page-schedule.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1
@@ -1240,109 +1241,6 @@ a { color: inherit; }
 
 /* ── Jump-to-the-day links for unresolved dates ───────────────────── */
 
-/* ── Schedule: month grid ─────────────────────────────────────────── */
-/* Cells carry NO border. The old grid outlined every one of 42 cells, which
-   read as a table of boxes and fought the flat-ground/floating-surface rule;
-   a scheduled day is now a tonal step up from the page ground and everything
-   else is the ground itself. */
-.day-cell {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 3px;
-  min-height: 56px;
-  padding: 6px 2px 5px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--bg-1);
-  color: var(--fg-1);
-  cursor: pointer;
-  font: inherit;
-  transition: background 120ms;
-}
-.day-cell:hover { background: var(--bg-2); }
-.day-cell:focus-visible { outline: none; box-shadow: var(--ring); }
-.day-cell:active { transform: scale(0.96); }
-/* Days with no shift and days off sit ON the ground rather than above it. */
-.day-cell.is-bare { background: transparent; }
-.day-cell.is-out { background: transparent; opacity: 0.4; }
-.day-cell.is-selected { background: var(--brand-bg); box-shadow: inset 0 0 0 1px var(--brand); }
-.day-num {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px; font-weight: 550; line-height: 1;
-}
-.day-cell.is-today .day-num { color: var(--brand); font-weight: 700; }
-.day-sub {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px; line-height: 1; color: var(--fg-3);
-}
-.day-sub.is-planned { opacity: 0.55; }
-.day-flag { width: 6px; height: 6px; border-radius: 999px; background: var(--warn); }
-/* A one-day shift override. Without this the cell is byte-identical to a
-   pattern day whenever the override lands on the same hours. */
-.day-override { color: var(--brand); font-weight: 700; margin-left: 1px; }
-.day-cell.is-override .day-sub { opacity: 1; }
-
-.day-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; padding: 0 2px; }
-.day-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-3); }
-.day-legend i {
-  font-style: normal;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-}
-
-/* ── Schedule: docked day inspector ───────────────────────────────── */
-/* The panel used to render BELOW six rows of calendar, so on a phone the day
-   you just tapped scrolled itself off screen. It docks instead.
-
-   DOCKING IS A PHONE AFFORDANCE ONLY. Sticky on desktop meant the panel stayed
-   frozen while the calendar slid underneath it — measured at 208px of travel
-   before it released — which reads as the calendar scrolling inside its own box
-   and then handing off to the page. Nothing on a desktop screen needs to be
-   held in thumb reach, so above 900px this is an ordinary card in flow and the
-   page scrolls as one thing. */
-.day-dock {
-  margin-top: 16px;
-  background: var(--bg-1);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  padding: 14px;
-  /* A resting surface here, not something above the page — pop elevation is
-     for the docked state, where it genuinely floats over the grid. */
-  box-shadow: var(--shadow-card);
-}
-@media (max-width: 899px) {
-  .day-dock {
-    position: sticky;
-    bottom: calc(72px + env(safe-area-inset-bottom));
-    box-shadow: var(--shadow-pop);
-    z-index: 20;
-  }
-}
-.day-dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
-
-/* Stepper that walks the unsettled days, so they don't have to be hunted. */
-.settle-strip {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 8px 8px 8px 14px;
-  margin-bottom: 16px;
-}
-.settle-strip-label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; color: var(--fg-1); }
-.settle-strip-nav { display: flex; align-items: center; gap: 2px; flex: none; }
-.settle-count {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px; color: var(--fg-3); min-width: 44px; text-align: center;
-}
-.icon-btn {
-  width: var(--tap-min); height: var(--tap-min);
-  display: grid; place-items: center;
-  border: 1px solid transparent; background: transparent;
-  color: var(--fg-2); border-radius: 999px; cursor: pointer;
-}
-.icon-btn:hover:not(:disabled) { background: var(--bg-3); }
-.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+/* Schedule: page-schedule.css (phase 5). */
 
 /* Insights: page-insights.css (phase 5). */
