@@ -2009,7 +2009,9 @@ describe("live-line resolution across a claim's rows", () => {
       }
     }
     expect(exactCases).toBeGreaterThan(10);
-  });
+    // ~1s alone, 5.5s under the full suite's parallel load: past vitest's 5s
+    // default, so it failed only on full runs. The work is bounded; give it room.
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------
