@@ -5,7 +5,88 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil, Trash2 } from "lucide-react";
 import type { OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
+import { Badge } from "@/components/ui/Badge";
+import { withPt } from "@/components/ui/Figure";
 import { tagHueVar } from "./tagHue";
+
+/**
+ * The cells of one library row (phase 5 sketch): code with its category tick,
+ * description · notes, flag hours, then edit / delete. Shared by the
+ * signed-in row (which wraps it in a sortable `<li>`) and the guest mirror
+ * (a plain `<li>`), so the two can't drift.
+ */
+export function OpCodeRowContent({
+  opCode,
+  tagColors,
+  onEdit,
+  onDelete,
+  deleting,
+}: {
+  opCode: OpCode;
+  tagColors?: Record<string, number>;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleting?: boolean;
+}) {
+  return (
+    <>
+      <div className="opl-main">
+        <div
+          className="opl-code"
+          title={opCode.tags.length > 0 ? opCode.tags.join(", ") : undefined}
+        >
+          <span
+            className="opl-tick"
+            style={{ "--tagc": tagHueVar(opCode.tags[0], tagColors) } as React.CSSProperties}
+            aria-hidden="true"
+          />
+          <b>{opCode.code}</b>
+        </div>
+        <div className="opl-desc">
+          <span>
+            {opCode.description}
+            {opCode.notes && (
+              <i>
+                {opCode.description ? " · " : ""}
+                {opCode.notes}
+              </i>
+            )}
+          </span>
+          {opCode.subOpCodes.length > 0 && (
+            <Badge tone="neutral">
+              {opCode.subOpCodes.length} sub{opCode.subOpCodes.length !== 1 ? "s" : ""}
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      <span className="opl-hours num">
+        {withPt(fmtHours(opCode.flagHours))}
+        <span className="unit">h</span>
+      </span>
+
+      <div className="opl-acts" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`Edit ${opCode.code}`}
+          className="iconbtn"
+        >
+          <Pencil size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={deleting}
+          aria-label={`Delete ${opCode.code}`}
+          className="iconbtn is-del"
+        >
+          <Trash2 size={16} aria-hidden="true" />
+        </button>
+      </div>
+    </>
+  );
+}
 
 export function OpCodeRow({
   opCode,
@@ -35,7 +116,6 @@ export function OpCodeRow({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
   };
 
   return (
@@ -53,92 +133,33 @@ export function OpCodeRow({
         }
       }}
       aria-label={`Edit ${opCode.code}`}
-      className="opl-grid opl-row"
+      className={`opl-row${isDragging ? " is-dragging" : ""}`}
     >
       {reorderable ? (
         <div
           {...listeners}
           onClick={(e) => e.stopPropagation()}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--fg-3)] cursor-grab active:cursor-grabbing hover:text-[var(--fg-1)]"
+          className="opl-grip"
           aria-label="Drag to reorder"
         >
-          <GripVertical className="h-4 w-4" />
+          <GripVertical size={16} aria-hidden="true" />
         </div>
       ) : (
         <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--fg-3)] opacity-20"
+          className="opl-grip is-off"
           title="Reordering is available in My order with no search or tag filters"
           aria-hidden="true"
         >
-          <GripVertical className="h-4 w-4" />
+          <GripVertical size={16} />
         </div>
       )}
-
-      <div className="opl-main">
-        {/* Code + category tick (hue = first tag) */}
-        <div
-          className="opl-codecell"
-          title={opCode.tags.length > 0 ? opCode.tags.join(", ") : undefined}
-        >
-          <span
-            className="opl-tick"
-            style={
-              { "--tagc": tagHueVar(opCode.tags[0], tagColors) } as React.CSSProperties
-            }
-          />
-          <span className="truncate font-mono text-sm font-semibold text-[var(--fg-0)]">
-            {opCode.code}
-          </span>
-        </div>
-
-        {/* Description · notes, one truncated line, sub count pinned */}
-        <div className="opl-desc">
-          <span className="truncate text-xs">
-            {opCode.description && (
-              <span className="text-[var(--fg-1)]">{opCode.description}</span>
-            )}
-            {opCode.notes && (
-              <span className="italic text-[var(--fg-3)]">
-                {opCode.description ? " · " : ""}
-                {opCode.notes}
-              </span>
-            )}
-          </span>
-          {opCode.subOpCodes.length > 0 && (
-            <span className="badge badge-neutral shrink-0">
-              {opCode.subOpCodes.length} sub
-              {opCode.subOpCodes.length !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <span className="opl-hours font-mono text-sm font-semibold tabular text-[var(--brand)]">
-        {fmtHours(opCode.flagHours)}
-      </span>
-
-      <div
-        className="opl-acts flex shrink-0 items-center justify-end gap-1"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          onClick={() => onEdit(opCode)}
-          aria-label={`Edit ${opCode.code}`}
-          className="relative cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] after:absolute after:-inset-1.5 after:content-['']"
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(opCode)}
-          disabled={deleting}
-          aria-label={`Delete ${opCode.code}`}
-          className="relative cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)] disabled:opacity-50 after:absolute after:-inset-1.5 after:content-['']"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
+      <OpCodeRowContent
+        opCode={opCode}
+        tagColors={tagColors}
+        onEdit={() => onEdit(opCode)}
+        onDelete={() => onDelete(opCode)}
+        deleting={deleting}
+      />
     </li>
   );
 }

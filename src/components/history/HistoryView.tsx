@@ -319,7 +319,7 @@ export function HistoryView({
               );
             })}
           </div>
-          <label className="hist-search">
+          <label className="search-well">
             <span className="sr-only">Search RO#, vehicle, or notes</span>
             <Search aria-hidden="true" />
             <Input
@@ -331,7 +331,7 @@ export function HistoryView({
             {search && (
               <button
                 type="button"
-                className="hist-clear"
+                className="search-clear"
                 onClick={() => setSearch("")}
                 aria-label="Clear search"
               >

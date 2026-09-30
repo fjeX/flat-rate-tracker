@@ -21,17 +21,7 @@
 /* the sort direction sits in the pressed button's label */
 .hist-ctl .seg button .dir { margin-left: 3px; font-weight: 400; }
 
-/* the search well: the shared .input with a glyph set into its left edge */
-.hist-search { position: relative; flex: 1 1 14rem; min-width: 0; display: block; }
-.hist-search > svg { position: absolute; left: var(--s3); top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--ink-3); pointer-events: none; }
-.hist-search .input { width: 100%; padding-left: calc(var(--s3) + 18px + var(--s2)); padding-right: var(--tap); }
-.hist-search .hist-clear {
-  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
-  display: grid; place-items: center; width: var(--tap); height: var(--tap);
-  background: transparent; border: 0; border-radius: var(--r-sign); color: var(--ink-2); cursor: pointer;
-}
-.hist-search .hist-clear:hover { background: var(--quiet-hover); color: var(--ink); }
-.hist-search .hist-clear:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+/* the search well is the shared .search-well (ui-page.css) */
 
 /* ---------- the chart zone ---------- */
 .hist-chart-empty { padding: var(--s4) 0; color: var(--ink-3); font-size: var(--fs-label); }

@@ -293,6 +293,24 @@ fonts and corner radius only** — no layout, wording or positions moved:
     time on a bound line). From 700px wide the slots sit side by side. The
     empty state is a zone with "Start a timer" and a three-step line under it
     (Start · Pick the line · Save).
+  - **Op Codes:** the H1 is "Op codes" with "Your library: N codes, X.Xh on
+    the books. Drag to reorder." under it and an **Add a code** button in the
+    page head (was "Add"). Search is a full-size field (placeholder "Search
+    code, description, or tag") with an ✕ clear button. **Sort** is a button
+    group with `aria-pressed` (My order / Code / Hours / Added; the pressed
+    one carries ↓/↑, My order has none) — the "Sort By:" chip row is gone.
+    **Tags** are outlined chips that toggle (`aria-pressed`), each with a
+    3px colour tick at its left instead of the round dot; a pressed chip is
+    the accent fill; a quiet **Clear** button appears once any is pressed.
+    The list is a **Library** zone: a header line "CODE · DESCRIPTION" /
+    "FLAG", then one ruled row per code — grip, the colour tick, the code in
+    bold, the description (notes in italics after " · ", a "N subs" tag),
+    the flag hours as a figure with a small "h", and the pencil / trash
+    buttons (hover-only where there is a mouse, always visible on touch).
+    On phones the description sits under the code. The footing reads
+    "N codes shown" and "X.Xh flagged"; the zone's top right says "N of M
+    shown" only while a search or tag filter is on. §8d's "tag filter chips
+    show a small color dot" is now that tick; the row tick is unchanged.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

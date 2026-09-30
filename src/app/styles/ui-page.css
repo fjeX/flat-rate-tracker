@@ -25,6 +25,35 @@
   .pagehead h1 { font-size: var(--fs-head-wide); }
 }
 
+/* ---------- search well: the shared .input with a glyph set into its left edge ---------- */
+.search-well { position: relative; flex: 1 1 14rem; min-width: 0; display: block; }
+.search-well > svg { position: absolute; left: var(--s3); top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--ink-3); pointer-events: none; }
+.search-well .input { width: 100%; padding-left: calc(var(--s3) + 18px + var(--s2)); padding-right: var(--tap); }
+.search-well .search-clear {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: var(--tap); height: var(--tap);
+  background: transparent; border: 0; border-radius: var(--r-sign); color: var(--ink-2); cursor: pointer;
+}
+.search-well .search-clear:hover { background: var(--quiet-hover); color: var(--ink); }
+.search-well .search-clear:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+
+/* ---------- filter chip: an outline chip that toggles (aria-pressed = accent fill) ---------- */
+.fchip {
+  display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--tap); padding: 0 var(--s3);
+  background: transparent; color: var(--ink); border: var(--w-edge) solid var(--line); border-radius: var(--r-sign);
+  font: inherit; font-size: var(--fs-label); font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.fchip:hover { background: var(--quiet-hover); border-color: var(--ink-3); }
+.fchip:active { background: var(--quiet-active); }
+.fchip:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.fchip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.fchip[aria-pressed="true"]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+/* a category hue, as a tick only (never text, never a fill) */
+.fchip .hue { display: inline-block; width: 3px; height: 14px; border-radius: 2px; background: var(--tagc, var(--ink-3)); flex: none; }
+.fchip[aria-pressed="true"] .hue { background: var(--accent-ink); }
+.fchips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
 /* ---------- plain rows on the wall ---------- */
 .rows > * { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line); min-height: 48px; }
 .rows > *:last-child { border-bottom: 0; }

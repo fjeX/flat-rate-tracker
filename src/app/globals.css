@@ -15,6 +15,7 @@
 @import "./styles/page-pay-period.css";
 @import "./styles/page-history.css";
 @import "./styles/page-timer.css";
+@import "./styles/page-op-codes.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1
@@ -1024,72 +1025,7 @@ a:focus-visible {
 
 a { color: inherit; }
 
-/* ── Op code library — ledger ─────────────────────────────────────────
-   One sheet, hairline-divided rows, a fixed mono code column and a
-   right-aligned tabular hours column. Category hue appears only as a
-   3px tick beside the code (the Phase-4 "op-code category hue" idea). */
-.opl-sheet {
-  background: var(--bg-1);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-.opl-grid {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 64px 76px;
-  gap: 10px;
-  align-items: center;
-}
-/* Code + description live in one flexible cell: side by side on desktop,
-   stacked on narrow screens so descriptions keep readable width. */
-.opl-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.opl-codecell { display: flex; align-items: center; gap: 8px; flex: 0 0 108px; min-width: 0; }
-.opl-desc { display: flex; align-items: baseline; gap: 8px; flex: 1 1 auto; min-width: 0; }
-@media (max-width: 560px) {
-  .opl-grid { grid-template-columns: 26px minmax(0, 1fr) 46px 72px; gap: 6px; }
-  .opl-main { flex-direction: column; align-items: stretch; gap: 2px; }
-  .opl-codecell { flex: none; }
-  .opl-head .opl-desc { display: none; }
-}
-.opl-head {
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--fg-3);
-  font-weight: 550;
-}
-.opl-row {
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-.opl-row:last-child { border-bottom: none; }
-.opl-row:hover { background: var(--bg-2); }
-.opl-row:focus-visible { outline: none; box-shadow: inset var(--ring); }
-.opl-tick {
-  flex-shrink: 0;
-  width: 3px;
-  height: 16px;
-  border-radius: 2px;
-  background: var(--tagc, var(--bg-3));
-}
-.opl-hours { text-align: right; }
-/* Actions fade in on hover where hover exists; stay visible on touch. */
-@media (hover: hover) {
-  .opl-acts { opacity: 0; transition: opacity 0.12s ease; }
-  .opl-row:hover .opl-acts,
-  .opl-row:focus-within .opl-acts { opacity: 1; }
-}
-.opl-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 14px;
-  background: var(--bg-2);
-  font-size: 12px;
-  color: var(--fg-3);
-}
+/* Op code library: page-op-codes.css (phase 5). */
 
 /* ── Light theme ─────────────────────────────────────────── */
 /* The palette lives in the token block at the top of this file
