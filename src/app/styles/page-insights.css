@@ -54,7 +54,10 @@
 .ins-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--s4); }
 .ins-grid > * { min-width: 0; }
 @media (min-width: 1024px) {
-  .ins-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  /* stretch, not start: the shorter zone of a pair left the wall showing
+     under it (Liem, 2026-09-30) */
+  .ins-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  .ins-grid > .zone { margin-top: var(--s4); }
   .ins-grid > *:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 .ins-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin-top: var(--s3); }
