@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { Lightbulb } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+import { Zone } from "@/components/ui/Zone";
+import { Badge } from "@/components/ui/Badge";
+import { withPt } from "@/components/ui/Figure";
 import { MixSection } from "@/components/insights/MixSection";
 import {
   BigJobsSection,
@@ -77,12 +79,25 @@ import type {
   UnpaidTime,
 } from "@/lib/types";
 
+// Phase 5 sketch: every section is a Zone, the window and sort chips are
+// segmented controls, the pills are tags, and the bars use the page's bar
+// tokens. Every calculation and every sentence is as it was — the bot and the
+// tests key on the wording.
+
 // Rows shown before the table collapses behind "Show all". Not a hard cap —
 // with sortable columns a hidden tail would mean sorting ascending silently
 // showed a different 15 rows than sorting descending.
 const COLLAPSED_ROWS = 15;
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * The tallest trend bar, as a percentage of the plot's height (phase 5: the
+ * plot grows on wider screens, so bars are no longer sized in pixels). The
+ * ceiling bar reaches this; the value labels sit in the remaining headroom.
+ * Exported for TrendSection's test, which asserts bar heights against it.
+ */
+export const TREND_BAR_MAX = 86;
 
 type FilterKind = "week" | "period" | "month" | "all";
 
@@ -99,6 +114,22 @@ type WeekdaySort = "day" | "efficiency";
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
+}
+
+/** A figure with its unit as a word: "12.4" + "h". */
+function Hours({ value, unit = "h" }: { value: string; unit?: string }) {
+  return (
+    <span className="num">
+      {withPt(value)}
+      <span className="unit">{unit}</span>
+    </span>
+  );
+}
+
+/** The ratio as a tag: colour is state (red = costing you, green = beating the book). */
+function RatioTag({ ratio, tier }: { ratio: number; tier: "good" | "warn" | "bad" | null }) {
+  const tone = tier === "bad" ? "bad" : tier === "good" ? "good" : "neutral";
+  return <Badge tone={tone}>{formatRatio(ratio)}×</Badge>;
 }
 
 // Same windows as the History page, so the two pages mean the same thing by
@@ -207,6 +238,34 @@ function SortHead({
   );
 }
 
+/** A segmented control for a small set of choices. */
+function Seg<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="seg" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 
 /** One line describing why a leak is a leak, in the tech's own vocabulary. */
@@ -224,28 +283,21 @@ function leakWhy(leak: Leak): string {
 }
 
 /**
- * The page's opening claim: everything unpaid, ranked, in hours.
- *
- * Leads with the total because that is the number a tech can act on — "which
- * job" is the follow-up question, not the first one. The bar is scaled to the
- * worst row rather than to the total, so the top row always fills it and the
- * rest read as a share of the worst offender instead of as slivers.
- */
-/**
  * The page's opening claim, above the window chips on purpose.
  *
  * This surface's whole job is to reach a conclusion — opening on a control
  * instead makes the reader do the concluding, which is what the old chips-first
  * layout did. An empty board is a real finding too, and a better one.
+ *
+ * Leads with the total because that is the number a tech can act on — "which
+ * job" is the follow-up question, not the first one.
  */
 function FindingLede({ board }: { board: LeakBoard }) {
   if (board.leaks.length === 0) {
     return (
-      <div>
-        <p className="text-base font-semibold" style={{ color: "var(--fg-0)" }}>
-          Nothing unpaid in this window.
-        </p>
-        <p className="mt-1 max-w-[60ch] text-sm" style={{ color: "var(--fg-2)" }}>
+      <div className="ins-lede">
+        <p className="ins-lead">Nothing unpaid in this window.</p>
+        <p className="ins-sub">
           Every job you timed came in at or under its book time, no comeback
           hours went unflagged, and your unpaid-time ledger is empty for this
           window.
@@ -255,24 +307,20 @@ function FindingLede({ board }: { board: LeakBoard }) {
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span
-          className="mono tabular-nums text-[34px] font-bold leading-[1.1] tracking-[-0.02em]"
-          style={{ color: "var(--bad)" }}
-        >
-          {fmtHours(board.totalHours)}h
+    <div className="ins-lede">
+      <div className="ins-lede-fig">
+        <span className="num ins-bad">
+          {withPt(fmtHours(board.totalHours))}
+          <span className="unit">h</span>
         </span>
-        <span className="text-base font-semibold" style={{ color: "var(--fg-0)" }}>
-          you weren&rsquo;t paid for
-        </span>
+        <span className="ins-lead">you weren&rsquo;t paid for</span>
       </div>
       {/* Names the three sources instead of claiming "every source the app can
           measure". The old wording was an affirmative claim about coverage the
           board did not have — the unpaid-time ledger was structurally
           unreachable from it — and a claim like that is worse than a gap,
           because it tells the tech to stop looking. Say what is in the number. */}
-      <p className="mt-2 max-w-[60ch] text-sm" style={{ color: "var(--fg-2)" }}>
+      <p className="ins-sub">
         Jobs that ran past their book time, comebacks that flagged zero, and
         every hour in your unpaid-time ledger — ranked by what it cost you.
       </p>
@@ -288,9 +336,11 @@ export function LeakSection({ board }: { board: LeakBoard }) {
   const worst = board.leaks[0]?.hours ?? 0;
 
   return (
-    <section>
-      <div className="section-title">What&rsquo;s costing you</div>
-      <Card flush>
+    <Zone name="What's costing you">
+      {/* The bar is scaled to the worst row rather than to the total, so the
+          top row always fills it and the rest read as a share of the worst
+          offender instead of as slivers. */}
+      <ol className="ins-rows">
         {board.leaks.map((leak, i) => {
           // An overrun at least paid some of its time; rework and unpaid clock
           // paid none of it, so both are the worse kind. Keyed on "is this an
@@ -300,13 +350,13 @@ export function LeakSection({ board }: { board: LeakBoard }) {
             leak.kind === "overrun" ? ratioTier(leak.ratio) ?? "warn" : "bad";
           const pct = worst > 0 ? Math.max(2, (leak.hours / worst) * 100) : 0;
           return (
-            <div key={leak.key} className="leak-row">
-              <div className="leak-head">
-                <span className="leak-rank" aria-hidden="true">
+            <li key={leak.key}>
+              <div className="ins-row-head">
+                <span className="ins-rank" aria-hidden="true">
                   {i + 1}
                 </span>
-                <span className="leak-name">
-                  <span className="leak-code">{leak.code}</span>
+                <span className="ins-row-name">
+                  <span className="ins-row-code">{leak.code}</span>
                   {/* Gated on `source`, NOT on the key's prefix. An opcode leak
                       keys `lib:<id>:overrun` / `custom:<CODE>:rework`, which
                       opCodeOrigin reads correctly; a ledger leak keys
@@ -314,23 +364,20 @@ export function LeakSection({ board }: { board: LeakBoard }) {
                       silently labelled "custom" — a made-up provenance on a row
                       that has no op code by definition. */}
                   {leak.source === "opcode" && <OriginTag row={leak} />}
-                  <span className="leak-why">{leakWhy(leak)}</span>
+                  <span className="ins-row-why">{leakWhy(leak)}</span>
                 </span>
-                <span className={`leak-hours ${tier === "bad" ? "bad" : "warn"}`}>
-                  {fmtHours(leak.hours)}h
+                <span className={`ins-row-fig${tier === "bad" ? " ins-bad" : ""}`}>
+                  <Hours value={fmtHours(leak.hours)} />
                 </span>
               </div>
-              <div className="leak-track">
-                <i
-                  className={`leak-fill${tier === "bad" ? " bad" : ""}`}
-                  style={{ width: `${pct}%` }}
-                />
+              <div className="ins-track">
+                <i className={tier === "bad" ? "is-bad" : undefined} style={{ width: `${pct}%` }} />
               </div>
-            </div>
+            </li>
           );
         })}
-      </Card>
-      <p className="mt-2 px-1 text-xs" style={{ color: "var(--fg-3)" }}>
+      </ol>
+      <p className="ins-fine">
         Overrun is actual minus flag on jobs you timed. Unpaid rework has no
         ratio because it flags zero — the hours are the whole finding. Ledger
         time (waiting, shop time, comebacks with no ticket) has no op code, so
@@ -338,7 +385,7 @@ export function LeakSection({ board }: { board: LeakBoard }) {
         day is slow because of the jobs on it, so counting it again would
         inflate the total.
       </p>
-    </section>
+    </Zone>
   );
 }
 
@@ -352,25 +399,24 @@ export function LeakSection({ board }: { board: LeakBoard }) {
 function GainSection({ gains }: { gains: Gain[] }) {
   const shown = gains.slice(0, 3);
   return (
-    <section>
-      <div className="section-title">Where you&rsquo;re winning</div>
-      <Card>
+    <Zone name="Where you're winning">
+      <ul className="ins-gains">
         {shown.map((gain) => (
-          <div key={gain.key} className="gain-row">
-            <span className="gain-name">
-              <span className="text-sm font-semibold" style={{ color: "var(--fg-0)" }}>
-                {gain.code}
-              </span>
-              <span className="mt-0.5 block text-xs" style={{ color: "var(--fg-3)" }}>
+          <li key={gain.key}>
+            <span className="ins-row-name">
+              <span className="ins-row-code">{gain.code}</span>
+              <span className="ins-row-why">
                 {gain.uses} {gain.uses === 1 ? "job" : "jobs"} at{" "}
                 {formatRatio(gain.ratio)}× book
               </span>
             </span>
-            <span className="gain-hours">+{fmtHours(gain.hours)}h</span>
-          </div>
+            <span className="ins-row-fig ins-good">
+              +<Hours value={fmtHours(gain.hours)} />
+            </span>
+          </li>
         ))}
-      </Card>
-    </section>
+      </ul>
+    </Zone>
   );
 }
 
@@ -399,27 +445,13 @@ export function TimeGoesSection({
   const reworkHours = rework.reduce((sum, r) => sum + r.unpaidHours, 0);
 
   return (
-    <section>
-      <div className="section-title">Where your time goes</div>
-
+    <Zone name="Where your time goes">
       {/* Phone form. Same `shown` array, same sort state — a 5-column table
-          clips its last column inside .card.flush at 390px, and that column is
-          the ratio this whole section exists to show. The sort chips reuse the
-          established filter-chip pattern rather than inventing a mobile-only
-          control; pressing one is exactly the header press it replaces. */}
-      <div className="opcode-list">
-        <div className="filter-row" style={{ marginBottom: 8 }}>
-          <span
-            style={{
-              fontSize: 12,
-              color: "var(--fg-3)",
-              fontWeight: 500,
-              alignSelf: "center",
-              flexShrink: 0,
-            }}
-          >
-            Sort
-          </span>
+          clips its last column at 390px, and that column is the ratio this
+          whole section exists to show. Pressing a sort button is exactly the
+          header press it replaces. */}
+      <div className="ins-oplist">
+        <div className="seg" role="group" aria-label="Sort">
           {([
             { col: "ratio", label: "Worst first" },
             { col: "uses", label: "Most used" },
@@ -428,23 +460,23 @@ export function TimeGoesSection({
             <button
               key={s.col}
               type="button"
+              aria-pressed={sortCol === s.col}
               onClick={() => onSort(s.col)}
-              className={`filter-chip${sortCol === s.col ? " active" : ""}`}
             >
               {s.label}
             </button>
           ))}
         </div>
-        <Card flush>
+        <div>
           {shown.map((row) => {
             const tier = ratioTier(row.ratio);
             const state = opCodeState(row);
             const shownHours = displayedHours(row);
             return (
-              <div key={row.key} className="opcode-item">
-                <div className="opcode-item-head">
-                  <span className="opcode-item-name">
-                    <span className="opcode-item-code">{row.code}</span>
+              <div key={row.key} className="ins-opitem">
+                <div className="ins-opitem-head">
+                  <span className="ins-opitem-name">
+                    <span className="ins-row-code">{row.code}</span>
                     {/* `op_codes.code` has no unique constraint and a one-time
                         line's text is free, so the code alone does not identify
                         a row. Description was the only thing telling them apart
@@ -452,20 +484,18 @@ export function TimeGoesSection({
                         has always kept them separate. */}
                     <OriginTag row={row} />
                     {row.description && (
-                      <span className="opcode-item-desc">{row.description}</span>
+                      <span className="ins-opitem-desc">{row.description}</span>
                     )}
                   </span>
                   {state === "measured" ? (
-                    <span className={`pill${tier === "good" ? "" : ` ${tier}`}`}>
-                      {formatRatio(row.ratio as number)}×
-                    </span>
+                    <RatioTag ratio={row.ratio as number} tier={tier} />
                   ) : state === "unpaid" ? (
-                    <span className="pill bad">unpaid rework</span>
+                    <Badge tone="bad">unpaid rework</Badge>
                   ) : (
-                    <span className="table-dim text-xs">never timed</span>
+                    <span className="ins-dim">never timed</span>
                   )}
                 </div>
-                <p className="opcode-item-meta">
+                <p className="ins-opitem-meta">
                   {/* The count the hours beside it came from. On an unpaid row
                       that is the comeback subset, not every line of the code —
                       see displayedUses. */}
@@ -476,11 +506,10 @@ export function TimeGoesSection({
               </div>
             );
           })}
-        </Card>
+        </div>
       </div>
 
-      <div className="opcode-table">
-      <Card flush>
+      <div className="ins-optable">
         <Table>
           <thead>
             <tr>
@@ -499,12 +528,10 @@ export function TimeGoesSection({
               return (
                 <tr key={row.key}>
                   <Td>
-                    <span className="font-medium text-[var(--fg-1)]">{row.code}</span>
+                    <span className="ins-row-code">{row.code}</span>
                     <OriginTag row={row} />
                     {row.description && (
-                      <span className="block text-xs text-[var(--fg-3)]">
-                        {row.description}
-                      </span>
+                      <span className="ins-cell-sub">{row.description}</span>
                     )}
                   </Td>
                   <Td num dim>
@@ -518,18 +545,16 @@ export function TimeGoesSection({
                   </Td>
                   <Td num>
                     {state === "measured" ? (
-                      <span className={`pill${tier === "good" ? "" : ` ${tier}`}`}>
-                        {formatRatio(row.ratio as number)}×
-                      </span>
+                      <RatioTag ratio={row.ratio as number} tier={tier} />
                     ) : state === "unpaid" ? (
                       // No ratio, and deliberately no fabricated one — the flag
                       // is zero, so there is nothing to divide by. What the row
                       // says instead is the finding itself.
-                      <span className="pill bad" title={`${row.unpaidUses} comeback ${row.unpaidUses === 1 ? "line" : "lines"} — no flag hours paid`}>
+                      <Badge tone="bad" title={`${row.unpaidUses} comeback ${row.unpaidUses === 1 ? "line" : "lines"} — no flag hours paid`}>
                         unpaid rework
-                      </span>
+                      </Badge>
                     ) : (
-                      <span className="text-xs text-[var(--fg-3)]">never timed</span>
+                      <span className="ins-dim">never timed</span>
                     )}
                   </Td>
                 </tr>
@@ -537,17 +562,16 @@ export function TimeGoesSection({
             })}
           </tbody>
         </Table>
-      </Card>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
-        <p className="text-xs text-[var(--fg-3)]">
+      <div className="ins-table-note">
+        <p className="ins-fine">
           Actual ÷ flag over the jobs you put on a timer —{" "}
-          <strong>lower is better</strong>. 1.00× means the book time was right;
+          <b>lower is better</b>. 1.00× means the book time was right;
           1.40× means the job eats 40% more clock than it pays.
           {rework.length > 0 && (
             <>
               {" "}
-              <strong>Unpaid rework</strong> has no ratio because it flags zero —
+              <b>Unpaid rework</b> has no ratio because it flags zero —
               that&rsquo;s {fmtHours(reworkHours)}h of comeback time these codes
               cost you and paid nothing for.
             </>
@@ -557,14 +581,14 @@ export function TimeGoesSection({
         {rows.length > COLLAPSED_ROWS && (
           <button
             type="button"
-            className="link text-xs"
+            className="btn btn-quiet btn-sm"
             onClick={() => setExpanded((v) => !v)}
           >
             {expanded ? "Show fewer" : `Show all ${rows.length}`}
           </button>
         )}
       </div>
-    </section>
+    </Zone>
   );
 }
 
@@ -601,80 +625,47 @@ function BestDaysSection({
   }, [rows, sort]);
 
   return (
-    <section>
-      <div className="section-title">Best days</div>
-      <div className="filter-row" style={{ marginBottom: 8 }}>
-        <span
-          style={{
-            fontSize: 12,
-            color: "var(--fg-3)",
-            fontWeight: 500,
-            alignSelf: "center",
-            flexShrink: 0,
-          }}
-        >
-          Sort
-        </span>
-        {(["day", "efficiency"] as WeekdaySort[]).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => onSort(s)}
-            className={`filter-chip${sort === s ? " active" : ""}`}
-          >
-            {s === "day" ? "By day" : "By efficiency"}
-          </button>
-        ))}
+    <Zone name="Best days">
+      <Seg
+        label="Sort"
+        value={sort}
+        onChange={onSort}
+        options={[
+          { value: "day", label: "By day" },
+          { value: "efficiency", label: "By efficiency" },
+        ]}
+      />
+      <div className="ins-days">
+        {ordered.map((row) => {
+          const isBest = compare && row === best;
+          const isWorst = compare && row === worst;
+          return (
+            <div key={row.weekday} className={`ins-day${isBest ? " is-best" : ""}`}>
+              <div className="ins-day-k">{WEEKDAY_LABELS[row.weekday]}</div>
+              <span className={`num${isBest ? " ins-good" : isWorst ? " ins-bad" : ""}`}>
+                {withPt(fmtPct(row.efficiency))}
+              </span>
+              <small>
+                {row.days === 0
+                  ? "—"
+                  : `${row.days} day${row.days === 1 ? "" : "s"}`}
+              </small>
+            </div>
+          );
+        })}
       </div>
-      <Card>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-          {ordered.map((row) => {
-            const isBest = compare && row === best;
-            const isWorst = compare && row === worst;
-            return (
-              <div
-                key={row.weekday}
-                className={`card-inset px-2 py-3 text-center ${
-                  isBest ? "ring-1 ring-[var(--good)]" : ""
-                }`}
-              >
-                <div className="field-label">{WEEKDAY_LABELS[row.weekday]}</div>
-                <div
-                  className={`mono mt-1 text-base font-semibold tabular-nums ${
-                    isBest
-                      ? "text-[var(--good)]"
-                      : isWorst
-                        ? "text-[var(--warn)]"
-                        : "text-[var(--fg-1)]"
-                  }`}
-                >
-                  {fmtPct(row.efficiency)}
-                </div>
-                <div className="mt-0.5 text-[11px] text-[var(--fg-3)]">
-                  {row.days === 0
-                    ? "—"
-                    : `${row.days} day${row.days === 1 ? "" : "s"}`}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {compare && (
-          <p className="mt-3 text-xs text-[var(--fg-2)]">
-            <span className="font-medium text-[var(--fg-1)]">
-              {WEEKDAY_LABELS[best!.weekday]}
-            </span>{" "}
-            is your strongest day at {fmtPct(best!.efficiency)};{" "}
-            {WEEKDAY_LABELS[worst!.weekday]} runs{" "}
-            {fmtPct(worst!.efficiency)}.
-          </p>
-        )}
-      </Card>
-      <p className="mt-2 px-1 text-xs text-[var(--fg-3)]">
+      {compare && (
+        <p className="ins-fine">
+          <b>{WEEKDAY_LABELS[best!.weekday]}</b> is your strongest day at{" "}
+          {fmtPct(best!.efficiency)}; {WEEKDAY_LABELS[worst!.weekday]} runs{" "}
+          {fmtPct(worst!.efficiency)}.
+        </p>
+      )}
+      <p className="ins-fine">
         Counted only over days the app knows the length of — days you clocked in,
         or scheduled days that have already passed.
       </p>
-    </section>
+    </Zone>
   );
 }
 
@@ -738,7 +729,7 @@ export function TrendSection({
   const scaleSource =
     completeMeasured.length > 0 ? completeMeasured : points.filter(measured);
   const ceiling = Math.max(100, ...scaleSource.map((p) => shownPct.get(p.key)!));
-  const BAR_MAX = 108;
+  const BAR_MAX = TREND_BAR_MAX;
   const parOffset = (100 / ceiling) * BAR_MAX;
   // Hours that are in no percentage on this page, because the app never learned
   // how long those days were. Stated rather than dropped: the pairing rule is
@@ -778,16 +769,15 @@ export function TrendSection({
   const delta = toPct != null && fromPct != null ? toPct - fromPct : null;
 
   return (
-    <section>
-      <div className="section-title">Trend</div>
-      <Card>
-        <div className="trend-plot">
+    <Zone name="Trend">
+      <div className="ins-trend">
+        <div className="ins-trend-plot">
           <div
-            className="trend-par"
-            style={{ bottom: parOffset }}
+            className="ins-par"
+            style={{ bottom: `${parOffset}%` }}
             aria-hidden="true"
           >
-            <span className="trend-par-label">100%</span>
+            <span>100%</span>
           </div>
           {points.map((point) => {
             const pct = shownPct.get(point.key) ?? null;
@@ -804,7 +794,7 @@ export function TrendSection({
             const height = Math.max(4, (Math.min(value, ceiling) / ceiling) * BAR_MAX);
             const running = point.end >= today;
             return (
-              <div key={point.key} className="trend-col">
+              <div key={point.key} className="ins-trend-col">
                 <span className="trend-val">{fmtPct(pct)}</span>
                 <div
                   className={[
@@ -815,7 +805,7 @@ export function TrendSection({
                   ]
                     .filter(Boolean)
                     .join(" ")}
-                  style={{ height }}
+                  style={{ height: `${height}%` }}
                 />
               </div>
             );
@@ -823,51 +813,42 @@ export function TrendSection({
         </div>
         {/* Outside the plot so every bar shares one baseline — the in-progress
             column's extra line used to lift its bar and understate it. */}
-        <div className="trend-labels">
+        <div className="ins-trend-x" aria-hidden="true">
           {points.map((point) => (
-            <span key={point.key} className="trend-label">
+            <span key={point.key} className={point === last ? "is-current" : undefined}>
               {point.label}
               {point.end >= today && <b>In progress</b>}
             </span>
           ))}
         </div>
-        {/* Both figures, stated plainly, instead of the difference between them.
-            The caption used to read "up 42 points" — correct (percentage points,
-            i.e. subtract don't divide) and useless: the first tech to read it
-            asked what a point was. A stat nobody can parse is a stat nobody
-            trusts, and the two percentages say it without the vocabulary. */}
-        {delta !== null && Math.abs(delta) >= 1 && (
-          <p className="mt-3 text-xs text-[var(--fg-2)]">
-            {deltaTo!.label} came in at{" "}
-            <span className="font-medium text-[var(--fg-1)]">
-              {fmtPct(toPct)}
-            </span>
-            , {delta > 0 ? "up from" : "down from"}{" "}
-            <span className="font-medium text-[var(--fg-1)]">
-              {fmtPct(fromPct)}
-            </span>{" "}
-            in {deltaFrom!.label}.
-          </p>
-        )}
-        {notes.map((note) => (
-          <p key={note.kind} className="mt-3 text-xs text-[var(--fg-2)]">
-            Not counted above:{" "}
-            <span className="font-medium text-[var(--fg-1)]">
-              {fmtHours(note.flagHours)}h
-            </span>{" "}
-            flagged across {note.days} {note.days === 1 ? "day" : "days"}{" "}
-            {note.labels.length === 1 ? `in ${note.labels[0]}` : "in these periods"}{" "}
-            {unpairedNoteClause(note, "trend")}
-          </p>
-        ))}
-      </Card>
+      </div>
+      {/* Both figures, stated plainly, instead of the difference between them.
+          The caption used to read "up 42 points" — correct (percentage points,
+          i.e. subtract don't divide) and useless: the first tech to read it
+          asked what a point was. A stat nobody can parse is a stat nobody
+          trusts, and the two percentages say it without the vocabulary. */}
+      {delta !== null && Math.abs(delta) >= 1 && (
+        <p className="ins-fine">
+          {deltaTo!.label} came in at <b>{fmtPct(toPct)}</b>,{" "}
+          {delta > 0 ? "up from" : "down from"} <b>{fmtPct(fromPct)}</b> in{" "}
+          {deltaFrom!.label}.
+        </p>
+      )}
+      {notes.map((note) => (
+        <p key={note.kind} className="ins-fine">
+          Not counted above: <b>{fmtHours(note.flagHours)}h</b> flagged across{" "}
+          {note.days} {note.days === 1 ? "day" : "days"}{" "}
+          {note.labels.length === 1 ? `in ${note.labels[0]}` : "in these periods"}{" "}
+          {unpairedNoteClause(note, "trend")}
+        </p>
+      ))}
       {/* The "ignores the window above" half of this caption moved up into the
           All time heading, which now says it once for the whole half of the
           page rather than once per section. */}
-      <p className="mt-2 px-1 text-xs text-[var(--fg-3)]">
+      <p className="ins-fine">
         Always the last six pay periods — one period on its own is not a trend.
       </p>
-    </section>
+    </Zone>
   );
 }
 
@@ -898,21 +879,17 @@ function UpsellSection({
 
   if (totalHours === 0) {
     return (
-      <section>
-        <div className="section-title">What you sold</div>
-        <Card>
-          <p className="text-sm text-[var(--fg-2)]">
-            Nothing marked as an upsell yet. Tap{" "}
-            <span className="font-medium text-[var(--fg-1)]">Upsell</span> on an
-            RO in your dashboard to add a line you sold, or tap the Upsell tag on
-            any line already on a ticket.
-          </p>
-          <p className="mt-2 text-xs text-[var(--fg-3)]">
-            Once a few are marked, this shows how much of the work you turn is
-            work you found — the part of the job nobody else measures.
-          </p>
-        </Card>
-      </section>
+      <Zone name="What you sold">
+        <p className="ins-sub">
+          Nothing marked as an upsell yet. Tap <b>Upsell</b> on an RO in your
+          dashboard to add a line you sold, or tap the Upsell tag on any line
+          already on a ticket.
+        </p>
+        <p className="ins-fine">
+          Once a few are marked, this shows how much of the work you turn is
+          work you found — the part of the job nobody else measures.
+        </p>
+      </Zone>
     );
   }
 
@@ -923,83 +900,67 @@ function UpsellSection({
   const peak = Math.max(0.1, ...points.map((p) => p.share ?? 0));
 
   return (
-    <section>
-      <div className="section-title">What you sold</div>
-      <Card>
-        <p className="text-sm text-[var(--fg-1)]">
-          <span className="font-medium">{fmtHours(totalHours)}h</span> upsold
-          across these {points.length}{" "}
-          {points.length === 1 ? "period" : "periods"}
-          {overallShare !== null && (
-            <> — {Math.round(overallShare * 100)}% of everything you flagged</>
-          )}
-          .
-        </p>
+    <Zone name="What you sold">
+      <p className="ins-sub">
+        <b>{fmtHours(totalHours)}h</b> upsold across these {points.length}{" "}
+        {points.length === 1 ? "period" : "periods"}
+        {overallShare !== null && (
+          <> — {Math.round(overallShare * 100)}% of everything you flagged</>
+        )}
+        .
+      </p>
 
-        <ul className="mt-3 space-y-2">
-          {points.map((p) => {
-            const share = p.share ?? 0;
-            return (
-              <li key={p.key} className="flex items-center gap-3 text-xs">
-                <span className="w-20 flex-shrink-0 text-[var(--fg-3)]">
-                  {p.label}
-                  {p.end >= today && (
-                    <b className="block text-[11px] font-normal">In progress</b>
-                  )}
+      <ul className="ins-rows is-flush">
+        {points.map((p) => {
+          const share = p.share ?? 0;
+          return (
+            <li key={p.key}>
+              <div className="ins-row-head">
+                <span className="ins-row-name">
+                  <span className="ins-row-code">{p.label}</span>
+                  {p.end >= today && <span className="ins-row-why">In progress</span>}
                 </span>
-                <span className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg-3)]">
-                  {/* A period with no upsells keeps an empty track rather than a
-                      stub: zero really is zero here, and a minimum-width bar
-                      would claim a sale that didn't happen. */}
-                  <span
-                    className="block h-full rounded-full bg-[var(--good)]"
-                    style={{ width: `${(share / peak) * 100}%` }}
-                  />
-                </span>
-                <span className="w-24 flex-shrink-0 text-right tabular-nums text-[var(--fg-2)]">
-                  {fmtHours(p.upsellHours)}h
-                  <span className="ml-1 text-[var(--fg-3)]">
+                <span className="ins-row-fig">
+                  <Hours value={fmtHours(p.upsellHours)} />{" "}
+                  <span className="ins-dim">
                     {p.share === null ? "—" : `${Math.round(share * 100)}%`}
                   </span>
                 </span>
-              </li>
-            );
-          })}
-        </ul>
+              </div>
+              <div className="ins-track">
+                {/* A period with no upsells keeps an empty track rather than a
+                    stub: zero really is zero here, and a minimum-width bar
+                    would claim a sale that didn't happen. */}
+                <i className="is-good" style={{ width: `${(share / peak) * 100}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
 
-        {codes.length > 0 && (
-          <div className="mt-4 border-t border-[var(--line)] pt-3">
-            <div className="field-label mb-2">Most upsold</div>
-            <ul className="space-y-1.5">
-              {codes.map((c) => (
-                <li
-                  key={c.opCodeId ?? `custom:${c.code}`}
-                  className="flex items-baseline justify-between gap-3 text-xs"
-                >
-                  <span className="min-w-0">
-                    <span className="font-mono text-[var(--brand)]">{c.code}</span>
-                    {c.description && (
-                      <span className="ml-2 text-[var(--fg-3)]">
-                        {c.description}
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex-shrink-0 tabular-nums text-[var(--fg-2)]">
-                    {fmtHours(c.hours)}h
-                    <span className="ml-1 text-[var(--fg-3)]">
-                      ×{c.count}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </Card>
-      <p className="mt-2 px-1 text-xs text-[var(--fg-3)]">
+      {codes.length > 0 && (
+        <div className="ins-subhead">
+          <div className="ins-k">Most upsold</div>
+          <ul className="ins-kv">
+            {codes.map((c) => (
+              <li key={c.opCodeId ?? `custom:${c.code}`}>
+                <span className="ins-row-name">
+                  <span className="ins-row-code">{c.code}</span>
+                  {c.description && <span className="ins-dim">{c.description}</span>}
+                </span>
+                <span className="ins-row-fig">
+                  <Hours value={fmtHours(c.hours)} />{" "}
+                  <span className="ins-dim">×{c.count}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="ins-fine">
         Upsold hours are part of your flagged total, not extra on top of it.
       </p>
-    </section>
+    </Zone>
   );
 }
 
@@ -1017,80 +978,62 @@ function RecoverySection({
   // the app got back for them.
   if (lifetime.closedCount === 0) {
     return (
-      <section>
-        <div className="section-title">Claims and recovery</div>
-        <Card>
-          <p className="text-sm font-medium text-[var(--fg-1)]">
-            Nothing recovered yet.
-          </p>
-          <p className="mt-1 text-sm text-[var(--fg-2)]">
-            When a period comes up short, track the claim on the Pay Period page
-            and record what actually came back. This is where FRT tells you what
-            it got back for you.
-          </p>
-        </Card>
-      </section>
+      <Zone name="Claims and recovery">
+        <p className="ins-lead">Nothing recovered yet.</p>
+        <p className="ins-sub">
+          When a period comes up short, track the claim on the Pay Period page
+          and record what actually came back. This is where FRT tells you what
+          it got back for you.
+        </p>
+      </Zone>
     );
   }
 
   return (
-    <section>
-      <div className="section-title">Claims and recovery</div>
-      <Card className="space-y-3">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="card-inset px-3 py-2">
-            <div className="field-label">Claims closed</div>
-            <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--fg-1)]">
-              {lifetime.closedCount}
-            </div>
-          </div>
-          <div className="card-inset px-3 py-2">
-            <div className="field-label">Got paid</div>
-            <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--fg-1)]">
-              {lifetime.winRate === null ? "—" : pct(lifetime.winRate)}
-            </div>
-          </div>
-          <div className="card-inset px-3 py-2">
-            <div className="field-label">Hours recovered</div>
-            <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--fg-1)]">
-              {lifetime.hourRecoveryRate === null
-                ? "—"
-                : pct(lifetime.hourRecoveryRate)}
-            </div>
-          </div>
-          <div className="card-inset px-3 py-2">
-            <div className="field-label">Recovered</div>
-            <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--good)]">
-              {lifetime.recoveredDollars !== null
-                ? fmtMoney(lifetime.recoveredDollars)
-                : `${fmtHours(lifetime.recoveredHours)}h`}
-            </div>
-          </div>
+    <Zone name="Claims and recovery">
+      <dl className="ins-spec">
+        <div>
+          <dt className="ins-k">Claims closed</dt>
+          <dd className="num">{lifetime.closedCount}</dd>
         </div>
+        <div>
+          <dt className="ins-k">Got paid</dt>
+          <dd className="num">{lifetime.winRate === null ? "—" : pct(lifetime.winRate)}</dd>
+        </div>
+        <div>
+          <dt className="ins-k">Hours recovered</dt>
+          <dd className="num">
+            {lifetime.hourRecoveryRate === null ? "—" : pct(lifetime.hourRecoveryRate)}
+          </dd>
+        </div>
+        <div>
+          <dt className="ins-k">Recovered</dt>
+          <dd className="num ins-good">
+            {lifetime.recoveredDollars !== null
+              ? withPt(fmtMoney(lifetime.recoveredDollars))
+              : <Hours value={fmtHours(lifetime.recoveredHours)} />}
+          </dd>
+        </div>
+      </dl>
 
-        {lifetime.hourRecoveryRate !== null && lifetime.hourRecoveryRate > 1 && (
-          <p className="text-xs text-[var(--fg-3)]">
-            Hours recovered is over 100% because a shop paid goodwill hours above
-            what you claimed. The number is right.
-          </p>
-        )}
+      {lifetime.hourRecoveryRate !== null && lifetime.hourRecoveryRate > 1 && (
+        <p className="ins-fine">
+          Hours recovered is over 100% because a shop paid goodwill hours above
+          what you claimed. The number is right.
+        </p>
+      )}
 
-        {insights.map((i) => (
-          <p key={i.id} className="text-xs text-[var(--fg-2)]">
-            <span className="font-medium text-[var(--fg-1)]">{i.betterLabel}</span>{" "}
-            claims get paid {pct(i.betterRate)} of the time ({i.betterCount}{" "}
-            closed) vs {pct(i.worseRate)} for{" "}
-            <span className="font-medium text-[var(--fg-1)]">
-              {i.worseLabel}
-            </span>{" "}
-            ({i.worseCount} closed).
-          </p>
-        ))}
-      </Card>
-      <p className="mt-2 px-1 text-xs text-[var(--fg-3)]">
+      {insights.map((i) => (
+        <p key={i.id} className="ins-fine">
+          <b>{i.betterLabel}</b> claims get paid {pct(i.betterRate)} of the time
+          ({i.betterCount} closed) vs {pct(i.worseRate)} for <b>{i.worseLabel}</b>{" "}
+          ({i.worseCount} closed).
+        </p>
+      ))}
+      <p className="ins-fine">
         Lifetime figures across every claim you have ever raised.
       </p>
-    </section>
+    </Zone>
   );
 }
 
@@ -1293,35 +1236,40 @@ export function InsightsView({
     (lifetime !== null && lifetime.closedCount > 0);
 
   const chipRow = (
-    <div className="filter-row">
-      {CHIPS.map((chip) => (
-        <button
-          key={chip.kind}
-          type="button"
-          onClick={() => setFilter(chip.kind)}
-          className={`filter-chip${filter === chip.kind ? " active" : ""}`}
-        >
-          {chip.label}
-        </button>
-      ))}
+    <div className="ins-ctl">
+      <span className="ins-k">Window</span>
+      <div className="seg" role="group" aria-label="Window">
+        {CHIPS.map((chip) => (
+          <button
+            key={chip.kind}
+            type="button"
+            aria-pressed={filter === chip.kind}
+            onClick={() => setFilter(chip.kind)}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 
   if (!hasAnyHistory) {
     return (
-      <div className="space-y-6">
+      <div>
         {chipRow}
-        <EmptyState
-          icon={<Lightbulb size={22} />}
-          title="Not enough data yet"
-          description="Log your clocked hours and put a few jobs on the timer. Once the app knows how long a day was and how long a job took, this page can tell you which work is costing you."
-        />
+        <Zone name="Insights" className="ins-empty">
+          <EmptyState
+            icon={<Lightbulb size={22} />}
+            title="Not enough data yet"
+            description="Log your clocked hours and put a few jobs on the timer. Once the app knows how long a day was and how long a job took, this page can tell you which work is costing you."
+          />
+        </Zone>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div>
       {/* Conclusion, then the control that scopes it, then the evidence. */}
       {hasWindowContent && <FindingLede board={leaks} />}
       {chipRow}
@@ -1347,28 +1295,21 @@ export function InsightsView({
           )}
         </>
       ) : (
-        <Card>
-          <p className="text-sm text-[var(--fg-2)]">
+        <Zone name="This window">
+          <p className="ins-sub">
             No work recorded in this {filter === "period" ? "pay period" : filter}.
             Pick a wider window above — the trend below still covers your whole
             history.
           </p>
-        </Card>
+        </Zone>
       )}
 
       {/* The window chips stop here, and the page says so structurally instead
           of apologising for it in a caption under each section. */}
       {(trend.length > 0 || lifetime !== null || mix.days.length > 0) && (
-        <div className="pt-2">
-          <div style={{ height: 1, background: "var(--line)" }} />
-          <div className="mt-5 flex items-baseline gap-3">
-            <h2 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>
-              All time
-            </h2>
-            <span className="text-xs" style={{ color: "var(--fg-3)" }}>
-              Ignores the window above
-            </span>
-          </div>
+        <div className="ins-alltime">
+          <h2>All time</h2>
+          <span>Ignores the window above</span>
         </div>
       )}
       {mix.days.length > 0 && (

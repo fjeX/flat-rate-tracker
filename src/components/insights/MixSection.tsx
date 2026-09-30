@@ -8,17 +8,17 @@
 // clothes.
 //
 // COLOR NOTE, so nobody "fixes" it later. The bars are figure/ground, not a
-// categorical pair: heavy-line hours wear --brand, everything else wears a
-// neutral surface. That follows the rule stated in globals.css — "color is
+// categorical pair: heavy-line hours wear the bar ink, everything else wears
+// the dim bar. That follows the rule stated in globals.css — "color is
 // reserved for state, not decoration" — and it is also what the chart means, since
 // the whole finding is that ONE of these two things moves the day. Running a
-// categorical palette validator over the pair reports the neutral as
-// low-chroma and low-contrast, which is the intended reading, not a defect; the
-// checks that matter pass wide (CVD separation ΔE 34-44 against a target of 8).
-// The sub-3:1 contrast on the neutral is discharged the way the guidance
+// categorical palette validator over the pair reports the dim one as
+// low-chroma and low-contrast, which is the intended reading, not a defect.
+// The sub-3:1 contrast on the dim fill is discharged the way the guidance
 // requires: every segment carries a visible number, and the band table below
 // repeats all of it as text.
-import { Card } from "@/components/ui/Card";
+import { Zone } from "@/components/ui/Zone";
+import { withPt } from "@/components/ui/Figure";
 import { fmtHours } from "@/lib/format";
 import {
   driverStrength,
@@ -59,43 +59,27 @@ function BandBar({ band, max }: { band: MixBand; max: number }) {
   const pct = (h: number) => (max > 0 ? (h / max) * 100 : 0);
 
   return (
-    <div className="flex items-center gap-3">
-      <div
-        className="shrink-0 text-[11px] tabular-nums"
-        style={{ width: 58, color: "var(--fg-3)" }}
-      >
+    <div className="ins-band">
+      <span className="ins-band-k">
         {band.days} day{band.days === 1 ? "" : "s"}
-      </div>
-
-      {/* The bar. 2px gap between the two fills, rounded outer end only, so the
-          segments read as one quantity split rather than two bars touching. */}
-      <div className="flex h-5 flex-1 items-stretch" style={{ gap: 2 }}>
-        <div
+      </span>
+      {/* The bar. 2px gap between the two fills so the segments read as one
+          quantity split rather than two bars touching. */}
+      <div className="ins-band-bar">
+        <i
           title={`${fmtHours(heavy)}h from jobs ${HEAVY_FLAG_HOURS}h and up`}
-          style={{
-            width: `${pct(heavy)}%`,
-            background: "var(--brand)",
-            borderRadius: rest > 0 ? "4px 0 0 4px" : 4,
-            minWidth: heavy > 0 ? 3 : 0,
-          }}
+          style={{ width: `${pct(heavy)}%`, minWidth: heavy > 0 ? 3 : 0 }}
         />
-        <div
+        <i
+          className="is-dim"
           title={`${fmtHours(rest)}h from everything else`}
-          style={{
-            width: `${pct(rest)}%`,
-            background: "var(--bg-4)",
-            borderRadius: heavy > 0 ? "0 4px 4px 0" : 4,
-            minWidth: rest > 0 ? 3 : 0,
-          }}
+          style={{ width: `${pct(rest)}%`, minWidth: rest > 0 ? 3 : 0 }}
         />
       </div>
-
-      <div
-        className="mono shrink-0 text-right text-sm font-semibold tabular-nums"
-        style={{ width: 52, color: "var(--fg-1)" }}
-      >
-        {fmtHours(band.avgFlagHours)}h
-      </div>
+      <span className="num">
+        {withPt(fmtHours(band.avgFlagHours))}
+        <span className="unit">h</span>
+      </span>
     </div>
   );
 }
@@ -111,40 +95,20 @@ function DriverRow({
 }) {
   const strength = driverStrength(r);
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <div className="min-w-0 flex-1">
-        <div
-          className="truncate text-sm"
-          style={{ color: lead ? "var(--fg-0)" : "var(--fg-2)" }}
-        >
-          {label}
-        </div>
-        <div className="text-[11px]" style={{ color: "var(--fg-3)" }}>
+    <li className={lead ? "is-lead" : undefined}>
+      <span className="ins-driver-name">
+        {label}
+        <span className="ins-driver-how">
           {strength ? STRENGTH_COPY[strength] : "Not enough variation to tell"}
-        </div>
-      </div>
-      {/* |r| as a meter. Only the leading driver is filled with brand; the rest
-          stay neutral, so the eye lands on the one finding that matters. */}
-      <div
-        className="h-1.5 shrink-0 overflow-hidden rounded-full"
-        style={{ width: 76, background: "var(--bg-3)" }}
-      >
-        <div
-          style={{
-            width: `${Math.min(100, Math.abs(r ?? 0) * 100)}%`,
-            height: "100%",
-            background: lead ? "var(--brand)" : "var(--bg-4)",
-            borderRadius: 999,
-          }}
-        />
-      </div>
-      <div
-        className="mono shrink-0 text-right text-xs tabular-nums"
-        style={{ width: 40, color: "var(--fg-2)" }}
-      >
-        {r === null ? "—" : r.toFixed(2)}
-      </div>
-    </div>
+        </span>
+      </span>
+      {/* |r| as a meter. Only the leading driver is filled with ink; the rest
+          stay dim, so the eye lands on the one finding that matters. */}
+      <span className="ins-meter" aria-hidden="true">
+        <i style={{ width: `${Math.min(100, Math.abs(r ?? 0) * 100)}%` }} />
+      </span>
+      <span className="num">{r === null ? "—" : withPt(r.toFixed(2))}</span>
+    </li>
   );
 }
 
@@ -164,16 +128,13 @@ export function MixSection({
   // absent section reads as a feature that does not exist.
   if (!bands || !summary) {
     return (
-      <section>
-        <div className="section-title">What makes a big day</div>
-        <Card>
-          <p className="text-sm" style={{ color: "var(--fg-2)" }}>
-            Needs {MIN_DAYS_FOR_BANDS} days of history to split your days into
-            quarters — you have {days.length}. Nothing to do but keep logging;
-            this fills itself in.
-          </p>
-        </Card>
-      </section>
+      <Zone name="What makes a big day">
+        <p className="ins-sub">
+          Needs {MIN_DAYS_FOR_BANDS} days of history to split your days into
+          quarters — you have {days.length}. Nothing to do but keep logging;
+          this fills itself in.
+        </p>
+      </Zone>
     );
   }
 
@@ -183,26 +144,17 @@ export function MixSection({
   const leadKey = leadDriver(list)?.key ?? null;
 
   return (
-    <section>
-      <div className="section-title">What makes a big day</div>
-
-      <Card className="space-y-4">
+    <>
+      <Zone name="What makes a big day">
         {/* The finding, in one sentence, before any chart. */}
-        <p className="text-sm" style={{ color: "var(--fg-1)" }}>
-          Your biggest quarter of days pays{" "}
-          <strong className="mono tabular-nums" style={{ color: "var(--fg-0)" }}>
-            {fmtHours(summary.bestFlagHours)}h
-          </strong>
-          . Your quietest pays{" "}
-          <strong className="mono tabular-nums" style={{ color: "var(--fg-0)" }}>
-            {fmtHours(summary.worstFlagHours)}h
-          </strong>
-          .{" "}
+        <p className="ins-sub">
+          Your biggest quarter of days pays <b>{fmtHours(summary.bestFlagHours)}h</b>.
+          Your quietest pays <b>{fmtHours(summary.worstFlagHours)}h</b>.{" "}
           {summary.quickJobsDontMove ? (
             <>
               The difference isn&rsquo;t how many jobs you turn — it&rsquo;s how
-              many <strong style={{ color: "var(--fg-0)" }}>big</strong> ones. Big
-              jobs go from {oneCount(summary.worstHeavyLines)} a day to{" "}
+              many <b>big</b> ones. Big jobs go from{" "}
+              {oneCount(summary.worstHeavyLines)} a day to{" "}
               {oneCount(summary.bestHeavyLines)}, while quick jobs barely move (
               {oneCount(summary.worstQuickLines)} →{" "}
               {oneCount(summary.bestQuickLines)}).
@@ -218,73 +170,56 @@ export function MixSection({
         </p>
 
         {/* Legend. Two fills, so it is always present. */}
-        <div className="flex flex-wrap items-center gap-4 text-[11px]">
-          <span className="flex items-center gap-1.5" style={{ color: "var(--fg-2)" }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: "var(--brand)",
-              }}
-            />
+        <div className="ins-legend">
+          <span>
+            <i aria-hidden="true" />
             Jobs {HEAVY_FLAG_HOURS}h and up
           </span>
-          <span className="flex items-center gap-1.5" style={{ color: "var(--fg-2)" }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: "var(--bg-4)",
-              }}
-            />
+          <span>
+            <i className="is-dim" aria-hidden="true" />
             Everything else
           </span>
         </div>
 
-        <div className="space-y-2">
+        <div className="ins-bands">
           {/* Biggest first — the shape the tech is aiming at leads. */}
           {[...bands].reverse().map((band) => (
             <BandBar key={band.quartile} band={band} max={max} />
           ))}
         </div>
 
-        <p className="text-xs" style={{ color: "var(--fg-3)" }}>
+        <p className="ins-fine">
           Your {days.length} days sorted by flag hours and cut into quarters,
           biggest at the top.
         </p>
-      </Card>
+      </Zone>
 
-      <div className="mt-4">
-        <Card className="space-y-1">
-          <div className="field-label">What a big day actually tracks with</div>
-          {drivers.drivers === null ? (
-            <p className="pt-1 text-sm" style={{ color: "var(--fg-2)" }}>
-              Needs {MIN_DAYS_FOR_CORRELATION} days before these are worth
-              printing — you have {drivers.days}.
+      <Zone name="What a big day actually tracks with">
+        {drivers.drivers === null ? (
+          <p className="ins-sub">
+            Needs {MIN_DAYS_FOR_CORRELATION} days before these are worth
+            printing — you have {drivers.days}.
+          </p>
+        ) : (
+          <>
+            <ul className="ins-drivers">
+              {ranked.map((d) => (
+                <DriverRow
+                  key={d.key}
+                  label={d.label}
+                  r={d.r}
+                  lead={d.key === leadKey}
+                />
+              ))}
+            </ul>
+            <p className="ins-fine">
+              &minus;1 to 1. Further from zero means that count tracks your flag
+              hours more closely. This is your own history, not a rule of thumb
+              — if quick jobs move your day, it will say so.
             </p>
-          ) : (
-            <>
-              <div className="pt-1">
-                {ranked.map((d) => (
-                  <DriverRow
-                    key={d.key}
-                    label={d.label}
-                    r={d.r}
-                    lead={d.key === leadKey}
-                  />
-                ))}
-              </div>
-              <p className="pt-1 text-xs" style={{ color: "var(--fg-3)" }}>
-                &minus;1 to 1. Further from zero means that count tracks your flag
-                hours more closely. This is your own history, not a rule of thumb
-                — if quick jobs move your day, it will say so.
-              </p>
-            </>
-          )}
-        </Card>
-      </div>
-    </section>
+          </>
+        )}
+      </Zone>
+    </>
   );
 }

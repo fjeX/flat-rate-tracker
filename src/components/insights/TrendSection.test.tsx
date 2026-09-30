@@ -23,7 +23,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import React from "react";
-import { TrendSection } from "./InsightsView";
+import { TREND_BAR_MAX, TrendSection } from "./InsightsView";
 import { trendEfficiencyDisplay, type PeriodTrendPoint } from "@/lib/insights";
 import { emptyUnpairedByReason } from "@/lib/stats";
 
@@ -213,8 +213,8 @@ describe("TrendSection — a hollowed-out bar states nothing", () => {
 
     // Ceiling is 120 (the tallest MEASURED bar), so Jul 16–31 is full height.
     const heights = barHeights();
-    expect(heights[2]).toBeCloseTo(108, 5);
-    expect(heights[1]).toBeCloseTo((100 / 120) * 108, 5);
+    expect(heights[2]).toBeCloseTo(TREND_BAR_MAX, 5);
+    expect(heights[1]).toBeCloseTo((100 / 120) * TREND_BAR_MAX, 5);
     expect(labels()[0]).toBe("—");
   });
 

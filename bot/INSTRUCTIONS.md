@@ -311,6 +311,27 @@ fonts and corner radius only** — no layout, wording or positions moved:
     "N codes shown" and "X.Xh flagged"; the zone's top right says "N of M
     shown" only while a search or tag filter is on. §8d's "tag filter chips
     show a small color dot" is now that tick; the row tick is unchanged.
+  - **Insights:** same sections, same order, same sentences (§7e still
+    applies word for word), in the new language. The **window chips** are a
+    button group labelled WINDOW with `aria-pressed` (Week / Period / Month /
+    All). Every section is a **zone** with its name in small capitals; the
+    "All time — Ignores the window above" divider is a heavy rule with the
+    heading on it. **What's costing you**: numbered rows with the hours as a
+    figure and an ink bar (red when the row is rework or unpaid clock); no
+    amber anywhere on the page — a "warn"-tier overrun draws in ink. **Where
+    your time goes**: the desktop table is unchanged (sortable headers,
+    `↕ ↑ ↓`); the ratio is an outlined tag (red = bad tier, green = good,
+    plain = in between), `unpaid rework` is a **red** tag (it was amber), and
+    "never timed" is plain dim text; on phones the sort is a three-button
+    group (Worst first / Most used / Code). **Best days**: a By day / By
+    efficiency button group and seven plate cells, the best day outlined
+    green. **Trend**: the bars fill in ink with the current period in the
+    accent, the in-progress bar dimmed, par as a dashed line labelled 100%,
+    labels under the plot with "In progress" on its own line. **What makes a
+    big day** and **What a big day actually tracks with** are now two zones
+    (they were one card with a sub-card). **What you sold**: per-period rows
+    with green bars, then a MOST UPSOLD list. **Claims and recovery**: four
+    labelled figures in a spec row.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

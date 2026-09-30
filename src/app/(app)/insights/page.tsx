@@ -77,15 +77,15 @@ export default async function InsightsPage() {
     : {};
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6">
-      <h1 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>
-        Insights
-      </h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--fg-2)" }}>
-        What your own history says, across every pay period.
-      </p>
+    <main className="ins-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>Insights</h1>
+          <p>What your own history says, across every pay period.</p>
+        </div>
+      </div>
 
-      <div className="mt-6">
+      <div>
         {/* The aggregates are computed in the client component, not here: the
             window chips re-scope every section, and round-tripping to the
             server for each chip press would make them feel broken. The pure
