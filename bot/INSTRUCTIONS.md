@@ -195,9 +195,9 @@ fonts and corner radius only** — no layout, wording or positions moved:
     bottom (saved to that browser only).
 - Phase 4 rebuilt **Dashboard, Log RO, Quick Add and Pay Period** (same
   features, re-arranged). What this file calls a *card* on these pages is now a
-  **zone**: a panel one shade lighter than the page, with a heavy top rule
-  and a name tab (e.g. "PAY PERIOD PACE", "BEFORE YOU START"); on phones it
-  runs edge to edge. Warnings are **tagged fields**: a word tag (NOTE / COST / FIX /
+  **zone**: a rounded panel one shade lighter than the page, headed by its
+  name in small capitals (e.g. "PAY PERIOD PACE", "BEFORE YOU START"); on
+  phones it runs edge to edge. Warnings are **tagged fields**: a word tag (NOTE / COST / FIX /
   SAVED) on a full-width strip; FIX and COST are red, SAVED green, NOTE grey.
   - **Dashboard:** greeting → page head (avatar, date, "N ROs logged…"; the
     pace status is a tag at the right: **On track / Near goal / Behind / Getting

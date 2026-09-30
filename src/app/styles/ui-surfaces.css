@@ -69,20 +69,25 @@
 .zone {
   --zone-pad: var(--gutter);
   background: var(--zone-fill);
-  border-top: var(--w-heavy) solid var(--zone-line);
-  margin: var(--s5) calc(-1 * var(--gutter)) 0;
-  padding: 0 var(--gutter) var(--s4);
+  margin: var(--s4) calc(-1 * var(--gutter)) 0;
+  padding: var(--s3) var(--gutter) var(--s4);
   min-width: 0;
 }
-.zone > .zone-head .zone-name { margin-left: calc(-1 * var(--zone-pad)); }
+/* Second pass (same day): the heavy top rule and the dark tab hanging from it
+   made each section read as a separate, fenced-off box. The fill already does
+   the grouping, so the rule is gone and the name is a plain label heading. */
+.zone > .zone-head .zone-name {
+  background: none; color: var(--ink);
+  padding: 0; margin: 0; border-radius: 0;
+}
+.zone > .zone-head { align-items: center; }
 @media (min-width: 700px) {
   .zone {
     --zone-pad: var(--s4);
     margin-left: 0; margin-right: 0;
-    padding: 0 var(--s4) var(--s4);
-    border: var(--w-hair) solid var(--line);
-    border-top: var(--w-heavy) solid var(--zone-line);
-    border-radius: 0 0 var(--r-panel) var(--r-panel);
+    padding: var(--s3) var(--s4) var(--s4);
+    border: var(--w-hair) solid var(--line-soft);
+    border-radius: var(--r-panel);
   }
 }
 .zone-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); min-height: 36px; margin-bottom: var(--s2); }
