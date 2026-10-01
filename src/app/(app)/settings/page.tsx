@@ -30,7 +30,7 @@ export default async function SettingsPage() {
 
   // One setting on display at a time (the mock's screen-settings); Pay Rates
   // opens first because it is the one that changes what every other page
-  // shows. The order here is the order of the "More settings" list.
+  // shows. The order here is the order of the "All settings" list.
   const sections: SettingsSection[] = [
     {
       id: "pay-rates",

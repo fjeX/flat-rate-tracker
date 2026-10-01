@@ -56,6 +56,7 @@ export function OpCodeBrowseBar({
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="Search code, description, or tag"
+          aria-label="Search code, description, or tag"
         />
         {search && (
           <button

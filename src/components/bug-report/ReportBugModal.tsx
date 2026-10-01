@@ -4,7 +4,7 @@
 // optionally attaches up to MAX_BUG_PHOTOS screenshots; page URL / user agent /
 // viewport are captured silently at submit time so triage can reproduce without
 // a back-and-forth. Screenshots are downscaled client-side before upload.
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Camera, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Field } from "@/components/ui/Field";
@@ -31,6 +31,12 @@ export function ReportBugModal({
   const [done, setDone] = useState<{ photosFailed: number } | null>(null);
   const [submitting, startSubmit] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const doneRef = useRef<HTMLDivElement>(null);
+
+  // The Send button unmounts on success, which would drop focus to <body>.
+  useEffect(() => {
+    if (done) doneRef.current?.closest<HTMLElement>('[role=dialog]')?.querySelector<HTMLButtonElement>('.bug-go')?.focus();
+  }, [done]);
 
   function reset() {
     photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
@@ -129,8 +135,8 @@ export function ReportBugModal({
       }
     >
       {done ? (
-        <div className="bug-body">
-          <StatusField tag="Saved" inset>
+        <div ref={doneRef} className="bug-body">
+          <StatusField tag="Saved" role="status" inset>
             <p className="bug-thanks">Thanks — report sent.</p>
             <p>
               We&apos;ll take a look and get it sorted.

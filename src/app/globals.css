@@ -26,7 +26,6 @@
 @import "./styles/dlg-bonus-form.css";
 @import "./styles/dlg-import.css";
 @import "./styles/dlg-timer.css";
-@import "./styles/dlg-guest-timer.css";
 @import "./styles/dlg-guest-ro.css";
 @import "./styles/dlg-template.css";
 @import "./styles/dlg-bug-report.css";
@@ -620,27 +619,6 @@ body {
   pointer-events: none;
 }
 
-.opc-hours-input {
-  width: 64px;
-  /* The most-tapped control in the app — pad to a ~44px rendered height so it's
-     an easy hit target on mobile without shrinking the visual field width. */
-  padding: 13px 8px;
-  font-family: var(--font-num);
-  font-size: 13px;
-  background: var(--bg-2);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--fg-0);
-  text-align: right;
-  transition: border-color 120ms, box-shadow 120ms;
-}
-.opc-hours-input:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
-/* On a --bg-2 inset (e.g. the RO-detail op-code table) the default --bg-2 well
-   vanishes — step one rung up the ladder so the field stays visible. Keeps the
-   base 64px width — the host cell centers it under its column header (a
-   `w-full` utility would lose to the base rule's width anyway). */
-.opc-hours-input.on-inset { background: var(--bg-3); }
-
 /* Expand the tappable area to ~44x44 without changing the visual 28x28 box. */
 
 /* Reusable invisible hit-area expander for small controls where real padding
@@ -648,11 +626,6 @@ body {
    element must not already be absolutely positioned. */
 .hit-expand { position: relative; }
 .hit-expand::after { content: ""; position: absolute; inset: -13px; }
-
-/* Weekly-pattern day toggle (ScheduleCard): the 64px label is the checkbox's
-   real tap target — give it full tap height on touch layouts, keep desktop
-   density (same split as .btn-sm). */
-@media (max-width: 899px) { .sched-day-toggle { min-height: var(--tap-min); } }
 
 /* Search-clear X inside the op-code search field — invisible ::after expands the
    tap area to ~44px without moving the 14px glyph (mirrors .opc-line .remove). */
@@ -697,39 +670,6 @@ body {
 /* Scan banner */
 
 /* ── History page ────────────────────────────────────── */
-.filter-row {
-  display: flex; gap: 6px; overflow-x: auto;
-  margin: 0 -16px 14px; padding: 0 16px;
-  scrollbar-width: none;
-}
-.filter-row::-webkit-scrollbar { display: none; }
-.filter-chip {
-  flex-shrink: 0;
-  display: inline-flex; align-items: center;
-  min-height: var(--tap-min);
-  padding: 8px 16px;
-  font-size: 14px;
-  border: 1px solid transparent;
-  background: var(--bg-1);
-  color: var(--fg-1);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 120ms;
-}
-.filter-chip:hover:not(:disabled) { background: var(--bg-2); }
-/* Calm Workspace: active = brand tint, not a filled block — color marks
-   state without shouting */
-.filter-chip.active {
-  background: var(--brand-bg);
-  border-color: color-mix(in oklab, var(--brand) 35%, transparent);
-  color: var(--brand);
-  font-weight: 600;
-}
-.filter-chip:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 /* History's rows are RO tags now (ui-page.css / page-history.css). The
    `history-ro-row` class survives on each tag only as the write-smoke
    locator (tests/smoke/write.smoke.ts) and carries no style. */
@@ -757,10 +697,6 @@ body {
    prefers-reduced-motion (see the guard at the very bottom of the file).
    =================================================================== */
 
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 @keyframes pace-grow {
   from { width: 0; }
 }
@@ -769,7 +705,7 @@ body {
 }
 
 /* — Pace bar fills from empty on load — same [data-animated] gate as above,
-   via <EntranceGrid animationName="pace-grow"> wrapping .pace. — */
+   (the [data-animated] gate is set by the page that renders .pace). — */
 
 /* — Chart bars rise from their baseline — */
 .r-chart rect {
@@ -779,11 +715,9 @@ body {
 }
 
 /* — Tactile press feedback on interactive elements (touch-friendly) — */
- .filter-chip,
 .opc-dropdown-item{
   transition: transform 90ms ease, background 120ms, border-color 120ms, color 120ms, filter 120ms;
 }
- .filter-chip:active,
 .opc-dropdown-item:active{
   transform: scale(0.96);
 }
@@ -791,7 +725,6 @@ body {
 /* ── Focus-visible (keyboard-only focus ring) ───────────
    Brand-colored ring on every custom interactive class in the file, plus
    a generic fallback for any plain <button>/<a> that isn't covered above. */
-.filter-chip:focus-visible,
 .opc-dropdown-item:focus-visible,
 button:focus-visible,
 a:focus-visible {

@@ -21,7 +21,6 @@
   padding: 0; background: transparent; color: var(--ink-2); border: 0; border-radius: var(--r-sign);
   cursor: pointer;
 }
-.ocf-x-tag { min-width: 36px; }
 .ocf-dot:hover, .ocf-x-tag:hover { background: var(--quiet-hover); }
 .ocf-x-tag:hover { color: var(--bad); }
 .ocf-dot:focus-visible, .ocf-x-tag:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
@@ -60,6 +59,24 @@
 /* ---------- footer: Delete far left, then Cancel + Save pushed right ---------- */
 .ocf-foot-end { display: flex; gap: var(--s2); margin-left: auto; }
 
+@media (max-width: 699px) {
+  /* phone: each sub-code row is a grid (code + hours on one line, description
+     full width, remove at the right). A grid row inside a real <table> is still
+     sized by the table algorithm, so the table and tbody become blocks too
+     (same lesson as dlg-ro-detail.css). */
+  .ocf-table, .ocf-table tbody { display: block; width: 100%; }
+  .ocf-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .ocf-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: var(--s2);
+    padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line);
+  }
+  .ocf-table tbody tr:last-child { border-bottom: 0; }
+  .ocf-table tbody tr > td { display: block; width: auto; padding: 0; border: 0; height: auto; }
+  .ocf-table tbody tr > td.ocf-c-code { grid-column: 1; grid-row: 1; }
+  .ocf-table tbody tr > td.ocf-c-hrs { grid-column: 2; grid-row: 1; }
+  .ocf-table tbody tr > td.ocf-c-x { grid-column: 3; grid-row: 1; }
+  .ocf-table tbody tr > td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+}
 @media (max-width: 480px) {
   .ocf-c-code { width: 5.5rem; }
   .ocf-c-hrs { width: 4.5rem; }

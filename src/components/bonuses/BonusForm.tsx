@@ -137,7 +137,7 @@ export function BonusForm({
                 role="radio"
                 aria-checked={active}
                 onClick={() => setCategory(c)}
-                className="fchip bon-chip"
+                className="fchip"
               >
                 {BONUS_CATEGORY_LABELS[c]}
               </button>

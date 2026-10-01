@@ -134,7 +134,7 @@ export function PayRatesCard({
             <Button type="submit" variant="go" disabled={!dirty || anyInvalid || pending} saved={saved}>
               {pending ? "Saving…" : saved ? "Saved ✓" : "Save rates"}
             </Button>
-            {anyInvalid && <span className="stg-note is-bad" style={{ margin: 0 }}>Rates must be between 0 and 9999.</span>}
+            {anyInvalid && <span role="alert" className="stg-note is-bad" style={{ margin: 0 }}>Rates must be between 0 and 9999.</span>}
           </div>
           {error && (
             <p role="alert" className="stg-note is-bad">
@@ -149,7 +149,7 @@ export function PayRatesCard({
         title="Default type for new lines"
         description="The labor type a new line starts on. Change it on the line whenever a job is different."
       >
-        <Field label="Default type" htmlFor="default-labor-type" labelHidden>
+        <Field label="Default type for new lines" htmlFor="default-labor-type" labelHidden>
           <select
             id="default-labor-type"
             value={defaultType}

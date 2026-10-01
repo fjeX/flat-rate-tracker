@@ -149,9 +149,11 @@ export function DataCard() {
         {parseError && (
           <p id="backup-parse-error" role="alert" className="stg-note is-bad">{parseError}</p>
         )}
-        {importDone && (
-          <p className="stg-note is-good">Import complete — data replaced.</p>
-        )}
+        <div role="status">
+          {importDone && (
+            <p className="stg-note is-good">Import complete — data replaced.</p>
+          )}
+        </div>
       </SettingRow>
 
       <Modal
@@ -187,8 +189,8 @@ export function DataCard() {
               </StatusField>
             )}
 
-            {summary.exportedAt && (
-              <div className="rows">
+            <div className="rows">
+              {summary.exportedAt && (
                 <div>
                   <span className="k">Backup taken</span>
                   <span className="v num">
@@ -199,12 +201,12 @@ export function DataCard() {
                     })}
                   </span>
                 </div>
-                <div>
-                  <span className="k">Version</span>
-                  <span className="v num">{summary.version}</span>
-                </div>
+              )}
+              <div>
+                <span className="k">Version</span>
+                <span className="v num">{summary.version}</span>
               </div>
-            )}
+            </div>
 
             <section>
               <p className="field-label">This will permanently replace:</p>

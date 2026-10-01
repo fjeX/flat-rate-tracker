@@ -15,8 +15,6 @@
 .tmd-date { font-size: var(--fs-label); color: var(--ink-2); }
 .tmd-pick .log-pick-desc { overflow-wrap: anywhere; }
 .log-pick.tmd-pick .log-pick-act, .log-pick.tmd-opt .log-pick-act { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: var(--track-num); }
-.log-pick:disabled { opacity: 0.55; cursor: not-allowed; }
-.log-pick:disabled:hover { background: var(--panel); border-color: var(--line); }
 .tmd-block { font-weight: 600; }
 
 /* ---------- close-out: radio rows ---------- */

@@ -56,7 +56,7 @@ export function TrueTimeCard({ initialShare }: { initialShare: boolean }) {
       fine="Pooled figures are only ever shown once at least 5 different techs have logged the same job, so nothing can be traced back to one person."
     >
       <Switch checked={share} onChange={toggle} disabled={isPending} label="Contribute to True Time" />
-      {error && <p className="stg-note is-bad">{error}</p>}
+      {error && <p role="alert" className="stg-note is-bad">{error}</p>}
     </SettingRow>
   );
 }

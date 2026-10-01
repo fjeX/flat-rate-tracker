@@ -28,6 +28,7 @@
 /* ---------- search well: the shared .input with a glyph set into its left edge ---------- */
 .search-well { position: relative; flex: 1 1 14rem; min-width: 0; display: block; }
 .search-well > svg { position: absolute; left: var(--s3); top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--ink-3); pointer-events: none; }
+.search-well .input::-webkit-search-cancel-button, .search-well .input::-webkit-search-decoration { -webkit-appearance: none; display: none; }
 .search-well .input { width: 100%; padding-left: calc(var(--s3) + 18px + var(--s2)); padding-right: var(--tap); }
 .search-well .search-clear {
   position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
@@ -47,11 +48,11 @@
 .fchip:hover { background: var(--quiet-hover); border-color: var(--ink-3); }
 .fchip:active { background: var(--quiet-active); }
 .fchip:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
-.fchip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.fchip[aria-pressed="true"]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.fchip[aria-pressed="true"], .fchip[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.fchip[aria-pressed="true"]:hover, .fchip[aria-checked="true"]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 /* a category hue, as a tick only (never text, never a fill) */
 .fchip .hue { display: inline-block; width: 3px; height: 14px; border-radius: 2px; background: var(--tagc, var(--ink-3)); flex: none; }
-.fchip[aria-pressed="true"] .hue { background: var(--accent-ink); }
+.fchip[aria-pressed="true"] .hue, .fchip[aria-checked="true"] .hue { background: var(--accent-ink); }
 .fchips { display: flex; flex-wrap: wrap; gap: var(--s2); }
 
 /* ---------- spec row: labelled figures side by side (mock .spec) ----------

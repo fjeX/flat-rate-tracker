@@ -27,7 +27,7 @@ export type SettingsSection = {
 /**
  * Settings as the mock draws it (final.html screen-settings, and Liem's
  * 2026-09-30 call): ONE setting on display at a time, and the rest listed in
- * a "More settings" zone at the right. Pay Rates opens by default; on a
+ * an "All settings" zone at the right. Pay Rates opens by default; on a
  * phone the list becomes a dropdown above the setting so it can be reached
  * without scrolling past what is on display.
  *
@@ -56,7 +56,11 @@ export function SettingsSwitcher({
     } catch {}
     // The setting on display is above the list on a phone, so bring it back
     // into view once it changes.
-    document.getElementById("stg-shown")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    // At 1024px+ the shown zone sits beside the list, already in view; and
+    // reduced-motion users get the jump without the glide.
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById("stg-shown")?.scrollIntoView({ block: "start", behavior: calm ? "auto" : "smooth" });
   }
 
   const current = sections.find((s) => s.id === active) ?? sections[0];

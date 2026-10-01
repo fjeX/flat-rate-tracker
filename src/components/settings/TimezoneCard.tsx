@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { setTimezoneAction } from "@/app/actions/settings";
 import { useClientValue } from "@/lib/client-storage";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { SettingRow } from "./SettingRow";
@@ -92,12 +93,19 @@ export function TimezoneCard({ initialTimezone }: { initialTimezone: string }) {
           {error}
         </p>
       )}
-      {tz && (
-        <p className={`stg-note${saved ? " is-good" : ""}`}>
-          {saved ? "Saved · " : "Current: "}
-          {tz}
-        </p>
-      )}
+      <p role="status" className="stg-note">
+        {tz && (
+          <>
+            Current: {tz}
+            {saved && (
+              <>
+                {" "}
+                <Badge tone="good">Saved</Badge>
+              </>
+            )}
+          </>
+        )}
+      </p>
     </SettingRow>
   );
 }

@@ -162,12 +162,17 @@ export function TimerSlots({
 
   /** Put an RO on a timer: a new slot, or — from a no-RO slot's "Attach RO" —
    * that slot, with its banked time and status kept. */
-  function attachTo(entryId: string, lineId: string | null): Promise<unknown> {
+  async function attachTo(entryId: string, lineId: string | null): Promise<unknown> {
     const target = attachTargetId;
-    setAttachTargetId(null);
-    return target
-      ? attachRoToExistingTimerAction(target, entryId, lineId)
-      : attachRoToTimerAction(entryId, lineId);
+    const res = target
+      ? await attachRoToExistingTimerAction(target, entryId, lineId)
+      : await attachRoToTimerAction(entryId, lineId);
+    // Forget the target only once the attach went through. A refused attach
+    // (error shown) must keep it, or the retry would claim a NEW slot and
+    // orphan the no-RO timer's banked time.
+    const refused = res && typeof res === "object" && "error" in res && res.error;
+    if (target && !refused) setAttachTargetId(null);
+    return res;
   }
 
   function closePicker() {

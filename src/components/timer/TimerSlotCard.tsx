@@ -206,12 +206,11 @@ export function TimerSlotCard({
                 type="button"
                 onClick={() => onOpenDetail(entry)}
                 className="ro-link"
-                aria-label={`RO ${entry.roNumber}`}
               >
                 #{entry.roNumber}
               </button>
             ) : (
-              <span className="ro-link" style={{ textDecoration: "none", cursor: "default" }}>
+              <span className="ro-link tmr-ro-plain">
                 #{entry.roNumber}
               </span>
             )}
@@ -342,7 +341,6 @@ export function TimerSlotCard({
             <button
               key={status}
               type="button"
-              className="timer-status-btn"
               data-tone={STATUS_TONE[status]}
               aria-pressed={active}
               aria-label={STATUS_LABEL[status]}

@@ -178,7 +178,8 @@
 .ins-drivers { list-style: none; margin: var(--s2) 0 0; padding: 0; }
 .ins-drivers li { display: grid; grid-template-columns: minmax(0, 1fr) 76px 44px; align-items: center; gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line); }
 .ins-drivers li:last-child { border-bottom: 0; }
-.ins-driver-name { font-weight: 700; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-driver-name { font-weight: 700; color: var(--ink-2); min-width: 0; }
+.ins-driver-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ins-drivers li.is-lead .ins-driver-name { color: var(--ink); }
 .ins-driver-how { display: block; font-size: var(--fs-label); font-weight: 400; color: var(--ink-3); }
 .ins-meter { height: 6px; background: var(--bar-track); }

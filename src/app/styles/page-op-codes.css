@@ -29,7 +29,7 @@
 /* ---------- the library: a ruled ledger inside the zone ---------- */
 .opl-sheet { list-style: none; margin: 0; padding: 0; }
 .opl-row {
-  display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 0 var(--s2); align-items: center;
+  display: grid; grid-template-columns: var(--tap) minmax(0, 1fr) auto calc(2 * var(--tap)); gap: 0 var(--s2); align-items: center;
   min-height: 56px; padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line);
   cursor: pointer; transition: background-color var(--fast) var(--ease);
 }
@@ -39,10 +39,11 @@
 .opl-row.is-dragging { opacity: 0.6; }
 .opl-head-row { min-height: 0; padding: 0 0 var(--s1); cursor: default; }
 .opl-head-row:hover { background: transparent; }
+.opl-head-row > :nth-child(3) { text-align: right; padding-right: var(--s1); }
 .opl-head-row > * { font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-2); }
 
 /* the grip: a 44px target; a ghost when the order is locked */
-.opl-grip { display: grid; place-items: center; width: 28px; min-height: var(--tap); color: var(--ink-3); cursor: grab; border-radius: var(--r-sign); }
+.opl-grip { display: grid; place-items: center; width: var(--tap); min-height: var(--tap); color: var(--ink-3); cursor: grab; border-radius: var(--r-sign); }
 .opl-grip:active { cursor: grabbing; }
 .opl-grip:hover { color: var(--ink); background: var(--quiet-hover); }
 .opl-grip.is-off { opacity: 0.25; cursor: default; }

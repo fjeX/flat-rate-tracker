@@ -181,9 +181,9 @@ fonts and corner radius only** — no layout, wording or positions moved:
     bar is still Dashboard · Log RO · Timer · History · Op Codes; the current
     page is marked with an accent bar.
   - **Theme moved from Account to Settings.** /account no longer has the
-    "Color Theme" Dark/Light buttons; it has one line, "Theme and accent moved
-    to Settings > Appearance". **Settings > Appearance** (first section on
-    /settings) has four themes (Light, Dark, Graphite, Pitch) and five accent
+    "Color Theme" Dark/Light buttons; it has a "Theme and accent" row with an
+    **Open Appearance** button. **Settings > Appearance** (the 11th entry in
+    the All-settings list on /settings) has four themes (Light, Dark, Graphite, Pitch) and five accent
     colours (Blue, Orange, Teal, Red, Ink), a preview row, and a **Saved**
     tag after each change. The choice is saved to the account.
     **Leave the bot account on Dark + Blue.** If you change it to test, set it
@@ -271,7 +271,8 @@ fonts and corner radius only** — no layout, wording or positions moved:
     headings and puts the date on each tag. The **RO number is the button**
     that opens the detail dialog, as on the dashboard. On desktop the chart
     sits to the left and **stays on screen while the list scrolls** — that is
-    deliberate. "Load more" is a plain outlined button under the list.
+    deliberate. Open tickets carry an **Open** badge on their tag. "Load more"
+    is a plain outlined button under the list.
   - **Timer:** the H1 is "Timers" with "N of 3 slots in use" under it. **All
     three slots are always drawn**: a running timer is a zone headed "TIMER
     1" with its status as a tag at the right (Currently working / Hold for
@@ -298,7 +299,9 @@ fonts and corner radius only** — no layout, wording or positions moved:
     page head (was "Add"). Search is a full-size field (placeholder "Search
     code, description, or tag") with an ✕ clear button. **Sort** is a button
     group with `aria-pressed` (My order / Code / Hours / Added; the pressed
-    one carries ↓/↑, My order has none) — the "Sort By:" chip row is gone.
+    one carries ↓/↑, My order has none; each button's accessible name is
+    "Sort by <field>, ascending/descending" while its visible text is the
+    field + arrow) — the "Sort By:" chip row is gone.
     **Tags** are outlined chips that toggle (`aria-pressed`), each with a
     3px colour tick at its left instead of the round dot; a pressed chip is
     the accent fill; a quiet **Clear** button appears once any is pressed.
@@ -311,8 +314,11 @@ fonts and corner radius only** — no layout, wording or positions moved:
     "N codes shown" and "X.Xh flagged"; the zone's top right says "N of M
     shown" only while a search or tag filter is on. §8d's "tag filter chips
     show a small color dot" is now that tick; the row tick is unchanged.
-  - **Insights:** same sections, same order, same sentences (§7e still
-    applies word for word), in the new language. The page now opens on a
+  - **Insights:** same sections, same sentences (§7e still applies word for
+    word), in the new language. The order is the same except that from 1024px
+    the all-time half is a two-column grid whose reading order is: What's
+    costing me → Where my time goes → Best days → What's winning (Liem OK'd
+    the layout). The page now opens on a
     **headline panel** (the accent-coloured block, like the dashboard's
     Today): four figures — UNPAID THIS WINDOW (red when non-zero, "0h" with
     "every timed job came in at book" when clean), STRONGEST DAY, LAST PERIOD
@@ -544,7 +550,7 @@ fonts and corner radius only** — no layout, wording or positions moved:
       buttons with status / severity / category badges; "Nothing here" empty
       state unchanged.
     - **Crash page:** the tower mark over a single "App crashed" panel (same
-      look as Sign in) with a blue **Reload** button; words unchanged.
+      look as Sign in) with an accent-coloured **Reload** button (the one primary); words unchanged.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,
@@ -627,7 +633,7 @@ sends you there.
 - Edit one of tonight's ROs (change hours or add a line) and verify the edit stuck.
 - **Reading the RO detail modal's Actual column is a property read, not a
   text scrape (new 2026-09-07).** The Actual cell is an `<input>`
-  (`RoDetailModal.tsx:485-505`), so its value lives in the DOM **value
+  (the `LineRow` component in `RoDetailModal.tsx`), so its value lives in the DOM **value
   property** — never in `textContent` — and a text scrape of that cell is
   empty **by design**. This has been filed as a confirmed bug twice; both
   filings were a measurement artifact, not an app bug. Read each line's
@@ -870,7 +876,8 @@ start and save in the same breath records ~0 and proves nothing.
   shows "No RO yet" where the RO number would be, the NEXT field says "Attach an
   RO to save these hours.", and an **Attach RO** button opens the picker for that
   slot. **Save stays dashed-disabled until an RO and a line are bound — that is
-  correct, not a bug.** You may start **one** no-RO timer per night to exercise
+  correct, not a bug.** A timer whose RO was later deleted shows the same "No RO
+  yet" card and can be re-attached the same way. You may start **one** no-RO timer per night to exercise
   this, but you must **Clear** it before you finish (same hygiene as §3b's
   timers), so it never lingers into the morning.
 
@@ -2104,7 +2111,7 @@ the streak, snapshots and career hours that §8b checks against. Export only.
 - **Export — capture the blob in-page. Do NOT attempt a real browser
   download.** A real download kills the Playwright transport outright — it
   has done so on 08-13, 09-01, 09-02, 09-03, 09-06, and TWICE on 09-07. The
-  app is blameless (`DataCard.tsx:19-31` is a textbook
+  app is blameless (`DataCard.tsx`'s `handleExport` is a textbook
   `URL.createObjectURL` → `<a>.click()` blob-download pattern); it's the CDP
   download event itself that this harness cannot survive. §8g is also the
   ONLY check in the whole run that catches deploy drift (the version compare

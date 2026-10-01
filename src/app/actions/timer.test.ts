@@ -38,6 +38,7 @@ const state = {
   failCreateUnpaidTime: false,
   failCreateRoEvent: false,
   failSyncObservations: false,
+  bindLosesRace: false,
   /** Every syncEntryLaborTimeObservations call: what the shared True Time
    *  helper pushed for which RO, and with what consent. */
   syncs: [] as {
@@ -171,6 +172,16 @@ vi.mock("@/lib/db", () => ({
     calls.push("updateTimerSlot");
     state.updatedSlots.push({ id, patch });
   },
+  bindRoToTimerSlot: async (
+    _c: unknown,
+    id: string,
+    patch: { entryId: string; lineId: string | null },
+  ) => {
+    calls.push("bindRoToTimerSlot");
+    if (state.bindLosesRace) return false;
+    state.updatedSlots.push({ id, patch });
+    return true;
+  },
   createRoEvent: async (
     _c: unknown,
     input: { entryId: string; kind: string; date: string; time?: string | null },
@@ -201,6 +212,7 @@ beforeEach(() => {
   state.failCreateUnpaidTime = false;
   state.failCreateRoEvent = false;
   state.failSyncObservations = false;
+  state.bindLosesRace = false;
   state.syncs = [];
   state.tz = undefined;
   state.advanceClockOnGetEntry = null;
@@ -651,6 +663,23 @@ describe("attachRoToExistingTimerAction", () => {
     expect((await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, LINE_ID)).error).toMatch(
       /isn't on this RO/,
     );
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+
+  it("refuses when another tab bound an RO first (conditional write changes no row)", async () => {
+    state.slots = [makeSlot({ entryId: null })];
+    state.entry = makeEntry({ status: "closed", opCodes: [{ id: LINE_ID } as never] });
+    state.bindLosesRace = true;
+    const res = await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, LINE_ID);
+    expect(res).toEqual({ error: "This timer already has an RO." });
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+
+  it("returns a refusal, not a throw, for a malformed id", async () => {
+    const res = await attachRoToExistingTimerAction("nope", ENTRY_ID, null);
+    expect(typeof res.error).toBe("string");
+    const res2 = await attachRoToExistingTimerAction(NO_RO_ID, "nope", null);
+    expect(typeof res2.error).toBe("string");
     expect(state.updatedSlots).toHaveLength(0);
   });
 

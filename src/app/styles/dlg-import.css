@@ -6,7 +6,7 @@
 .imp-body section { display: flex; flex-direction: column; gap: var(--s2); }
 .imp-body .field-label { margin: 0; }
 .imp-body .sfield-body p { margin: 0; }
-.imp-body .sfield-body b { font-weight: 600; color: var(--ink); }
+.imp-body .sfield-body b { color: var(--ink); }
 .imp-dim { color: var(--ink-3); }
 .imp-cleared { color: var(--bad); }
 .imp-go { margin-left: auto; }

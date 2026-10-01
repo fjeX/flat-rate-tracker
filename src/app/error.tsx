@@ -1,6 +1,5 @@
 "use client";
 
-import "./globals.css";
 import { useEffect } from "react";
 import { reportError } from "@/lib/report-error";
 import { isStaleDeployError } from "@/lib/action-error";
@@ -35,23 +34,19 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    // The root boundary replaces the root layout, so it brings its own <html>
-    // with the same theme defaults the layout renders; tokens come from the
-    // globals.css import above.
-    <html lang="en" data-theme="dark" data-accent="blue" data-panel="accent">
-      <body>
-        <main className="err-page">
-          <div className="logo err-logo">
-            <LogoMark />
-            <LogoWord />
-          </div>
-          <Card name="App crashed" nameAs="h1" paddedLg className="err-card">
-            <p className="err-title">The app hit an error it couldn&apos;t recover from</p>
-            <p className="err-desc">Reload the page — your logged hours are saved on the server.</p>
-            <Button variant="go" onClick={reset}>Reload</Button>
-          </Card>
-        </main>
-      </body>
-    </html>
+    // A plain error.tsx (not global-error.tsx): Next keeps the root layout
+    // mounted around it, so <html>, the theme attributes and globals.css are
+    // already there. Only the page body is ours.
+    <main className="err-page">
+      <div className="logo err-logo">
+        <LogoMark />
+        <LogoWord />
+      </div>
+      <Card name="App crashed" nameAs="h1" paddedLg className="err-card">
+        <p className="err-title">The app hit an error it couldn&apos;t recover from</p>
+        <p className="err-desc">Reload the page — your logged hours are saved on the server.</p>
+        <Button variant="go" onClick={reset}>Reload</Button>
+      </Card>
+    </main>
   );
 }

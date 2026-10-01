@@ -97,7 +97,7 @@ function DriverRow({
   return (
     <li className={lead ? "is-lead" : undefined}>
       <span className="ins-driver-name">
-        {label}
+        <span className="ins-driver-label">{label}</span>
         <span className="ins-driver-how">
           {strength ? STRENGTH_COPY[strength] : "Not enough variation to tell"}
         </span>

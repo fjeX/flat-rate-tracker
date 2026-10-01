@@ -1,10 +1,9 @@
 /* Phase 5 dialog bodies: dlg-bonus-form (BonusForm, prefix bon-). Tokens only.
    Body of Quick Add's Spiff tab and the SpiffsCard add/edit dialogs. Follows
    the mock's field / fchip / pick-list habits; the Cancel/Save row is a
-   .dlg-foot look-alike that bleeds to the panel edges (same trick as
-   pp-dlg-actions), because the form is embedded and cannot use Modal's footer.
-   .fchip's selected look keys off aria-pressed; these are radios, so
-   .bon-chip restates it for aria-checked. */
+   .dlg-foot look-alike that bleeds to the panel edges, because the form is
+   embedded and cannot use Modal's footer. The category chips are radios, so
+   the shared .fchip selected look (ui-page.css) also keys off aria-checked. */
 .bon-form { display: grid; gap: var(--s4); }
 .bon-amt { position: relative; }
 .bon-amt > span {
@@ -14,8 +13,6 @@
 .bon-amt .input { padding-left: calc(var(--s3) + var(--s4)); }
 .bon-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
 .bon-pair .pill-input { width: 100%; min-width: 0; }
-.bon-chip[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.bon-chip[aria-checked="true"]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .bon-opt { color: var(--ink-3); font-weight: 600; text-transform: none; letter-spacing: 0; }
 .bon-ico { width: 16px; height: 16px; flex: none; }
 .bon-linked { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s2) var(--s3); }

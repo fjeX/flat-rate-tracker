@@ -32,18 +32,36 @@ vi.mock("next/navigation", () => ({
 const saveTimerAction = vi.fn();
 const startTimerWithoutRoAction = vi.fn();
 const attachRoToExistingTimerAction = vi.fn();
+const attachRoToTimerAction = vi.fn();
+const saveEntry = vi.fn();
 vi.mock("@/app/actions/timer", () => ({
   saveTimerAction: (...args: unknown[]) => saveTimerAction(...args),
   startTimerWithoutRoAction: (...args: unknown[]) => startTimerWithoutRoAction(...args),
   attachRoToExistingTimerAction: (...args: unknown[]) =>
     attachRoToExistingTimerAction(...args),
-  attachRoToTimerAction: vi.fn(),
+  attachRoToTimerAction: (...args: unknown[]) => attachRoToTimerAction(...args),
   releaseTimerAction: vi.fn(),
   resetTimerAction: vi.fn(),
   setTimerLineAction: vi.fn(),
   setTimerStatusAction: vi.fn(),
 }));
-vi.mock("@/app/actions/entries", () => ({ saveEntry: vi.fn() }));
+vi.mock("@/app/actions/entries", () => ({
+  saveEntry: (...args: unknown[]) => saveEntry(...args),
+}));
+// The real form is heavy; a stand-in that just calls onSave is enough to drive
+// the Log-a-new-RO path.
+vi.mock("@/components/forms/LogRoForm", () => ({
+  LogRoForm: ({ onSave }: { onSave: (input: unknown) => Promise<void> }) => (
+    <button
+      type="button"
+      onClick={() => {
+        onSave({}).catch(() => {});
+      }}
+    >
+      Save new RO
+    </button>
+  ),
+}));
 
 import { TimerSlots } from "./TimerSlots";
 
@@ -317,5 +335,24 @@ describe("TimerSlots — a timer with no RO", () => {
     fireEvent.click(screen.getByRole("button", { name: /start without an ro/i }));
     await waitFor(() => expect(startTimerWithoutRoAction).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it("a refused attach keeps the target: Log-a-new-RO retry binds the same no-RO timer", async () => {
+    attachRoToExistingTimerAction
+      .mockResolvedValueOnce({ error: "This timer already has an RO." })
+      .mockResolvedValueOnce({});
+    saveEntry.mockResolvedValue({ id: "e-1", opCodes: [LINE] });
+    renderNoRo();
+    fireEvent.click(screen.getByRole("button", { name: /^attach ro$/i }));
+    await screen.findByText("Put an RO on a timer");
+    fireEvent.click(screen.getByRole("button", { name: /log a new ro/i }));
+    const save = await screen.findByRole("button", { name: "Save new RO" });
+    fireEvent.click(save);
+    await waitFor(() => expect(attachRoToExistingTimerAction).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Save new RO" }));
+    await waitFor(() => expect(attachRoToExistingTimerAction).toHaveBeenCalledTimes(2));
+    expect(attachRoToExistingTimerAction).toHaveBeenLastCalledWith("t-1", "e-1", "line-1");
+    // Never fell through to claiming a new slot.
+    expect(attachRoToTimerAction).not.toHaveBeenCalled();
   });
 });

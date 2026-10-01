@@ -29,11 +29,16 @@ interface Props {
 // Small inline feedback component
 // ---------------------------------------------------------------------------
 function Feedback({ error, message }: { error?: string; message?: string }) {
-  if (!error && !message) return null;
+  // The status wrapper stays mounted so a screen reader announces the
+  // success message when it appears; errors keep their own role="alert".
   return (
-    <p className={`stg-note ${error ? "is-bad" : "is-good"}`} role={error ? "alert" : undefined}>
-      {error ?? message}
-    </p>
+    <div role="status">
+      {(error || message) && (
+        <p className={`stg-note ${error ? "is-bad" : "is-good"}`} role={error ? "alert" : undefined}>
+          {error ?? message}
+        </p>
+      )}
+    </div>
   );
 }
 

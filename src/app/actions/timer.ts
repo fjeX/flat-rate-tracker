@@ -22,7 +22,7 @@ import {
   lineTakenByOtherSlot,
 } from "@/lib/timer";
 import { capForSlot, type TimerCapContext } from "@/lib/timer-schedule";
-import { validate } from "@/lib/validation/core";
+import { check, validate } from "@/lib/validation/core";
 import {
   attachTimerSchema,
   saveTimerSchema,
@@ -249,11 +249,16 @@ export async function attachRoToExistingTimerAction(
   entryIdArg: string,
   lineIdArg: string | null = null,
 ): Promise<TimerRefusal> {
-  const timerId = validate(timerIdSchema, timerIdArg);
-  const { entryId, lineId } = validate(attachTimerSchema, {
+  // Non-throwing parse: a thrown validation message is masked in production.
+  const idCheck = check(timerIdSchema, timerIdArg);
+  if (!idCheck.ok) return { error: idCheck.error };
+  const attachCheck = check(attachTimerSchema, {
     entryId: entryIdArg,
     lineId: lineIdArg,
   });
+  if (!attachCheck.ok) return { error: attachCheck.error };
+  const timerId = idCheck.data;
+  const { entryId, lineId } = attachCheck.data;
   const supabase = await createClient();
 
   const all = await db.listTimerSlots(supabase);
@@ -290,7 +295,10 @@ export async function attachRoToExistingTimerAction(
       };
   }
 
-  await db.updateTimerSlot(supabase, slot.id, { entryId, lineId });
+  // Conditional on entry_id IS NULL: a second tab that bound a different RO
+  // since the read above must lose, not overwrite it.
+  const bound = await db.bindRoToTimerSlot(supabase, slot.id, { entryId, lineId });
+  if (!bound) return { error: "This timer already has an RO." };
   revalidateTimerScreens();
   return {};
 }

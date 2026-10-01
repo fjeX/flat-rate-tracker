@@ -57,7 +57,7 @@ export function RoTimeCard({ initialTrack }: { initialTrack: boolean }) {
           switch's only accessible name, and a name that doesn't contain the
           label a user can see is a WCAG 2.5.3 (Label in Name) failure. */}
       <Switch checked={track} onChange={toggle} disabled={isPending} label="Time of day on each RO" />
-      {error && <p className="stg-note is-bad">{error}</p>}
+      {error && <p role="alert" className="stg-note is-bad">{error}</p>}
     </SettingRow>
   );
 }

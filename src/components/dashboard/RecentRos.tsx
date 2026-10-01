@@ -3,9 +3,8 @@
 // The Recent ROs zone: the last five ROs as tags, each with a duration bar
 // (length = the exact flagged time, one block per hour).
 //
-// This is the dashboard's own list, no longer RoList. RoList is still what
-// History, Pay Period and the guest page render; this one exists because the
-// mock's tag is a different object (hole, hours top right, duration bar), and
+// This is the dashboard's own list (the old RoList is gone); it exists because
+// the mock's tag is a different object (hole, hours top right, duration bar), and
 // the dashboard is the only page that has the Upsell shortcut. What it keeps
 // from RoList, on purpose: tap the RO number for the detail dialog, the Upsell
 // shortcut opening that dialog with the op-code picker already up, the Open

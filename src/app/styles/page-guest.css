@@ -28,3 +28,6 @@
 .gst-rate-pre, .gst-rate-unit { position: absolute; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
 .gst-rate-pre { left: var(--s3); font-family: var(--font-num); }
 .gst-rate-unit { right: var(--s3); font-size: var(--fs-label); font-weight: 600; }
+
+/* three cells: under 600px the strip is two across, so the last one spans */
+@media (max-width: 599px) { .gst-page .gst-spec > div:last-child { grid-column: 1 / -1; } }

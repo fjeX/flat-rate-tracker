@@ -71,13 +71,13 @@
   display: flex; align-items: center; justify-content: center; cursor: pointer;
   background: var(--bad); color: var(--panel); border: var(--w-edge) solid var(--panel); border-radius: 999px;
 }
-.tpl-box-x::after { content: ""; position: absolute; inset: -6px; }
+.tpl-box-x::after { content: ""; position: absolute; inset: -12px; }
 .tpl-box-x:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
 .tpl-box-x-ico { width: 12px; height: 12px; }
 
 /* ---------- hint ---------- */
 .tpl-change {
-  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline;
+  background: none; border: 0; padding: 0; min-height: var(--tap); font: inherit; color: inherit; cursor: pointer; text-decoration: underline;
 }
 .tpl-change:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
 

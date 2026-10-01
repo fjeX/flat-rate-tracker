@@ -9,6 +9,7 @@ import {
   attachConflict,
   bucketFor,
   flushAccumulators,
+  MAX_TIMER_SLOTS,
   msToHours,
   nextFreeSlot,
   type TimerSlot,
@@ -457,7 +458,9 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         return "That RO is on a timer with no line set yet. Set that timer's line first.";
     }
     const slot = nextFreeSlot(state.timers);
-    if (slot === null) return "All 3 timers are in use. Save or clear one first.";
+    if (slot === null) {
+      return `All ${MAX_TIMER_SLOTS} timers are in use. Save or clear one first.`;
+    }
     dispatch({
       type: "TIMER_ATTACH",
       id: crypto.randomUUID(),
@@ -471,7 +474,9 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
 
   function startGuestTimerWithoutRo(): string | null {
     const slot = nextFreeSlot(state.timers);
-    if (slot === null) return "All 3 timers are in use. Save or clear one first.";
+    if (slot === null) {
+      return `All ${MAX_TIMER_SLOTS} timers are in use. Save or clear one first.`;
+    }
     dispatch({
       type: "TIMER_ATTACH",
       id: crypto.randomUUID(),

@@ -25,7 +25,7 @@
 .rod-table th, .rod-table td { height: auto; min-height: 46px; padding-top: var(--s2); padding-bottom: var(--s2); }
 .rod-table thead th { height: 30px; padding-top: 0; padding-bottom: 0; }
 .rod-table td { vertical-align: top; }
-.rod-table td.table-num, .rod-table td.rod-cell-in, .rod-table td.rod-cell-act { vertical-align: top; padding-top: var(--s2); }
+.rod-table td.table-num, .rod-table td.rod-cell-in { vertical-align: top; padding-top: var(--s2); }
 .rod-table th:first-child, .rod-table td:first-child { padding-left: var(--s3); }
 .rod-table th.rod-col-flag, .rod-table td.rod-col-flag { width: 4.5rem; }
 .rod-table th.rod-col-act, .rod-table td.rod-col-act { width: 6.5rem; text-align: right; }
@@ -49,8 +49,7 @@
 .rod-up:disabled { border-style: dashed; color: var(--disabled-ink); cursor: not-allowed; }
 
 /* the actual-hours field: the shared .input, kept narrow. `.opc-hours-input`
-   stays on the element for the bot's selector; its old-token rule is overridden
-   here (higher specificity) so nothing of it shows through. */
+   stays on the element for the bot's selector; it carries no styling of its own. */
 .input.num.opc-hours-input.rod-hours {
   width: 5rem; padding: 0 var(--s2); text-align: right;
   background: var(--field); color: var(--ink); border: var(--w-hair) solid var(--field-line); border-radius: var(--r-sign);
@@ -59,6 +58,7 @@
 .input.num.opc-hours-input.rod-hours:hover { border-color: var(--ink); }
 .input.num.opc-hours-input.rod-hours:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 1px; border-color: var(--ink); box-shadow: var(--field-cut); }
 .input.num.opc-hours-input.rod-hours[aria-invalid="true"] { border-color: var(--bad); border-width: var(--w-edge); }
+.input.num.opc-hours-input.rod-hours:disabled { border-style: dashed; box-shadow: none; color: var(--disabled-ink); cursor: not-allowed; }
 
 /* icon button (remove a line / an event / a day) */
 .rod-x {
@@ -202,14 +202,14 @@
   /* a grid row inside a real <table> is still sized by the table's column
      algorithm (it came out 208px wide): the table and tbody become blocks too,
      and the totals rows become flex rows so they keep their two-ended shape */
-  .rod-table, .rod-table tbody { display: block; width: 100%; }
-  .rod-table tbody tr.table-foot, .rod-table tbody tr.rod-sub {
+  .rod-table, .rod-table tbody, .rod-table tfoot { display: block; width: 100%; }
+  .rod-table tfoot tr.table-foot, .rod-table tfoot tr.rod-sub {
     display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s3);
     border-bottom: var(--w-hair) solid var(--line);
   }
-  .rod-table tbody tr.table-foot { border-top: var(--w-edge) solid var(--edge); }
-  .rod-table tbody tr.table-foot > td, .rod-table tbody tr.rod-sub > td { display: block; border: 0; padding: 0; height: auto; min-height: 0; width: auto; }
-  .rod-table tbody tr.table-foot > td:first-child, .rod-table tbody tr.rod-sub > td:first-child { flex: 1 1 auto; }
-  .rod-table tbody tr.table-foot > td:empty, .rod-table tbody tr.rod-sub > td:empty { display: none; }
-  .rod-table tbody tr:last-child { border-bottom: 0; }
+  .rod-table tfoot tr.table-foot { border-top: var(--w-edge) solid var(--edge); }
+  .rod-table tfoot tr.table-foot > td, .rod-table tfoot tr.rod-sub > td { display: block; border: 0; padding: 0; height: auto; min-height: 0; width: auto; }
+  .rod-table tfoot tr.table-foot > td:first-child, .rod-table tfoot tr.rod-sub > td:first-child { flex: 1 1 auto; }
+  .rod-table tfoot tr.table-foot > td:empty, .rod-table tfoot tr.rod-sub > td:empty { display: none; }
+  .rod-table tbody tr:last-child, .rod-table tfoot tr:last-child { border-bottom: 0; }
 }

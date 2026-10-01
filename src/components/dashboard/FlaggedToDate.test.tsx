@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 //
-// The Flagged to date table replaced the dashboard's three StatCard tiles.
-// StatCard still exists (the guest page uses it) and keeps its own tests; what
-// those tests pin is a set of hard-won behaviours, and the dashboard's copy of
-// the same logic has to keep every one of them:
+// The Flagged to date table replaced the dashboard's three StatCard tiles
+// (StatCard is gone). What its tests pinned was a set of hard-won behaviours,
+// and the dashboard's copy of the same logic has to keep every one of them:
 //
 //   - `zero-efficiency-hero-copy`: when the period's percentage would be hollow
 //     (every flagged hour sat on a day the app can't measure) the row must not

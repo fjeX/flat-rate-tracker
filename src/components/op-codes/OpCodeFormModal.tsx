@@ -16,12 +16,14 @@ function HoursInput({
   className,
   ariaLabel,
   id,
+  describedBy,
 }: {
   value: number;
   onChange: (val: number) => void;
   className?: string;
   ariaLabel?: string;
   id?: string;
+  describedBy?: string;
 }) {
   const [raw, setRaw] = useState(String(value));
 
@@ -32,6 +34,7 @@ function HoursInput({
       inputMode="decimal"
       value={raw}
       aria-label={ariaLabel}
+      aria-describedby={describedBy}
       onChange={(e) => {
         const str = e.target.value;
         if (!/^[0-9]*\.?[0-9]*$/.test(str)) return;
@@ -421,7 +424,7 @@ function OpCodeFormBody({
   return (
     <Modal open={open} onClose={onClose} title={title} size="lg" footer={footer}>
       <form id={formId} onSubmit={handle} className="ocf-form">
-        <Field label="Code" htmlFor="opc-form-code">
+        <Field label="Code" htmlFor="opc-form-code" hint="Required.">
           <input
             id="opc-form-code"
             type="text"
@@ -447,15 +450,20 @@ function OpCodeFormBody({
         <Field
           label="Flag hours"
           htmlFor={hoursId}
-          hint={draft.hasSubCodes ? "Set per sub op code — kept for reference" : undefined}
           className="ocf-hours"
         >
           <HoursInput
             id={hoursId}
+            describedBy={draft.hasSubCodes ? `${hoursId}-hint` : undefined}
             value={draft.flagHours}
             onChange={(val) => setDraft({ ...draft, flagHours: val })}
             className="input num"
           />
+          {draft.hasSubCodes && (
+            <span id={`${hoursId}-hint`} className="field-msg">
+              Set per sub op code — kept for reference
+            </span>
+          )}
         </Field>
         <Field label="Notes (optional)" htmlFor={notesId}>
           <textarea

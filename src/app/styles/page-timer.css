@@ -21,7 +21,7 @@
 .tmr-slots { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--s4); }
 .tmr-slots > * { min-width: 0; }
 @media (min-width: 700px) {
-  .tmr-slots { grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); align-items: start; }
+  .tmr-slots { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); align-items: start; }
 }
 .tmr-empty { margin-top: var(--s2); }
 
@@ -44,8 +44,6 @@
 
 /* the Next field sits inside the timer's flow */
 .tmr-slot .sfield { margin-top: var(--s3); }
-.tmr-more { margin-top: var(--s4); }
-.tmr-more-hint { margin: var(--s2) 0 0; text-align: center; color: var(--ink-3); font-size: var(--fs-label); }
 
 /* ---------- one timer ---------- */
 /* the status word in the zone head; its dot pulses only while working */
@@ -86,7 +84,8 @@
 
 /* the line the hours will land on */
 .tmr-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s3); padding-top: var(--s3); border-top: var(--w-hair) solid var(--line); }
-.tmr-line-k { font-size: var(--fs-label); font-weight: 600; color: var(--ink-2); }
+.tmr-line-k { font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-2); }
+.tmr-ro-plain { text-decoration: none; cursor: default; }
 .tmr-line .btn { margin-left: auto; }
 
 /* status picker: the shared .seg, four equal cells, working = green */

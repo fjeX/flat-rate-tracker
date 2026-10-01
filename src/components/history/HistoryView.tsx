@@ -327,6 +327,7 @@ export function HistoryView({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search RO#, vehicle, or notes"
+              aria-label="Search RO#, vehicle, or notes"
             />
             {search && (
               <button

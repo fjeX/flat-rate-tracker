@@ -888,7 +888,7 @@ export function TrendSection({
         </div>
         {/* Outside the plot so every bar shares one baseline — the in-progress
             column's extra line used to lift its bar and understate it. */}
-        <div className="ins-trend-x" aria-hidden="true">
+        <div className="ins-trend-x">
           {points.map((point) => (
             <span key={point.key} className={point === last ? "is-current" : undefined}>
               {point.label}
