@@ -2,6 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { setReferenceRateAction } from "@/app/actions/settings";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { SettingRow } from "./SettingRow";
 
 // Parse an input string to a positive rate, null (blank = unset), or NaN (bad).
 function parseRate(val: string): number | null | typeof NaN {
@@ -50,82 +54,67 @@ export function ReferenceRateCard({
   }
 
   return (
-    <section className="card padded-lg">
-      <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>
-        Reference hourly rate
-      </h2>
-      <p className="mb-5 text-sm" style={{ color: "var(--fg-2)" }}>
-        Compare your effective hourly pay against a rate you choose — for example,
-        your local minimum wage. It shows up as a comparison on the pay period&apos;s
-        Pay Check-Up. Leave it blank to skip the comparison. Minimum wage varies by
-        city, county, and state and changes every year — look up the current figure
-        on the{" "}
-        <a
-          href="https://www.dir.ca.gov/dlse/faq_minimumwage.htm"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-          style={{ color: "var(--brand)" }}
-        >
-          California DIR minimum wage page
-        </a>
-        .
-      </p>
-      <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
-        <label
-          htmlFor="referenceRate"
-          className="whitespace-nowrap text-sm"
-          style={{ color: "var(--fg-1)" }}
-        >
-          Reference rate
-        </label>
-        <div className="flex items-center gap-1">
-          <span style={{ color: "var(--fg-3)" }}>$</span>
-          <input
-            id="referenceRate"
-            type="number"
-            min={0}
-            max={9999}
-            step={0.25}
-            inputMode="decimal"
-            value={inputVal}
-            onChange={(e) => {
-              setInputVal(e.target.value);
-              setSaved(false);
-              setError(null);
-            }}
-            aria-invalid={invalid}
-            aria-describedby={error ? "referenceRate-error" : undefined}
-            placeholder="—"
-            className="input mono w-24 text-right tabular-nums"
-          />
-          <span className="text-xs" style={{ color: "var(--fg-3)" }}>
-            /hr
+    <SettingRow
+      titleAs="h2"
+      title="Reference hourly rate"
+      description={
+        <>
+          Compare your effective hourly pay against a rate you choose — for
+          example, your local minimum wage. It shows up as a comparison on the
+          pay period&apos;s Pay Check-Up. Leave it blank to skip the comparison.
+          Minimum wage varies by city, county, and state and changes every year —
+          look up the current figure on the{" "}
+          <a
+            href="https://www.dir.ca.gov/dlse/faq_minimumwage.htm"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            California DIR minimum wage page
+          </a>
+          .
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="stg-inline">
+        <Field label="Reference rate" htmlFor="referenceRate">
+          <span className="stg-money">
+            <span className="stg-cur" aria-hidden="true">$</span>
+            <Input
+              id="referenceRate"
+              type="number"
+              min={0}
+              max={9999}
+              step={0.25}
+              inputMode="decimal"
+              mono
+              className="is-money"
+              value={inputVal}
+              onChange={(e) => {
+                setInputVal(e.target.value);
+                setSaved(false);
+                setError(null);
+              }}
+              aria-invalid={invalid}
+              aria-describedby={error ? "referenceRate-error" : undefined}
+              placeholder="—"
+            />
+            <span className="stg-unit">/hr</span>
           </span>
-        </div>
-        <button
-          type="submit"
-          disabled={!dirty || invalid || pending}
-          className="btn btn-primary"
-        >
+        </Field>
+        <Button type="submit" variant="go" disabled={!dirty || invalid || pending} saved={saved}>
           {pending ? "Saving…" : saved ? "Saved ✓" : "Save"}
-        </button>
+        </Button>
         {invalid && (
-          <span className="text-sm" style={{ color: "var(--bad)" }}>
+          <p className="stg-note is-bad" style={{ flexBasis: "100%" }}>
             Rate must be between 0 and 9999.
-          </span>
+          </p>
         )}
         {error && (
-          <p
-            id="referenceRate-error"
-            role="alert"
-            className="w-full text-sm"
-            style={{ color: "var(--bad)" }}
-          >
+          <p id="referenceRate-error" role="alert" className="stg-note is-bad" style={{ flexBasis: "100%" }}>
             {error}
           </p>
         )}
       </form>
-    </section>
+    </SettingRow>
   );
 }

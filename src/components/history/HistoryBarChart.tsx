@@ -1,10 +1,16 @@
 "use client";
 
+// The History page's Flagged hours zone: the same chart as the dashboard's
+// (HoursChart, the mock `.chart`), windowed by the page's range filter. The
+// bar builders below are unchanged from the SVG version this replaced.
 import { useState } from "react";
 import type { Entry } from "@/lib/types";
 import { addDays, getPeriodForDate } from "@/lib/periods";
 import { fmtHours, type DayDenom } from "@/lib/stats";
 import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
+import { withPt } from "@/components/ui/Figure";
+import { Zone } from "@/components/ui/Zone";
+import { HoursChart, type ChartBar, type TabId } from "@/components/dashboard/AveragesChart";
 
 type FilterKind = "today" | "week" | "period" | "month" | "all";
 
@@ -195,11 +201,16 @@ function unitName(filter: FilterKind): string {
   }
 }
 
-// ── SVG layout (mirrors the dashboard "Flagged Hours" chart) ─────────────
-const CHART_W = 358;
-const CHART_H = 130;
-const PAD_L = 4, PAD_R = 4, PAD_T = 6;
-const INNER_W = CHART_W - PAD_L - PAD_R;
+// Which x-axis treatment the shared chart gives this range.
+function chartTab(filter: FilterKind): TabId {
+  switch (filter) {
+    case "today":
+    case "week":   return "week";
+    case "period": return "period";
+    case "month":
+    case "all":    return "month";
+  }
+}
 
 export function HistoryBarChart({
   entries,
@@ -239,56 +250,35 @@ export function HistoryBarChart({
   const activeIdx = hover ?? (currIdx >= 0 ? currIdx : bestIdx >= 0 ? bestIdx : 0);
   const activeBar = bars[activeIdx];
 
-  // Period needs a second label row (Wk 1 / Wk 2)
-  const PAD_B = filter === "period" ? 40 : 26;
-  const INNER_H = CHART_H - PAD_T - PAD_B;
-  const BASELINE = CHART_H - PAD_B;
+  const chartBars: ChartBar[] = bars.map((b, i) => ({
+    label: b.label,
+    longLabel: b.longLabel,
+    subLabel: b.subLabel,
+    date: b.date,
+    value: b.hours,
+    isBest: i === bestIdx,
+    isCurrent: b.isCurrent,
+  }));
 
-  if (n === 0) {
-    return (
-      <section>
-        <h2 className="section-title">Flagged Hours</h2>
-        <div className="card padded">
-          <div className="r-readout">
-            <div className="r-readout-main">
-              <span className="r-readout-label">—</span>
-              <span className="r-readout-value">0h</span>
-              <span className="r-readout-unit">flag hrs</span>
-            </div>
-          </div>
-          <div
-            style={{
-              height: INNER_H, display: "flex", alignItems: "center",
-              justifyContent: "center", color: "var(--fg-3)", fontSize: 12,
-            }}
-          >
-            Nothing flagged in this range
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  const maxVal = Math.max(...bars.map((b) => b.hours), 0.01);
-  const slot = INNER_W / n;
-  const barW = Math.max(6, Math.min(slot * 0.70, 42));
-
-  // Show every label when sparse, thin them out when dense; always keep the
-  // current bar and the last bar labelled.
-  const labelEvery = n <= 10 ? 1 : Math.max(1, Math.ceil(n / 8));
+  const ariaLabel =
+    `Flagged hours, ${totalCaption(filter)}. ` +
+    bars.map((b) => `${b.longLabel} ${fmtHours(b.hours)}`).join(", ") +
+    ".";
 
   return (
-    <section>
-      <div className="section-title">Flagged Hours</div>
-      <div className="card padded">
-        {/* READOUT — value lives here, never over the bars */}
-        <div className="r-readout">
-          <div className="r-readout-main">
-            <span className="r-readout-label">{activeBar?.longLabel ?? "—"}</span>
-            <span className="r-readout-value">
-              {activeBar ? `${fmtHours(activeBar.hours)}h` : "—"}
-            </span>
-            <span className="r-readout-unit">flag hrs</span>
+    <Zone id="z-hist-chart" name="Flagged hours">
+      {n === 0 ? (
+        <p className="hist-chart-empty">Nothing flagged in this range.</p>
+      ) : (
+        <>
+          {/* READOUT — the value always lives here, never over the bars */}
+          <div className="chart-headline" aria-live="polite">
+            <span className="when">{activeBar?.longLabel ?? "—"}</span>
+            <b className="num">
+              {activeBar ? withPt(fmtHours(activeBar.hours)) : "—"}
+              {activeBar && <span className="unit">h</span>}
+            </b>
+            <span className="what">flagged</span>
             {activeBar?.date && (
               <ReadoutEfficiency
                 flagHours={activeBar.hours}
@@ -296,106 +286,30 @@ export function HistoryBarChart({
               />
             )}
           </div>
-        </div>
 
-        {/* CHART — keyed by filter so bar-rise replays on a user-initiated
-            filter switch (new data by intent) but not on an unrelated parent
-            re-render with the same filter. */}
-        <div className="r-chart-wrap" key={filter}>
-          <svg
-            className="r-chart"
-            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-            overflow="visible"
-            aria-label={`${totalCaption(filter)} flagged hours bar chart`}
-            onMouseLeave={() => setHover(null)}
-            onTouchEnd={() => setHover(null)}
-          >
-            {/* Baseline */}
-            <line
-              x1={PAD_L} x2={CHART_W - PAD_R}
-              y1={BASELINE + 0.5} y2={BASELINE + 0.5}
-              stroke="var(--line)" strokeWidth="1"
-            />
+          {/* Keyed by filter so bar-rise replays on a user-initiated range
+              switch (new data by intent) but not on an unrelated parent
+              re-render with the same filter. */}
+          <HoursChart
+            key={filter}
+            bars={chartBars}
+            hover={hover}
+            setHover={setHover}
+            tab={chartTab(filter)}
+            mode="total"
+            ariaLabel={ariaLabel}
+          />
 
-            {bars.map((bar, i) => {
-              const cx = PAD_L + slot * (i + 0.5);
-              const h = Math.max(3, (bar.hours / maxVal) * INNER_H);
-              const x = cx - barW / 2;
-              const y = BASELINE - h;
-              const isHover = hover === i;
-              const highlight = isHover || bar.isCurrent;
-              const showLabel = i % labelEvery === 0 || bar.isCurrent || i === n - 1;
-              const labelColor = bar.isCurrent ? "var(--brand)" : "var(--fg-3)";
-
-              return (
-                <g key={i}>
-                  {/* Touch / hover hit zone */}
-                  <rect
-                    x={PAD_L + slot * i} y={0} width={slot} height={BASELINE}
-                    fill="transparent"
-                    onMouseEnter={() => setHover(i)}
-                    onTouchStart={() => setHover(i)}
-                  />
-                  {/* Bar — pointer-events off so it never occludes the
-                      full-height hit zone behind it (hover must register). */}
-                  <rect
-                    x={x} y={y} width={barW} height={h}
-                    rx={bar.hours > 0 ? Math.min(barW / 2, 6) : 0}
-                    fill={highlight ? "var(--brand)" : "var(--bg-4)"}
-                    pointerEvents="none"
-                  />
-                  {/* Primary axis label */}
-                  {showLabel && (
-                    <text
-                      x={cx} y={BASELINE + 14}
-                      textAnchor="middle"
-                      fontSize={11}
-                      fontFamily="ui-monospace, Menlo, monospace"
-                      fill={labelColor}
-                      fontWeight={bar.isCurrent ? 600 : 400}
-                    >
-                      {bar.label}
-                    </text>
-                  )}
-                  {/* Secondary axis label (Wk 1 / Wk 2) */}
-                  {showLabel && bar.subLabel && (
-                    <text
-                      x={cx} y={BASELINE + 27}
-                      textAnchor="middle"
-                      fontSize={11}
-                      fontFamily="ui-monospace, Menlo, monospace"
-                      fill={labelColor}
-                      opacity={bar.isCurrent ? 1 : 0.7}
-                      fontWeight={bar.isCurrent ? 600 : 400}
-                    >
-                      {bar.subLabel}
-                    </text>
-                  )}
-                  {/* Hover indicator dot */}
-                  {isHover && bar.hours > 0 && (
-                    <circle cx={cx} cy={y - 7} r={2.2} fill="var(--brand)" pointerEvents="none" />
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-
-        {/* FOOTER */}
-        <div className="r-footer">
-          <span className="r-footer-stat">
-            <span className="r-footer-num">{fmtHours(totalHours)}h</span>
-            <span className="r-footer-cap">{totalCaption(filter)}</span>
-          </span>
-          <span className="r-footer-dot" />
-          <span className="r-footer-stat">
-            <span className="r-footer-num">
-              {bestIdx >= 0 ? bars[bestIdx].longLabel : "—"}
+          <div className="chart-foot">
+            <span>
+              <b className="num">{withPt(fmtHours(totalHours))}h</b> {totalCaption(filter)}
             </span>
-            <span className="r-footer-cap">best {unitName(filter)}</span>
-          </span>
-        </div>
-      </div>
-    </section>
+            <span>
+              <b>{bestIdx >= 0 ? bars[bestIdx].longLabel : "—"}</b> best {unitName(filter)}
+            </span>
+          </div>
+        </>
+      )}
+    </Zone>
   );
 }

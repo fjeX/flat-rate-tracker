@@ -1,0 +1,13 @@
+/* Phase 5 dialog bodies: dlg-import ("Replace all data?", DataCard).
+   Prefix imp-. Tokens only. Not in the mock (the mock has no import dialog);
+   built from the shared .rows / .field-label / .sfield parts, so this file only
+   holds the spacing between the four blocks and the two state colours. */
+.imp-body { display: flex; flex-direction: column; gap: var(--s4); }
+.imp-body section { display: flex; flex-direction: column; gap: var(--s2); }
+.imp-body .field-label { margin: 0; }
+.imp-body .sfield-body p { margin: 0; }
+.imp-body .sfield-body b { color: var(--ink); }
+.imp-dim { color: var(--ink-3); }
+.imp-cleared { color: var(--bad); }
+.imp-go { margin-left: auto; }
+.imp-list { list-style: none; margin: 0; padding: 0; }

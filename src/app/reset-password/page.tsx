@@ -4,6 +4,9 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { AuthShell } from "@/components/auth/AuthShell";
+import { Field } from "@/components/ui/Field";
+import { StatusField } from "@/components/ui/StatusField";
 
 /**
  * Step 2 of password recovery: the page the emailed link lands on.
@@ -29,20 +32,7 @@ import { createClient } from "@/lib/supabase/client";
 type Phase = "verifying" | "ready" | "invalid" | "done";
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="mb-8">
-        <Link href="/" className="no-underline">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/frt-logo.png" alt="Flat Rate Tracker" style={{ height: 100, width: "auto" }} />
-        </Link>
-      </div>
-      <div className="card w-full max-w-sm p-6">
-        <h1 className="text-xl font-semibold mb-4">Set a new password</h1>
-        {children}
-      </div>
-    </main>
-  );
+  return <AuthShell title="Set a new password">{children}</AuthShell>;
 }
 
 function ResetPasswordInner() {
@@ -254,23 +244,19 @@ function ResetPasswordInner() {
 
   return (
     <Shell>
-      {phase === "verifying" && (
-        <p className="text-sm text-[var(--fg-2)]">Checking your link…</p>
-      )}
+      {phase === "verifying" && <p className="auth-lede">Checking your link…</p>}
 
       {phase === "invalid" && (
         <>
-          <div role="alert" className="mb-4 rounded-[var(--radius-sm)] border border-[var(--bad)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
-            {reason}
-          </div>
-          <p className="mb-4 text-sm text-[var(--fg-2)]">
-            Reset links are single-use. Request a fresh one and it&apos;ll work.
-          </p>
-          <Link href="/forgot-password" className="btn btn-primary btn-block">
-            Request a new link
-          </Link>
-          <div className="mt-3">
-            <Link href="/signin" className="btn btn-ghost btn-block">
+          <StatusField tag="Fix" role="alert" inset>
+            <p>{reason}</p>
+          </StatusField>
+          <p className="auth-lede">Reset links are single-use. Request a fresh one and it&apos;ll work.</p>
+          <div className="auth-stack">
+            <Link href="/forgot-password" className="btn btn-go btn-block">
+              Request a new link
+            </Link>
+            <Link href="/signin" className="btn btn-quiet btn-block">
               Back to sign in
             </Link>
           </div>
@@ -278,11 +264,11 @@ function ResetPasswordInner() {
       )}
 
       {phase === "ready" && (
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="auth-form">
           {error && (
-            <div role="alert" className="rounded-[var(--radius-sm)] border border-[var(--bad)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
-              {error}
-            </div>
+            <StatusField tag="Fix" role="alert" inset>
+              <p>{error}</p>
+            </StatusField>
           )}
           {/*
             The wrapper is UNCONDITIONAL and the input inside it is not, so this
@@ -307,42 +293,39 @@ function ResetPasswordInner() {
               />
             )}
           </div>
-          <label className="block">
-            <span className="text-sm text-[var(--fg-2)]">New password</span>
+          <Field label="New password" htmlFor="new_password" hint="At least 8 characters.">
             <input
+              id="new_password"
               type="password"
               required
               minLength={8}
               autoComplete="new-password"
-              placeholder="At least 8 characters"
-              className="input mt-1"
+              className="input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-          </label>
-          <label className="block">
-            <span className="text-sm text-[var(--fg-2)]">Confirm new password</span>
+          </Field>
+          <Field label="Confirm new password" htmlFor="confirm_new_password">
             <input
+              id="confirm_new_password"
               type="password"
               required
               autoComplete="new-password"
-              placeholder="Repeat new password"
-              className="input mt-1"
+              className="input"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
-          </label>
-          <button type="submit" className="btn btn-primary btn-block" disabled={pending}>
+          </Field>
+          <button type="submit" className="btn btn-go btn-block" disabled={pending} aria-busy={pending || undefined}>
             {pending ? "Saving…" : "Set new password"}
           </button>
         </form>
       )}
 
       {phase === "done" && (
-        <p className="text-sm text-[var(--good)]">
-          Password updated. Signing you out of all devices — taking you to sign
-          in…
-        </p>
+        <StatusField tag="Saved" role="status" inset>
+          <p>Password updated. Signing you out of all devices — taking you to sign in…</p>
+        </StatusField>
       )}
     </Shell>
   );
@@ -355,7 +338,7 @@ export default function ResetPasswordPage() {
     <Suspense
       fallback={
         <Shell>
-          <p className="text-sm text-[var(--fg-2)]">Checking your link…</p>
+          <p className="auth-lede">Checking your link…</p>
         </Shell>
       }
     >

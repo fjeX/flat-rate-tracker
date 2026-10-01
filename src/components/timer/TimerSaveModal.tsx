@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { StatusField } from "@/components/ui/StatusField";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import { fmtHours2 } from "@/lib/format";
@@ -159,44 +160,41 @@ export function TimerSaveReceipt({
       : "Saved";
 
   return (
-    <Modal open onClose={onClose} title={title}>
-      <div className="space-y-4">
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      footer={
+        <Button variant="go" className="tmd-primary" onClick={onClose}>
+          Done
+        </Button>
+      }
+    >
+      <div className="tmd-body">
         {!saved.ledgerWritten && (
-          <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
+          <StatusField tag="Fix" inset>
             Saved the worked hours, but the waiting time couldn&apos;t be
             recorded — the unpaid-time table isn&apos;t set up yet.
-          </p>
+          </StatusField>
         )}
         {/* What the SERVER wrote — not the frozen projection the modal showed.
          * These are the values saveTimerAction returned, recomputed from
          * persisted accumulators at submit time. Wording forks on `target`
          * (Open Tickets Phase 2): a lineless ticket has no "line" to name, and
          * saying so would be a lie on a money document. */}
-        <div className="card-inset" style={{ padding: 12 }}>
-          <p className="text-sm text-[var(--fg-1)]">
+        <div className="card-inset tmd-well">
+          <p className="tmd-sentence">
             {saved.target === "ticket" ? (
               <>
-                Saved{" "}
-                <strong className="font-mono text-[var(--fg-0)]">
-                  {fmtHours2(saved.workHours)}h
-                </strong>{" "}
-                to open ticket RO #{roNumber} — the ticket now totals{" "}
-                <strong className="font-mono text-[var(--fg-0)]">
-                  {fmtHours2(saved.totalHours)}h
-                </strong>
-                .
+                Saved <strong>{fmtHours2(saved.workHours)}h</strong> to open
+                ticket RO #{roNumber} — the ticket now totals{" "}
+                <strong>{fmtHours2(saved.totalHours)}h</strong>.
               </>
             ) : (
               <>
-                Saved{" "}
-                <strong className="font-mono text-[var(--fg-0)]">
-                  {fmtHours2(saved.workHours)}h
-                </strong>{" "}
-                to RO #{roNumber} — that line now totals{" "}
-                <strong className="font-mono text-[var(--fg-0)]">
-                  {fmtHours2(saved.totalHours)}h
-                </strong>
-                .
+                Saved <strong>{fmtHours2(saved.workHours)}h</strong> to RO #
+                {roNumber} — that line now totals{" "}
+                <strong>{fmtHours2(saved.totalHours)}h</strong>.
               </>
             )}
           </p>
@@ -204,33 +202,33 @@ export function TimerSaveReceipt({
            * clock-kept-running line over a stale-baseline divergence restated
            * the frozen figure — which equals the headline — and blamed
            * something that didn't happen. */}
-          {divergence.addedHours && (
-            <p className="mt-2 text-xs text-[var(--fg-3)]">
-              That isn&apos;t the {fmtHours2(shown.workHours)}h this window
-              showed — the clock kept running while it was open, and the timer
-              banks what actually elapsed. The figure above is what&apos;s on
-              the RO.
-            </p>
+          {(divergence.addedHours || divergence.baselineTotal || undisclosed) && (
+            <div className="rows tmd-notes">
+              {divergence.addedHours && (
+                <p>
+                  That isn&apos;t the {fmtHours2(shown.workHours)}h this window
+                  showed — the clock kept running while it was open, and the
+                  timer banks what actually elapsed. The figure above is
+                  what&apos;s on the RO.
+                </p>
+              )}
+              {divergence.baselineTotal && (
+                <p>
+                  The {fmtHours2(saved.workHours)}h added is exactly what this
+                  window showed, but{" "}
+                  {saved.target === "ticket" ? "that ticket" : "the line"}{" "}
+                  already had time on it that this window didn&apos;t know
+                  about. The total above is what&apos;s on the RO.
+                </p>
+              )}
+              {undisclosed && (
+                <p>
+                  {undisclosed} was also banked and logged as unpaid time
+                  against this RO. It never touches your flag hours.
+                </p>
+              )}
+            </div>
           )}
-          {divergence.baselineTotal && (
-            <p className="mt-2 text-xs text-[var(--fg-3)]">
-              The {fmtHours2(saved.workHours)}h added is exactly what this
-              window showed, but {saved.target === "ticket" ? "that ticket" : "the line"}{" "}
-              already had time on it that this window didn&apos;t know about.
-              The total above is what&apos;s on the RO.
-            </p>
-          )}
-          {undisclosed && (
-            <p className="mt-2 text-xs text-[var(--warn)]">
-              {undisclosed} was also banked and logged as unpaid time against
-              this RO. It never touches your flag hours.
-            </p>
-          )}
-        </div>
-        <div className="flex justify-end">
-          <Button variant="primary" onClick={onClose}>
-            Done
-          </Button>
         </div>
       </div>
     </Modal>
@@ -412,32 +410,50 @@ export function TimerSaveModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={`Close out RO #${entry.roNumber}`}>
-      <div className="space-y-4">
+    <Modal
+      open
+      onClose={onClose}
+      title={`Close out RO #${entry.roNumber}`}
+      footer={
+        <>
+          <Button variant="quiet" onClick={onClose} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            variant="go"
+            className="tmd-primary"
+            onClick={handleSave}
+            busy={pending}
+            disabled={pending || (!isOpenTicket && !selected)}
+          >
+            {pending ? "Saving…" : "Save & close timer"}
+          </Button>
+        </>
+      }
+    >
+      <div className="tmd-body">
         {/* What's being banked, before anything is chosen. */}
-        <div className="card-inset" style={{ padding: 12 }}>
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-sm text-[var(--fg-2)]">Worked</span>
-            <span className="font-mono text-sm text-[var(--fg-0)]">
-              {formatElapsed(frozen.work)} · {fmtHours(workHours)}h
-            </span>
+        <div className="card-inset tmd-well">
+          <div className="rows">
+            <div>
+              <span className="k">Worked</span>
+              <span className="v">
+                {formatElapsed(frozen.work)} · {fmtHours(workHours)}h
+              </span>
+            </div>
+            {holdParts > 0 && (
+              <div>
+                <span className="k">Waiting on parts</span>
+                <span className="v">{formatDuration(holdParts)}</span>
+              </div>
+            )}
+            {holdApproval > 0 && (
+              <div>
+                <span className="k">Waiting on approval</span>
+                <span className="v">{formatDuration(holdApproval)}</span>
+              </div>
+            )}
           </div>
-          {holdParts > 0 && (
-            <div className="mt-1.5 flex items-baseline justify-between gap-3">
-              <span className="text-sm text-[var(--warn)]">Waiting on parts</span>
-              <span className="font-mono text-sm text-[var(--warn)]">
-                {formatDuration(holdParts)}
-              </span>
-            </div>
-          )}
-          {holdApproval > 0 && (
-            <div className="mt-1.5 flex items-baseline justify-between gap-3">
-              <span className="text-sm text-[var(--info)]">Waiting on approval</span>
-              <span className="font-mono text-sm text-[var(--info)]">
-                {formatDuration(holdApproval)}
-              </span>
-            </div>
-          )}
           {/* Only promise a ledger row when one will actually be written.
            * The save action drops holds under MIN_LEDGERED_HOLD_MS, so a
            * 20-second hold shows its time above but earns no row — saying it
@@ -445,7 +461,7 @@ export function TimerSaveModal({
            * frozen: a hold still running crosses that gate while this modal is
            * open, and the promise has to appear when it does. */}
           {ledgerPromised && (
-            <p className="mt-2 text-xs text-[var(--fg-3)]">
+            <p className="tmd-fine">
               Waiting time is logged as unpaid time against this RO. It never
               touches your flag hours.
             </p>
@@ -458,118 +474,88 @@ export function TimerSaveModal({
                 worked hours land on the ticket's own open_work ledger instead
                 of a line, additive across every session the same way a
                 line's actual hours are. */}
-            <p className="text-xs text-[var(--fg-3)]">
+            <p className="tmd-fine">
               Hours go on the ticket&apos;s timeline as a day of work —
               they&apos;re added to what the ticket already has.
             </p>
             {workHours > 0 && (
-              <p className="text-sm text-[var(--fg-2)]">
+              <p className="tmd-total">
                 {ticketTotal === null ? (
                   "Checking this ticket's hours so far…"
                 ) : ticketTotal === 0 ? (
                   <>
                     This ticket has no hours yet — it becomes{" "}
-                    <strong className="text-[var(--fg-0)]">
-                      {fmtHours2(workHours)}h
-                    </strong>
-                    .
+                    <strong>{fmtHours2(workHours)}h</strong>.
                   </>
                 ) : (
                   <>
-                    <span className="font-mono">{fmtHours2(ticketTotal)}h</span>{" "}
-                    + <span className="font-mono">{fmtHours2(workHours)}h</span>{" "}
-                    ={" "}
-                    <strong className="font-mono text-[var(--fg-0)]">
-                      {fmtHours2(newTotal)}h
-                    </strong>{" "}
-                    on this ticket.
+                    <span className="num">{fmtHours2(ticketTotal)}h</span> +{" "}
+                    <span className="num">{fmtHours2(workHours)}h</span> ={" "}
+                    <strong>{fmtHours2(newTotal)}h</strong> on this ticket.
                   </>
                 )}
               </p>
             )}
           </>
         ) : entry.opCodes.length === 0 ? (
-          <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
+          <StatusField tag="Fix" inset>
             This RO has no op codes. Edit it first to add one.
-          </p>
+          </StatusField>
         ) : (
           <>
-            <p className="text-xs text-[var(--fg-3)]">
+            <p className="tmd-fine">
               Which line did the worked time go to? It&apos;s{" "}
-              <strong className="text-[var(--fg-1)]">added</strong> to whatever
-              that line already has, so a job you picked back up tomorrow still
-              totals correctly.
+              <strong>added</strong> to whatever that line already has, so a
+              job you picked back up tomorrow still totals correctly.
             </p>
-            <fieldset className="card-inset overflow-hidden">
+            <fieldset className="tmd-lines log-picks">
               <legend className="sr-only">Op code to save time to</legend>
-              <ul className="divide-y divide-[var(--line-soft)]">
-                {entry.opCodes.map((line) => {
-                  const { code, description } = lineLabel(line, libraryById);
-                  const active = line.id === selectedId;
-                  return (
-                    <li key={line.id}>
-                      <label
-                        className={`flex cursor-pointer items-start gap-3 px-3 py-2.5 text-sm ${
-                          active
-                            ? "bg-[var(--brand-bg)]"
-                            : "hover:bg-[var(--bg-3)]/40"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="timer-save-line"
-                          checked={active}
-                          onChange={() => setSelectedId(line.id)}
-                          className="mt-1 h-4 w-4 accent-[var(--brand)]"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline gap-2">
-                            <span className="font-mono text-sm text-[var(--brand)]">
-                              {code}
-                            </span>
-                            {line.custom && <Badge>Other</Badge>}
-                            <span className="ml-auto text-xs text-[var(--fg-3)]">
-                              Flag {fmtHours(line.flagHours)}h
-                            </span>
-                          </div>
-                          {description && (
-                            <div className="truncate text-xs text-[var(--fg-3)]">
-                              {description}
-                            </div>
-                          )}
-                          <div className="mt-0.5 text-xs text-[var(--fg-2)]">
-                            Actual:{" "}
-                            {line.actualHours === null
-                              ? "—"
-                              : `${fmtHours(line.actualHours)}h`}
-                          </div>
-                        </div>
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
+              {entry.opCodes.map((line) => {
+                const { code, description } = lineLabel(line, libraryById);
+                const active = line.id === selectedId;
+                return (
+                  <label
+                    key={line.id}
+                    className={`log-pick tmd-opt${active ? " is-rec" : ""}`}
+                  >
+                    <input
+                      type="radio"
+                      name="timer-save-line"
+                      checked={active}
+                      onChange={() => setSelectedId(line.id)}
+                    />
+                    <span className="log-pick-txt">
+                      <span className="tmd-pick-head">
+                        <Badge chip mono>{code}</Badge>
+                        {line.custom && <Badge>Other</Badge>}
+                      </span>
+                      {description && <span className="log-pick-desc">{description}</span>}
+                      <span className="log-pick-desc">
+                        Actual:{" "}
+                        {line.actualHours === null
+                          ? "—"
+                          : `${fmtHours(line.actualHours)}h`}
+                      </span>
+                    </span>
+                    <span className="log-pick-act">Flag {fmtHours(line.flagHours)}h</span>
+                  </label>
+                );
+              })}
             </fieldset>
 
             {/* The running total — the whole reason additive saves are safe. */}
             {selected && workHours > 0 && (
-              <p className="text-sm text-[var(--fg-2)]">
+              <p className="tmd-total">
                 {existing === null ? (
                   <>
                     This line has no actual hours yet — it becomes{" "}
-                    <strong className="text-[var(--fg-0)]">
-                      {fmtHours2(workHours)}h
-                    </strong>
-                    .
+                    <strong>{fmtHours2(workHours)}h</strong>.
                   </>
                 ) : (
                   <>
-                    <span className="font-mono">{fmtHours2(existing)}h</span> +{" "}
-                    <span className="font-mono">{fmtHours2(workHours)}h</span> ={" "}
-                    <strong className="font-mono text-[var(--fg-0)]">
-                      {fmtHours2(newTotal)}h
-                    </strong>{" "}
-                    on this line.
+                    <span className="num">{fmtHours2(existing)}h</span> +{" "}
+                    <span className="num">{fmtHours2(workHours)}h</span> ={" "}
+                    <strong>{fmtHours2(newTotal)}h</strong> on this line.
                   </>
                 )}
               </p>
@@ -578,23 +564,10 @@ export function TimerSaveModal({
         )}
 
         {error && (
-          <p role="alert" className="text-sm text-[var(--bad)]">
+          <StatusField tag="Fix" role="alert" inset>
             {error}
-          </p>
+          </StatusField>
         )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button onClick={onClose} disabled={pending}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            disabled={pending || (!isOpenTicket && !selected)}
-          >
-            {pending ? "Saving…" : "Save & close timer"}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

@@ -20,6 +20,7 @@ export function RoTag({
   hoursTitle,
   body,
   action,
+  className,
 }: {
   roNumber: string;
   /** Accessible name for the RO button. Defaults to "RO <number>". */
@@ -28,7 +29,9 @@ export function RoTag({
   /** Sits beside the RO number: a status tag, the open-ticket chip. */
   headExtra?: ReactNode;
   /** "Mar 11 · 2:02 PM" */
-  when?: string;
+  when?: ReactNode;
+  /** Extra class on the tag itself (History keeps `history-ro-row` for the write-smoke locator). */
+  className?: string;
   /** Already formatted by fmtHours. */
   hours: string;
   hoursTitle?: string;
@@ -38,7 +41,7 @@ export function RoTag({
   action?: ReactNode;
 }) {
   return (
-    <li className="tag">
+    <li className={`tag${className ? ` ${className}` : ""}`}>
       <span className="tag-hole" aria-hidden="true" />
       <div className="tag-head">
         <button

@@ -22,20 +22,22 @@ export default async function AccountPage() {
   const hasPassword = user?.identities?.some((i) => i.provider === "email") ?? true;
 
   return (
-    <main className="app-main" style={{ paddingBottom: 64 }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 className="section-title" style={{ marginBottom: 4 }}>Account</h1>
-        <p style={{ margin: 0, fontSize: 14, color: "var(--fg-2)" }}>
-          Manage your profile, email, password, and display preferences.
-        </p>
+    <main className="stg-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>Account</h1>
+          <p>Manage your profile, email, password, and display preferences.</p>
+        </div>
       </div>
-      <AccountView
-        initialFirstName={firstName}
-        initialLastName={lastName}
-        initialEmail={email}
-        initialWeekStartDay={weekStartDay}
-        hasPassword={hasPassword}
-      />
+      <div className="stg-col">
+        <AccountView
+          initialFirstName={firstName}
+          initialLastName={lastName}
+          initialEmail={email}
+          initialWeekStartDay={weekStartDay}
+          hasPassword={hasPassword}
+        />
+      </div>
     </main>
   );
 }

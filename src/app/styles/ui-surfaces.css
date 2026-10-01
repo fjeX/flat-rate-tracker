@@ -293,6 +293,20 @@
 .empty-state-action { margin-top: var(--s3); }
 
 /* =====================================================================
+   error boundary (app/error.tsx, app/(app)/error.tsx): the crash panel.
+   The root boundary has no shell, so .err-page centres the whole page.
+   ===================================================================== */
+.err-page {
+  min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: var(--s6) var(--gutter);
+}
+.err-page-app { min-height: 60vh; }
+.err-logo { margin-bottom: var(--s5); }
+.err-card { width: 100%; max-width: 26rem; display: grid; gap: var(--s2); justify-items: start; }
+.err-title { margin: var(--s3) 0 0; font-size: var(--fs-body); font-weight: 700; color: var(--ink); }
+.err-desc { margin: 0 0 var(--s3); font-size: var(--fs-label); color: var(--ink-2); line-height: 1.45; }
+
+/* =====================================================================
    SKELETON: flat --plate block, opacity pulse, no shadow.
    ===================================================================== */
 .skel { background: var(--bar-track); border-radius: var(--r-sign); box-shadow: none; animation: skel-pulse 1.4s ease-in-out infinite; }

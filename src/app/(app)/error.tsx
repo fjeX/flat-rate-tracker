@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { reportError } from "@/lib/report-error";
 import { isStaleDeployError } from "@/lib/action-error";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 
 export default function AppError({
   error,
@@ -31,18 +33,12 @@ export default function AppError({
   }, [error]);
 
   return (
-    <main style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px", textAlign: "center" }}>
-      <p style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>App crashed</p>
-      <h2 style={{ fontSize: 20, fontWeight: 600, margin: "0 0 12px", color: "var(--fg-1)" }}>The app hit an error it couldn&apos;t recover from</h2>
-      <p style={{ fontSize: 13, color: "var(--fg-2)", maxWidth: 320, margin: "0 0 20px" }}>
-        Reload the page — your logged hours are saved on the server.
-      </p>
-      <button
-        onClick={reset}
-        style={{ background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: "var(--radius-sm)", padding: "8px 20px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
-      >
-        Reload
-      </button>
+    <main className="err-page err-page-app">
+      <Card name="App crashed" nameAs="h2" paddedLg className="err-card">
+        <p className="err-title">The app hit an error it couldn&apos;t recover from</p>
+        <p className="err-desc">Reload the page — your logged hours are saved on the server.</p>
+        <Button variant="go" onClick={reset}>Reload</Button>
+      </Card>
     </main>
   );
 }

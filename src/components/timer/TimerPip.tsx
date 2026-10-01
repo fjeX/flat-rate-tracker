@@ -304,7 +304,7 @@ export function TimerPip({
                 >
                   <span className="min-w-0">
                     <span className="ro block">
-                      {e ? `#${e.roNumber}` : "—"}
+                      {e ? `#${e.roNumber}` : s.entryId === null ? "No RO" : "—"}
                     </span>
                     <span className="why">{STATUS_LABEL_SHORT[s.status]}</span>
                   </span>
@@ -402,10 +402,14 @@ export function TimerPip({
               <ChevronUp className="h-4 w-4" />
             </button>
           </div>
-          {leadEntry && (
+          {leadEntry ? (
             <span className="mt-0.5 text-xs text-[var(--fg-3)]">
               #{leadEntry.roNumber}
             </span>
+          ) : (
+            lead.entryId === null && (
+              <span className="mt-0.5 text-xs text-[var(--fg-3)]">No RO</span>
+            )
           )}
         </div>
       )}

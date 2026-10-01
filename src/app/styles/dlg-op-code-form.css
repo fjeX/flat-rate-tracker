@@ -1,0 +1,83 @@
+/* Phase 5 dialog bodies — dlg-op-code-form (New op code / Edit op code).
+   Prefix ocf-. Tokens only; the 8 swatch colours are the tag palette
+   (--tag-hue-N, data), passed in as --swatch / --tagc.
+   Covers: field stack, tag chips + colour picker, the sub-code well and its
+   ruled table, and the footer's right-hand pair. No mock lines of its own: it
+   assembles .field / .input / .fchip / .table / .card-inset from ui-*.css. */
+
+.ocf-form { display: flex; flex-direction: column; gap: var(--s4); }
+.ocf-hours { max-width: 9rem; }
+
+/* ---------- tags ---------- */
+.ocf-tags { display: flex; flex-direction: column; gap: var(--s2); }
+.ocf-chips { margin-top: var(--s1); }
+
+/* the chip holds two buttons (colour dot, remove), so it is not itself a button */
+.ocf-chip { cursor: default; gap: var(--s1); padding: 0 0 0 var(--s1); }
+.ocf-chip:hover { background: transparent; border-color: var(--line); }
+.ocf-dot, .ocf-x-tag {
+  display: inline-grid; place-items: center; flex: none;
+  min-width: var(--tap); height: var(--tap);
+  padding: 0; background: transparent; color: var(--ink-2); border: 0; border-radius: var(--r-sign);
+  cursor: pointer;
+}
+.ocf-dot:hover, .ocf-x-tag:hover { background: var(--quiet-hover); }
+.ocf-x-tag:hover { color: var(--bad); }
+.ocf-dot:focus-visible, .ocf-x-tag:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+.ocf-dot .hue { width: 14px; height: 14px; border-radius: 50%; border: var(--w-hair) solid var(--line); }
+
+/* swatch row: 8 colours + Auto, 44px targets. Current = solid ring in ink
+   (the focus/edge treatment); "auto landed here" = a soft ring. */
+.ocf-picker { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding-top: var(--s1); }
+.ocf-picker-tag { flex: 1 0 100%; color: var(--ink-2); font-size: var(--fs-label); }
+.ocf-swatch {
+  width: var(--tap); height: var(--tap); padding: 0; flex: none;
+  background: var(--swatch); border: var(--w-hair) solid var(--line); border-radius: var(--r-sign);
+  cursor: pointer;
+}
+.ocf-swatch:hover { border-color: var(--ink); }
+.ocf-swatch:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.ocf-swatch[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 var(--w-heavy) var(--panel), 0 0 0 var(--w-edge) var(--ink); }
+.ocf-swatch.is-showing { border-color: var(--ink-2); box-shadow: inset 0 0 0 var(--w-heavy) var(--panel), 0 0 0 var(--w-hair) var(--ink-3); }
+
+/* ---------- sub op codes ---------- */
+.ocf-sub { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s3); }
+.ocf-sub-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); width: 100%; }
+.ocf-sub-label { color: var(--ink); font-size: var(--fs-body); }
+
+.ocf-table th, .ocf-table td { padding: var(--s2) var(--s1); height: auto; vertical-align: top; }
+.ocf-table thead th { vertical-align: middle; }
+.ocf-table .input { padding: 0 var(--s2); }
+.ocf-table .input.num { text-align: right; }
+.ocf-table textarea.input { padding: var(--s2); min-height: var(--field-h); }
+.ocf-grow { resize: none; overflow: hidden; }
+.ocf-c-code { width: 7rem; }
+.ocf-c-hrs { width: 5.5rem; }
+.ocf-c-x { width: var(--tap); }
+.ocf-x { width: var(--tap); padding: 0; }
+
+/* ---------- footer: Delete far left, then Cancel + Save pushed right ---------- */
+.ocf-foot-end { display: flex; gap: var(--s2); margin-left: auto; }
+
+@media (max-width: 699px) {
+  /* phone: each sub-code row is a grid (code + hours on one line, description
+     full width, remove at the right). A grid row inside a real <table> is still
+     sized by the table algorithm, so the table and tbody become blocks too
+     (same lesson as dlg-ro-detail.css). */
+  .ocf-table, .ocf-table tbody { display: block; width: 100%; }
+  .ocf-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .ocf-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: var(--s2);
+    padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line);
+  }
+  .ocf-table tbody tr:last-child { border-bottom: 0; }
+  .ocf-table tbody tr > td { display: block; width: auto; padding: 0; border: 0; height: auto; }
+  .ocf-table tbody tr > td.ocf-c-code { grid-column: 1; grid-row: 1; }
+  .ocf-table tbody tr > td.ocf-c-hrs { grid-column: 2; grid-row: 1; }
+  .ocf-table tbody tr > td.ocf-c-x { grid-column: 3; grid-row: 1; }
+  .ocf-table tbody tr > td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 480px) {
+  .ocf-c-code { width: 5.5rem; }
+  .ocf-c-hrs { width: 4.5rem; }
+}

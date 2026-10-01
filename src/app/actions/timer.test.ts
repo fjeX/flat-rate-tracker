@@ -38,6 +38,7 @@ const state = {
   failCreateUnpaidTime: false,
   failCreateRoEvent: false,
   failSyncObservations: false,
+  bindLosesRace: false,
   /** Every syncEntryLaborTimeObservations call: what the shared True Time
    *  helper pushed for which RO, and with what consent. */
   syncs: [] as {
@@ -45,6 +46,7 @@ const state = {
     observations: { lineId: string | null; actualHours: number }[];
     share: boolean;
   }[],
+  createdSlots: [] as Record<string, unknown>[],
   deletedSlotIds: [] as string[],
   updatedSlots: [] as { id: string; patch: Record<string, unknown> }[],
 };
@@ -157,6 +159,11 @@ vi.mock("@/lib/db", () => ({
     if (state.failSyncObservations) throw new Error("boom sync");
     state.syncs.push({ entryId, observations, share });
   },
+  createTimerSlot: async (_c: unknown, input: Record<string, unknown>) => {
+    calls.push("createTimerSlot");
+    state.createdSlots.push(input);
+    return { id: "new-slot", ...input };
+  },
   deleteTimerSlot: async (_c: unknown, id: string) => {
     calls.push("deleteTimerSlot");
     state.deletedSlotIds.push(id);
@@ -164,6 +171,16 @@ vi.mock("@/lib/db", () => ({
   updateTimerSlot: async (_c: unknown, id: string, patch: Record<string, unknown>) => {
     calls.push("updateTimerSlot");
     state.updatedSlots.push({ id, patch });
+  },
+  bindRoToTimerSlot: async (
+    _c: unknown,
+    id: string,
+    patch: { entryId: string; lineId: string | null },
+  ) => {
+    calls.push("bindRoToTimerSlot");
+    if (state.bindLosesRace) return false;
+    state.updatedSlots.push({ id, patch });
+    return true;
   },
   createRoEvent: async (
     _c: unknown,
@@ -176,7 +193,12 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-const { saveTimerAction, setTimerStatusAction } = await import("./timer");
+const {
+  saveTimerAction,
+  setTimerStatusAction,
+  startTimerWithoutRoAction,
+  attachRoToExistingTimerAction,
+} = await import("./timer");
 const { hhmmInTz, isoDate } = await import("@/lib/periods");
 
 beforeEach(() => {
@@ -190,6 +212,7 @@ beforeEach(() => {
   state.failCreateUnpaidTime = false;
   state.failCreateRoEvent = false;
   state.failSyncObservations = false;
+  state.bindLosesRace = false;
   state.syncs = [];
   state.tz = undefined;
   state.advanceClockOnGetEntry = null;
@@ -197,6 +220,7 @@ beforeEach(() => {
   vi.useRealTimers();
   state.deletedSlotIds = [];
   state.updatedSlots = [];
+  state.createdSlots = [];
 });
 
 const ONE_HOUR_MS = 3_600_000;
@@ -550,5 +574,139 @@ describe("setTimerStatusAction — hold flips write ro_events on open tickets", 
     await expect(setTimerStatusAction("aaaaaaaa-1111-4111-8111-111111111111", "hold_parts")).resolves.toBeUndefined();
     expect(reportServerError).toHaveBeenCalledTimes(1);
     expect(calls).toContain("updateTimerSlot");
+  });
+});
+
+// Product decision (Liem, 2026-09-30): a timer can run with no RO; saving the
+// time still needs one. The new actions RETURN refusals (a thrown message is
+// masked in production), the old ones keep throwing.
+describe("startTimerWithoutRoAction", () => {
+  it("creates a working slot with a null entry in the lowest free index, clock running", async () => {
+    state.slots = [makeSlot({ slot: 1, status: "paused" })];
+    const res = await startTimerWithoutRoAction();
+    expect(res).toEqual({});
+    expect(state.createdSlots).toHaveLength(1);
+    expect(state.createdSlots[0]).toMatchObject({
+      slot: 2,
+      entryId: null,
+      lineId: null,
+      status: "working",
+    });
+    expect(typeof state.createdSlots[0].startTime).toBe("number");
+    expect(revalidatePath).toHaveBeenCalledWith("/timer");
+  });
+
+  it("pauses another working slot first (one pair of hands)", async () => {
+    state.slots = [makeSlot({ status: "working", startTime: Date.now() - 60_000 })];
+    await startTimerWithoutRoAction();
+    expect(state.updatedSlots).toHaveLength(1);
+    expect(state.updatedSlots[0].patch).toMatchObject({ status: "paused", startTime: null });
+    expect(calls.indexOf("updateTimerSlot")).toBeLessThan(calls.indexOf("createTimerSlot"));
+  });
+
+  it("returns a refusal, not a throw, when all slots are in use", async () => {
+    state.slots = [1, 2, 3].map((n) =>
+      makeSlot({ id: `aaaaaaaa-1111-4111-8111-11111111111${n}`, slot: n }),
+    );
+    const res = await startTimerWithoutRoAction();
+    expect(res.error).toMatch(/All 3 timers are in use/);
+    expect(state.createdSlots).toHaveLength(0);
+  });
+});
+
+describe("attachRoToExistingTimerAction", () => {
+  const NO_RO_ID = "aaaaaaaa-1111-4111-8111-111111111111";
+  const ENTRY_ID = "eeeeeeee-0000-4000-8000-000000000001";
+
+  it("binds the RO to the existing slot without touching its time or status", async () => {
+    state.slots = [
+      makeSlot({
+        entryId: null,
+        status: "working",
+        startTime: 1_000,
+        workAccumulated: ONE_HOUR_MS,
+      }),
+    ];
+    state.entry = makeEntry({ status: "closed", opCodes: [{ id: LINE_ID } as never] });
+
+    const res = await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, LINE_ID);
+
+    expect(res).toEqual({});
+    expect(state.createdSlots).toHaveLength(0);
+    expect(state.updatedSlots).toEqual([
+      { id: NO_RO_ID, patch: { entryId: ENTRY_ID, lineId: LINE_ID } },
+    ]);
+    // No accumulator or clock field in the patch: work_accumulated is kept.
+    expect(state.updatedSlots[0].patch).not.toHaveProperty("workAccumulated");
+    expect(state.updatedSlots[0].patch).not.toHaveProperty("startTime");
+    expect(state.updatedSlots[0].patch).not.toHaveProperty("status");
+  });
+
+  it("refuses a slot that already has an RO", async () => {
+    state.slots = [makeSlot()];
+    state.entry = makeEntry();
+    const res = await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, null);
+    expect(res.error).toMatch(/already has an RO/);
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+
+  it("refuses a missing timer, a missing RO and a foreign line", async () => {
+    expect((await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, null)).error).toMatch(
+      /no longer running/,
+    );
+    state.slots = [makeSlot({ entryId: null })];
+    state.entry = null;
+    expect((await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, null)).error).toMatch(
+      /no longer exists/,
+    );
+    state.entry = makeEntry({ opCodes: [] });
+    expect((await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, LINE_ID)).error).toMatch(
+      /isn't on this RO/,
+    );
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+
+  it("refuses when another tab bound an RO first (conditional write changes no row)", async () => {
+    state.slots = [makeSlot({ entryId: null })];
+    state.entry = makeEntry({ status: "closed", opCodes: [{ id: LINE_ID } as never] });
+    state.bindLosesRace = true;
+    const res = await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, LINE_ID);
+    expect(res).toEqual({ error: "This timer already has an RO." });
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+
+  it("returns a refusal, not a throw, for a malformed id", async () => {
+    const res = await attachRoToExistingTimerAction("nope", ENTRY_ID, null);
+    expect(typeof res.error).toBe("string");
+    const res2 = await attachRoToExistingTimerAction(NO_RO_ID, "nope", null);
+    expect(typeof res2.error).toBe("string");
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+
+  it("refuses a line another timer already has", async () => {
+    state.slots = [
+      makeSlot({ entryId: null }),
+      makeSlot({
+        id: "aaaaaaaa-1111-4111-8111-111111111112",
+        slot: 2,
+        entryId: ENTRY_ID,
+        lineId: LINE_ID,
+      }),
+    ];
+    state.entry = makeEntry({ status: "closed", opCodes: [{ id: LINE_ID } as never] });
+    const res = await attachRoToExistingTimerAction(NO_RO_ID, ENTRY_ID, LINE_ID);
+    expect(res.error).toMatch(/already on a timer/);
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+});
+
+describe("saveTimerAction — a slot with no RO", () => {
+  it("refuses, and leaves the slot and its time alone", async () => {
+    state.slots = [makeSlot({ entryId: null, workAccumulated: ONE_HOUR_MS })];
+    await expect(
+      saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID),
+    ).rejects.toThrow("This timer has no RO attached.");
+    expect(state.deletedSlotIds).toHaveLength(0);
+    expect(calls).not.toContain("addLineActualHours:" + LINE_ID);
   });
 });

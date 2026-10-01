@@ -3,6 +3,10 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { StatusField } from "@/components/ui/StatusField";
+import { Switch } from "@/components/ui/Switch";
 import { TAG_HUE_SLOTS, tagHueOverride, tagHueSlot, tagHueVar } from "./tagHue";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -12,12 +16,14 @@ function HoursInput({
   className,
   ariaLabel,
   id,
+  describedBy,
 }: {
   value: number;
   onChange: (val: number) => void;
   className?: string;
   ariaLabel?: string;
   id?: string;
+  describedBy?: string;
 }) {
   const [raw, setRaw] = useState(String(value));
 
@@ -28,6 +34,7 @@ function HoursInput({
       inputMode="decimal"
       value={raw}
       aria-label={ariaLabel}
+      aria-describedby={describedBy}
       onChange={(e) => {
         const str = e.target.value;
         if (!/^[0-9]*\.?[0-9]*$/.test(str)) return;
@@ -78,7 +85,7 @@ function AutoGrowInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       aria-label={ariaLabel}
-      className={`resize-none overflow-hidden ${className ?? ""}`}
+      className={`ocf-grow ${className ?? ""}`}
     />
   );
 }
@@ -88,6 +95,7 @@ function AutoGrowInput({
 // When `onSetTagColor` is provided, each chip gets a colour dot that opens an
 // 8-swatch picker — colours are library-wide per tag, saved immediately.
 function TagInput({
+  inputId,
   tags,
   onChange,
   suggestions,
@@ -97,6 +105,7 @@ function TagInput({
   tags: string[];
   onChange: (tags: string[]) => void;
   suggestions: string[];
+  inputId: string;
   tagColors?: Record<string, number>;
   onSetTagColor?: (tag: string, hue: number | null) => void;
 }) {
@@ -135,39 +144,66 @@ function TagInput({
     (s) => !tags.some((t) => t.toLowerCase() === s.toLowerCase()),
   );
 
+
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1.5 rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-2 py-1.5 focus-within:border-[var(--brand)]">
-      {tags.map((tag) => (
-        <span
-          key={tag}
-          className="flex items-center gap-1 badge badge-neutral text-[var(--fg-1)]"
-        >
-          {onSetTagColor && (
-            <button
-              type="button"
-              onClick={() => setPickerFor(pickerFor === tag ? null : tag)}
-              aria-label={`Change color for ${tag}`}
-              aria-expanded={pickerFor === tag}
-              title="Tag color"
-              className="h-3 w-3 shrink-0 rounded-full border border-[var(--line)] hover:scale-125"
-              style={{ background: tagHueVar(tag, tagColors), transition: "transform 0.1s" }}
-            />
-          )}
-          {tag}
-          <button
-            type="button"
-            onClick={() => removeTag(tag)}
-            aria-label={`Remove ${tag}`}
-            className="text-[var(--fg-2)] hover:text-[var(--bad)]"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </span>
-      ))}
+    <div className="ocf-tags">
+      <input
+        id={inputId}
+        type="text"
+        value={raw}
+        list={listId}
+        onChange={(e) => {
+          const val = e.target.value;
+          // Commit when the user types a comma or picks a datalist suggestion.
+          if (val.endsWith(",")) addTag(val);
+          else setRaw(val);
+        }}
+        onKeyDown={onKeyDown}
+        onBlur={() => addTag(raw)}
+        placeholder={tags.length === 0 ? "Add tags…" : ""}
+        className="input"
+      />
+      <datalist id={listId}>
+        {available.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+
+      {tags.length > 0 && (
+        <div className="fchips ocf-chips">
+          {tags.map((tag) => (
+            <span key={tag} className="fchip ocf-chip">
+              {onSetTagColor && (
+                <button
+                  type="button"
+                  onClick={() => setPickerFor(pickerFor === tag ? null : tag)}
+                  aria-label={`Change color for ${tag}`}
+                  aria-expanded={pickerFor === tag}
+                  title="Tag color"
+                  className="ocf-dot"
+                  style={{ "--tagc": tagHueVar(tag, tagColors) } as React.CSSProperties}
+                >
+                  <span className="hue" aria-hidden="true" />
+                </button>
+              )}
+              {tag}
+              <button
+                type="button"
+                onClick={() => removeTag(tag)}
+                aria-label={`Remove ${tag}`}
+                className="ocf-x-tag"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Swatch picker for the chip whose dot was tapped */}
       {onSetTagColor && pickerFor && tags.includes(pickerFor) && (
-        <div className="flex w-full flex-wrap items-center gap-2 pt-1.5">
-          <span className="text-xs text-[var(--fg-3)]">{pickerFor}:</span>
+        <div className="ocf-picker" role="group" aria-label={`Color for ${pickerFor}`}>
+          <span className="ocf-picker-tag">{pickerFor}:</span>
           {/* "Pinned" and "showing" are different questions. A tag whose hash
               lands on the slot the user pinned looks identical either way, so
               a picker keyed on the resolved colour alone made "Auto" appear to
@@ -188,15 +224,8 @@ function TagInput({
                 aria-label={`Color ${i + 1}${
                   pinned ? " (current)" : showing ? " (current, automatic)" : ""
                 }`}
-                className="h-5 w-5 rounded-full border border-[var(--line)]"
-                style={{
-                  background: `var(--tag-hue-${i})`,
-                  boxShadow: pinned
-                    ? "0 0 0 2px var(--bg-2), 0 0 0 4px var(--fg-2)"
-                    : showing
-                      ? "0 0 0 2px var(--bg-2), 0 0 0 4px var(--fg-3)"
-                      : undefined,
-                }}
+                className={`ocf-swatch${showing && !pinned ? " is-showing" : ""}`}
+                style={{ "--swatch": `var(--tag-hue-${i})` } as React.CSSProperties}
               />
             );
           })}
@@ -211,11 +240,7 @@ function TagInput({
                 }}
                 aria-pressed={isAuto}
                 aria-label={`Auto${isAuto ? " (current)" : ""}`}
-                className={
-                  isAuto
-                    ? "text-xs font-semibold text-[var(--fg-0)] underline"
-                    : "text-xs text-[var(--fg-2)] underline hover:text-[var(--fg-0)]"
-                }
+                className="fchip ocf-auto"
               >
                 Auto
               </button>
@@ -223,26 +248,6 @@ function TagInput({
           })()}
         </div>
       )}
-      <input
-        type="text"
-        value={raw}
-        list={listId}
-        onChange={(e) => {
-          const val = e.target.value;
-          // Commit when the user types a comma or picks a datalist suggestion.
-          if (val.endsWith(",")) addTag(val);
-          else setRaw(val);
-        }}
-        onKeyDown={onKeyDown}
-        onBlur={() => addTag(raw)}
-        placeholder={tags.length === 0 ? "Add tags…" : ""}
-        className="min-w-[6rem] flex-1 bg-transparent py-0.5 text-sm placeholder-[var(--fg-3)] focus:outline-none"
-      />
-      <datalist id={listId}>
-        {available.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
     </div>
   );
 }
@@ -268,7 +273,11 @@ export type OpCodeFormValues = {
 
 type Mode = "add" | "edit";
 
+// Owns the draft and renders the Modal itself: the footer's Save/Delete need
+// the form's state, and the Modal only takes the footer as a prop.
 function OpCodeFormBody({
+  open,
+  title,
   mode,
   initial,
   allTags,
@@ -279,6 +288,8 @@ function OpCodeFormBody({
   onDelete,
   isPending,
 }: {
+  open: boolean;
+  title: string;
   mode: Mode;
   initial: OpCodeFormValues;
   allTags: string[];
@@ -291,6 +302,12 @@ function OpCodeFormBody({
 }) {
   const [draft, setDraft] = useState<OpCodeFormValues>(initial);
   const [error, setError] = useState<string | null>(null);
+  const uid = useId();
+  const formId = `${uid}-form`;
+  const descId = `${uid}-desc`;
+  const hoursId = `${uid}-hours`;
+  const notesId = `${uid}-notes`;
+  const tagsId = `${uid}-tags`;
 
   function toggleSubCodes(enabled: boolean) {
     if (!enabled) {
@@ -385,14 +402,29 @@ function OpCodeFormBody({
     }
   }
 
+
+  const footer = (
+    <>
+      {mode === "edit" && onDelete && (
+        <Button variant="danger" onClick={onDelete} disabled={isPending}>
+          Delete
+        </Button>
+      )}
+      <span className="ocf-foot-end">
+        <Button variant="quiet" onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button variant="go" type="submit" form={formId} disabled={isPending}>
+          {isPending ? "Saving…" : mode === "add" ? "Save" : "Save changes"}
+        </Button>
+      </span>
+    </>
+  );
+
   return (
-    <form onSubmit={handle} className="space-y-4">
-      <div className="space-y-3">
-        <label className="block" htmlFor="opc-form-code">
-          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
-            Code <span aria-hidden="true">*</span>
-            <span className="sr-only"> (required)</span>
-          </span>
+    <Modal open={open} onClose={onClose} title={title} size="lg" footer={footer}>
+      <form id={formId} onSubmit={handle} className="ocf-form">
+        <Field label="Code" htmlFor="opc-form-code" hint="Required.">
           <input
             id="opc-form-code"
             type="text"
@@ -403,188 +435,152 @@ function OpCodeFormBody({
             aria-required="true"
             aria-invalid={Boolean(error)}
             aria-describedby={error ? "opc-form-error" : undefined}
-            className="mt-1 input font-mono"
+            className="input mono"
           />
-        </label>
-        <label className="block">
-          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
-            Description
-          </span>
+        </Field>
+        <Field label="Description" htmlFor={descId}>
           <input
+            id={descId}
             type="text"
             value={draft.description}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-            className="mt-1 input"
+            className="input"
           />
-        </label>
-        <label className="block">
-          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
-            Flag hours
-            {draft.hasSubCodes && (
-              <span className="ml-2 font-normal normal-case text-[var(--fg-3)]">
-                (set per sub op code — kept for reference)
-              </span>
-            )}
-          </span>
+        </Field>
+        <Field
+          label="Flag hours"
+          htmlFor={hoursId}
+          className="ocf-hours"
+        >
           <HoursInput
+            id={hoursId}
+            describedBy={draft.hasSubCodes ? `${hoursId}-hint` : undefined}
             value={draft.flagHours}
             onChange={(val) => setDraft({ ...draft, flagHours: val })}
-            className="mt-1 w-32 rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
+            className="input num"
           />
-        </label>
-        <label className="block">
-          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
-            Notes{" "}
-            <span className="font-normal normal-case text-[var(--fg-3)]">
-              (optional)
+          {draft.hasSubCodes && (
+            <span id={`${hoursId}-hint`} className="field-msg">
+              Set per sub op code — kept for reference
             </span>
-          </span>
+          )}
+        </Field>
+        <Field label="Notes (optional)" htmlFor={notesId}>
           <textarea
+            id={notesId}
             value={draft.notes}
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
             rows={2}
             placeholder="Part numbers, reminders, procedure notes…"
-            className="mt-1 w-full resize-y input placeholder-[var(--fg-3)]"
+            className="input"
           />
-        </label>
-        <label className="block">
-          <span className="text-xs uppercase tracking-wide text-[var(--fg-2)]">
-            Tags{" "}
-            <span className="font-normal normal-case text-[var(--fg-3)]">
-              (optional — group repairs, e.g. Brakes, Warranty)
-            </span>
-          </span>
+        </Field>
+        <Field
+          label="Tags"
+          htmlFor={tagsId}
+          hint="Optional — group repairs, e.g. Brakes, Warranty"
+        >
           <TagInput
+            inputId={tagsId}
             tags={draft.tags}
             onChange={(tags) => setDraft({ ...draft, tags })}
             suggestions={allTags}
             tagColors={tagColors}
             onSetTagColor={onSetTagColor}
           />
-        </label>
-      </div>
+        </Field>
 
-      {/* Sub op codes */}
-      <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-2)] p-3 space-y-3">
-        <label className="flex items-center gap-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={draft.hasSubCodes}
-            onChange={(e) => toggleSubCodes(e.target.checked)}
-            className="h-4 w-4 rounded-[4px] border-[var(--line)] bg-[var(--bg-3)] accent-[var(--brand)]"
-          />
-          <span className="text-sm text-[var(--fg-1)]">This op code has sub op codes</span>
-        </label>
-
-        {draft.hasSubCodes && (
-          <div className="space-y-2">
-            {/* Column header */}
-            {draft.subCodes.length > 0 && (
-              // px-2 on each label matches the inputs' own px-2 so the column
-              // headers line up with the text inside the fields below.
-              <div className="grid grid-cols-[100px_1fr_72px_32px] gap-2">
-                <span className="px-2 text-xs text-[var(--fg-2)]">Code</span>
-                <span className="px-2 text-xs text-[var(--fg-2)]">Description</span>
-                <span className="px-2 text-xs text-[var(--fg-2)]">Flag hrs</span>
-                <span />
-              </div>
-            )}
-
-            {draft.subCodes.map((sub) => (
-              <div
-                key={sub.draftKey}
-                className="grid grid-cols-[100px_1fr_72px_32px] items-start gap-2"
-              >
-                <input
-                  type="text"
-                  value={sub.code}
-                  onChange={(e) => updateSubCode(sub.draftKey, { code: e.target.value })}
-                  placeholder="R1"
-                  aria-label="Sub op code"
-                  required
-                  aria-required="true"
-                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-3)] px-2 py-1.5 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
-                />
-                <AutoGrowInput
-                  value={sub.description}
-                  onChange={(val) => updateSubCode(sub.draftKey, { description: val })}
-                  placeholder="Description…"
-                  ariaLabel="Sub op code description"
-                  className="w-full rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-3)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
-                />
-                <HoursInput
-                  value={sub.flagHours}
-                  onChange={(val) => updateSubCode(sub.draftKey, { flagHours: val })}
-                  ariaLabel="Sub op code flag hours"
-                  className="rounded-[var(--radius-sm)] border border-transparent bg-[var(--bg-3)] px-2 py-1.5 text-sm text-[var(--fg-0)] focus:border-[var(--brand)] focus:shadow-[var(--ring)] focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeSubCode(sub.draftKey)}
-                  // Falls back while the code field is still empty mid-typing.
-                  aria-label={
-                    sub.code.trim()
-                      ? `Remove sub op code ${sub.code.trim()}`
-                      : "Remove sub op code"
-                  }
-                  className="mt-1.5 flex items-center justify-center rounded-full p-1 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)]"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={addSubCode}
-              className="flex items-center gap-1.5 min-h-[38px] rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] px-3 py-1.5 text-xs text-[var(--fg-2)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add sub op code
-            </button>
+        {/* Sub op codes */}
+        <div className="card-inset ocf-sub">
+          <div className="ocf-sub-head">
+            <span className="ocf-sub-label">This op code has sub op codes</span>
+            <Switch
+              checked={draft.hasSubCodes}
+              onChange={toggleSubCodes}
+              label="This op code has sub op codes"
+            />
           </div>
-        )}
-      </div>
 
-      {error && <p id="opc-form-error" role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
+          {draft.hasSubCodes && (
+            <>
+              {draft.subCodes.length > 0 && (
+                <table className="table ocf-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Code</th>
+                      <th scope="col">Description</th>
+                      <th scope="col" className="table-num">Flag hrs</th>
+                      <th scope="col"><span className="sr-only">Remove</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draft.subCodes.map((sub) => (
+                      <tr key={sub.draftKey}>
+                        <td className="ocf-c-code">
+                          <input
+                            type="text"
+                            value={sub.code}
+                            onChange={(e) => updateSubCode(sub.draftKey, { code: e.target.value })}
+                            placeholder="R1"
+                            aria-label="Sub op code"
+                            required
+                            aria-required="true"
+                            className="input mono"
+                          />
+                        </td>
+                        <td>
+                          <AutoGrowInput
+                            value={sub.description}
+                            onChange={(val) => updateSubCode(sub.draftKey, { description: val })}
+                            placeholder="Description…"
+                            ariaLabel="Sub op code description"
+                            className="input"
+                          />
+                        </td>
+                        <td className="ocf-c-hrs">
+                          <HoursInput
+                            value={sub.flagHours}
+                            onChange={(val) => updateSubCode(sub.draftKey, { flagHours: val })}
+                            ariaLabel="Sub op code flag hours"
+                            className="input num"
+                          />
+                        </td>
+                        <td className="ocf-c-x">
+                          <Button
+                            variant="quiet"
+                            className="ocf-x"
+                            onClick={() => removeSubCode(sub.draftKey)}
+                            // Falls back while the code field is still empty mid-typing.
+                            aria-label={
+                              sub.code.trim()
+                                ? `Remove sub op code ${sub.code.trim()}`
+                                : "Remove sub op code"
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
 
-      <div className="flex items-center justify-between gap-2 pt-2">
-        <div>
-          {mode === "edit" && onDelete && (
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={isPending}
-              className="btn"
-              style={{
-                color: "var(--bad)",
-                borderColor: "color-mix(in oklab, var(--bad) 40%, transparent)",
-                background: "transparent",
-              }}
-            >
-              Delete
-            </button>
+              <Button variant="line" onClick={addSubCode}>
+                <Plus className="h-3.5 w-3.5" />
+                Add sub op code
+              </Button>
+            </>
           )}
         </div>
-        <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isPending}
-          className="btn btn-ghost"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="btn btn-primary"
-        >
-          {isPending ? "Saving…" : mode === "add" ? "Save" : "Save changes"}
-        </button>
-        </div>
-      </div>
-    </form>
+
+        {error && (
+          <StatusField tag="Fix" role="alert" inset id="opc-form-error">
+            {error}
+          </StatusField>
+        )}
+      </form>
+    </Modal>
   );
 }
 
@@ -625,19 +621,23 @@ export function OpCodeFormModal({
     removedSubIds: [],
   };
 
+  // The form owns the Modal, so it must unmount when closed or the draft
+  // would survive between openings (the Modal itself used to do this).
+  if (!open) return null;
+
   return (
-    <Modal open={open} onClose={onClose} title={title} size="lg">
-      <OpCodeFormBody
-        mode={mode}
-        initial={seeded}
-        allTags={allTags}
-        tagColors={tagColors}
-        onSetTagColor={onSetTagColor}
-        onSubmit={onSubmit}
-        onClose={onClose}
-        onDelete={onDelete}
-        isPending={isPending}
-      />
-    </Modal>
+    <OpCodeFormBody
+      open={open}
+      title={title}
+      mode={mode}
+      initial={seeded}
+      allTags={allTags}
+      tagColors={tagColors}
+      onSetTagColor={onSetTagColor}
+      onSubmit={onSubmit}
+      onClose={onClose}
+      onDelete={onDelete}
+      isPending={isPending}
+    />
   );
 }

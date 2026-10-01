@@ -355,6 +355,44 @@ export const laborRates = [
   { id: id("1ab0", 2), user_id: FIXTURE_USER_ID, labor_type: "warranty", hourly_rate: 32, created_at: STAMP, updated_at: STAMP },
 ];
 
+// ── portfolio snapshots ─────────────────────────────────────────────────────
+// The account has ~90 ROs, so it crossed the 10 / 25 / 50 lines long ago and
+// would hold three frozen sheets. Without them the dashboard's snapshot row
+// said "Your first snapshot" over a 90-RO account and the sheet itself was
+// never photographed. Stats are frozen values, not derived from the entries
+// above: a snapshot is an immutable record, and the fixture treats it as one.
+const SNAPSHOT_TOP_OPS = [
+  { code: "LOF", count: 4 },
+  { code: "BRK-F", count: 3 },
+  { code: "ALIGN", count: 3 },
+];
+export const portfolioSnapshots = [
+  [1, 10, "2026-01-05", "2026-01-13", 7, 24.2, 1.06, 2, "2026-01-13T23:40:00.000Z"],
+  [2, 25, "2026-01-05", "2026-01-30", 19, 61.8, 1.02, 5, "2026-01-30T23:55:00.000Z"],
+  [3, 50, "2026-01-05", "2026-02-24", 36, 122.4, 0.97, 9, "2026-02-24T23:35:00.000Z"],
+].map(([seq, threshold, first, last, workDays, flag, avg, photos, at], i) => ({
+  id: id("5a9c", i + 1),
+  user_id: FIXTURE_USER_ID,
+  seq,
+  ro_threshold: threshold,
+  stats: {
+    roCount: threshold,
+    totalFlagHours: flag,
+    avgVsBook: avg,
+    comebackHours: 0,
+    photoCount: photos,
+    topOps: SNAPSHOT_TOP_OPS,
+    firstDate: first,
+    lastDate: last,
+    workDays,
+    overallEfficiency: 47 + i * 3,
+    efficiencySource: "clocked",
+    unpairedFlagHours: 0,
+    unpairedDays: 0,
+  },
+  created_at: at,
+}));
+
 /**
  * Table → rows. Anything absent resolves to an empty array, never an error.
  *
@@ -372,4 +410,5 @@ export const TABLES: Record<string, unknown[]> = {
   daily_clock_hours: dailyClockHours,
   user_settings: [userSettings],
   work_schedules: workSchedules,
+  portfolio_snapshots: portfolioSnapshots,
 };

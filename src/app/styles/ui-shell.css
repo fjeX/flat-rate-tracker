@@ -106,13 +106,15 @@ svg.ic-sm { width: 16px; height: 16px; }
   padding-top: var(--s2); border-top: var(--w-hair) solid var(--line);
   font-size: var(--fs-label); color: var(--ink-3);
 }
-.footer a, .footer button {
+/* scoped to .footer-link, not every <a>/<button>: the Report a Bug dialog is
+   rendered inside the footer and its buttons were being restyled as links */
+.footer .footer-link {
   display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s2);
   background: transparent; border: 0; cursor: pointer; font: inherit; font-weight: 600; color: var(--ink-2); text-decoration: none; border-radius: var(--r-sign);
 }
 .footer-in > :first-child { margin-left: calc(-1 * var(--s2)); }
-.footer a:hover, .footer button:hover { color: var(--ink); background: var(--quiet-hover); }
-.footer a:focus-visible, .footer button:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+.footer .footer-link:hover { color: var(--ink); background: var(--quiet-hover); }
+.footer .footer-link:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
 .footer .copy { margin-left: auto; padding: var(--s2) 0; }
 
 /* ---------- save bar: slim, flush on the bottom bar ---------- */

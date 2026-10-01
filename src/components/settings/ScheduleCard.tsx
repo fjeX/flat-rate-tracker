@@ -23,6 +23,12 @@ import {
 } from "@/lib/schedule";
 import { fmtHours } from "@/lib/stats";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { StatusField } from "@/components/ui/StatusField";
+import { Zone } from "@/components/ui/Zone";
+import { withPt } from "@/components/ui/Figure";
 
 const DAY_ORDER: { key: WeekdayKey; label: string }[] = [
   { key: "mon", label: "Mon" },
@@ -81,15 +87,8 @@ function WeekEditor({
       {DAY_ORDER.map(({ key, label }) => {
         const shift = week[key];
         return (
-          <div
-            key={key}
-            className="flex flex-wrap items-center gap-3 py-1.5 text-sm"
-            style={{ borderTop: "1px dashed var(--line-soft)" }}
-          >
-            <label
-              className="sched-day-toggle flex items-center gap-2"
-              style={{ width: 64, color: shift ? "var(--fg-1)" : "var(--fg-3)" }}
-            >
+          <div key={key} className="sch-day">
+            <label className={`sch-day-on${shift ? "" : " is-off"}`}>
               <input
                 type="checkbox"
                 checked={shift !== null}
@@ -98,16 +97,18 @@ function WeekEditor({
                   patchDay(key, e.target.checked ? shiftTemplate(week, key) : null)
                 }
               />
-              <span className="font-medium">{label}</span>
+              <span>{label}</span>
             </label>
             {shift ? (
-              <>
-                <label className="flex items-center gap-1.5" style={{ color: "var(--fg-2)" }}>
-                  <input
+              <div className="sch-shift-row">
+                <label>
+                  <Input
                     type="number"
                     min={0.5}
                     max={16}
                     step={0.5}
+                    mono
+                    className="is-hrs"
                     value={shiftPaidHours(shift)}
                     disabled={disabled}
                     aria-label={`${label} paid hours`}
@@ -119,15 +120,15 @@ function WeekEditor({
                       );
                       if (next) patchDay(key, next);
                     }}
-                    className="input mono tabular"
-                    style={{ width: 64 }}
                   />
-                  <span style={{ fontSize: 12 }}>hrs</span>
+                  hrs
                 </label>
-                <label className="flex items-center gap-1.5" style={{ color: "var(--fg-2)" }}>
-                  <span style={{ fontSize: 12 }}>starts</span>
-                  <input
+                <label>
+                  starts
+                  <Input
                     type="time"
+                    mono
+                    className="is-time"
                     value={shift.start}
                     disabled={disabled}
                     aria-label={`${label} shift start`}
@@ -139,17 +140,17 @@ function WeekEditor({
                       );
                       if (next) patchDay(key, next);
                     }}
-                    className="input mono tabular"
-                    style={{ width: 104 }}
                   />
                 </label>
-                <label className="flex items-center gap-1.5" style={{ color: "var(--fg-2)" }}>
-                  <span style={{ fontSize: 12 }}>lunch</span>
-                  <input
+                <label>
+                  lunch
+                  <Input
                     type="number"
                     min={0}
                     max={240}
                     step={15}
+                    mono
+                    className="is-min"
                     value={shift.breakMin}
                     disabled={disabled}
                     aria-label={`${label} unpaid lunch minutes`}
@@ -161,21 +162,14 @@ function WeekEditor({
                       );
                       if (next) patchDay(key, next);
                     }}
-                    className="input mono tabular"
-                    style={{ width: 60 }}
                   />
-                  <span style={{ fontSize: 12 }}>min</span>
+                  min
                 </label>
-                <span
-                  className="tabular ml-auto"
-                  style={{ color: "var(--fg-3)", fontSize: 12 }}
-                >
-                  out ≈ {shift.end}
-                </span>
-              </>
+              </div>
             ) : (
-              <span style={{ color: "var(--fg-3)", fontSize: 12 }}>Off</span>
+              <span className="sch-dim">Off</span>
             )}
+            {shift && <span className="sch-dim">out ≈ <span className="num">{shift.end}</span></span>}
           </div>
         );
       })}
@@ -249,12 +243,22 @@ export function ScheduleCard({
     });
   }
 
+  const activeWeekly = active
+    ? active.weeks.reduce((s, w) => s + weekPaidHours(w), 0) / active.rotationWeeks
+    : null;
+
   return (
-    <section className="card padded-lg">
-      <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>
-        Work Schedule
-      </h2>
-      <p className="mb-5 text-sm" style={{ color: "var(--fg-2)" }}>
+    <Zone
+      name="Weekly pattern"
+      aside={
+        activeWeekly !== null ? (
+          <>
+            <span className="num">{withPt(fmtHours(activeWeekly))}</span>h/week
+          </>
+        ) : undefined
+      }
+    >
+      <p className="ins-sub">
         Your normal shifts. On days you don&apos;t enter clocked hours,
         efficiency falls back to these scheduled hours — entered clock hours
         always win. Changes apply from their effective date forward; past
@@ -263,74 +267,50 @@ export function ScheduleCard({
 
       {!editing && (
         <>
-          {active ? (
-            <div className="text-sm" style={{ color: "var(--fg-1)" }}>
-              <span className="tabular">
-                {active.rotationWeeks === 2 ? "2-week rotation" : "Weekly"} ·{" "}
-                {fmtHours(
-                  active.weeks.reduce((s, w) => s + weekPaidHours(w), 0) /
-                    active.rotationWeeks,
-                )}
-                h/week
-              </span>
-              <span style={{ color: "var(--fg-3)" }}>
-                {" "}
-                · since {formatDateShort(active.effectiveFrom)}
-              </span>
-            </div>
-          ) : (
-            <p className="text-sm" style={{ color: "var(--fg-3)" }}>
-              No schedule yet.
-            </p>
-          )}
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => startEditingFrom(active ? active.weeks : null)}
-            >
+          <div className="sch-pattern-now" style={{ marginTop: "var(--s3)" }}>
+            {active ? (
+              <>
+                <b>{active.rotationWeeks === 2 ? "2-week rotation" : "Weekly"}</b>
+                <span>
+                  · <span className="num">{withPt(fmtHours(activeWeekly as number))}</span>h/week
+                </span>
+                <span className="sch-dim">· since {formatDateShort(active.effectiveFrom)}</span>
+              </>
+            ) : (
+              <span className="sch-dim">No schedule yet.</span>
+            )}
+          </div>
+          <div className="sch-acts">
+            <Button variant="go" onClick={() => startEditingFrom(active ? active.weeks : null)}>
               {active ? "Change schedule" : "Set up schedule"}
-            </button>
+            </Button>
             {!active && suggestion && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => startEditingFrom([suggestion])}
-              >
+              <Button variant="line" onClick={() => startEditingFrom([suggestion])}>
                 Suggest from my history
-              </button>
+              </Button>
             )}
           </div>
         </>
       )}
 
       {editing && (
-        <div>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="field" style={{ minWidth: 150 }}>
-              <span className="field-label">Effective from</span>
-              <input
+        <div className="sch-editor">
+          <div className="sch-editor-head">
+            <Field label="Effective from" htmlFor="sch-effective">
+              <Input
+                id="sch-effective"
                 type="date"
                 value={effectiveFrom}
                 onChange={(e) => setEffectiveFrom(e.target.value)}
-                className="input"
               />
-            </label>
+            </Field>
             <div className="field">
               <span className="field-label">Pattern</span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className={`btn btn-sm ${rotation === 1 ? "btn-primary" : "btn-ghost"}`}
-                  onClick={() => setRotation(1)}
-                >
+              <div className="seg" role="group" aria-label="Pattern">
+                <button type="button" aria-pressed={rotation === 1} onClick={() => setRotation(1)}>
                   Every week
                 </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${rotation === 2 ? "btn-primary" : "btn-ghost"}`}
-                  onClick={() => setRotation(2)}
-                >
+                <button type="button" aria-pressed={rotation === 2} onClick={() => setRotation(2)}>
                   2-week rotation
                 </button>
               </div>
@@ -338,13 +318,13 @@ export function ScheduleCard({
           </div>
 
           {weeks.map((week, i) => (
-            <div key={i} className="mt-4">
+            <div key={i} className="sch-week">
               {rotation === 2 && (
-                <div className="field-label mb-1">
-                  {i === 0 ? "Week A (starts on the effective date's week)" : "Week B"}
-                  <span className="tabular" style={{ color: "var(--fg-3)", marginLeft: 8 }}>
-                    {fmtHours(weekPaidHours(week))}h
+                <div className="sch-week-k">
+                  <span className="field-label" style={{ margin: 0 }}>
+                    {i === 0 ? "Week A (starts on the effective date's week)" : "Week B"}
                   </span>
+                  <span className="num">{withPt(fmtHours(weekPaidHours(week)))}h</span>
                 </div>
               )}
               <WeekEditor
@@ -357,77 +337,51 @@ export function ScheduleCard({
             </div>
           ))}
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={pending || problem !== null}
-              onClick={handleSave}
-            >
+          <div className="sch-editor-foot">
+            <Button variant="go" disabled={pending || problem !== null} onClick={handleSave} busy={pending}>
               {pending ? "Saving…" : "Save schedule"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              disabled={pending}
-              onClick={() => setEditing(false)}
-            >
+            </Button>
+            <Button variant="quiet" disabled={pending} onClick={() => setEditing(false)}>
               Cancel
-            </button>
-            <span className="tabular text-sm" style={{ color: "var(--fg-2)" }}>
-              {fmtHours(
-                weeks.reduce((s, w) => s + weekPaidHours(w), 0) / rotation,
-              )}
-              h/week
+            </Button>
+            <span className="num">
+              {withPt(fmtHours(weeks.reduce((s, w) => s + weekPaidHours(w), 0) / rotation))}
+              <span className="unit">h/week</span>
             </span>
           </div>
-          {problem && (
-            <p className="mt-2 text-sm" style={{ color: "var(--fg-3)" }}>
-              {problem}
-            </p>
-          )}
+          {problem && <p className="sch-fine">{problem}</p>}
         </div>
       )}
 
       {error && (
-        <p role="alert" className="mt-3 text-sm" style={{ color: "var(--bad)" }}>
+        <StatusField tag="Fix" role="alert" inset>
           {error}
-        </p>
+        </StatusField>
       )}
 
       {schedules.length > 0 && (
-        <ul className="mt-4" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+        <ul className="sch-versions">
           {schedules.map((s) => (
-            <li
-              key={s.id}
-              className="flex items-center justify-between gap-3 py-2 text-sm"
-              style={{ borderTop: "1px dashed var(--line-soft)", color: "var(--fg-1)" }}
-            >
-              <span className="tabular">
+            <li key={s.id}>
+              <span>
                 {formatDateShort(s.effectiveFrom)} →{" "}
                 {s.rotationWeeks === 2 ? "2-week rotation" : "weekly"},{" "}
-                {fmtHours(
-                  s.weeks.reduce((sum, w) => sum + weekPaidHours(w), 0) /
-                    s.rotationWeeks,
-                )}
+                <span className="num">
+                  {withPt(fmtHours(
+                    s.weeks.reduce((sum, w) => sum + weekPaidHours(w), 0) /
+                      s.rotationWeeks,
+                  ))}
+                </span>
                 h/week
-                {s.id === active?.id && (
-                  <span style={{ color: "var(--good)" }}> · current</span>
-                )}
+                {s.id === active?.id && <span className="is-current"> · current</span>}
               </span>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                style={{ color: "var(--bad)" }}
-                disabled={pending}
-                onClick={() => handleDelete(s.id)}
-              >
+              <Button variant="quiet" size="sm" disabled={pending} onClick={() => handleDelete(s.id)}>
                 Remove
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Zone>
   );
 }

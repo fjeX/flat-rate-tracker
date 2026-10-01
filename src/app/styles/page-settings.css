@@ -1,0 +1,118 @@
+/* Phase 5: Settings and Account, sketched on the dev server in the final
+   language (no mock screen exists except Appearance, which is phase 3;
+   plans/frt-visual-overhaul-rollout.md). Tokens only.
+
+   Everything here is prefixed `stg-` (`set-` belongs to ui-appearance.css).
+   The page language (.pagehead, .seg) comes from ui-page.css; zones, badges,
+   buttons, fields, switches and status fields from the ui-*.css partials. */
+
+/* ---------- page ---------- */
+.stg-page {
+  width: 100%; max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s4) var(--gutter) var(--s6);
+}
+@media (min-width: 1024px) { .stg-page { padding-top: var(--s5); } }
+.stg-page .pagehead { flex-wrap: wrap; }
+/* settings read as one column; a 1180px-wide row of prose is not a setting */
+.stg-page .stg-col { max-width: 52rem; }
+
+/* ---------- the mock's layout: one setting on display, the rest listed ---------- */
+.stg-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--s6); }
+.stg-grid > div { min-width: 0; }
+.stg-pick { margin-top: var(--s3); }
+.stg-pick .input { width: 100%; }
+.stg-shown .stg-row:first-child { padding-top: var(--s1); }
+@media (min-width: 1024px) {
+  .stg-grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: start; }
+  .stg-pick { display: none; }
+}
+@media (max-width: 1023px) {
+  /* the list is the dropdown above the setting on a phone; keep the zone
+     too, further down, for anyone who scrolls */
+  .stg-more { margin-top: var(--s4); }
+}
+/* in the shown zone the single-setting rows never need the split; a wide
+   control keeps the row */
+.stg-shown .stg-row:not(.is-wide) { grid-template-columns: minmax(0, 1fr); }
+.stg-shown .stg-row:not(.is-wide) .stg-ctl { justify-self: start; max-width: none; }
+
+/* ---------- one setting ---------- */
+.stg-row {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2) var(--s5); align-items: start;
+  padding: var(--s3) 0; border-top: var(--w-hair) solid var(--line);
+}
+.stg-row:first-child, .zone-head + .stg-row { border-top: 0; padding-top: var(--s1); }
+.stg-txt { min-width: 0; }
+.stg-title { margin: 0; font-size: var(--fs-control); font-weight: 700; line-height: 1.25; }
+.stg-desc { margin: 2px 0 0; color: var(--ink-2); font-size: var(--fs-body); max-width: 62ch; }
+.stg-desc + .stg-desc { margin-top: var(--s2); }
+.stg-fine { margin: var(--s1) 0 0; color: var(--ink-3); font-size: var(--fs-label); max-width: 62ch; }
+.stg-desc a, .stg-fine a { color: var(--accent-text); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.stg-ctl { min-width: 0; }
+@media (min-width: 700px) {
+  .stg-row:not(.is-wide) { grid-template-columns: minmax(0, 1fr) auto; }
+  .stg-row:not(.is-wide) .stg-ctl { justify-self: end; max-width: 22rem; }
+}
+/* the danger zone: red title and a red rule above it */
+.stg-row.is-bad { border-top: var(--w-edge) solid var(--bad); }
+.stg-row.is-bad .stg-title { color: var(--bad); }
+
+/* ---------- controls inside a row ---------- */
+.stg-inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2); }
+.stg-inline .field { margin: 0; }
+.stg-inline .input { width: 100%; }
+.stg-inline .is-hrs { width: 6rem; }
+.stg-inline .is-money { width: 8rem; }
+.stg-inline .is-day { width: 5rem; }
+.stg-inline .select-wrap, .stg-inline select.input { min-width: 14rem; }
+.stg-inline .btn-quiet { align-self: flex-end; }
+/* a money field: $ set into the well, /hr after it */
+.stg-money { position: relative; display: inline-flex; align-items: center; gap: var(--s2); }
+.stg-money .stg-cur { position: absolute; left: var(--s3); color: var(--ink-3); font-weight: 600; pointer-events: none; }
+.stg-money .input { padding-left: calc(var(--s3) + 12px); text-align: right; }
+.stg-money .stg-unit { color: var(--ink-3); font-size: var(--fs-label); font-weight: 600; white-space: nowrap; }
+/* a Saved / Fix line under a control */
+.stg-note { margin: var(--s2) 0 0; font-size: var(--fs-label); color: var(--ink-3); }
+.stg-note.is-good { color: var(--good); font-weight: 700; }
+.stg-note.is-bad { color: var(--bad); font-weight: 700; }
+.stg-ctl .sfield { margin-top: var(--s2); }
+
+/* pay rates: one ruled row per labour type */
+.stg-rates { list-style: none; margin: 0; padding: 0; }
+.stg-rates li { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 56px; padding: var(--s1) 0; border-bottom: var(--w-hair) solid var(--line); }
+.stg-rates li:last-child { border-bottom: 0; }
+.stg-rates label { font-weight: 600; }
+.stg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin-top: var(--s3); }
+
+/* the split-day preview: two plates */
+.stg-preview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin-top: var(--s3); }
+.stg-preview > div { padding: var(--s2) var(--s3); background: var(--plate); border: var(--w-hair) solid var(--line); border-radius: var(--r-sign); }
+.stg-preview .stg-k { font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-2); }
+.stg-preview p { margin: 2px 0 0; font-size: var(--fs-body); }
+
+/* RO scan templates */
+.stg-steps { list-style: none; margin: var(--s2) 0 0; padding: 0; counter-reset: step; display: grid; gap: var(--s2); }
+.stg-steps li { display: flex; gap: var(--s2); align-items: flex-start; font-size: var(--fs-label); color: var(--ink-2); }
+.stg-steps li::before {
+  counter-increment: step; content: counter(step);
+  display: grid; place-items: center; width: 22px; height: 22px; flex: none;
+  background: var(--block); color: var(--block-ink); border-radius: var(--r-sign);
+  font-family: var(--font-num); font-size: var(--fs-min); font-weight: 700;
+}
+.stg-steps b { color: var(--ink); font-weight: 700; }
+.stg-templates { list-style: none; margin: var(--s2) 0 0; padding: 0; }
+.stg-templates li { padding: var(--s2) 0; border-top: var(--w-hair) solid var(--line); }
+.stg-template-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.stg-template-head b { font-weight: 700; }
+.stg-template-acts { display: flex; gap: var(--s2); flex: none; }
+.stg-template-fields { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s2); }
+
+/* danger zone */
+.stg-danger { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.stg-danger .input { flex: 1 1 14rem; min-width: 0; }
+
+/* ---------- account ---------- */
+.stg-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+@media (min-width: 520px) { .stg-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stg-stack { display: grid; gap: var(--s3); }
+.stg-form .btn { margin-top: var(--s3); }

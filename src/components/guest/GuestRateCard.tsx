@@ -3,8 +3,10 @@
 // Guest mode's stand-in for the full Pay Rates card: a single flat rate, no
 // labor types. It's just enough to preview the dollar figures a signed-in user
 // unlocks with per-type rates. Persists via the guest store (sessionStorage).
+// The shared field look: Field + .input.num, with the $ and /hr set inside it.
 import { useState } from "react";
 import { useGuestStore } from "@/lib/guest/context";
+import { Field } from "@/components/ui/Field";
 
 export function GuestRateCard() {
   const { hourlyRate, setGuestRate } = useGuestStore();
@@ -22,11 +24,11 @@ export function GuestRateCard() {
   }
 
   return (
-    <label className="flex items-center gap-2 text-sm">
-      <span className="text-[var(--fg-2)]">Your rate</span>
-      <span className="flex items-center card-inset pl-2 focus-within:border-[var(--brand)] focus-within:shadow-[var(--ring)]">
-        <span className="text-[var(--fg-3)]">$</span>
+    <Field label="Your rate" htmlFor="guest-rate" className="gst-rate-field">
+      <span className="gst-rate">
+        <span className="gst-rate-pre" aria-hidden="true">$</span>
         <input
+          id="guest-rate"
           type="number"
           min={0}
           step={1}
@@ -39,10 +41,10 @@ export function GuestRateCard() {
           }}
           placeholder="—"
           aria-label="Your hourly flat-rate pay"
-          className="w-16 bg-transparent px-1 py-1.5 text-right font-mono text-sm text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
+          className="input num"
         />
-        <span className="pr-2 text-xs text-[var(--fg-3)]">/hr</span>
+        <span className="gst-rate-unit" aria-hidden="true">/hr</span>
       </span>
-    </label>
+    </Field>
   );
 }

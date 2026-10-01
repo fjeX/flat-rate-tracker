@@ -344,6 +344,8 @@ button.log-step-head:focus-visible { outline: var(--w-heavy) solid var(--focus);
 .log-pick:active { background: var(--quiet-active); }
 .log-pick:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
 .log-pick.is-rec { border-color: var(--ink); }
+.log-pick:disabled { opacity: 0.55; cursor: not-allowed; }
+.log-pick:disabled:hover { background: var(--panel); border-color: var(--line); }
 .log-pick-txt { min-width: 0; }
 .log-pick-txt > b { display: block; font-weight: 700; }
 .log-pick-desc { display: block; color: var(--ink-2); font-size: var(--fs-label); }

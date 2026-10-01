@@ -10,6 +10,7 @@ import { addDays, isoDate, isoDateInTz, startOfWeek } from "@/lib/periods";
 import { inferScheduleWeek, shiftForDate } from "@/lib/schedule";
 import { ScheduleCalendar, type CalendarDay } from "@/components/schedule/ScheduleCalendar";
 import { ScheduleCard } from "@/components/settings/ScheduleCard";
+import { StatusField } from "@/components/ui/StatusField";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -57,14 +58,16 @@ export default async function SchedulePage({
 
   if (schedules === null) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-6">
-        <h1 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>Schedule</h1>
-        <section className="card padded-lg mt-6">
-          <p className="text-sm" style={{ color: "var(--fg-2)" }}>
-            The schedule feature isn&apos;t available yet — the database
-            migration hasn&apos;t been applied to this environment.
-          </p>
-        </section>
+      <main className="sch-page">
+        <div className="pagehead">
+          <div className="grow">
+            <h1>Schedule</h1>
+          </div>
+        </div>
+        <StatusField tag="Note">
+          The schedule feature isn&apos;t available yet — the database migration
+          hasn&apos;t been applied to this environment.
+        </StatusField>
       </main>
     );
   }
@@ -126,57 +129,55 @@ export default async function SchedulePage({
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>Schedule</h1>
-        <div className="flex items-center gap-2">
+    <main className="sch-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>Schedule</h1>
+          {/* Was seven sentences, which on a 390px phone was the entire first
+              screen before a single day was visible. The calendar teaches most
+              of this by being used; the mark is explained by the legend above
+              the grid, and the weekly pattern explains itself where it sits. */}
+          <p>
+            Your efficiency is only as honest as the hours behind it. Tap any day
+            to record what you actually worked.
+          </p>
+        </div>
+        <div className="sch-picker">
           <Link
             href={`/schedule?m=${monthShift(monthKey, -1)}`}
-            className="btn btn-ghost btn-sm hit-expand"
+            className="btn btn-line"
             aria-label="Previous month"
           >
             ‹
           </Link>
-          <span className="tabular text-sm font-medium" style={{ color: "var(--fg-1)", minWidth: 110, textAlign: "center" }}>
-            {monthLabel(monthKey)}
-          </span>
+          <span className="sch-month">{monthLabel(monthKey)}</span>
           <Link
             href={`/schedule?m=${monthShift(monthKey, 1)}`}
-            className="btn btn-ghost btn-sm hit-expand"
+            className="btn btn-line"
             aria-label="Next month"
           >
             ›
           </Link>
           {monthKey !== today.slice(0, 7) && (
-            <Link href="/schedule" className="btn btn-ghost btn-sm">
+            <Link href="/schedule" className="btn btn-quiet">
               Today
             </Link>
           )}
         </div>
       </div>
 
-      {/* Was seven sentences, which on a 390px phone was the entire first
-          screen before a single day was visible. The calendar teaches most of
-          this by being used; the dot is explained by the legend under the grid,
-          and the weekly pattern explains itself where it sits. */}
-      <p className="mt-1 text-sm" style={{ color: "var(--fg-2)" }}>
-        Your efficiency is only as honest as the hours behind it. Tap any day to
-        record what you actually worked.
-      </p>
+      <ScheduleCalendar
+        days={days}
+        today={today}
+        weekStartDay={weekStartDay}
+        monthName={monthLabel(monthKey)}
+      />
 
-      <section className="mt-4">
-        <h2 className="sr-only">Monthly calendar</h2>
-        <ScheduleCalendar days={days} today={today} weekStartDay={weekStartDay} />
-      </section>
-
-      <section className="mt-8">
-        <h2 className="section-title">Weekly pattern</h2>
-        <ScheduleCard
-          initialSchedules={schedules}
-          suggestion={scheduleSuggestion}
-          today={today}
-        />
-      </section>
+      <ScheduleCard
+        initialSchedules={schedules}
+        suggestion={scheduleSuggestion}
+        today={today}
+      />
     </main>
   );
 }

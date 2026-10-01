@@ -1,0 +1,123 @@
+/* Phase 5: Schedule, sketched on the dev server in the final language (no
+   mock screen exists; plans/frt-visual-overhaul-rollout.md). Tokens only.
+
+   Everything here is prefixed `sch-`. The page language (.pagehead, .seg)
+   comes from ui-page.css; zones, badges, buttons, fields, status fields and
+   icon buttons from the ui-*.css partials. Colour is state: today and the
+   selected day carry the accent, a day that needs a decision carries the
+   accent mark, nothing is amber. */
+
+/* ---------- page ---------- */
+.sch-page {
+  width: 100%; max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s4) var(--gutter) var(--s6);
+}
+@media (min-width: 1024px) { .sch-page { padding-top: var(--s5); } }
+.sch-page .pagehead { flex-wrap: wrap; }
+.sch-page > .sfield { margin-top: var(--s3); }
+
+/* ---------- month picker: ‹ month › and Today ---------- */
+.sch-picker { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.sch-picker .btn { padding: 0 var(--s2); min-width: var(--tap); }
+.sch-month {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 10rem; min-height: var(--tap);
+  padding: 0 var(--s3); font-size: var(--fs-title); font-weight: 700; white-space: nowrap;
+}
+
+/* ---------- the calendar zone ---------- */
+.sch-legend { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); margin: 0 0 var(--s3); font-size: var(--fs-label); color: var(--ink-2); }
+.sch-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sch-legend i { font-style: normal; font-family: var(--font-num); font-size: var(--fs-min); letter-spacing: var(--track-num); }
+.sch-legend .day-flag { display: inline-block; }
+.sch-dow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-bottom: 4px; }
+.sch-dow > div { text-align: center; font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-3); }
+.sch-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+@media (min-width: 700px) { .sch-dow, .sch-grid { gap: 6px; } }
+
+/* a day. Cells carry no border: a scheduled day is a plate a step up from the
+   zone, everything else is the zone itself. */
+.day-cell {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  min-height: 56px; padding: 7px 2px 6px;
+  background: var(--plate); color: var(--ink); border: 0; border-radius: var(--r-sign);
+  font: inherit; cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+@media (min-width: 700px) { .day-cell { min-height: 64px; } }
+.day-cell:hover { background: var(--quiet-hover); }
+.day-cell:active { background: var(--quiet-active); }
+.day-cell:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.day-cell.is-bare { background: transparent; }
+.day-cell.is-bare:hover { background: var(--quiet-hover); }
+.day-cell.is-out { background: transparent; opacity: 0.4; }
+.day-cell.is-selected { box-shadow: inset 0 0 0 var(--w-edge) var(--accent); }
+.day-cell.is-today .day-num { color: var(--accent-text); }
+.day-num { font-family: var(--font-num); font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-num); line-height: 1; font-variant-numeric: tabular-nums; }
+.day-sub { font-family: var(--font-num); font-size: var(--fs-min); font-weight: 600; letter-spacing: var(--track-num); line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.day-sub.is-planned { color: var(--ink-3); font-weight: 500; }
+/* needs a decision: the accent mark, the same mark that says "current" elsewhere */
+.day-flag { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-text); }
+.day-cell .day-flag { position: absolute; top: 5px; right: 5px; }
+/* a one-day shift override. Without this the cell is byte-identical to a
+   pattern day whenever the override lands on the same hours. */
+.day-override { color: var(--accent-text); font-weight: 700; margin-left: 1px; }
+.day-cell.is-override .day-sub { color: var(--ink); }
+
+/* ---------- the docked day panel ---------- */
+/* Below six rows of calendar on a phone the day you just tapped scrolls itself
+   off screen, so it docks above the thumb bar. DOCKING IS A PHONE AFFORDANCE
+   ONLY: above 900px it is an ordinary panel in flow. */
+.day-dock {
+  margin-top: var(--s4); padding: var(--s3) var(--s4) var(--s4);
+  background: var(--panel); color: var(--ink);
+  border: var(--w-edge) solid var(--edge); border-radius: var(--r-panel);
+}
+@media (max-width: 899px) {
+  .day-dock { position: sticky; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 20; box-shadow: var(--lift); }
+}
+.day-dock-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s3); }
+.day-dock-head h3 { margin: 0; font-size: var(--fs-title); font-weight: 700; }
+.sch-dock-meta { margin: var(--s1) 0 0; font-size: var(--fs-label); color: var(--ink-2); }
+.sch-dock-meta .num { font-size: var(--fs-label); }
+.sch-hours { display: flex; align-items: flex-end; gap: var(--s2); margin-top: var(--s3); }
+.sch-hours .field { flex: 0 0 11rem; }
+.sch-hours .field-label { white-space: nowrap; }
+.sch-hours .input { width: 100%; }
+.sch-fine { margin: var(--s2) 0 0; font-size: var(--fs-label); color: var(--ink-3); }
+.sch-acts { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.sch-override { margin-top: var(--s3); padding-top: var(--s3); border-top: var(--w-hair) solid var(--line); }
+.sch-shift-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.sch-shift-row label { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-label); color: var(--ink-2); }
+.sch-shift-row .input { min-width: 0; }
+.sch-shift-row .is-hrs { width: 5rem; }
+.sch-shift-row .is-time { width: 8rem; }
+.sch-shift-row .is-min { width: 5rem; }
+.sch-status { margin-top: var(--s2); font-size: var(--fs-label); color: var(--ink-3); }
+
+/* ---------- the unsettled stepper, inside its status field ---------- */
+.sch-step { display: flex; align-items: center; gap: var(--s1); margin-left: auto; }
+.sch-step .num { min-width: 3.5rem; text-align: center; font-size: var(--fs-label); }
+
+/* ---------- weekly pattern ---------- */
+.sch-pattern-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s2); font-size: var(--fs-body); }
+.sch-pattern-now .num { font-size: var(--fs-num); }
+.sch-dim { color: var(--ink-3); }
+.sch-editor { margin-top: var(--s3); }
+.sch-editor-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); }
+.sch-editor-head .field { flex: 0 0 12rem; }
+.sch-week { margin-top: var(--s3); }
+.sch-week-k { display: flex; align-items: baseline; gap: var(--s2); margin-bottom: var(--s1); }
+.sch-week-k .num { font-size: var(--fs-label); color: var(--ink-2); }
+.sch-day {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3);
+  min-height: 56px; padding: var(--s2) 0; border-top: var(--w-hair) solid var(--line);
+}
+.sch-day-on { display: inline-flex; align-items: center; gap: var(--s2); width: 4.5rem; min-height: var(--tap); font-weight: 700; cursor: pointer; }
+.sch-day-on input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.sch-day-on.is-off { color: var(--ink-3); font-weight: 600; }
+.sch-day .sch-dim { margin-left: auto; font-size: var(--fs-label); }
+.sch-editor-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin-top: var(--s4); }
+.sch-editor-foot .num { margin-left: auto; font-size: var(--fs-num); }
+.sch-versions { list-style: none; margin: var(--s3) 0 0; padding: 0; }
+.sch-versions li { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 48px; padding: var(--s1) 0; border-top: var(--w-hair) solid var(--line); font-size: var(--fs-body); }
+.sch-versions .is-current { color: var(--good); font-weight: 700; }

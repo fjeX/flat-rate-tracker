@@ -1,0 +1,81 @@
+/* Phase 5: Op Codes, sketched on the dev server in the final language (no
+   mock screen exists; plans/frt-visual-overhaul-rollout.md). Tokens only.
+
+   Everything here is prefixed `opl-` (op-code library). The page language
+   (.pagehead, .seg, .search-well, .fchip) comes from ui-page.css; the zone,
+   badge, button, status field and icon button from the ui-*.css partials.
+   Shared between the signed-in page and the guest mirror: both render
+   OpCodeRowContent. */
+
+/* ---------- page ---------- */
+.opl-page {
+  width: 100%; max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s4) var(--gutter) var(--s6);
+}
+@media (min-width: 1024px) { .opl-page { padding-top: var(--s5); } }
+.opl-page .pagehead { flex-wrap: wrap; }
+.opl-page .pagehead .num { font-size: var(--fs-label); }
+.opl-page > .sfield { margin-top: var(--s3); }
+
+/* ---------- controls: search, then sort + tags ---------- */
+.opl-ctl { display: grid; gap: var(--s3); margin-top: var(--s3); }
+.opl-ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.opl-ctl-k { font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-3); flex: none; }
+.opl-ctl .seg { max-width: 100%; }
+.opl-ctl .seg button { flex: 1 1 0; min-width: 0; padding: 0 var(--s2); white-space: nowrap; }
+.opl-ctl .seg button .dir { margin-left: 3px; font-weight: 400; }
+@media (min-width: 700px) { .opl-ctl .seg button { flex: none; } }
+
+/* ---------- the library: a ruled ledger inside the zone ---------- */
+.opl-sheet { list-style: none; margin: 0; padding: 0; }
+.opl-row {
+  display: grid; grid-template-columns: var(--tap) minmax(0, 1fr) auto calc(2 * var(--tap)); gap: 0 var(--s2); align-items: center;
+  min-height: 56px; padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line);
+  cursor: pointer; transition: background-color var(--fast) var(--ease);
+}
+.opl-row:last-child { border-bottom: 0; }
+.opl-row:hover { background: var(--quiet-hover); }
+.opl-row:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.opl-row.is-dragging { opacity: 0.6; }
+.opl-head-row { min-height: 0; padding: 0 0 var(--s1); cursor: default; }
+.opl-head-row:hover { background: transparent; }
+.opl-head-row > :nth-child(3) { text-align: right; padding-right: var(--s1); }
+.opl-head-row > * { font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-2); }
+
+/* the grip: a 44px target; a ghost when the order is locked */
+.opl-grip { display: grid; place-items: center; width: var(--tap); min-height: var(--tap); color: var(--ink-3); cursor: grab; border-radius: var(--r-sign); }
+.opl-grip:active { cursor: grabbing; }
+.opl-grip:hover { color: var(--ink); background: var(--quiet-hover); }
+.opl-grip.is-off { opacity: 0.25; cursor: default; }
+.opl-grip.is-off:hover { background: transparent; color: var(--ink-3); }
+
+/* code + hue tick, then description · notes on the next line (phone) or
+   beside it (700px up) */
+.opl-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.opl-code { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.opl-tick { flex: none; width: 3px; height: 16px; border-radius: 2px; background: var(--tagc, var(--ink-3)); }
+.opl-code b { font-weight: 700; letter-spacing: 0.02em; font-size: var(--fs-control); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opl-desc { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; font-size: var(--fs-label); color: var(--ink-2); }
+.opl-desc > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.opl-desc i { color: var(--ink-3); }
+.opl-desc .badge { flex: none; }
+@media (min-width: 700px) {
+  .opl-main { flex-direction: row; align-items: center; gap: var(--s3); }
+  .opl-code { flex: 0 0 132px; }
+  .opl-desc { flex: 1 1 auto; }
+}
+
+.opl-hours { text-align: right; font-size: var(--fs-num); white-space: nowrap; padding-right: var(--s1); }
+.opl-hours .unit { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0; margin-left: 2px; color: var(--ink-2); }
+.opl-acts { display: flex; align-items: center; justify-content: flex-end; }
+/* on a pointer device the actions show on hover; they stay put on touch */
+@media (hover: hover) {
+  .opl-acts { opacity: 0; transition: opacity var(--fast) var(--ease); }
+  .opl-row:hover .opl-acts, .opl-row:focus-within .opl-acts { opacity: 1; }
+}
+.opl-acts .iconbtn.is-del:hover { color: var(--bad); }
+.opl-empty { padding: var(--s4) 0; color: var(--ink-3); font-size: var(--fs-label); text-align: center; }
+
+/* footing: the count and the hours on the books */
+.opl-foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding-top: var(--s2); border-top: var(--w-edge) solid var(--edge); font-size: var(--fs-label); color: var(--ink-2); }
+.opl-foot .num { color: var(--ink); font-size: var(--fs-num); }

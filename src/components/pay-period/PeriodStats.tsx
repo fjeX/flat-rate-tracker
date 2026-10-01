@@ -33,8 +33,8 @@ function Cell({
       <dt>{label}</dt>
       <dd className="num">
         {withPt(value)}
-        {unit && <span className="pp-unit">{unit}</span>}
-        {sub && <small>{sub}</small>}
+        {unit && <span className="unit">{unit}</span>}
+        {sub && <small className="sub">{sub}</small>}
       </dd>
     </div>
   );
@@ -137,7 +137,7 @@ export function PeriodStats({
         </dl>
       )}
 
-      <dl className="pp-spec" style={{ "--pp-cols": cols } as CSSProperties}>
+      <dl className="spec" style={{ "--spec-cols": cols } as CSSProperties}>
         <Cell label="ROs" value={String(stats.roCount)} />
         {/* The DENOMINATOR, not the raw clock rows.
             `stats.clockedHours` only sums daily_clock_hours entries, so on a

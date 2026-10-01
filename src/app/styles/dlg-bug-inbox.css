@@ -1,0 +1,42 @@
+/* Phase 5 dialog bodies: dlg-bug-inbox (inb-). Covers the admin "Bug report"
+   detail dialog and its custom "Screenshot" lightbox in BugInbox.tsx. The inbox
+   list is a separate phase 5 item. No mock lines: built from the shared parts
+   (.field-label, .card-inset, .rows, .input/.select, .sfield). Tokens only. */
+.inb-body { display: flex; flex-direction: column; gap: var(--s5); }
+.inb-label-icon { display: flex; align-items: center; gap: var(--s1); }
+.inb-desc { margin-top: var(--s1); padding: var(--s3); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.inb-fine { margin: var(--s1) 0 0; font-size: var(--fs-label); color: var(--ink-2); }
+.inb-loading { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) 0; font-size: var(--fs-label); color: var(--ink-2); }
+.inb-spin { animation: inb-spin 1s linear infinite; }
+@keyframes inb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .inb-spin { animation: none; } }
+.inb-save .inb-spin { margin-right: var(--s2); }
+
+/* screenshot tiles */
+.inb-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr)); gap: var(--s2); margin-top: var(--s2); }
+.inb-thumb {
+  aspect-ratio: 1; min-height: var(--tap); padding: 0; overflow: hidden; display: block;
+  background: var(--panel); border: var(--w-edge) solid var(--line); border-radius: var(--r-sign); cursor: pointer;
+}
+.inb-thumb:hover { border-color: var(--ink-3); }
+.inb-thumb:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.inb-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* context: a dl as ruled rows; long values (URLs, user agents) wrap */
+.inb-ctx { margin: var(--s1) 0 0; }
+.inb-ctx-row { align-items: flex-start; }
+.inb-ctx .k { flex: none; }
+.inb-ctx .v { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: var(--fs-label); }
+.inb-ctx .inb-mono { font-family: var(--font-num); }
+
+/* triage: a heavy top rule, the name above, fields below */
+.inb-triage { display: flex; flex-direction: column; gap: var(--s3); padding-top: var(--s3); border-top: var(--w-heavy) solid var(--edge); }
+.inb-triage-grid { display: grid; grid-template-columns: 1fr; gap: var(--s3); }
+@media (min-width: 700px) { .inb-triage-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* the full-screen screenshot viewer: a custom role="dialog" over the modal */
+.inb-zoom { position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column; background: var(--overlay-scrim); color: var(--overlay-fg); }
+.inb-zoom-head { display: flex; justify-content: flex-end; padding: var(--s3) var(--s4); }
+.inb-zoom-x { width: var(--tap); height: var(--tap); padding: 0; display: grid; place-items: center; background: var(--panel); border-color: var(--edge); color: var(--ink); }
+.inb-zoom-stage { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: var(--s4); }
+.inb-zoom-stage img { max-width: 100%; max-height: 100%; object-fit: contain; border: var(--w-edge) solid var(--edge); background: var(--panel); }

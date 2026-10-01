@@ -10,8 +10,9 @@
 //
 // They are deliberately adjacent so the page reads as one idea with two methods,
 // rather than as a feature and an apology for a missing feature.
-import { Card } from "@/components/ui/Card";
+import { Zone } from "@/components/ui/Zone";
 import { Table, Td, Th } from "@/components/ui/Table";
+import { withPt } from "@/components/ui/Figure";
 import { fmtHours } from "@/lib/format";
 import {
   formatRatio,
@@ -22,12 +23,6 @@ import {
 import { OriginTag } from "@/components/insights/OriginTag";
 import { HEAVY_FLAG_HOURS } from "@/lib/mix";
 import type { Inference } from "@/lib/time-inference";
-
-const TIER_COLOR: Record<string, string> = {
-  good: "var(--good)",
-  warn: "var(--warn)",
-  bad: "var(--bad)",
-};
 
 export function BigJobsSection({
   rows,
@@ -42,220 +37,167 @@ export function BigJobsSection({
   const implausible = rows.reduce((sum, r) => sum + r.implausibleUses, 0);
 
   return (
-    <section>
-      <div className="section-title">Big jobs</div>
+    <Zone name="Big jobs">
+      <p className="ins-sub">
+        Jobs flagging {HEAVY_FLAG_HOURS}h or more — the ones worth timing one at
+        a time. They&rsquo;re {coverage.lines} of your lines and where most of
+        your money is.
+      </p>
 
-      <Card flush>
-        <div className="px-4 pt-4">
-          <p className="text-sm" style={{ color: "var(--fg-2)" }}>
-            Jobs flagging {HEAVY_FLAG_HOURS}h or more — the ones worth timing
-            one at a time. They&rsquo;re {coverage.lines} of your lines and where
-            most of your money is.
-          </p>
+      {/* Coverage, stated plainly and never buried. A scorecard built on a
+          handful of readings must say so, or it gets read as a record. */}
+      <div className="ins-coverage">
+        <span className="ins-meter" aria-hidden="true">
+          <i style={{ width: `${Math.min(100, coverage.pct)}%`, background: "var(--bar)" }} />
+        </span>
+        <span className="num">
+          {coverage.measured}/{coverage.lines} timed
+        </span>
+      </div>
 
-          {/* Coverage, stated plainly and never buried. A scorecard built on a
-              handful of readings must say so, or it gets read as a record. */}
-          <div className="mt-3 flex items-center gap-3">
-            <div
-              className="h-1.5 flex-1 overflow-hidden rounded-full"
-              style={{ background: "var(--bg-3)" }}
-            >
-              <div
-                style={{
-                  width: `${Math.min(100, coverage.pct)}%`,
-                  height: "100%",
-                  background: "var(--brand)",
-                  borderRadius: 999,
-                }}
-              />
-            </div>
-            <span
-              className="mono shrink-0 text-xs tabular-nums"
-              style={{ color: "var(--fg-2)" }}
-            >
-              {coverage.measured}/{coverage.lines} timed
-            </span>
-          </div>
+      {measured.length === 0 ? (
+        <p className="ins-fine">
+          None of them have a time on them yet. Next time you log one, the app
+          will ask you once — roughly is fine.
+        </p>
+      ) : (
+        <div className="ins-subhead">
+          <Table>
+            <thead>
+              <tr>
+                <Th>Job</Th>
+                <Th num>Flag</Th>
+                <Th num>Actual</Th>
+                <Th num>vs book</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {measured.map((row) => {
+                const tier = ratioTier(row.ratio);
+                // A provisional row is stated in muted ink rather than a
+                // verdict colour. Green on one reading is a claim the data
+                // cannot support. A "warn" tier is ink too: colour is state,
+                // and the only states are beat the book / cost you.
+                const tone = !row.confident
+                  ? "ins-dim"
+                  : tier === "good"
+                    ? "ins-good"
+                    : tier === "bad"
+                      ? "ins-bad"
+                      : "";
+                return (
+                  <tr key={row.key}>
+                    <Td>
+                      <span className="ins-row-code">{row.code}</span>
+                      <OriginTag row={row} />
+                      <span className="ins-cell-sub">
+                        {row.timedUses} timed
+                        {row.hasEstimate && " · includes an estimate"}
+                        {!row.confident && ` · ${row.needsMore} more to call it`}
+                      </span>
+                    </Td>
+                    <Td num dim>{fmtHours(row.flagTotal)}h</Td>
+                    <Td num dim>{fmtHours(row.actualTotal)}h</Td>
+                    <Td num className={tone || undefined}>
+                      {row.ratio === null ? "—" : `${formatRatio(row.ratio)}×`}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
         </div>
+      )}
 
-        {measured.length === 0 ? (
-          <p className="px-4 py-4 text-sm" style={{ color: "var(--fg-2)" }}>
-            None of them have a time on them yet. Next time you log one, the app
-            will ask you once — roughly is fine.
-          </p>
-        ) : (
-          <div className="mt-3">
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Job</Th>
-                  <Th align="right">Flag</Th>
-                  <Th align="right">Actual</Th>
-                  <Th align="right">vs book</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {measured.map((row) => {
-                  const tier = ratioTier(row.ratio);
-                  return (
-                    <tr key={row.key}>
-                      <Td>
-                        <div className="mono text-sm" style={{ color: "var(--fg-0)" }}>
-                          {row.code}
-                          <OriginTag row={row} />
-                        </div>
-                        <div className="text-[11px]" style={{ color: "var(--fg-3)" }}>
-                          {row.timedUses} timed
-                          {row.hasEstimate && " · includes an estimate"}
-                          {!row.confident &&
-                            ` · ${row.needsMore} more to call it`}
-                        </div>
-                      </Td>
-                      <Td align="right">
-                        <span className="mono tabular-nums">
-                          {fmtHours(row.flagTotal)}h
-                        </span>
-                      </Td>
-                      <Td align="right">
-                        <span className="mono tabular-nums">
-                          {fmtHours(row.actualTotal)}h
-                        </span>
-                      </Td>
-                      <Td align="right">
-                        <span
-                          className="mono font-semibold tabular-nums"
-                          style={{
-                            // A provisional row is stated in muted ink rather
-                            // than a verdict colour. Green on one reading is a
-                            // claim the data cannot support.
-                            color: row.confident
-                              ? (tier && TIER_COLOR[tier]) || "var(--fg-1)"
-                              : "var(--fg-2)",
-                          }}
-                        >
-                          {row.ratio === null ? "—" : `${formatRatio(row.ratio)}×`}
-                        </span>
-                      </Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </div>
-        )}
-
-        <div className="px-4 pb-4 pt-3">
-          <p className="text-xs" style={{ color: "var(--fg-3)" }}>
-            Lower than 1.00× means you beat the book.
-          </p>
-          {implausible > 0 && (
-            <p className="mt-1 text-xs" style={{ color: "var(--warn)" }}>
-              {implausible} reading{implausible === 1 ? "" : "s"} can&rsquo;t be
-              right (a few minutes against a multi-hour job) and{" "}
-              {implausible === 1 ? "was" : "were"} left out. Worth fixing on the
-              RO if you spot {implausible === 1 ? "it" : "them"}.
-            </p>
-          )}
-        </div>
-      </Card>
-    </section>
+      <p className="ins-fine">Lower than 1.00× means you beat the book.</p>
+      {implausible > 0 && (
+        <p className="ins-fine">
+          {implausible} reading{implausible === 1 ? "" : "s"} can&rsquo;t be
+          right (a few minutes against a multi-hour job) and{" "}
+          {implausible === 1 ? "was" : "were"} left out. Worth fixing on the RO
+          if you spot {implausible === 1 ? "it" : "them"}.
+        </p>
+      )}
+    </Zone>
   );
 }
 
 export function MaintenanceTimesSection({ inference }: { inference: Inference }) {
   return (
-    <section>
-      <div className="section-title">The quick stuff</div>
-      <Card className="space-y-3">
-        <p className="text-sm" style={{ color: "var(--fg-2)" }}>
-          Nobody is going to run a stopwatch on an oil change eight times a day,
-          so the app doesn&rsquo;t ask. Instead it works these out from how long
-          your days run and what was on them.
-        </p>
+    <Zone name="The quick stuff">
+      <p className="ins-sub">
+        Nobody is going to run a stopwatch on an oil change eight times a day,
+        so the app doesn&rsquo;t ask. Instead it works these out from how long
+        your days run and what was on them.
+      </p>
 
-        {inference.ok ? (
-          <>
-            {inference.dailyOverheadHours !== null && (
-              <div className="card-inset px-3 py-2">
-                <div className="field-label">Before any job is touched</div>
-                <div
-                  className="mono mt-0.5 text-base font-semibold tabular-nums"
-                  style={{ color: "var(--fg-0)" }}
-                >
-                  {fmtHours(inference.dailyOverheadHours)}h a day
-                </div>
-                <div className="text-[11px]" style={{ color: "var(--fg-3)" }}>
-                  Cleanup, waiting, dispatch limbo — time that never lands on a
-                  ticket
-                  {inference.foldedIntoOverhead.length > 0 &&
-                    `, plus ${inference.foldedIntoOverhead.length} code${
-                      inference.foldedIntoOverhead.length === 1 ? "" : "s"
-                    } there wasn't enough history to separate out (${inference.foldedIntoOverhead
-                      .slice(0, 4)
-                      .join(", ")}${
-                      inference.foldedIntoOverhead.length > 4 ? "…" : ""
-                    })`}
-                </div>
-              </div>
-            )}
-
-            <div>
-              {inference.durations.map((d) => (
-                <div
-                  key={d.key}
-                  className="flex items-center justify-between gap-3 py-1.5"
-                >
-                  <div className="min-w-0">
-                    {/* Same collision, same fix as Big jobs above: lib/time-inference
-                        keys these rows `lib:`/`custom:` exactly as lib/insights
-                        does, so a typed "ALIGN" and the library one are two rows
-                        with one label unless the origin is stated. */}
-                    <span className="mono text-sm" style={{ color: "var(--fg-0)" }}>
-                      {d.code}
-                      <OriginTag row={d} />
-                    </span>
-                    <span
-                      className="ml-2 text-[11px]"
-                      style={{ color: "var(--fg-3)" }}
-                    >
-                      {d.uses} logged
-                      {d.unreliableReason === "tangled" &&
-                        ` · almost always run alongside ${d.tangledWith}, so these two can't be told apart`}
-                      {d.unreliableReason === "no-signal" &&
-                        " · not enough independent variation to pin down"}
-                    </span>
-                  </div>
-                  <span
-                    className="mono shrink-0 text-sm tabular-nums"
-                    style={{
-                      color: d.reliable ? "var(--fg-1)" : "var(--fg-3)",
-                    }}
-                  >
-                    {/* Minutes, not hours — an inferred per-op job time is
-                        read against a clock, and "0.8h" is worse than "~48 min"
-                        here. Not a private hours formatter (2026-08-20 sweep):
-                        the unit is different, and `reliable` already gates out
-                        the values small enough for fmtHours' floor to matter. */}
-                    {d.reliable ? `~${(d.hours * 60).toFixed(0)} min` : "—"}
-                  </span>
-                </div>
-              ))}
+      {inference.ok ? (
+        <>
+          {inference.dailyOverheadHours !== null && (
+            <div className="ins-plate">
+              <div className="ins-k">Before any job is touched</div>
+              <span className="num">
+                {withPt(fmtHours(inference.dailyOverheadHours))}
+                <span className="unit">h a day</span>
+              </span>
+              <p>
+                Cleanup, waiting, dispatch limbo — time that never lands on a
+                ticket
+                {inference.foldedIntoOverhead.length > 0 &&
+                  `, plus ${inference.foldedIntoOverhead.length} code${
+                    inference.foldedIntoOverhead.length === 1 ? "" : "s"
+                  } there wasn't enough history to separate out (${inference.foldedIntoOverhead
+                    .slice(0, 4)
+                    .join(", ")}${
+                    inference.foldedIntoOverhead.length > 4 ? "…" : ""
+                  })`}
+              </p>
             </div>
+          )}
 
-            <p className="text-xs" style={{ color: "var(--fg-3)" }}>
-              Worked out from {inference.days} days, explaining{" "}
-              {(inference.rSquared * 100).toFixed(0)}% of why your days run the
-              length they do. These are averages for the code, never a reading of
-              one particular job.
-            </p>
-          </>
-        ) : (
-          <p className="text-sm" style={{ color: "var(--fg-2)" }}>
-            {refusalCopy(inference)}
+          <ul className="ins-kv">
+            {inference.durations.map((d) => (
+              <li key={d.key}>
+                <span className="ins-row-name">
+                  {/* Same collision, same fix as Big jobs above: lib/time-inference
+                      keys these rows `lib:`/`custom:` exactly as lib/insights
+                      does, so a typed "ALIGN" and the library one are two rows
+                      with one label unless the origin is stated. */}
+                  <span className="ins-row-code">
+                    {d.code}
+                    <OriginTag row={d} />
+                  </span>
+                  <span className="ins-dim" style={{ fontSize: "var(--fs-label)" }}>
+                    {d.uses} logged
+                    {d.unreliableReason === "tangled" &&
+                      ` · almost always run alongside ${d.tangledWith}, so these two can't be told apart`}
+                    {d.unreliableReason === "no-signal" &&
+                      " · not enough independent variation to pin down"}
+                  </span>
+                </span>
+                <span className={`ins-row-fig num${d.reliable ? "" : " is-dim"}`}>
+                  {/* Minutes, not hours — an inferred per-op job time is read
+                      against a clock, and "0.8h" is worse than "~48 min" here.
+                      Not a private hours formatter (2026-08-20 sweep): the unit
+                      is different, and `reliable` already gates out the values
+                      small enough for fmtHours' floor to matter. */}
+                  {d.reliable ? `~${(d.hours * 60).toFixed(0)} min` : "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <p className="ins-fine">
+            Worked out from {inference.days} days, explaining{" "}
+            {(inference.rSquared * 100).toFixed(0)}% of why your days run the
+            length they do. These are averages for the code, never a reading of
+            one particular job.
           </p>
-        )}
-      </Card>
-    </section>
+        </>
+      ) : (
+        <p className="ins-sub">{refusalCopy(inference)}</p>
+      )}
+    </Zone>
   );
 }
 

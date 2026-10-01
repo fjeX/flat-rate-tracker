@@ -36,22 +36,24 @@ export function LinkedSpiffs({ entryId }: { entryId: string }) {
   if (!loaded || bonuses.length === 0) return null;
 
   return (
-    <div className="card-inset p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wide text-[var(--fg-3)]">
-        <BadgeDollarSign className="h-3.5 w-3.5" />
-        Linked spiffs
-        <span className="text-[var(--fg-2)]">({bonuses.length})</span>
+    <div className="card-inset rod-well">
+      <div className="rod-well-head">
+        <h3 className="field-label rod-well-name">
+          <BadgeDollarSign className="h-4 w-4" aria-hidden="true" />
+          Linked spiffs
+          <span className="rod-count">({bonuses.length})</span>
+        </h3>
       </div>
-      <ul className="space-y-1.5">
+      <ul className="rod-rule">
         {bonuses.map((b) => (
-          <li key={b.id} className="flex items-center justify-between gap-3 text-sm">
-            <span className="min-w-0 truncate text-[var(--fg-1)]">
+          <li key={b.id}>
+            <span className="rod-main">
               {b.source?.trim() || BONUS_CATEGORY_LABELS[b.category]}
-              <span className="ml-1.5 text-xs text-[var(--fg-3)]">
+              <span className="rod-kind">
                 {BONUS_CATEGORY_LABELS[b.category]}
               </span>
             </span>
-            <span className="font-mono font-medium text-[var(--good)]">
+            <span className="rod-fig rod-fig-good">
               {fmtMoney(b.amount)}
             </span>
           </li>

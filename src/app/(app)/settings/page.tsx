@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { isoDate, isoDateInTz } from "@/lib/periods";
@@ -14,8 +15,8 @@ import { QuickAddCard } from "@/components/settings/QuickAddCard";
 import { RoTimeCard } from "@/components/settings/RoTimeCard";
 import { TrueTimeCard } from "@/components/settings/TrueTimeCard";
 import { AppearanceCard } from "@/components/settings/AppearanceCard";
-import { Card } from "@/components/ui/Card";
-import Link from "next/link";
+import { SettingRow } from "@/components/settings/SettingRow";
+import { SettingsSwitcher, type SettingsSection } from "@/components/settings/SettingsSwitcher";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -34,64 +35,121 @@ export default async function SettingsPage() {
   // failed hydration on /settings (deploy rolled back 2026-09-30 20:33 PT).
   const today = timezone ? isoDateInTz(timezone) : isoDate();
 
+  // One setting on display at a time (the mock's screen-settings); Pay Rates
+  // opens first because it is the one that changes what every other page
+  // shows. The order here is the order of the "All settings" list.
+  const sections: SettingsSection[] = [
+    {
+      id: "pay-rates",
+      name: "Pay Rates",
+      group: "Tracking",
+      content: (
+        <PayRatesCard
+          initialRates={laborRates}
+          initialDefaultLaborType={settings.defaultLaborType}
+        />
+      ),
+    },
+    {
+      id: "goal",
+      name: "Pay Period Goal",
+      group: "Tracking",
+      content: <GoalHoursCard initialGoalHours={settings.goalHours} />,
+    },
+    {
+      id: "period",
+      name: "Pay Period Defaults",
+      group: "Tracking",
+      content: <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} today={today} />,
+    },
+    {
+      id: "reference-rate",
+      name: "Reference hourly rate",
+      group: "Tracking",
+      content: <ReferenceRateCard initialRate={settings.referenceHourlyRate} />,
+    },
+    {
+      id: "schedule",
+      name: "Work Schedule & Days Off",
+      group: "Tracking",
+      content: (
+        <SettingRow
+          titleAs="h2"
+          title="Work Schedule & Days Off"
+          description="Your weekly pattern, days off, and one-day changes live on the schedule calendar — they drive efficiency on days you don't enter clocked hours."
+        >
+          <Link href="/schedule" className="btn btn-line">
+            Open schedule calendar
+          </Link>
+        </SettingRow>
+      ),
+    },
+    {
+      id: "timezone",
+      name: "Timezone",
+      group: "Tracking",
+      content: <TimezoneCard initialTimezone={timezone} />,
+    },
+    {
+      id: "true-time",
+      name: "Contribute to True Time",
+      group: "Tracking",
+      content: <TrueTimeCard initialShare={settings.shareLaborTimes} />,
+    },
+    {
+      id: "quick-add",
+      name: "Quick Add RO",
+      group: "Logging",
+      content: <QuickAddCard />,
+    },
+    {
+      id: "ro-time",
+      name: "Time of day on each RO",
+      group: "Logging",
+      content: <RoTimeCard initialTrack={settings.trackRoTime} />,
+    },
+    {
+      id: "templates",
+      name: "RO Scan Templates",
+      group: "Logging",
+      content: <RoTemplateCard userId={user!.id} initialTemplates={settings.roTemplates} />,
+    },
+    {
+      id: "appearance",
+      name: "Appearance",
+      group: "Appearance",
+      // Phase 3 built this from the mock; it keeps its own layout.
+      content: (
+        <AppearanceCard
+          initialTheme={settings.theme}
+          initialAccent={settings.accent}
+          mode="account"
+        />
+      ),
+    },
+    {
+      id: "backup",
+      name: "Backup",
+      group: "Data",
+      content: <DataCard />,
+    },
+    {
+      id: "danger",
+      name: "Danger Zone",
+      group: "Data",
+      content: <DangerZoneCard />,
+    },
+  ];
+
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6">
-      <h1 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>Settings</h1>
-
-      <section className="mt-6" id="appearance">
-        <Card name="Appearance" paddedLg>
-          <AppearanceCard
-            initialTheme={settings.theme}
-            initialAccent={settings.accent}
-            mode="account"
-          />
-        </Card>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="section-title">Tracking</h2>
-        <div className="space-y-6">
-          <GoalHoursCard initialGoalHours={settings.goalHours} />
-          <PayRatesCard
-            initialRates={laborRates}
-            initialDefaultLaborType={settings.defaultLaborType}
-          />
-          <ReferenceRateCard initialRate={settings.referenceHourlyRate} />
-          <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} today={today} />
-          <TimezoneCard initialTimezone={timezone} />
-          <TrueTimeCard initialShare={settings.shareLaborTimes} />
-          <section className="card padded-lg">
-            <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>
-              Work Schedule & Days Off
-            </h2>
-            <p className="mb-4 text-sm" style={{ color: "var(--fg-2)" }}>
-              Your weekly pattern, days off, and one-day changes live on the
-              schedule calendar — they drive efficiency on days you don&apos;t
-              enter clocked hours.
-            </p>
-            <Link href="/schedule" className="btn btn-primary">
-              Open schedule calendar
-            </Link>
-          </section>
+    <main className="stg-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>Settings</h1>
+          <p>Saved to your account as you change them.</p>
         </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="section-title">Logging</h2>
-        <div className="space-y-6">
-          <QuickAddCard />
-          <RoTimeCard initialTrack={settings.trackRoTime} />
-          <RoTemplateCard userId={user!.id} initialTemplates={settings.roTemplates} />
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="section-title">Data</h2>
-        <div className="space-y-6">
-          <DataCard />
-          <DangerZoneCard />
-        </div>
-      </section>
+      </div>
+      <SettingsSwitcher sections={sections} defaultId="pay-rates" />
     </main>
   );
 }

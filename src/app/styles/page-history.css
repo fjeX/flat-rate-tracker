@@ -1,0 +1,95 @@
+/* Phase 5: History, sketched on the dev server in the final language (no
+   mock screen exists; plans/frt-visual-overhaul-rollout.md). Tokens only.
+
+   Everything here is prefixed `hist-`. The shared page language (.pagehead,
+   .seg, .tags/.tag, .chart*) comes from ui-page.css; the zone, status field,
+   badge, button and input from the ui-*.css partials. Only History's own
+   layout lives here: the control block, the search well, day/month groups. */
+
+/* ---------- page ---------- */
+.hist-page {
+  width: 100%; max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s4) var(--gutter) var(--s6);
+}
+@media (min-width: 1024px) { .hist-page { padding-top: var(--s5); } }
+
+/* ---------- controls: range, then sort + search ---------- */
+.hist-ctl { display: grid; gap: var(--s3); margin-top: var(--s3); }
+.hist-ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.hist-ctl .seg { max-width: 100%; }
+.hist-ctl .seg button { flex: 1 1 0; min-width: 0; }
+/* the sort direction sits in the pressed button's label */
+.hist-ctl .seg button .dir { margin-left: 3px; font-weight: 400; }
+
+/* the search well is the shared .search-well (ui-page.css) */
+
+/* ---------- the chart zone ---------- */
+.hist-chart-empty { padding: var(--s4) 0; color: var(--ink-3); font-size: var(--fs-label); }
+
+/* ---------- RO groups: one per day (or month), the tags inside ---------- */
+.hist-groups { display: grid; gap: var(--s4); margin-top: var(--s3); }
+/* grid items default to min-width:auto, and one tag's chip row was pushing
+   the whole column 10px past the viewport */
+.hist-groups > *, .hist-group .tags > * { min-width: 0; }
+.hist-group-h {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
+  margin: 0; padding-bottom: var(--s1); border-bottom: var(--w-hair) solid var(--line);
+  font-size: var(--fs-control); font-weight: 700;
+}
+.hist-group-h .num { font-size: var(--fs-label); }
+.hist-group-sum { color: var(--ink-2); font-size: var(--fs-label); font-weight: 400; white-space: nowrap; }
+.hist-group .tags { margin-top: var(--s2); }
+/* the photo mark beside the RO number */
+.hist-photo { color: var(--ink-3); flex: none; }
+
+/* Compact tag (Liem, 2026-09-30): a period holds 20-40 ROs and the dashboard
+   tag is sized for five. Same object, same order, but the vehicle and the op
+   codes share a line, the hours figure is the row size, the bar is thinner and
+   the tags sit closer. */
+.hist-page .tags { gap: var(--s1); }
+.hist-page .tag { padding: 0 var(--s3) var(--s2) 0; }
+.hist-page .tag-head { padding-right: 64px; }
+.hist-page .ro-link { min-height: 36px; }
+.hist-page .tag-hrs-cell { padding-top: 7px; }
+.hist-page .tag-hrs { font-size: var(--fs-num); }
+.hist-page .tag-body { margin-top: -4px; }
+.hist-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); margin-bottom: 6px; }
+.hist-page .tag-veh { margin: 0; font-size: var(--fs-body); }
+.hist-page .ops { margin: 0; }
+/* the bar keeps its true length (one block per hour); only thinner here */
+.hist-page .dur { height: 6px; }
+.hist-page .scale-note i { height: 6px; }
+
+/* the whole tag opens the RO, not only the number (the Pay Period rows work
+   the same way); the Upsell shortcut is dashboard-only, so nothing else here
+   needs its own hit area */
+.hist-page .tag { transition: background-color var(--fast) var(--ease); }
+.hist-page .tag:hover { background: var(--quiet-hover); }
+.hist-page .tag:has(.ro-link:focus-visible) { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.hist-page .ro-link::after { content: ""; position: absolute; inset: 0; }
+.hist-page .ro-link:focus-visible { outline: 0; }
+.hist-page .tag-hrs-cell { pointer-events: none; }
+
+.hist-more { display: flex; justify-content: center; margin-top: var(--s4); }
+.hist-empty { margin-top: var(--s2); }
+
+/* ---------- the chart zone ---------- */
+/* History is the page ABOUT the hours, so its plot is taller than the
+   dashboard's glance (152/200px) at every width. */
+.hist-page .chart-plot { height: 200px; }
+
+/* ---------- wider: chart beside the list from the desktop rail up ----------
+   Equal columns, and the chart column sticks: the list can run to thousands
+   of pixels, and a short chart stranded at the top read as an afterthought
+   (Liem, 2026-09-30). */
+@media (min-width: 1024px) {
+  .hist-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 0 var(--s6); align-items: start; }
+  .hist-grid > * { min-width: 0; }
+  .hist-grid > .hist-chart-col { position: sticky; top: var(--s4); }
+  .hist-page .chart-plot { height: 380px; }
+  .hist-ctl { grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+  .hist-ctl .seg button { flex: none; }
+}
+
+/* ---------- loading (the shape of the layout above) ---------- */
+.hist-skel-tags { list-style: none; display: grid; gap: var(--s2); margin: var(--s2) 0 0; padding: 0; }

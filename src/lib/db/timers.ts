@@ -142,6 +142,30 @@ export async function updateTimerSlot(
   if (error) throw error;
 }
 
+/**
+ * Bind an RO to a slot that has none, atomically: the update only matches while
+ * `entry_id IS NULL`, so two tabs binding different ROs to the same no-RO timer
+ * cannot both win. Returns whether a row actually changed.
+ */
+export async function bindRoToTimerSlot(
+  supabase: DbClient,
+  id: string,
+  bind: { entryId: string; lineId: string | null },
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("active_timers")
+    .update({
+      entry_id: bind.entryId,
+      line_id: bind.lineId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .is("entry_id", null)
+    .select("id");
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 /** Release a slot entirely — the row goes away and the slot number frees up. */
 export async function deleteTimerSlot(
   supabase: DbClient,

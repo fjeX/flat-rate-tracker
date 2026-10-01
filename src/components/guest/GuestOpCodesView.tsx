@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Plus, Tag } from "lucide-react";
 import { useGuestStore } from "@/lib/guest/context";
 import { OpCodeFormModal, type OpCodeFormValues } from "@/components/op-codes/OpCodeFormModal";
 import { OpCodeBrowseBar } from "@/components/op-codes/OpCodeBrowseBar";
 import { useOpCodeBrowsing } from "@/components/op-codes/useOpCodeBrowsing";
-import { tagHueVar } from "@/components/op-codes/tagHue";
+import { OpCodeRowContent } from "@/components/op-codes/OpCodeRow";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { withPt } from "@/components/ui/Figure";
+import { Zone } from "@/components/ui/Zone";
 import { fmtHours } from "@/lib/stats";
 import type { OpCode } from "@/lib/types";
 
@@ -73,47 +77,25 @@ export function GuestOpCodesView() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-3 p-4 pb-16">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Op Codes</h1>
-          <p className="text-xs text-[var(--fg-2)]">Your guest library. Changes are saved for this session.</p>
+    <main className="opl-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>Op codes</h1>
+          <p>
+            Your guest library: <span className="num">{opCodes.length}</span> {opCodes.length === 1 ? "code" : "codes"},{" "}
+            <span className="num">{withPt(fmtHours(opCodes.reduce((sum, op) => sum + op.flagHours, 0)))}</span>h on the books.
+            {" "}Saved for this session.
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className="btn btn-primary"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add</span>
-        </button>
+        <Button variant="go" onClick={() => setAddOpen(true)}>
+          <Plus size={16} aria-hidden="true" />
+          Add a code
+        </Button>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3">
-        <Search className="h-4 w-4 text-[var(--fg-2)]" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search code or description"
-          className="min-h-[44px] w-full rounded-full bg-transparent px-1 text-sm placeholder-[var(--fg-3)] focus-ring focus:outline-none"
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => setSearch("")}
-            aria-label="Clear search"
-            className="text-[var(--fg-2)] hover:text-[var(--fg-1)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
-      {/* Sort + tag filters */}
       <OpCodeBrowseBar
+        search={search}
+        onSearch={setSearch}
         sortBy={sortBy}
         sortDir={sortDir}
         onSortClick={handleSortClick}
@@ -123,27 +105,37 @@ export function GuestOpCodesView() {
         onClearTags={clearTags}
       />
 
-      {/* List — ledger sheet (mirrors the authed view's layout) */}
-      <div className="opl-sheet">
-        <div className="opl-grid opl-head" aria-hidden="true">
-          <span />
-          <div className="opl-main">
-            <span className="opl-codecell">Code</span>
-            <span className="opl-desc">Description</span>
-          </div>
-          <span className="opl-hours">Flag hrs</span>
-          <span />
-        </div>
+      <Zone
+        id="z-opl"
+        name="Library"
+        aside={
+          visible.length === opCodes.length
+            ? undefined
+            : <><span className="num">{visible.length}</span> of <span className="num">{opCodes.length}</span> shown</>
+        }
+      >
         {opCodes.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
-            No op codes yet. Add one to get started.
-          </p>
+          <EmptyState
+            icon={<Tag size={22} />}
+            title="No op codes yet"
+            description="Add the jobs you flag most and they become one-tap chips on Log RO."
+            action={
+              <Button variant="go" onClick={() => setAddOpen(true)}>
+                <Plus size={16} aria-hidden="true" />
+                Add a code
+              </Button>
+            }
+          />
         ) : visible.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
-            No op codes match.
-          </p>
+          <p className="opl-empty">No op codes match.</p>
         ) : (
-          <ul>
+          <ul className="opl-sheet">
+            <li className="opl-row opl-head-row" aria-hidden="true">
+              <span />
+              <span>Code · description</span>
+              <span>Flag</span>
+              <span />
+            </li>
             {visible.map((op) => (
               <li
                 key={op.id}
@@ -157,88 +149,30 @@ export function GuestOpCodesView() {
                   }
                 }}
                 aria-label={`Edit ${op.code}`}
-                className="opl-grid opl-row"
+                className="opl-row"
               >
                 {/* Blank space where the drag handle sits in the real app */}
-                <div className="h-8 w-8 shrink-0" aria-hidden="true" />
-
-                <div className="opl-main">
-                  <div
-                    className="opl-codecell"
-                    title={op.tags.length > 0 ? op.tags.join(", ") : undefined}
-                  >
-                    <span
-                      className="opl-tick"
-                      style={
-                        {
-                          "--tagc": tagHueVar(op.tags[0]),
-                        } as React.CSSProperties
-                      }
-                    />
-                    <span className="truncate font-mono text-sm font-semibold text-[var(--fg-0)]">
-                      {op.code}
-                    </span>
-                  </div>
-
-                  <div className="opl-desc">
-                    <span className="truncate text-xs">
-                      {op.description && (
-                        <span className="text-[var(--fg-1)]">
-                          {op.description}
-                        </span>
-                      )}
-                      {op.notes && (
-                        <span className="italic text-[var(--fg-3)]">
-                          {op.description ? " · " : ""}
-                          {op.notes}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                <span className="opl-hours font-mono text-sm font-semibold tabular text-[var(--brand)]">
-                  {fmtHours(op.flagHours)}
-                </span>
-
-                {/* Action buttons — stopPropagation so row click doesn't also fire */}
-                <div
-                  className="opl-acts flex shrink-0 items-center justify-end gap-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setEditTarget(op)}
-                    aria-label={`Edit ${op.code}`}
-                    className="relative cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] after:absolute after:-inset-1.5 after:content-['']"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(op.id, op.code)}
-                    aria-label={`Delete ${op.code}`}
-                    className="relative cursor-pointer rounded-full p-2 text-[var(--fg-2)] hover:bg-[var(--bg-3)] hover:text-[var(--bad)] after:absolute after:-inset-1.5 after:content-['']"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                <span aria-hidden="true" />
+                <OpCodeRowContent
+                  opCode={op}
+                  onEdit={() => setEditTarget(op)}
+                  onDelete={() => handleDelete(op.id, op.code)}
+                />
               </li>
             ))}
           </ul>
         )}
-        <div className="opl-foot">
-          <span>
-            {visible.length === opCodes.length
-              ? `${opCodes.length} code${opCodes.length !== 1 ? "s" : ""}`
-              : `${visible.length} of ${opCodes.length} codes`}
-          </span>
-          <span className="mono tabular">
-            {fmtHours(visible.reduce((sum, op) => sum + op.flagHours, 0))} flag
-            hours on the books
-          </span>
-        </div>
-      </div>
+        {opCodes.length > 0 && (
+          <div className="opl-foot">
+            <span>
+              <span className="num">{visible.length}</span> {visible.length === 1 ? "code" : "codes"} shown
+            </span>
+            <span>
+              <span className="num">{withPt(fmtHours(visible.reduce((sum, op) => sum + op.flagHours, 0)))}</span>h flagged
+            </span>
+          </div>
+        )}
+      </Zone>
 
       {/* Add modal */}
       <OpCodeFormModal

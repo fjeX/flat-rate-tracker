@@ -1,0 +1,15 @@
+/* Phase 5 dialog bodies: dlg-bug-report ("Report a bug", ReportBugModal).
+   Prefix bug-. Tokens only. Not in the mock (the mock has no bug dialog); built
+   from Field + .input, .card-inset tiles, Button and StatusField, so this file
+   only holds block spacing, the screenshot grid and the footer push. */
+.bug-body { display: flex; flex-direction: column; gap: var(--s4); }
+.bug-shots { display: flex; flex-direction: column; gap: var(--s2); }
+.bug-shots .field-label { margin: 0; }
+.bug-opt { text-transform: none; letter-spacing: 0; color: var(--ink-3); }
+.bug-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--s2); }
+.bug-tile { display: flex; flex-direction: column; align-items: stretch; gap: var(--s2); padding: var(--s2); }
+.bug-thumb { width: 100%; height: 72px; object-fit: cover; display: block; }
+.bug-remove { width: var(--tap); padding-left: 0; padding-right: 0; align-self: flex-end; }
+.bug-thanks { font-weight: 600; color: var(--ink); }
+.bug-body .sfield-body p { margin: 0; }
+.bug-go { margin-left: auto; }

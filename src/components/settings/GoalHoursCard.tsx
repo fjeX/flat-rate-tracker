@@ -3,6 +3,10 @@
 import { useState, useTransition } from "react";
 import { setGoalHoursAction } from "@/app/actions/settings";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { SettingRow } from "./SettingRow";
 
 export function GoalHoursCard({ initialGoalHours }: { initialGoalHours: number }) {
   const [inputVal, setInputVal] = useState(String(initialGoalHours));
@@ -32,46 +36,41 @@ export function GoalHoursCard({ initialGoalHours }: { initialGoalHours: number }
   }
 
   return (
-    <section className="card padded-lg">
-      <h2 className="mb-1 text-base font-semibold" style={{ color: "var(--fg-0)" }}>Pay Period Goal</h2>
-      <p className="mb-5 text-sm" style={{ color: "var(--fg-2)" }}>
-        Target flag hours per pay period. Drives the pace bar on the dashboard and the chart
-        reference line in history.
-      </p>
-      <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
-        <label htmlFor="goalHours" className="whitespace-nowrap text-sm" style={{ color: "var(--fg-1)" }}>
-          Goal hours
-        </label>
-        <input
-          id="goalHours"
-          type="number"
-          min={1}
-          max={999}
-          required
-          aria-required="true"
-          value={inputVal}
-          onChange={(e) => {
-            setInputVal(e.target.value);
-            setSaved(false);
-            setError(null);
-          }}
-          aria-invalid={!valid}
-          aria-describedby={error ? "goalHours-error" : undefined}
-          className="input w-24 text-center"
-        />
-        <button
-          type="submit"
-          disabled={!dirty || pending}
-          className="btn btn-primary"
-        >
+    <SettingRow
+      titleAs="h2"
+      title="Pay Period Goal"
+      description="Target flag hours per pay period. Drives the pace bar on the dashboard and the chart reference line in history."
+    >
+      <form onSubmit={handleSubmit} className="stg-inline">
+        <Field label="Goal hours" htmlFor="goalHours">
+          <Input
+            id="goalHours"
+            type="number"
+            min={1}
+            max={999}
+            required
+            aria-required="true"
+            mono
+            className="is-hrs"
+            value={inputVal}
+            onChange={(e) => {
+              setInputVal(e.target.value);
+              setSaved(false);
+              setError(null);
+            }}
+            aria-invalid={!valid}
+            aria-describedby={error ? "goalHours-error" : undefined}
+          />
+        </Field>
+        <Button type="submit" variant="go" disabled={!dirty || pending} saved={saved}>
           {pending ? "Saving…" : saved ? "Saved ✓" : "Save"}
-        </button>
+        </Button>
         {error && (
-          <p id="goalHours-error" role="alert" className="w-full text-sm" style={{ color: "var(--bad)" }}>
+          <p id="goalHours-error" role="alert" className="stg-note is-bad" style={{ flexBasis: "100%" }}>
             {error}
           </p>
         )}
       </form>
-    </section>
+    </SettingRow>
   );
 }

@@ -10,7 +10,7 @@
 //
 //     stored 5.35 -> dashboard tile "5.3h"  vs  the RO row under it "5.4"
 //
-// That contradiction was visible on ONE screen, because RoList renders on the
+// That contradiction was visible on ONE screen, because the RO list renders on the
 // dashboard directly beneath the Today · Flag headline. The sr-only text
 // carried the wrong figure too.
 //
@@ -23,9 +23,8 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import React from "react";
 import { fmtHours } from "@/lib/stats";
-import { StatCard } from "./StatCard";
 import { TodayCard } from "./TodayCard";
-import { RoList } from "@/components/ro/RoList";
+import GuestDashboard from "@/app/guest/page";
 import { RecentRos } from "./RecentRos";
 import { FlaggedToDate } from "./FlaggedToDate";
 import { RollingNumber } from "@/components/ui/RollingNumber";
@@ -38,6 +37,21 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
   useSearchParams: () => new URLSearchParams(),
 }));
+
+// The guest dashboard reads its entries from the guest store and its date from
+// the browser clock hook. Both are swapped for fixtures; `guestEntries` is what
+// each case sets.
+let guestEntries: Entry[] = [];
+vi.mock("@/lib/guest/context", () => ({
+  useGuestStore: () => ({
+    entries: guestEntries,
+    opCodes: [],
+    hourlyRate: null,
+    setGuestRate: vi.fn(),
+    settings: { splitDay: 15, periodOverrides: [] },
+  }),
+}));
+vi.mock("@/lib/use-client-today", () => ({ useClientToday: () => "2026-08-20" }));
 
 afterEach(cleanup);
 
@@ -83,15 +97,17 @@ function entry(flagHours: number): Entry {
 /**
  * The headline of whichever readout `selector` names, digits + unit, as a
  * reader sees it. Each surface has its own container: the guest page's
- * StatCard is `.stat-value`, the Today zone's headline panel is
+ * headline panel is `.gst-flag .head-v`, the Today zone's headline panel is
  * `.today-flag .head-v`, a Flagged to date row is the flag cell of its row.
  */
 // Where each dashboard surface prints its flag hours.
 const TODAY = ".today-flag .head-v";
+// The guest dashboard's Pay Period headline.
+const GUEST_PERIOD = ".gst-flag .head-v";
 // Flagged to date: the flag cell of the Pay Period row (second row of the body).
 const PERIOD_ROW = "tbody tr:nth-child(2) td.num";
 
-function headline(selector = ".stat-value"): string {
+function headline(selector: string): string {
   const el = document.querySelector(selector);
   if (!el) throw new Error(`no ${selector} rendered`);
   // The digit strips render every 0-9 cell, so textContent of the whole node is
@@ -104,10 +120,10 @@ function headline(selector = ".stat-value"): string {
 
 describe("dashboard flag hours agree with fmtHours", () => {
   for (const v of [...DIVERGENT, ...CONTROLS]) {
-    it(`StatCard prints ${fmtHours(v)}h for a stored ${v}`, () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      render(<StatCard label="Pay Period" stats={stats(v) as any} />);
-      expect(headline()).toBe(`${fmtHours(v)}h`);
+    it(`Guest dashboard prints ${fmtHours(v)}h for a stored ${v}`, () => {
+      guestEntries = [entry(v)];
+      render(<GuestDashboard />);
+      expect(headline(GUEST_PERIOD)).toBe(`${fmtHours(v)}h`);
     });
 
     it(`TodayCard prints ${fmtHours(v)}h for a stored ${v} (quick-add off)`, () => {
@@ -153,23 +169,17 @@ describe("dashboard flag hours agree with fmtHours", () => {
   }
 
   // The user-visible contract, and the shape the escalation was filed as: the
-  // Today · Flag headline and the RO row beneath it are the same period's same
-  // hours, rendered on the same screen.
-  it("the dashboard headline and the RO row under it show the same figure", () => {
-    render(
-      <div>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <TodayCard date="2026-08-20" stats={stats(5.35) as any} initialHours={8} library={[]} />
-        <RoList entries={[entry(5.35)]} />
-      </div>,
-    );
-    const row = document.querySelector(".hours");
-    expect(row).toBeTruthy();
-    expect(headline(TODAY)).toBe(row!.textContent);
+  // headline and the RO tag beneath it are the same period's same hours,
+  // rendered on the same screen. On the guest page they are one component tree.
+  it("the guest headline and the RO tag under it show the same figure", () => {
+    guestEntries = [entry(5.35)];
+    render(<GuestDashboard />);
+    const tag = document.querySelector(".tag-hrs");
+    expect(tag).toBeTruthy();
+    expect(headline(GUEST_PERIOD)).toBe(tag!.textContent);
   });
 
-  // The dashboard's own list is the tag list now (RoList still serves History,
-  // Pay Period and the guest page). Same contract, same screen.
+  // The signed-in dashboard's list is the same tag. Same contract, same screen.
   it("the Today headline and the RO tag under it show the same figure", () => {
     render(
       <div>
@@ -187,9 +197,9 @@ describe("dashboard flag hours agree with fmtHours", () => {
   // the bug lib/format.ts was created to end. A formatter of its own inside
   // RollingNumber would have reintroduced it here even with half-up rounding.
   it("a sub-resolution nonzero renders as <0.1, not 0.0", () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    render(<StatCard label="Pay Period" stats={stats(0.04) as any} />);
-    expect(headline()).toBe("<0.1h");
+    guestEntries = [entry(0.04)];
+    render(<GuestDashboard />);
+    expect(headline(GUEST_PERIOD)).toBe("<0.1h");
   });
 
   it("a sub-resolution nonzero renders as <0.1 in the Flagged to date table too", () => {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { setShareLaborTimesAction } from "@/app/actions/settings";
 import { Switch } from "@/components/ui/Switch";
 import { actionErrorMessage } from "@/lib/action-error";
+import { SettingRow } from "./SettingRow";
 
 /**
  * True Time consent. Off by default, and the copy has to earn the yes.
@@ -38,44 +39,24 @@ export function TrueTimeCard({ initialShare }: { initialShare: boolean }) {
   }
 
   return (
-    <section className="card padded-lg">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2
-            className="mb-1 text-base font-semibold"
-            style={{ color: "var(--fg-0)" }}
-          >
-            Contribute to True Time
-          </h2>
-          <p className="text-sm" style={{ color: "var(--fg-2)" }}>
-            Book times were written for cars that didn&apos;t have scan tools.
-            True Time pools what jobs <em>actually</em> take, measured by techs in
-            the bay, so you can tell which op codes really pay.
-          </p>
-          <p className="mt-2 text-sm" style={{ color: "var(--fg-2)" }}>
-            If you turn this on, FRT shares the op code, the vehicle, the book
-            hours, and your actual hours — nothing else. No RO numbers, no
-            customer info, no shop name, no name of yours, and no date finer than
-            the month. Turn it off and everything you&apos;ve contributed is
-            deleted.
-          </p>
-          <p className="mt-2 text-xs" style={{ color: "var(--fg-3)" }}>
-            Pooled figures are only ever shown once at least 5 different techs
-            have logged the same job, so nothing can be traced back to one
-            person.
-          </p>
-          {error && (
-            <p className="mt-2 text-xs text-[var(--bad)]">{error}</p>
-          )}
-        </div>
-
-        <Switch
-          checked={share}
-          onChange={toggle}
-          disabled={isPending}
-          label="Contribute to True Time"
-        />
-      </div>
-    </section>
+    <SettingRow
+      titleAs="h2"
+      title="Contribute to True Time"
+      description={
+        <>
+          Book times were written for cars that didn&apos;t have scan tools. True
+          Time pools what jobs <em>actually</em> take, measured by techs in the
+          bay, so you can tell which op codes really pay. If you turn this on, FRT
+          shares the op code, the vehicle, the book hours, and your actual hours —
+          nothing else. No RO numbers, no customer info, no shop name, no name of
+          yours, and no date finer than the month. Turn it off and everything
+          you&apos;ve contributed is deleted.
+        </>
+      }
+      fine="Pooled figures are only ever shown once at least 5 different techs have logged the same job, so nothing can be traced back to one person."
+    >
+      <Switch checked={share} onChange={toggle} disabled={isPending} label="Contribute to True Time" />
+      {error && <p role="alert" className="stg-note is-bad">{error}</p>}
+    </SettingRow>
   );
 }

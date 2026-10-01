@@ -25,9 +25,5 @@ import { opCodeOrigin, OP_CODE_ORIGIN_LABEL } from "@/lib/insights";
  * lib/insights beside the predicate.
  */
 export function OriginTag({ row }: { row: { key: string } }) {
-  return (
-    <span className="ml-1.5 align-middle text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
-      {OP_CODE_ORIGIN_LABEL[opCodeOrigin(row)]}
-    </span>
-  );
+  return <span className="ins-origin">{OP_CODE_ORIGIN_LABEL[opCodeOrigin(row)]}</span>;
 }

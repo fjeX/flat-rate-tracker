@@ -787,10 +787,10 @@ export function WorkCostCard({
             type="button"
             onClick={() => setRecordsOpen((v) => !v)}
             aria-expanded={recordsOpen}
-            className="pp-rowbtn"
+            className="rowbtn"
           >
             <span>Every unpaid record</span>
-            <span>
+            <span className="rowbtn-aside">
               <b className="num">{withPt(fmtHours2(unpaid.totalHours))}h</b>
               <PpIcon name="chev" className="chev" />
             </span>

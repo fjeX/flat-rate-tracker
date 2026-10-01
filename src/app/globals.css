@@ -7,11 +7,32 @@
 @import "./styles/ui-fields.css";
 @import "./styles/ui-surfaces.css";
 @import "./styles/ui-figures.css";
+@import "./styles/ui-page.css";
 @import "./styles/ui-shell.css";
 @import "./styles/ui-appearance.css";
 @import "./styles/page-dashboard.css";
 @import "./styles/page-log.css";
 @import "./styles/page-pay-period.css";
+@import "./styles/page-history.css";
+@import "./styles/page-timer.css";
+@import "./styles/page-op-codes.css";
+@import "./styles/page-insights.css";
+@import "./styles/page-schedule.css";
+@import "./styles/page-snapshots.css";
+@import "./styles/page-settings.css";
+@import "./styles/page-auth.css";
+@import "./styles/dlg-ro-detail.css";
+@import "./styles/dlg-op-code-form.css";
+@import "./styles/dlg-bonus-form.css";
+@import "./styles/dlg-import.css";
+@import "./styles/dlg-timer.css";
+@import "./styles/dlg-guest-ro.css";
+@import "./styles/dlg-template.css";
+@import "./styles/dlg-bug-report.css";
+@import "./styles/dlg-bug-inbox.css";
+@import "./styles/page-guest.css";
+@import "./styles/page-landing.css";
+@import "./styles/page-admin-bugs.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1
@@ -516,68 +537,6 @@ body {
 .greeting h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .greeting p  { margin: 2px 0 0; font-size: 14px; color: var(--fg-2); }
 
-/* ── Stat tiles ──────────────────────────────────────── */
-.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (min-width: 600px) { .stat-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } }
-
-.stat.today-card { grid-column: 1 / -1; }
-@media (min-width: 600px) { .stat.today-card { grid-column: auto; } }
-
-.stat {
-  padding: 14px 16px;
-  border-radius: var(--radius);
-  background: var(--bg-1);
-  border: 1px solid transparent;
-  box-shadow: var(--shadow-card);
-  position: relative;
-}
-.stat .stat-label {
-  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--fg-3); font-weight: 550;
-}
-.stat .stat-value {
-  font-size: 26px; font-weight: 600; letter-spacing: -0.02em;
-  margin-top: 4px; line-height: 1;
-}
-.stat .stat-value .unit { font-size: 14px; color: var(--fg-2); margin-left: 1px; font-weight: 500; }
-.stat .stat-delta {
-  margin-top: 6px; font-size: 12px; display: inline-flex; align-items: center; gap: 3px;
-}
-.stat .stat-delta.good { color: var(--good); }
-.stat .stat-delta.warn { color: var(--warn); }
-.stat .stat-delta.bad  { color: var(--bad); }
-.stat .stat-delta.neutral { color: var(--fg-3); }
-.stat.featured {
-  background:
-    linear-gradient(180deg, var(--brand-bg), transparent 100%),
-    var(--bg-1);
-  border-color: var(--brand-soft);
-}
-.stat.featured .stat-label { color: var(--brand); }
-.stat.featured .stat-value { color: var(--brand); }
-
-/* ── Efficiency status accents (Phase 2) ─────────────────
-   Thin coloured top edge + tinted value, driven by efficiencyTier().
-   Tiles with no clocked hours have no tier → stay neutral. Placed after
-   .featured so the status colour wins on the value number. */
-.stat.eff-good, .stat.eff-warn, .stat.eff-bad { overflow: hidden; }
-.stat.eff-good::before, .stat.eff-warn::before, .stat.eff-bad::before {
-  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
-}
-.stat.eff-good::before { background: var(--good); }
-.stat.eff-warn::before { background: var(--warn); }
-.stat.eff-bad::before  { background: var(--bad); }
-.stat.eff-good { border-color: color-mix(in oklab, var(--good) 32%, var(--line)); }
-.stat.eff-warn { border-color: color-mix(in oklab, var(--warn) 32%, var(--line)); }
-.stat.eff-bad  { border-color: color-mix(in oklab, var(--bad) 32%, var(--line)); }
-.stat.eff-good .stat-value { color: var(--good); }
-.stat.eff-warn .stat-value { color: var(--warn); }
-.stat.eff-bad  .stat-value { color: var(--bad); }
-
-/* ── Today = hero tile ───────────────────────────────────
-   The orange "now" anchor reads bigger than the context tiles. */
-.stat.today-card .stat-value { font-size: 34px; }
-.stat.today-card .stat-value .unit { font-size: 16px; }
-
 /* ── Pace bar ────────────────────────────────────────── */
 .pace {
   padding: 14px;
@@ -634,129 +593,6 @@ body {
   width: 3px; height: 3px; border-radius: 999px; background: var(--line); flex-shrink: 0;
 }
 
-/* ── RO list ─────────────────────────────────────────── */
-.ro-list { }
-/* The row is a container, not a control. It stopped being a <button> when the
-   Upsell shortcut moved inside it — a button nested in a button is invalid HTML
-   and browsers recover by dropping one, which is a coin flip over whether the
-   row or the shortcut still works.
-
-   ORDER: [RO + vehicle + codes] [Upsell] [hours]. The shortcut is its own
-   control between the two, not something crowding the hours column. */
-.ro-row {
-  position: relative;
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  transition: background 120ms;
-  width: 100%;
-}
-.ro-row:last-child { border-bottom: none; }
-.ro-row:hover { background: var(--bg-3); }
-
-.ro-row-main {
-  flex: 1; min-width: 0;
-  cursor: pointer;
-  text-align: left;
-  background: transparent;
-  border: none;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-}
-/* The hit area is the WHOLE row, including the hours, even though the button
-   only wraps the text. Splitting the hours out is what let the Upsell shortcut
-   sit between them; without this, tapping the hours would stop opening the RO —
-   a target that silently shrank. Same stretched-overlay trick the op-code line
-   buttons use, and it keeps both controls real <button>s for the keyboard. */
-.ro-row-main::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-}
-
-/* Its own control, with its own edge, sitting to the right of the RO and
-   vehicle information — deliberately not tucked against the hours, where it
-   read as part of the number. Raised above the row's stretched hit area so it
-   receives its own clicks. */
-.ro-upsell {
-  position: relative;
-  z-index: 1;
-  display: flex; align-items: center; gap: 4px;
-  flex-shrink: 0;
-  min-height: 34px;
-  padding: 0 10px;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-3);
-  cursor: pointer;
-  transition: color 120ms, border-color 120ms, background 120ms;
-}
-.ro-upsell:hover {
-  color: var(--brand);
-  border-color: var(--brand-soft);
-  background: var(--bg-3);
-}
-/* 34px pill, 46px target. A 44px-tall pill would have made every RO row taller
-   for a shortcut, so the hit area is expanded instead — the same trick the
-   op-code line controls use, and quality.spec.ts's touch-target check knows to
-   read this ::after and add its negative inset to the box.
-   Not optional: that check failed on the dashboard at 34px, which is exactly
-   what it is for. */
-.ro-upsell::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
-}
-
-/* Reveal for a capped list (RoList maxRows). Only the Pay Period page caps —
-   a settled period is 50-90 rows and reconciliation is the real drill-down. */
-.ro-show-all {
-  width: 100%;
-  min-height: var(--tap-min);
-  padding: 12px 14px;
-  border: none;
-  background: transparent;
-  color: var(--brand);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  border-top: 1px solid var(--line-soft);
-}
-.ro-show-all:hover { background: var(--bg-2); }
-
-.ro-num {
-  font-family: var(--font-num);
-  font-size: 13px; color: var(--brand); font-weight: 600;
-}
-.ro-meta { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
-.ro-vehicle { font-size: 13px; color: var(--fg-1); }
-.ro-row .grow { flex: 1; min-width: 0; }
-.ro-row .hours {
-  font-family: var(--font-num);
-  font-size: 14px; font-weight: 600;
-}
-.ro-row .hours .unit { color: var(--fg-3); font-weight: 500; margin-left: 1px; }
-
-.ro-codes {
-  display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px;
-}
-.ro-code-chip {
-  font-family: var(--font-num);
-  font-size: 11px;
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 2px 8px;
-  color: var(--fg-2);
-}
-.ro-code-chip .c { color: var(--brand); }
-
 /* ── Log RO step cards ───────────────────────────────── */
 .step-card {
   background: var(--bg-1);
@@ -783,27 +619,6 @@ body {
   pointer-events: none;
 }
 
-.opc-hours-input {
-  width: 64px;
-  /* The most-tapped control in the app — pad to a ~44px rendered height so it's
-     an easy hit target on mobile without shrinking the visual field width. */
-  padding: 13px 8px;
-  font-family: var(--font-num);
-  font-size: 13px;
-  background: var(--bg-2);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--fg-0);
-  text-align: right;
-  transition: border-color 120ms, box-shadow 120ms;
-}
-.opc-hours-input:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
-/* On a --bg-2 inset (e.g. the RO-detail op-code table) the default --bg-2 well
-   vanishes — step one rung up the ladder so the field stays visible. Keeps the
-   base 64px width — the host cell centers it under its column header (a
-   `w-full` utility would lose to the base rule's width anyway). */
-.opc-hours-input.on-inset { background: var(--bg-3); }
-
 /* Expand the tappable area to ~44x44 without changing the visual 28x28 box. */
 
 /* Reusable invisible hit-area expander for small controls where real padding
@@ -811,11 +626,6 @@ body {
    element must not already be absolutely positioned. */
 .hit-expand { position: relative; }
 .hit-expand::after { content: ""; position: absolute; inset: -13px; }
-
-/* Weekly-pattern day toggle (ScheduleCard): the 64px label is the checkbox's
-   real tap target — give it full tap height on touch layouts, keep desktop
-   density (same split as .btn-sm). */
-@media (max-width: 899px) { .sched-day-toggle { min-height: var(--tap-min); } }
 
 /* Search-clear X inside the op-code search field — invisible ::after expands the
    tap area to ~44px without moving the 14px glyph (mirrors .opc-line .remove). */
@@ -860,69 +670,9 @@ body {
 /* Scan banner */
 
 /* ── History page ────────────────────────────────────── */
-.filter-row {
-  display: flex; gap: 6px; overflow-x: auto;
-  margin: 0 -16px 14px; padding: 0 16px;
-  scrollbar-width: none;
-}
-.filter-row::-webkit-scrollbar { display: none; }
-.filter-chip {
-  flex-shrink: 0;
-  display: inline-flex; align-items: center;
-  min-height: var(--tap-min);
-  padding: 8px 16px;
-  font-size: 14px;
-  border: 1px solid transparent;
-  background: var(--bg-1);
-  color: var(--fg-1);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 120ms;
-}
-.filter-chip:hover:not(:disabled) { background: var(--bg-2); }
-/* Calm Workspace: active = brand tint, not a filled block — color marks
-   state without shouting */
-.filter-chip.active {
-  background: var(--brand-bg);
-  border-color: color-mix(in oklab, var(--brand) 35%, transparent);
-  color: var(--brand);
-  font-weight: 600;
-}
-.filter-chip:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.history-summary {
-  display: flex; gap: 18px; flex-wrap: wrap;
-  padding: 14px 16px;
-  background: var(--bg-1);
-  border: 1px solid transparent;
-  box-shadow: var(--shadow-card);
-  border-radius: var(--radius);
-  margin: 12px 0;
-  font-size: 13px;
-}
-.history-summary .k { color: var(--fg-3); font-size: 12px; letter-spacing: 0; text-transform: none; display: block; margin-bottom: 2px; }
-.history-summary .v { font-family: var(--font-num); font-weight: 700; font-size: 16px; }
-
-/* ── History RO rows ─────────────────────────────────── */
-.history-ro-row {
-  display: flex;
-  align-items: center;
-  padding: 12px 14px;
-  cursor: pointer;
-  transition: background 120ms;
-  gap: 10px;
-}
-.history-ro-row:hover { background: var(--bg-2); }
-.history-ro-row + .history-ro-row {
-  border-top: 1px dashed var(--line-soft);
-}
-.history-ro-num { color: var(--brand); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
-.history-ro-meta { font-size: 12px; color: var(--fg-3); margin-top: 1px; }
-.history-ro-vehicle { font-size: 14px; color: var(--fg-1); }
-.history-ro-hours { color: var(--fg-0); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; flex-shrink: 0; }
+/* History's rows are RO tags now (ui-page.css / page-history.css). The
+   `history-ro-row` class survives on each tag only as the write-smoke
+   locator (tests/smoke/write.smoke.ts) and carries no style. */
 
 /* ── Animations ──────────────────────────────────────── */
 @keyframes modal-backdrop-in {
@@ -947,10 +697,6 @@ body {
    prefers-reduced-motion (see the guard at the very bottom of the file).
    =================================================================== */
 
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 @keyframes pace-grow {
   from { width: 0; }
 }
@@ -958,18 +704,8 @@ body {
   from { transform: scaleY(0); }
 }
 
-/* — Dashboard stat tiles stagger in on load —
-   Gated by [data-animated] (set by <EntranceGrid>, WS5) so a router.refresh()
-   after quick-add — which re-renders the tiles in place without remounting
-   the grid — doesn't replay the stagger. Fires once per real mount. */
-.stat-grid:not([data-animated="true"]) .stat { animation: fade-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.stat-grid .stat:nth-child(1) { animation-delay: 0ms; }
-.stat-grid .stat:nth-child(2) { animation-delay: 45ms; }
-.stat-grid .stat:nth-child(3) { animation-delay: 90ms; }
-.stat-grid .stat:nth-child(4) { animation-delay: 135ms; }
-
 /* — Pace bar fills from empty on load — same [data-animated] gate as above,
-   via <EntranceGrid animationName="pace-grow"> wrapping .pace. — */
+   (the [data-animated] gate is set by the page that renders .pace). — */
 
 /* — Chart bars rise from their baseline — */
 .r-chart rect {
@@ -979,22 +715,16 @@ body {
 }
 
 /* — Tactile press feedback on interactive elements (touch-friendly) — */
- .filter-chip,
 .opc-dropdown-item{
   transition: transform 90ms ease, background 120ms, border-color 120ms, color 120ms, filter 120ms;
 }
- .filter-chip:active,
 .opc-dropdown-item:active{
   transform: scale(0.96);
 }
-.ro-row:active, .history-ro-row:active { background: var(--bg-4); }
 
 /* ── Focus-visible (keyboard-only focus ring) ───────────
    Brand-colored ring on every custom interactive class in the file, plus
    a generic fallback for any plain <button>/<a> that isn't covered above. */
-.filter-chip:focus-visible,
-.ro-row:focus-visible,
-.history-ro-row:focus-visible,
 .opc-dropdown-item:focus-visible,
 button:focus-visible,
 a:focus-visible {
@@ -1049,72 +779,7 @@ a:focus-visible {
 
 a { color: inherit; }
 
-/* ── Op code library — ledger ─────────────────────────────────────────
-   One sheet, hairline-divided rows, a fixed mono code column and a
-   right-aligned tabular hours column. Category hue appears only as a
-   3px tick beside the code (the Phase-4 "op-code category hue" idea). */
-.opl-sheet {
-  background: var(--bg-1);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-.opl-grid {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 64px 76px;
-  gap: 10px;
-  align-items: center;
-}
-/* Code + description live in one flexible cell: side by side on desktop,
-   stacked on narrow screens so descriptions keep readable width. */
-.opl-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.opl-codecell { display: flex; align-items: center; gap: 8px; flex: 0 0 108px; min-width: 0; }
-.opl-desc { display: flex; align-items: baseline; gap: 8px; flex: 1 1 auto; min-width: 0; }
-@media (max-width: 560px) {
-  .opl-grid { grid-template-columns: 26px minmax(0, 1fr) 46px 72px; gap: 6px; }
-  .opl-main { flex-direction: column; align-items: stretch; gap: 2px; }
-  .opl-codecell { flex: none; }
-  .opl-head .opl-desc { display: none; }
-}
-.opl-head {
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--fg-3);
-  font-weight: 550;
-}
-.opl-row {
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-.opl-row:last-child { border-bottom: none; }
-.opl-row:hover { background: var(--bg-2); }
-.opl-row:focus-visible { outline: none; box-shadow: inset var(--ring); }
-.opl-tick {
-  flex-shrink: 0;
-  width: 3px;
-  height: 16px;
-  border-radius: 2px;
-  background: var(--tagc, var(--bg-3));
-}
-.opl-hours { text-align: right; }
-/* Actions fade in on hover where hover exists; stay visible on touch. */
-@media (hover: hover) {
-  .opl-acts { opacity: 0; transition: opacity 0.12s ease; }
-  .opl-row:hover .opl-acts,
-  .opl-row:focus-within .opl-acts { opacity: 1; }
-}
-.opl-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 14px;
-  background: var(--bg-2);
-  font-size: 12px;
-  color: var(--fg-3);
-}
+/* Op code library: page-op-codes.css (phase 5). */
 
 /* ── Light theme ─────────────────────────────────────────── */
 /* The palette lives in the token block at the top of this file
@@ -1176,182 +841,11 @@ a { color: inherit; }
 
 /* — Career odometer (quiet number + milestone road) — */
 
-/* — Portfolio snapshot build sheet — */
-.gami-sheet {
-  background: var(--bg-1); border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--fg-3) 25%, transparent);
-  box-shadow: var(--shadow-card);
-  padding: 18px; position: relative; overflow: hidden;
-  font-family: var(--font-num);
-}
-/* Dashed brand strip — a plain dashed border, not a new gradient technique
-   (the approved gradient set stays closed; see design-review 2026-07-14). */
-.gami-sheet::before {
-  content: ""; position: absolute; left: 0; right: 0; top: 0;
-  border-top: 4px dashed var(--brand);
-}
-.gami-sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-top: 4px; }
-.gami-sheet-eyebrow { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fg-3); }
-.gami-sheet-title { font-size: 16px; font-weight: 700; margin-top: 3px; letter-spacing: 0.01em; }
-.gami-stamp {
-  display: inline-flex; align-items: center; gap: 3px;
-  transform: rotate(4deg);
-  border: 2px solid var(--good); color: var(--good);
-  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-  padding: 4px 8px; border-radius: 4px; opacity: 0.9; white-space: nowrap;
-}
-.gami-sheet-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
-  background: var(--line); border: 1px solid var(--line);
-  border-radius: 8px; overflow: hidden; margin-top: 14px;
-}
-@media (min-width: 600px) { .gami-sheet-grid { grid-template-columns: repeat(4, 1fr); } }
-.gami-sheet-cell { background: var(--bg-2); padding: 10px 12px; }
-/* .k labels are load-bearing (they name the stat) — fg-2, not decorative fg-3 */
-.gami-sheet-cell .k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-2); }
-.gami-sheet-cell .v { font-size: 16px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.gami-sheet-cell .v small { font-size: 11px; color: var(--fg-2); font-weight: 500; }
-.gami-sheet-specs { margin-top: 12px; font-size: 11px; color: var(--fg-2); line-height: 1.7; }
-.gami-sheet-specs b { color: var(--fg-0); }
-.gami-sheet-foot {
-  display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px;
-  border-top: 1px dashed var(--line); font-size: 11px; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--fg-3);
-}
+/* — Portfolio snapshot build sheet: .gami-sheet in ui-page.css (phase 5) — */
 
 /* — Snapshot dashboard card (progress to next unlock) — */
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Timer slots — up to 3 concurrent jobs (Unpaid Time Engine, Phase 1)
-   ═══════════════════════════════════════════════════════════════════════
-   These live here rather than as Tailwind utilities on purpose: globals.css
-   is unlayered, so a utility stacked on a component class here would be
-   silently overridden (see .opc-hours-input.on-inset for the same lesson).
-   Variants are modifier classes; colour comes from the status tokens. */
-
-.timer-slots { display: flex; flex-direction: column; gap: 12px; }
-
-.timer-slot-head {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 10px; min-width: 0;
-}
-.timer-slot-id {
-  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--fg-3); margin-bottom: 2px;
-}
-.timer-slot-ro {
-  font-family: var(--font-num);
-  font-size: 14px; color: var(--brand);
-}
-.timer-slot-vehicle {
-  margin-top: 2px; font-size: 12px; color: var(--fg-2);
-  /* The quality suite fails hidden overflow without an ellipsis — a long
-     "2021 Mercedes-Benz Sprinter 3500XD" must truncate visibly, not vanish. */
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.timer-slot-display { text-align: center; padding: 12px 0 2px; }
-.timer-slot-time {
-  font-family: var(--font-num);
-  font-size: 34px; font-weight: 600; color: var(--fg-0);
-  font-variant-numeric: tabular-nums; line-height: 1.1;
-}
-.timer-slot-time.dim { color: var(--fg-2); }
-.timer-slot-caption { margin-top: 2px; font-size: 11px; color: var(--fg-3); }
-
-/* Work / waiting split. Only rendered when there is waiting time to show —
-   an empty "0m waiting" row would train the eye to ignore the number that
-   this whole feature exists to surface. */
-.timer-slot-split {
-  display: flex; justify-content: center; flex-wrap: wrap;
-  gap: 6px 16px; margin-top: 8px; font-size: 12px;
-}
-.timer-slot-split span { color: var(--fg-3); }
-.timer-slot-split b {
-  font-family: var(--font-num);
-  font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg-1);
-}
-.timer-slot-split .wait b { color: var(--warn); }
-.timer-slot-split .wait-approval b { color: var(--info); }
-
-/* Status picker. Two columns on a phone, four across once there's room —
-   four 44px targets side by side don't fit 390px without clipping labels. */
-.timer-status-grid {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px; margin-top: 14px;
-}
-@media (min-width: 560px) {
-  .timer-status-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-.timer-status-btn {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: var(--tap-min); padding: 6px 8px;
-  border: 1px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--bg-2); color: var(--fg-2);
-  font-size: 12px; font-weight: 500; cursor: pointer;
-  transition: background 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
-              color 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
-              border-color 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.timer-status-btn:hover:not(:disabled) { background: var(--bg-3); color: var(--fg-1); }
-.timer-status-btn:disabled { opacity: 0.5; cursor: default; }
-.timer-status-btn[aria-pressed="true"][data-tone="good"] {
-  background: var(--good-bg); color: var(--good);
-  border-color: color-mix(in oklab, var(--good) 32%, transparent);
-}
-.timer-status-btn[aria-pressed="true"][data-tone="warn"] {
-  background: var(--warn-bg); color: var(--warn);
-  border-color: color-mix(in oklab, var(--warn) 32%, transparent);
-}
-.timer-status-btn[aria-pressed="true"][data-tone="info"] {
-  background: var(--info-bg); color: var(--info);
-  border-color: color-mix(in oklab, var(--info) 32%, transparent);
-}
-.timer-status-btn[aria-pressed="true"][data-tone="neutral"] {
-  background: var(--bg-4); color: var(--fg-0); border-color: var(--line);
-}
-
-.timer-slot-actions { display: flex; gap: 8px; margin-top: 12px; }
-.timer-slot-actions .btn { flex: 1; }
-
-.timer-slot-line {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  margin-top: 10px; font-size: 12px; color: var(--fg-3);
-}
-.timer-slot-line .code {
-  font-family: var(--font-num);
-  color: var(--brand);
-}
-
-/* "Timer stopped at the end of your shift" notice. */
-.timer-capped {
-  display: flex; gap: 8px; align-items: flex-start; margin-top: 12px;
-  padding: 10px 12px; border-radius: var(--radius-sm);
-  background: var(--warn-bg); color: var(--warn); font-size: 12px; line-height: 1.5;
-}
-
-/* Add-a-timer affordance in a free slot. */
-.timer-add {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; min-height: 64px; padding: 12px;
-  border: 1px dashed var(--line); border-radius: var(--radius);
-  background: transparent; color: var(--fg-2);
-  font-size: 14px; font-weight: 500; cursor: pointer;
-  transition: background 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
-              color 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.timer-add:hover:not(:disabled) { background: var(--bg-2); color: var(--fg-0); }
-.timer-add:disabled { opacity: 0.5; cursor: default; }
-.timer-add-hint { margin-top: 8px; text-align: center; font-size: 12px; color: var(--fg-3); }
-
-/* Running dot, reusing the existing pulse rather than a second keyframe. */
-.timer-dot {
-  display: inline-block; width: 7px; height: 7px; border-radius: 999px;
-  background: var(--good); animation: pulse-good 1.8s ease-in-out infinite;
-}
-.timer-dot.wait { background: var(--warn); animation: none; }
-.timer-dot.wait-approval { background: var(--info); animation: none; }
+/* Timer slots: page-timer.css (phase 5). Only the floating pip is still here. */
 
 /* — Multi-timer PiP: one panel listing N rows, not N draggable pills — */
 .pip-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -1458,242 +952,6 @@ a { color: inherit; }
 
 /* ── Jump-to-the-day links for unresolved dates ───────────────────── */
 
-/* ── Schedule: month grid ─────────────────────────────────────────── */
-/* Cells carry NO border. The old grid outlined every one of 42 cells, which
-   read as a table of boxes and fought the flat-ground/floating-surface rule;
-   a scheduled day is now a tonal step up from the page ground and everything
-   else is the ground itself. */
-.day-cell {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 3px;
-  min-height: 56px;
-  padding: 6px 2px 5px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--bg-1);
-  color: var(--fg-1);
-  cursor: pointer;
-  font: inherit;
-  transition: background 120ms;
-}
-.day-cell:hover { background: var(--bg-2); }
-.day-cell:focus-visible { outline: none; box-shadow: var(--ring); }
-.day-cell:active { transform: scale(0.96); }
-/* Days with no shift and days off sit ON the ground rather than above it. */
-.day-cell.is-bare { background: transparent; }
-.day-cell.is-out { background: transparent; opacity: 0.4; }
-.day-cell.is-selected { background: var(--brand-bg); box-shadow: inset 0 0 0 1px var(--brand); }
-.day-num {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px; font-weight: 550; line-height: 1;
-}
-.day-cell.is-today .day-num { color: var(--brand); font-weight: 700; }
-.day-sub {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px; line-height: 1; color: var(--fg-3);
-}
-.day-sub.is-planned { opacity: 0.55; }
-.day-flag { width: 6px; height: 6px; border-radius: 999px; background: var(--warn); }
-/* A one-day shift override. Without this the cell is byte-identical to a
-   pattern day whenever the override lands on the same hours. */
-.day-override { color: var(--brand); font-weight: 700; margin-left: 1px; }
-.day-cell.is-override .day-sub { opacity: 1; }
+/* Schedule: page-schedule.css (phase 5). */
 
-.day-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; padding: 0 2px; }
-.day-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-3); }
-.day-legend i {
-  font-style: normal;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-}
-
-/* ── Schedule: docked day inspector ───────────────────────────────── */
-/* The panel used to render BELOW six rows of calendar, so on a phone the day
-   you just tapped scrolled itself off screen. It docks instead.
-
-   DOCKING IS A PHONE AFFORDANCE ONLY. Sticky on desktop meant the panel stayed
-   frozen while the calendar slid underneath it — measured at 208px of travel
-   before it released — which reads as the calendar scrolling inside its own box
-   and then handing off to the page. Nothing on a desktop screen needs to be
-   held in thumb reach, so above 900px this is an ordinary card in flow and the
-   page scrolls as one thing. */
-.day-dock {
-  margin-top: 16px;
-  background: var(--bg-1);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  padding: 14px;
-  /* A resting surface here, not something above the page — pop elevation is
-     for the docked state, where it genuinely floats over the grid. */
-  box-shadow: var(--shadow-card);
-}
-@media (max-width: 899px) {
-  .day-dock {
-    position: sticky;
-    bottom: calc(72px + env(safe-area-inset-bottom));
-    box-shadow: var(--shadow-pop);
-    z-index: 20;
-  }
-}
-.day-dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
-
-/* Stepper that walks the unsettled days, so they don't have to be hunted. */
-.settle-strip {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 8px 8px 8px 14px;
-  margin-bottom: 16px;
-}
-.settle-strip-label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; color: var(--fg-1); }
-.settle-strip-nav { display: flex; align-items: center; gap: 2px; flex: none; }
-.settle-count {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px; color: var(--fg-3); min-width: 44px; text-align: center;
-}
-.icon-btn {
-  width: var(--tap-min); height: var(--tap-min);
-  display: grid; place-items: center;
-  border: 1px solid transparent; background: transparent;
-  color: var(--fg-2); border-radius: 999px; cursor: pointer;
-}
-.icon-btn:hover:not(:disabled) { background: var(--bg-3); }
-.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
-
-/* ── Insights: trend chart ────────────────────────────────────────── */
-/* Labels live OUTSIDE the plot so every bar shares one baseline. They used to
-   sit inside each column, and the in-progress column carries an extra line —
-   which lifted that bar off the baseline and made it read shorter than its own
-   number. A bar chart whose bars start at different heights is not a chart. */
-.trend-plot {
-  position: relative;
-  display: flex; align-items: flex-end; gap: 8px;
-  height: 132px;
-}
-.trend-col {
-  flex: 1; min-width: 0; height: 100%;
-  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
-  gap: 4px;
-}
-.trend-val {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px; color: var(--fg-3); line-height: 1;
-}
-.trend-bar {
-  position: relative;
-  width: 100%;
-  border-radius: 4px 4px 0 0;
-  background: var(--bg-4);
-}
-.trend-bar.is-current { background: var(--brand); }
-/* Not finished, so not comparable to the bars beside it. */
-.trend-bar.is-running { opacity: 0.55; }
-/* Taller than the scale can show. The true figure is always printed above the
-   bar, so the hatch says "continues past here" without inventing a height. */
-.trend-bar.is-clipped::before {
-  content: "";
-  position: absolute; left: 0; right: 0; top: 0; height: 8px;
-  border-radius: 4px 4px 0 0;
-  background: repeating-linear-gradient(-45deg, var(--bg-0) 0 2px, transparent 2px 4px);
-}
-/* Par: flag hours equal to clock hours. The one height on this chart that
-   means something on its own. */
-.trend-par {
-  position: absolute; left: 0; right: 0;
-  /* --line is a within-surface hairline and disappears entirely where it
-     crosses a bar, which is most of this chart's width. Derived from the text
-     ramp instead so it stays visible over bar and ground alike, in both themes,
-     without becoming a second piece of foreground. */
-  border-top: 1px dashed color-mix(in oklab, var(--fg-3) 55%, transparent);
-  pointer-events: none;
-}
-/* Punched through the bar rather than floating on top of it — the label sits
-   over a filled bar most of the time, where plain text is unreadable. */
-.trend-par-label {
-  position: absolute; right: 0; top: -7px;
-  padding: 1px 5px;
-  background: var(--bg-1);
-  border-radius: 999px;
-  font-family: var(--font-num);
-  font-size: 11px; color: var(--fg-3); line-height: 1.2;
-}
-.trend-labels { display: flex; gap: 8px; margin-top: 6px; }
-.trend-label {
-  flex: 1; min-width: 0; text-align: center;
-  font-size: 11px; color: var(--fg-3); line-height: 1.3;
-}
-.trend-label b { display: block; font-weight: 550; color: var(--fg-3); }
-
-/* ── Insights: what's costing you ─────────────────────────────────── */
-/* One ranked list in a single currency (hours), so an op-code overrun and a
-   block of unpaid rework can finally be weighed against each other. */
-.leak-row { padding: 14px; }
-.leak-row + .leak-row { border-top: 1px solid var(--line-soft); }
-.leak-head {
-  display: flex; align-items: baseline; gap: 10px;
-  margin-bottom: 8px;
-}
-.leak-rank {
-  flex: none; width: 16px;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px; font-weight: 700; color: var(--fg-3);
-}
-.leak-name { flex: 1; min-width: 0; }
-.leak-code { font-size: 14px; font-weight: 600; color: var(--fg-0); }
-.leak-why { display: block; margin-top: 2px; font-size: 12px; color: var(--fg-3); }
-.leak-hours {
-  flex: none;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 16px; font-weight: 700;
-}
-.leak-hours.warn { color: var(--warn); }
-.leak-hours.bad  { color: var(--bad); }
-/* Indented to the rank gutter so every bar starts on the same rail. */
-.leak-track {
-  margin-left: 26px; height: 8px; border-radius: 999px;
-  background: var(--bg-3); overflow: hidden;
-}
-.leak-fill { display: block; height: 100%; border-radius: 999px; background: var(--warn); }
-.leak-fill.bad { background: var(--bad); }
-
-.gain-row { display: flex; align-items: baseline; gap: 10px; }
-.gain-row + .gain-row { margin-top: 10px; }
-.gain-name { flex: 1; min-width: 0; }
-.gain-hours {
-  flex: none; color: var(--good);
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 14px; font-weight: 600;
-}
-
-/* ── Insights: op-code table, phone form ──────────────────────────── */
-/* A 5-column table does not fit a 390px phone: .card.flush clips its overflow,
-   so the last column — the ratio, the only reason the section exists — was cut
-   off mid-glyph rather than scrolling. Below 600px the same rows render as a
-   list with the ratio pinned right; the sortable table returns above it, where
-   it actually fits. Both are driven by the same sorted array. */
-.opcode-table { display: none; }
-.opcode-list { display: block; }
-@media (min-width: 600px) {
-  .opcode-table { display: block; }
-  .opcode-list { display: none; }
-}
-.opcode-item { padding: 12px 14px; }
-.opcode-item + .opcode-item { border-top: 1px solid var(--line-soft); }
-.opcode-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.opcode-item-name { min-width: 0; }
-.opcode-item-code { font-size: 14px; font-weight: 500; color: var(--fg-1); }
-.opcode-item-desc { display: block; margin-top: 2px; font-size: 12px; color: var(--fg-3); }
-.opcode-item-meta {
-  margin-top: 6px; font-size: 12px; color: var(--fg-3);
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-}
-.opcode-item-head .pill,
-.opcode-item-head .table-dim { flex: none; }
+/* Insights: page-insights.css (phase 5). */

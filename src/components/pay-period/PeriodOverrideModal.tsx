@@ -261,8 +261,28 @@ function PeriodOverrideBody({
     });
   }
 
+  // Actions live in the Modal's real footer; the submit button sits outside the
+  // <form>, so it is tied to it by id (form="period-override-form").
+  const footer = (
+    <>
+      <Button variant="quiet" onClick={onClose} disabled={isPending}>
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        form="period-override-form"
+        variant="go"
+        disabled={isPending || !valid || !dirty}
+        busy={isPending}
+      >
+        {isPending ? "Saving…" : "Save dates"}
+      </Button>
+    </>
+  );
+
   return (
-    <form onSubmit={submit} className="pp-stack">
+    <Modal open onClose={onClose} title="Custom period dates" footer={footer}>
+    <form id="period-override-form" onSubmit={submit} className="pp-stack">
       <p className="pp-sub">
         Set the exact dates your paystub covers. The usual 1st-to-15th split is
         only a starting shape — your shop&apos;s real boundary is whatever the
@@ -387,24 +407,8 @@ function PeriodOverrideBody({
           <span id="period-override-error">{error}</span>
         </p></StatusField>
       )}
-
-      {/* The dialog's action bar (the shared .dlg-foot look). It lives inside
-          the form because the submit button and the pending state do; the
-          negative margin lets it run edge to edge under the padded body. */}
-      <div className="dlg-foot pp-dlg-actions">
-        <Button variant="quiet" onClick={onClose} disabled={isPending}>
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          variant="go"
-          disabled={isPending || !valid || !dirty}
-          busy={isPending}
-        >
-          {isPending ? "Saving…" : "Save dates"}
-        </Button>
-      </div>
     </form>
+    </Modal>
   );
 }
 
@@ -434,19 +438,18 @@ export function PeriodOverrideModal({
   paidFlagHours: number | null;
   onClose: () => void;
 }) {
+  if (!open) return null;
   return (
-    <Modal open={open} onClose={onClose} title="Custom period dates">
-      <PeriodOverrideBody
-        periodKey={periodKey}
-        initialRange={initialRange}
-        entries={entries}
-        clocks={clocks}
-        unpaid={unpaid}
-        schedule={schedule}
-        rates={rates}
-        paidFlagHours={paidFlagHours}
-        onClose={onClose}
-      />
-    </Modal>
+    <PeriodOverrideBody
+      periodKey={periodKey}
+      initialRange={initialRange}
+      entries={entries}
+      clocks={clocks}
+      unpaid={unpaid}
+      schedule={schedule}
+      rates={rates}
+      paidFlagHours={paidFlagHours}
+      onClose={onClose}
+    />
   );
 }

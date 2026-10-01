@@ -15,7 +15,7 @@
 // the screen, which made the panel effectively undiscoverable.
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { upsertDailyClockHoursAction } from "@/app/actions/daily-clock";
 import { addDayOffAction, deleteDayOffAction } from "@/app/actions/gamification";
 import {
@@ -28,6 +28,13 @@ import { formatDateLong, formatDateShort } from "@/lib/periods";
 import { shiftPaidHours, type ShiftDef } from "@/lib/schedule";
 import { fmtHours } from "@/lib/stats";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { StatusField } from "@/components/ui/StatusField";
+import { Zone } from "@/components/ui/Zone";
+import { withPt } from "@/components/ui/Figure";
 
 export type CalendarDay = {
   date: string; // "YYYY-MM-DD"
@@ -85,7 +92,7 @@ function DayCell({
 
   // One line of hours, never four lines of text. At 390px a cell is ~48px wide;
   // everything that used to be stacked in here (flag hours, "empty?", "zero
-  // day", "clocked") is now either a dot or lives in the dock.
+  // day", "clocked") is now either a mark or lives in the dock.
   const hours = logged
     ? fmtHours(day.clockedHours as number)
     : scheduled
@@ -130,7 +137,7 @@ function DayCell({
     >
       <span className="day-num">{dayNumber(day.date)}</span>
       {off ? (
-        <span className="day-sub">off</span>
+        <span className="day-sub is-planned">off</span>
       ) : hours !== null ? (
         <span className={`day-sub${logged ? "" : " is-planned"}`}>
           {hours}
@@ -200,55 +207,52 @@ function DayDock({
     });
   }
 
-  const badge = day.unresolved
-    ? { cls: "badge-warn", text: "Needs a decision" }
+  // The day's state as a tag. Colour is state: green = logged, red = still
+  // owes a decision, everything else plain.
+  const badge: { tone: "neutral" | "good" | "bad"; text: string } = day.unresolved
+    ? { tone: "bad", text: "Needs a decision" }
     : off
-      ? { cls: "badge-neutral", text: "Day off" }
+      ? { tone: "neutral", text: "Day off" }
       : day.clockedHours !== null && day.clockedHours > 0
-        ? { cls: "badge-good", text: `${fmtHours(day.clockedHours)}h logged` }
+        ? { tone: "good", text: `${fmtHours(day.clockedHours)}h logged` }
         : day.confirmedZero
-          ? { cls: "badge-neutral", text: "Zero day" }
+          ? { tone: "neutral", text: "Zero day" }
           : day.shift
-            ? { cls: "badge-neutral", text: `Scheduled ${fmtHours(shiftPaidHours(day.shift))}h` }
-            : { cls: "badge-neutral", text: "Not a workday" };
+            ? { tone: "neutral", text: `Scheduled ${fmtHours(shiftPaidHours(day.shift))}h` }
+            : { tone: "neutral", text: "Not a workday" };
 
   return (
     <div className="day-dock">
       <div className="day-dock-head">
-        <h3 className="text-sm font-semibold" style={{ color: "var(--fg-0)" }}>
-          {formatDateLong(day.date)}
-        </h3>
-        <span className={`badge ${badge.cls}`}>{badge.text}</span>
+        <h3>{formatDateLong(day.date)}</h3>
+        <Badge tone={badge.tone}>{badge.text}</Badge>
       </div>
 
       {(day.flagHours > 0 || day.roCount > 0) && (
-        <p className="mb-3 text-xs" style={{ color: "var(--fg-3)" }}>
-          <span className="mono tabular">{fmtHours(day.flagHours)}h</span> flag ·{" "}
-          {day.roCount} RO{day.roCount === 1 ? "" : "s"}
+        <p className="sch-dock-meta">
+          <span className="num">{withPt(fmtHours(day.flagHours))}</span>h flag ·{" "}
+          <span className="num">{day.roCount}</span> RO{day.roCount === 1 ? "" : "s"}
         </p>
       )}
 
       {isPastOrToday && (
-        <div className="mb-3">
-          <label className="field-label" htmlFor="day-hours">
-            Actual hours worked
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              id="day-hours"
-              type="number"
-              min={0}
-              max={24}
-              step={0.1}
-              value={hoursText}
-              placeholder="—"
-              onChange={(e) => setHoursText(e.target.value)}
-              className="input mono tabular"
-              style={{ width: 96, flex: "0 0 auto" }}
-            />
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
+        <>
+          <div className="sch-hours">
+            <Field label="Actual hours worked" htmlFor="day-hours">
+              <Input
+                id="day-hours"
+                type="number"
+                min={0}
+                max={24}
+                step={0.1}
+                mono
+                value={hoursText}
+                placeholder="—"
+                onChange={(e) => setHoursText(e.target.value)}
+              />
+            </Field>
+            <Button
+              variant="go"
               disabled={pending || hoursText.trim() === ""}
               onClick={() =>
                 run(
@@ -258,125 +262,122 @@ function DayDock({
               }
             >
               Save
-            </button>
+            </Button>
           </div>
-          <p className="mt-1 text-xs" style={{ color: "var(--fg-3)" }}>
+          <p className="sch-fine">
             Stayed late? Left early? This is the truth — it beats the schedule. 0
             clears it.
           </p>
-        </div>
+        </>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="sch-acts">
         {off ? (
-          <button
-            type="button"
-            className="btn btn-sm"
+          <Button
+            variant="line"
+            size="sm"
             disabled={pending}
             onClick={() => run(() => deleteDayOffAction(day.offRange!.id))}
           >
             {day.offRange!.startDate !== day.offRange!.endDate
               ? `Remove ${formatDateShort(day.offRange!.startDate)}–${formatDateShort(day.offRange!.endDate)} range`
               : "Remove day off"}
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
-            className="btn btn-sm"
+          <Button
+            variant="line"
+            size="sm"
             disabled={pending}
             onClick={() => run(() => addDayOffAction(day.date, day.date), true)}
           >
             Day off
-          </button>
+          </Button>
         )}
 
         {day.confirmedZero ? (
-          <button
-            type="button"
-            className="btn btn-sm"
+          <Button
+            variant="line"
+            size="sm"
             disabled={pending}
             onClick={() => run(() => deleteConfirmedZeroDayAction(day.date))}
           >
             Undo zero day
-          </button>
+          </Button>
         ) : (
           day.unresolved && (
-            <button
-              type="button"
-              className="btn btn-sm"
+            <Button
+              variant="line"
+              size="sm"
               disabled={pending}
               onClick={() => run(() => resolveZeroDayAction(day.date, "worked-zero"), true)}
             >
               Worked, zero flag
-            </button>
+            </Button>
           )
         )}
 
         {!off && (
-          <button
-            type="button"
-            className="btn btn-sm"
+          <Button
+            variant="quiet"
+            size="sm"
             aria-expanded={editingShift}
             onClick={() => setEditingShift((v) => !v)}
           >
             {day.hasOverride ? "Edit shift" : "Change shift"}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* A plan, not a fact — kept behind a press so the dock stays short
           enough to sit above the thumb bar on a phone. */}
       {!off && editingShift && (
-        <div
-          className="mt-3 pt-3"
-          style={{ borderTop: "1px dashed var(--line-soft)" }}
-        >
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-1.5 text-xs" style={{ color: "var(--fg-2)" }}>
-              <input
+        <div className="sch-override">
+          <div className="sch-shift-row">
+            <label>
+              <Input
                 type="number"
                 min={0.5}
                 max={16}
                 step={0.5}
+                mono
+                className="is-hrs"
                 value={ovHours}
                 onChange={(e) => setOvHours(e.target.value)}
-                className="input mono tabular"
-                style={{ width: 72 }}
                 aria-label="Override paid hours"
               />
               hrs
             </label>
-            <label className="flex items-center gap-1.5 text-xs" style={{ color: "var(--fg-2)" }}>
+            <label>
               starts
-              <input
+              <Input
                 type="time"
+                mono
+                className="is-time"
                 value={ovStart}
                 onChange={(e) => setOvStart(e.target.value)}
-                className="input mono tabular"
-                style={{ width: 116 }}
                 aria-label="Override shift start"
               />
             </label>
-            <label className="flex items-center gap-1.5 text-xs" style={{ color: "var(--fg-2)" }}>
+            <label>
               lunch
-              <input
+              <Input
                 type="number"
                 min={0}
                 max={240}
                 step={15}
+                mono
+                className="is-min"
                 value={ovLunch}
                 onChange={(e) => setOvLunch(e.target.value)}
-                className="input mono tabular"
-                style={{ width: 68 }}
                 aria-label="Override lunch minutes"
               />
               min
             </label>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn btn-sm"
+          <div className="sch-acts">
+            <Button
+              variant="go"
+              size="sm"
               disabled={pending}
               onClick={() =>
                 run(() =>
@@ -389,19 +390,19 @@ function DayDock({
               }
             >
               Save shift
-            </button>
+            </Button>
             {day.hasOverride && (
-              <button
-                type="button"
-                className="btn btn-sm"
+              <Button
+                variant="line"
+                size="sm"
                 disabled={pending}
                 onClick={() => run(() => clearShiftOverrideAction(day.date))}
               >
                 Reset to pattern
-              </button>
+              </Button>
             )}
           </div>
-          <p className="mt-2 text-xs" style={{ color: "var(--fg-3)" }}>
+          <p className="sch-fine">
             Still an estimate — for hours you actually worked, use “actual hours”
             above.
           </p>
@@ -409,12 +410,12 @@ function DayDock({
       )}
 
       {error && (
-        <p role="alert" className="mt-2 text-sm" style={{ color: "var(--bad)" }}>
+        <StatusField tag="Fix" role="alert" inset>
           {error}
-        </p>
+        </StatusField>
       )}
       {pending && (
-        <p className="mt-2 text-xs" style={{ color: "var(--fg-3)" }} aria-live="polite">
+        <p className="sch-status" aria-live="polite">
           Saving…
         </p>
       )}
@@ -430,10 +431,13 @@ export function ScheduleCalendar({
   days,
   today,
   weekStartDay,
+  monthName,
 }: {
   days: CalendarDay[]; // 42 cells, grid order
   today: string;
   weekStartDay: 0 | 1;
+  /** "March 2026" — the zone's name. */
+  monthName: string;
 }) {
   // Only days in the displayed month: stepping into a neighbouring month's
   // leading cells would settle a day the header says you aren't looking at.
@@ -464,107 +468,108 @@ export function ScheduleCalendar({
     setSelected(unsettled[next]);
   }
 
+  const scheduledHours = days
+    .filter((d) => d.inMonth && d.offRange === null && d.shift !== null)
+    .reduce((s, d) => s + shiftPaidHours(d.shift as ShiftDef), 0);
+
   return (
-    <div>
+    <>
+      {/* Stepper that walks the unsettled days, so they don't have to be
+          hunted. A status field, because it is the one thing on the page that
+          asks for something. */}
       {unsettled.length > 0 && (
-        <div className="card-inset settle-strip">
-          <span className="settle-strip-label">
-            <TriangleAlert size={16} style={{ color: "var(--warn)", flex: "none" }} />
+        <StatusField tag="Fix">
+          <div className="sfield-act">
             <span>
-              {unsettled.length} unsettled
+              <b>{unsettled.length}</b> {unsettled.length === 1 ? "day needs" : "days need"} a decision —
+              scheduled, nothing logged.
             </span>
+            <span className="sch-step">
+              <button
+                type="button"
+                className="iconbtn"
+                aria-label="Previous unsettled day"
+                onClick={() => step(-1)}
+              >
+                <ChevronLeft size={18} aria-hidden="true" />
+              </button>
+              <span className="num">
+                {stepIndex === -1 ? `${unsettled.length}` : `${stepIndex + 1} of ${unsettled.length}`}
+              </span>
+              <button
+                type="button"
+                className="iconbtn"
+                aria-label="Next unsettled day"
+                onClick={() => step(1)}
+              >
+                <ChevronRight size={18} aria-hidden="true" />
+              </button>
+            </span>
+          </div>
+        </StatusField>
+      )}
+
+      <Zone
+        name={monthName}
+        aside={
+          <>
+            <span className="num">{withPt(fmtHours(scheduledHours))}</span>h scheduled
+          </>
+        }
+      >
+        {/* Above the grid, not below it. The dock is sticky, so anything
+            sitting between the grid and the dock's resting position is hidden
+            behind it at the top of the page — which is exactly where a
+            first-time reader needs the key to the mark. */}
+        <div className="sch-legend">
+          <span>
+            <i className="day-flag" aria-hidden="true" />
+            Needs a decision
           </span>
-          <span className="settle-strip-nav">
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Previous unsettled day"
-              onClick={() => step(-1)}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="settle-count">
-              {stepIndex === -1 ? `${unsettled.length}` : `${stepIndex + 1} of ${unsettled.length}`}
-            </span>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Next unsettled day"
-              onClick={() => step(1)}
-            >
-              <ChevronRight size={16} />
-            </button>
+          <span>
+            <i className="day-sub is-planned">8.0</i>Scheduled
+          </span>
+          <span>
+            <i className="day-sub">9.2</i>Hours you logged
+          </span>
+          <span>
+            <i className="day-override">*</i>
+            One-day override
           </span>
         </div>
-      )}
 
-      {/* Above the grid, not below it. The dock is sticky, so anything sitting
-          between the grid and the dock's resting position is hidden behind it
-          at the top of the page — which is exactly where a first-time reader
-          needs the key to the amber dot. */}
-      <div className="day-legend" style={{ margin: "0 0 10px" }}>
-        <span>
-          <i className="day-flag" style={{ display: "inline-block" }} aria-hidden="true" />
-          Needs a decision
-        </span>
-        <span>
-          <i style={{ color: "var(--fg-3)", opacity: 0.55 }}>8.0</i>Scheduled
-        </span>
-        <span>
-          <i style={{ color: "var(--fg-3)" }}>9.2</i>Hours you logged
-        </span>
-        <span>
-          <i className="day-override" style={{ fontStyle: "normal" }}>
-            *
-          </i>
-          One-day override
-        </span>
-      </div>
+        <div className="sch-dow">
+          {headers.map((h) => (
+            <div key={h}>
+              <span aria-hidden="true">{h[0]}</span>
+              <span className="sr-only">{h}</span>
+            </div>
+          ))}
+        </div>
+        <div className="sch-grid">
+          {days.map((day) => (
+            <DayCell
+              key={day.date}
+              day={day}
+              isToday={day.date === today}
+              selected={day.date === selected}
+              onSelect={(d) => setSelected(d === selected ? null : d)}
+            />
+          ))}
+        </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: 4,
-          marginBottom: 4,
-        }}
-      >
-        {headers.map((h) => (
-          <div key={h} className="field-label" style={{ textAlign: "center", marginBottom: 0 }}>
-            <span aria-hidden="true">{h[0]}</span>
-            <span className="sr-only">{h}</span>
-          </div>
-        ))}
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: 4,
-        }}
-      >
-        {days.map((day) => (
-          <DayCell
-            key={day.date}
-            day={day}
-            isToday={day.date === today}
-            selected={day.date === selected}
-            onSelect={(d) => setSelected(d === selected ? null : d)}
+        {selectedDay && (
+          <DayDock
+            key={selectedDay.date}
+            day={selectedDay}
+            today={today}
+            onSettled={(date) => {
+              const next = nextUnsettled(unsettled, date);
+              if (next) setSelected(next);
+            }}
           />
-        ))}
-      </div>
-
-      {selectedDay && (
-        <DayDock
-          key={selectedDay.date}
-          day={selectedDay}
-          today={today}
-          onSettled={(date) => {
-            const next = nextUnsettled(unsettled, date);
-            if (next) setSelected(next);
-          }}
-        />
-      )}
-    </div>
+        )}
+      </Zone>
+    </>
   );
 }

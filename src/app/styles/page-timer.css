@@ -1,0 +1,106 @@
+/* Phase 5: Timer, sketched on the dev server in the final language (no mock
+   screen exists; plans/frt-visual-overhaul-rollout.md). Tokens only.
+
+   Everything here is prefixed `tmr-`. The page language (.pagehead, .seg,
+   .ro-link) comes from ui-page.css; zones, badges, buttons, status fields and
+   the duration bar from the ui-*.css partials. Shared between the signed-in
+   page and the guest mirror: both render TimerSlotCard. */
+
+/* ---------- page ---------- */
+.tmr-page {
+  width: 100%; max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s4) var(--gutter) var(--s6);
+}
+@media (min-width: 1024px) { .tmr-page { padding-top: var(--s5); } }
+.tmr-page .pagehead { flex-wrap: wrap; }
+.tmr-page .pagehead .num { font-size: var(--fs-label); }
+.tmr-page > .sfield { margin-top: var(--s3); }
+.tmr-scale { margin-top: var(--s3); }
+
+/* ---------- the slots: one zone each, side by side from 700px ---------- */
+.tmr-slots { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--s4); }
+.tmr-slots > * { min-width: 0; }
+@media (min-width: 700px) {
+  .tmr-slots { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); align-items: start; }
+}
+.tmr-empty { margin-top: var(--s2); }
+
+/* the three steps, under the empty state */
+.tmr-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2) var(--s4); margin: 0 0 var(--s3); padding: 0; list-style: none; counter-reset: step; font-size: var(--fs-label); color: var(--ink-2); }
+.tmr-steps li { display: flex; align-items: center; gap: var(--s2); }
+.tmr-steps li::before {
+  counter-increment: step; content: counter(step);
+  display: grid; place-items: center; width: 22px; height: 22px; flex: none;
+  background: var(--block); color: var(--block-ink); border-radius: var(--r-sign);
+  font-family: var(--font-num); font-size: var(--fs-min); font-weight: 700;
+}
+.tmr-steps b { color: var(--ink); }
+
+/* a free slot: the same zone, drawn empty, dashed like a disabled control */
+.tmr-free { border: var(--w-edge) dashed var(--line); background: transparent; }
+@media (max-width: 699px) { .tmr-free { border-left: 0; border-right: 0; } }
+.tmr-free .zone-name, .tmr-free .zone-aside { color: var(--ink-3); }
+.tmr-free-txt { margin: 0 0 var(--s3); color: var(--ink-3); font-size: var(--fs-body); }
+
+/* the Next field sits inside the timer's flow */
+.tmr-slot .sfield { margin-top: var(--s3); }
+
+/* ---------- one timer ---------- */
+/* the status word in the zone head; its dot pulses only while working */
+.tmr-slot .zone-aside { padding-top: 0; }
+.tmr-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.tmr-dot.is-live { animation: pulse-good 1.8s ease-in-out infinite; }
+
+.tmr-ro { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); }
+.tmr-when { font-size: var(--fs-label); color: var(--ink-3); }
+.tmr-veh {
+  margin-top: 2px; font-weight: 700; font-size: var(--fs-control);
+  /* The quality suite fails hidden overflow without an ellipsis — a long
+     "2021 Mercedes-Benz Sprinter 3500XD" must truncate visibly, not vanish. */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tmr-gone { color: var(--ink-2); }
+/* a timer with no RO yet: the NEXT field, then the one action that unblocks it */
+.tmr-attach { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); margin-top: var(--s3); }
+.tmr-attach .sfield { align-self: stretch; margin-top: 0; }
+
+/* the headline figure: worked time, and only worked time */
+.tmr-fig { margin-top: var(--s3); }
+.tmr-time {
+  font-family: var(--font-num); font-size: var(--fs-sign); font-weight: 600;
+  letter-spacing: var(--track-fig); line-height: 1; font-variant-numeric: tabular-nums;
+}
+.tmr-time.is-still { color: var(--ink-2); }
+.tmr-cap { margin-top: var(--s1); font-size: var(--fs-label); color: var(--ink-3); }
+.tmr-bar { margin-top: var(--s2); }
+/* a timer that has only just started has a 1px bar; a 4px tick says "started"
+   without claiming time it hasn't banked */
+.tmr-bar .dur { --dur-gap: var(--zone-fill); min-width: 4px; }
+
+/* waiting time, one line per reason */
+.tmr-split { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-top: var(--s2); font-size: var(--fs-label); color: var(--ink-2); }
+.tmr-split b { color: var(--ink); }
+.tmr-split .tmr-dot { margin-right: 4px; vertical-align: 1px; }
+
+/* the line the hours will land on */
+.tmr-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s3); padding-top: var(--s3); border-top: var(--w-hair) solid var(--line); }
+.tmr-line-k { font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-2); }
+.tmr-ro-plain { text-decoration: none; cursor: default; }
+.tmr-line .btn { margin-left: auto; }
+
+/* status picker: the shared .seg, four equal cells, working = green */
+.tmr-seg { display: flex; width: 100%; margin-top: var(--s3); }
+.tmr-seg button { flex: 1 1 0; min-width: 0; padding: 0 var(--s1); gap: 5px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+.tmr-seg button svg { flex: none; }
+.tmr-seg button:disabled:not([aria-pressed="true"]) { color: var(--disabled-ink); cursor: default; }
+.tmr-seg button:disabled:not([aria-pressed="true"]):hover { background: transparent; }
+.tmr-seg button[aria-pressed="true"]:disabled { cursor: default; }
+.tmr-seg button[aria-pressed="true"][data-tone="good"] { background: var(--good); color: var(--good-ink, var(--accent-ink)); }
+.tmr-seg button[aria-pressed="true"][data-tone="good"]:hover { background: var(--good); }
+@media (max-width: 359px) {
+  .tmr-seg button span { display: none; }
+}
+
+.tmr-actions { display: flex; gap: var(--s2); margin-top: var(--s3); }
+.tmr-actions .btn { flex: 1 1 0; min-width: 0; }
+.tmr-actions .btn-quiet { flex: 0 0 auto; }

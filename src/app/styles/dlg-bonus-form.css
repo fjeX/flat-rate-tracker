@@ -1,0 +1,26 @@
+/* Phase 5 dialog bodies: dlg-bonus-form (BonusForm, prefix bon-). Tokens only.
+   Body of Quick Add's Spiff tab and the SpiffsCard add/edit dialogs. Follows
+   the mock's field / fchip / pick-list habits; the Cancel/Save row is a
+   .dlg-foot look-alike that bleeds to the panel edges, because the form is
+   embedded and cannot use Modal's footer. The category chips are radios, so
+   the shared .fchip selected look (ui-page.css) also keys off aria-checked. */
+.bon-form { display: grid; gap: var(--s4); }
+.bon-amt { position: relative; }
+.bon-amt > span {
+  position: absolute; left: var(--s3); top: 50%; transform: translateY(-50%);
+  font-family: var(--font-num); font-size: var(--fs-num); font-weight: 600; color: var(--ink-3); pointer-events: none;
+}
+.bon-amt .input { padding-left: calc(var(--s3) + var(--s4)); }
+.bon-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+.bon-pair .pill-input { width: 100%; min-width: 0; }
+.bon-opt { color: var(--ink-3); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.bon-ico { width: 16px; height: 16px; flex: none; }
+.bon-linked { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s2) var(--s3); }
+.bon-linked-txt { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.bon-ro { font-weight: 700; color: var(--accent-text); }
+.bon-veh { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-label); color: var(--ink-2); }
+.bon-picker { padding: var(--s2); }
+.bon-picker-head { display: flex; align-items: center; justify-content: space-between; padding: 0 0 var(--s2) var(--s2); font-size: var(--fs-label); font-weight: 700; color: var(--ink-2); }
+.bon-picks { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; }
+.bon-empty { padding: var(--s2) var(--s3); font-size: var(--fs-label); color: var(--ink-2); }
+.bon-actions { margin: var(--s2) calc(-1 * var(--s4)) calc(-1 * var(--s4)); justify-content: flex-end; }

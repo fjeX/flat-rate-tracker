@@ -1,0 +1,20 @@
+/* Phase 5: Snapshots, sketched on the dev server in the final language (no
+   mock screen exists; plans/frt-visual-overhaul-rollout.md). Tokens only.
+
+   Everything here is prefixed `snp-`. The sheet itself (.gami-sheet) is a
+   shared part in ui-page.css because the dashboard draws the latest one too;
+   this file is only the page around the sheets. */
+
+.snp-page {
+  width: 100%; max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s4) var(--gutter) var(--s6);
+}
+@media (min-width: 1024px) { .snp-page { padding-top: var(--s5); } }
+.snp-page .pagehead { flex-wrap: wrap; }
+.snp-page .pagehead .num { font-size: var(--fs-label); }
+
+/* the sheets, newest first; two across from the desktop rail up */
+.snp-sheets { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); margin: var(--s2) 0 0; padding: 0; }
+.snp-sheets > li { min-width: 0; }
+@media (min-width: 1024px) { .snp-sheets { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+.snp-empty { margin-top: var(--s2); }

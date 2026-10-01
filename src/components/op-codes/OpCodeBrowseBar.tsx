@@ -1,5 +1,7 @@
 "use client";
 
+import { Search, X } from "lucide-react";
+import { Input } from "@/components/ui/Input";
 import {
   SORT_CHIPS,
   type OpCodeSortKind,
@@ -7,17 +9,14 @@ import {
 } from "./useOpCodeBrowsing";
 import { tagHueVar } from "./tagHue";
 
-// Reuses the History page's chip styling (.filter-row / .filter-chip) so the
-// op code library sorts and filters with the same look and feel.
-const labelStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "var(--fg-3)",
-  fontWeight: 500,
-  alignSelf: "center",
-  flexShrink: 0,
-};
-
+/**
+ * The library's controls (phase 5 sketch): the search well, the sort as a
+ * segmented control, and the tag filters as toggling outline chips with a
+ * category tick. Shared by the signed-in view and the guest mirror.
+ */
 export function OpCodeBrowseBar({
+  search,
+  onSearch,
   sortBy,
   sortDir,
   onSortClick,
@@ -28,6 +27,8 @@ export function OpCodeBrowseBar({
   tagColors,
   showManualSort = true,
 }: {
+  search: string;
+  onSearch: (value: string) => void;
   sortBy: OpCodeSortKind;
   sortDir: SortDir;
   onSortClick: (kind: OpCodeSortKind) => void;
@@ -35,7 +36,7 @@ export function OpCodeBrowseBar({
   selectedTags: string[];
   onToggleTag: (tag: string) => void;
   onClearTags: () => void;
-  /** Per-tag colour overrides (settings.tagColors) for the chip dots. */
+  /** Per-tag colour overrides (settings.tagColors) for the chip ticks. */
   tagColors?: Record<string, number>;
   // Guest demo has no drag order, so it can hide the "My order" option.
   showManualSort?: boolean;
@@ -46,75 +47,83 @@ export function OpCodeBrowseBar({
   const selectedSet = new Set(selectedTags.map((t) => t.toLowerCase()));
 
   return (
-    <>
-      {/* Sort chips — mirrors the History page */}
-      <div className="filter-row" style={{ marginBottom: 6 }}>
-        <span style={labelStyle}>Sort By:</span>
-        {sortChips.map((chip) => {
-          const active = sortBy === chip.kind;
-          // "My order" has no direction; others show the asc/desc arrow.
-          const arrow =
-            active && chip.kind !== "manual"
-              ? sortDir === "desc"
-                ? " ↓"
-                : " ↑"
-              : "";
-          return (
-            <button
-              key={chip.kind}
-              type="button"
-              onClick={() => onSortClick(chip.kind)}
-              className={`filter-chip${active ? " active" : ""}`}
-            >
-              {chip.label}
-              {arrow}
-            </button>
-          );
-        })}
-      </div>
+    <div className="opl-ctl">
+      <label className="search-well">
+        <span className="sr-only">Search code, description, or tag</span>
+        <Search aria-hidden="true" />
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder="Search code, description, or tag"
+          aria-label="Search code, description, or tag"
+        />
+        {search && (
+          <button
+            type="button"
+            className="search-clear"
+            onClick={() => onSearch("")}
+            aria-label="Clear search"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </label>
 
-      {/* Tag filter chips */}
-      {allTags.length > 0 && (
-        <div className="filter-row" style={{ marginBottom: 6 }}>
-          <span style={labelStyle}>Tags:</span>
-          {allTags.map((tag) => {
-            const active = selectedSet.has(tag.toLowerCase());
+      <div className="opl-ctl-row">
+        <span className="opl-ctl-k">Sort</span>
+        <div className="seg" role="group" aria-label="Sort by">
+          {sortChips.map((chip) => {
+            const active = sortBy === chip.kind;
+            // "My order" has no direction; the others carry the arrow.
+            const dir = active && chip.kind !== "manual" ? (sortDir === "desc" ? "↓" : "↑") : null;
             return (
               <button
-                key={tag}
+                key={chip.kind}
                 type="button"
-                onClick={() => onToggleTag(tag)}
                 aria-pressed={active}
-                className={`filter-chip${active ? " active" : ""}`}
+                onClick={() => onSortClick(chip.kind)}
+                aria-label={`Sort by ${chip.label}${dir ? `, ${sortDir === "desc" ? "descending" : "ascending"}` : ""}`}
               >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    display: "inline-block",
-                    width: 8,
-                    height: 8,
-                    borderRadius: 999,
-                    background: tagHueVar(tag, tagColors),
-                    marginRight: 6,
-                    verticalAlign: "baseline",
-                  }}
-                />
-                {tag}
+                {chip.label}
+                {dir && <span className="dir" aria-hidden="true">{dir}</span>}
               </button>
             );
           })}
-          {selectedTags.length > 0 && (
-            <button
-              type="button"
-              onClick={onClearTags}
-              className="filter-chip"
-              style={{ color: "var(--fg-3)" }}
-            >
-              Clear
-            </button>
-          )}
+        </div>
+      </div>
+
+      {allTags.length > 0 && (
+        <div className="opl-ctl-row">
+          <span className="opl-ctl-k">Tags</span>
+          <div className="fchips" role="group" aria-label="Filter by tag">
+            {allTags.map((tag) => {
+              const active = selectedSet.has(tag.toLowerCase());
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => onToggleTag(tag)}
+                  aria-pressed={active}
+                  className="fchip"
+                >
+                  <span
+                    className="hue"
+                    aria-hidden="true"
+                    style={{ "--tagc": tagHueVar(tag, tagColors) } as React.CSSProperties}
+                  />
+                  {tag}
+                </button>
+              );
+            })}
+            {selectedTags.length > 0 && (
+              <button type="button" onClick={onClearTags} className="btn btn-quiet btn-sm">
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

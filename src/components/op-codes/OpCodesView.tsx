@@ -17,7 +17,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus, Search, X } from "lucide-react";
+import { Plus, Tag } from "lucide-react";
 import type { OpCode } from "@/lib/types";
 import { fmtHours } from "@/lib/stats";
 import {
@@ -35,6 +35,11 @@ import { OpCodeRow } from "./OpCodeRow";
 import { OpCodeBrowseBar } from "./OpCodeBrowseBar";
 import { useOpCodeBrowsing } from "./useOpCodeBrowsing";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { withPt } from "@/components/ui/Figure";
+import { StatusField } from "@/components/ui/StatusField";
+import { Zone } from "@/components/ui/Zone";
 
 type ModalState =
   | { kind: "closed" }
@@ -224,49 +229,25 @@ export function OpCodesView({
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-3 p-4 pb-16">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Op Codes</h1>
-          <p className="text-xs text-[var(--fg-2)]">
-            Your personal library. Drag to reorder.
+    <main className="opl-page">
+      <div className="pagehead">
+        <div className="grow">
+          <h1>Op codes</h1>
+          <p>
+            Your library: <span className="num">{items.length}</span> {items.length === 1 ? "code" : "codes"},{" "}
+            <span className="num">{withPt(fmtHours(items.reduce((sum, op) => sum + op.flagHours, 0)))}</span>h on the books.
+            {" "}Drag to reorder.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setModal({ kind: "add" })}
-          className="btn btn-primary"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add</span>
-        </button>
+        <Button variant="go" onClick={() => setModal({ kind: "add" })}>
+          <Plus size={16} aria-hidden="true" />
+          Add a code
+        </Button>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3">
-        <Search className="h-4 w-4 text-[var(--fg-2)]" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search code or description"
-          className="min-h-[44px] w-full rounded-full bg-transparent px-1 text-sm placeholder-[var(--fg-3)] focus-ring focus:outline-none"
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => setSearch("")}
-            aria-label="Clear search"
-            className="text-[var(--fg-2)] hover:text-[var(--fg-1)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
-      {/* Sort + tag filters */}
       <OpCodeBrowseBar
+        search={search}
+        onSearch={setSearch}
         sortBy={sortBy}
         sortDir={sortDir}
         onSortClick={handleSortClick}
@@ -278,30 +259,34 @@ export function OpCodesView({
       />
 
       {reorderError && (
-        <p className="rounded-[var(--radius-sm)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--bad)]">
+        <StatusField tag="Fix" role="alert">
           {reorderError}
-        </p>
+        </StatusField>
       )}
 
-      {/* List — ledger sheet */}
-      <div className="opl-sheet">
-        <div className="opl-grid opl-head" aria-hidden="true">
-          <span />
-          <div className="opl-main">
-            <span className="opl-codecell">Code</span>
-            <span className="opl-desc">Description</span>
-          </div>
-          <span className="opl-hours">Flag hrs</span>
-          <span />
-        </div>
+      <Zone
+        id="z-opl"
+        name="Library"
+        aside={
+          visible.length === items.length
+            ? undefined
+            : <><span className="num">{visible.length}</span> of <span className="num">{items.length}</span> shown</>
+        }
+      >
         {items.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
-            No op codes yet. Add one to get started.
-          </p>
+          <EmptyState
+            icon={<Tag size={22} />}
+            title="No op codes yet"
+            description="Add the jobs you flag most and they become one-tap chips on Log RO."
+            action={
+              <Button variant="go" onClick={() => setModal({ kind: "add" })}>
+                <Plus size={16} aria-hidden="true" />
+                Add a code
+              </Button>
+            }
+          />
         ) : visible.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-[var(--fg-2)]">
-            No op codes match.
-          </p>
+          <p className="opl-empty">No op codes match.</p>
         ) : (
           <DndContext
             sensors={sensors}
@@ -312,7 +297,13 @@ export function OpCodesView({
               items={visible.map((op) => op.id)}
               strategy={verticalListSortingStrategy}
             >
-              <ul>
+              <ul className="opl-sheet">
+                <li className="opl-row opl-head-row" aria-hidden="true">
+                  <span />
+                  <span>Code · description</span>
+                  <span>Flag</span>
+                  <span />
+                </li>
                 {visible.map((op) => (
                   <OpCodeRow
                     key={op.id}
@@ -330,18 +321,17 @@ export function OpCodesView({
             </SortableContext>
           </DndContext>
         )}
-        <div className="opl-foot">
-          <span>
-            {visible.length === items.length
-              ? `${items.length} code${items.length !== 1 ? "s" : ""}`
-              : `${visible.length} of ${items.length} codes`}
-          </span>
-          <span className="mono tabular">
-            {fmtHours(visible.reduce((sum, op) => sum + op.flagHours, 0))} flag
-            hours on the books
-          </span>
-        </div>
-      </div>
+        {items.length > 0 && (
+          <div className="opl-foot">
+            <span>
+              <span className="num">{visible.length}</span> {visible.length === 1 ? "code" : "codes"} shown
+            </span>
+            <span>
+              <span className="num">{withPt(fmtHours(visible.reduce((sum, op) => sum + op.flagHours, 0)))}</span>h flagged
+            </span>
+          </div>
+        )}
+      </Zone>
 
       {/* Modals */}
       <OpCodeFormModal
