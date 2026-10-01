@@ -2,16 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { setSplitDayAction } from "@/app/actions/settings";
-import { getRangeForPeriodKey, formatPeriodLabel, isoDate } from "@/lib/periods";
+import { getRangeForPeriodKey, formatPeriodLabel } from "@/lib/periods";
 import { actionErrorMessage } from "@/lib/action-error";
 
 interface Props {
   initialSplitDay: number;
   overrideCount: number;
+  /** ISO date from the server, in the tech's timezone. Never read the clock here: the server and the browser disagree on the date for hours every evening, and the preview below is rendered on both. */
+  today: string;
 }
 
-function buildPreview(splitDay: number) {
-  const today = isoDate();
+function buildPreview(splitDay: number, today: string) {
   const [y, m] = today.split("-");
   const key = `${y}-${m}`;
   return {
@@ -20,7 +21,7 @@ function buildPreview(splitDay: number) {
   };
 }
 
-export function SplitDayCard({ initialSplitDay, overrideCount }: Props) {
+export function SplitDayCard({ initialSplitDay, overrideCount, today }: Props) {
   const [saved, setSaved] = useState(false);
   const [inputVal, setInputVal] = useState(String(initialSplitDay));
   const [committed, setCommitted] = useState(initialSplitDay);
@@ -29,7 +30,7 @@ export function SplitDayCard({ initialSplitDay, overrideCount }: Props) {
 
   const parsed = parseInt(inputVal, 10);
   const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= 30;
-  const preview = valid ? buildPreview(parsed) : null;
+  const preview = valid ? buildPreview(parsed, today) : null;
   const dirty = valid && parsed !== committed;
 
   function handleSubmit(e: React.FormEvent) {
