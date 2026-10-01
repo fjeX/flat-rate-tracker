@@ -278,7 +278,7 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
           title="Theme and accent"
           description="Moved to Settings > Appearance."
         >
-          <Link href="/settings#appearance" className="btn btn-line">
+          <Link href="/settings?section=appearance" className="btn btn-line">
             Open Appearance
           </Link>
         </SettingRow>

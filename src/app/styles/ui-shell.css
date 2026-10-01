@@ -24,13 +24,21 @@ svg.ic-sm { width: 16px; height: 16px; }
 .logo:hover .logo-word b { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: var(--w-tag); }
 .logo:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
 
-/* ---------- topbar (phones) ---------- */
+/* ---------- topbar (phones) ----------
+   Sticky (Liem, 2026-09-30, after the phase 5 deploy): the directory button
+   has to be reachable from anywhere on a long page without scrolling back
+   to the top. The mock drew it static; this overrides the mock. Below the
+   directory dialog (z 40+) and the save bar/bottom bar (20/30). */
 .topbar {
+  position: sticky; top: 0; z-index: 25;
   display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
   padding: var(--s2) var(--gutter);
   border-bottom: var(--w-edge) solid var(--edge);
   background: var(--wall);
 }
+/* anchors and scrollIntoView land below the sticky bar, not under it */
+html { scroll-padding-top: 64px; }
+@media (min-width: 1024px) { html { scroll-padding-top: 0; } }
 .topbar-actions { display: flex; gap: var(--s1); }
 .iconbtn {
   position: relative;

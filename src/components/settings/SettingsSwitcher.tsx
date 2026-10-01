@@ -8,7 +8,15 @@ import { Zone } from "@/components/ui/Zone";
 // matches the HTML, then the real hash a frame later.
 function subscribeHash(cb: () => void) {
   window.addEventListener("hashchange", cb);
-  return () => window.removeEventListener("hashchange", cb);
+  window.addEventListener("popstate", cb);
+  // A client-side navigation commits the new URL after this render, and
+  // neither event fires for it, so re-read once the URL has settled.
+  const t = window.setTimeout(cb, 0);
+  return () => {
+    window.removeEventListener("hashchange", cb);
+    window.removeEventListener("popstate", cb);
+    window.clearTimeout(t);
+  };
 }
 const readHash = () => window.location.hash.replace(/^#/, "");
 const noHash = () => "";
@@ -31,9 +39,10 @@ export type SettingsSection = {
  * phone the list becomes a dropdown above the setting so it can be reached
  * without scrolling past what is on display.
  *
- * The hash is the state (`/settings#appearance` from the Account page lands
- * on Appearance), written with replaceState so the back button is not
- * peppered with settings clicks.
+ * `defaultId` is the server's answer (`/settings?section=appearance` from the
+ * Account page, read by the page on the server so the first HTML is already
+ * right); the hash is the in-page state after that, written with
+ * replaceState so the back button is not peppered with settings clicks.
  */
 export function SettingsSwitcher({
   sections,
@@ -42,8 +51,8 @@ export function SettingsSwitcher({
   sections: SettingsSection[];
   defaultId: string;
 }) {
-  // What the tech picked in this visit wins; otherwise the hash the page was
-  // opened with (the Account page links to #appearance); otherwise Pay Rates.
+  // What the tech picked in this visit wins; otherwise a hash the page was
+  // opened with; otherwise the server's defaultId (Pay Rates, or ?section=).
   const [picked, setPicked] = useState<string | null>(null);
   const hash = useSyncExternalStore(subscribeHash, readHash, noHash);
   const active =

@@ -18,7 +18,18 @@ import { AppearanceCard } from "@/components/settings/AppearanceCard";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSwitcher, type SettingsSection } from "@/components/settings/SettingsSwitcher";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  /** `?section=appearance` opens that setting. Read on the server so the first
+   *  HTML already shows it: a `#hash` alone is only known to the browser, and
+   *  on a client-side navigation from the Account page the Settings page
+   *  rendered before the URL carried the hash, so it opened on Pay Rates
+   *  (Liem, live, 2026-09-30). The hash still works as a fallback. */
+  searchParams: Promise<{ section?: string | string[] }>;
+}) {
+  const { section: rawSection } = await searchParams;
+  const requested = typeof rawSection === "string" ? rawSection : undefined;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const [settings, laborRates] = await Promise.all([
@@ -149,7 +160,10 @@ export default async function SettingsPage() {
           <p>Saved to your account as you change them.</p>
         </div>
       </div>
-      <SettingsSwitcher sections={sections} defaultId="pay-rates" />
+      <SettingsSwitcher
+        sections={sections}
+        defaultId={requested && sections.some((s) => s.id === requested) ? requested : "pay-rates"}
+      />
     </main>
   );
 }

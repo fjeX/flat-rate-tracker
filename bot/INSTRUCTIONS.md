@@ -396,7 +396,7 @@ fonts and corner radius only** — no layout, wording or positions moved:
     plate with an accent bar at its left, like the current page in the rail;
     `aria-current="true"`); tap another and it takes the display. On a phone
     the list is a **"Setting" dropdown** above the display (the ALL SETTINGS
-    zone is still there, below). **Pay Rates opens by default**; `/settings#appearance`
+    zone is still there, below). **Pay Rates opens by default**; `/settings?section=appearance` (the Account page's "Open Appearance" link; `#appearance` also works)
     (the Account page's link) opens Appearance. The list, in order: Pay
     Rates, Pay Period Goal, Pay Period Defaults, Reference hourly rate, Work
     Schedule & Days Off, Timezone, Contribute to True Time, Quick Add RO,
