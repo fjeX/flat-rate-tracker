@@ -288,7 +288,7 @@ export const STATUS_LABEL_SHORT: Record<TimerStatus, string> = {
   paused: "Paused",
 };
 
-/** Badge tones. `--info` was defined in globals.css and unused until now, which
+/** Badge tones. The old `info` tone was defined in globals.css and unused until now, which
  * is why the two hold reasons don't have to share a colour. */
 export const STATUS_TONE: Record<
   TimerStatus,

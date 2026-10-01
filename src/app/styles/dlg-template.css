@@ -46,7 +46,7 @@
   position: absolute; box-sizing: border-box;
   border: 2px solid var(--tagc);
   background: color-mix(in oklab, var(--tagc) 25%, transparent);
-  box-shadow: 0 0 0 1px var(--overlay-fg);
+  box-shadow: 0 0 0 var(--w-hair) var(--overlay-fg);
 }
 .tpl-ghost { border-style: dashed; pointer-events: none; }
 .tpl-box-label {
@@ -55,11 +55,11 @@
   background: var(--panel); color: var(--ink); border: var(--w-hair) solid var(--edge); border-radius: var(--r-sign);
   font-size: var(--fs-label); font-weight: 600; line-height: 1.2;
 }
-.tpl-box-label::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--tagc); }
+.tpl-box-label::before { content: ""; width: 3px; height: 12px; border-radius: var(--r-tag); background: var(--tagc); }
 
 .tpl-handle {
   position: absolute; width: 12px; height: 12px; box-sizing: border-box;
-  background: var(--panel); border: var(--w-edge) solid var(--edge); border-radius: 2px;
+  background: var(--panel); border: var(--w-edge) solid var(--edge); border-radius: var(--r-tag);
 }
 .tpl-nw { left: -6px; top: -6px; cursor: nw-resize; }
 .tpl-ne { right: -6px; top: -6px; cursor: ne-resize; }

@@ -162,7 +162,7 @@
 .badge-neutral { color: var(--ink); }
 .badge-good { color: var(--good); }
 .badge-bad { color: var(--bad); }
-/* warn: NOTE-style neutral by the phase-1 decision (--warn -> --ink-2); each
+/* warn: NOTE-style neutral by the phase-1 decision (amber retired, --ink-2); each
    page retags its own warnings later. */
 .badge-warn { color: var(--ink-2); }
 .badge-brand, .badge-info { color: var(--accent-text); }
@@ -210,8 +210,8 @@
 /* numeric column: header and figures share one right edge */
 .table-num, .table th.table-num, .table td.table-num, .tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table td.table-num { font-family: var(--font-num); font-size: var(--fs-num); font-weight: 600; letter-spacing: var(--track-num); }
-/* a cell that carries its own pill/tag keeps the pill's font */
-.table td.table-num .pill, .table td.table-num .badge { font-family: var(--font-ui); }
+/* a cell that carries its own tag keeps the tag's font */
+.table td.table-num .badge { font-family: var(--font-ui); }
 .table-dim { color: var(--ink-3); }
 
 /* total row: closes the ledger with a full-strength rule */

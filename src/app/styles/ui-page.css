@@ -51,7 +51,7 @@
 .fchip[aria-pressed="true"], .fchip[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .fchip[aria-pressed="true"]:hover, .fchip[aria-checked="true"]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 /* a category hue, as a tick only (never text, never a fill) */
-.fchip .hue { display: inline-block; width: 3px; height: 14px; border-radius: 2px; background: var(--tagc, var(--ink-3)); flex: none; }
+.fchip .hue { display: inline-block; width: 3px; height: 14px; border-radius: var(--r-tag); background: var(--tagc, var(--ink-3)); flex: none; }
 .fchip[aria-pressed="true"] .hue, .fchip[aria-checked="true"] .hue { background: var(--accent-ink); }
 .fchips { display: flex; flex-wrap: wrap; gap: var(--s2); }
 

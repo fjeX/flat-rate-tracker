@@ -129,8 +129,8 @@
 /* ---------- print ---------- */
 @media print {
   /* Whatever the app theme is, the page is white and the ink is black. */
-  html, body { background: #ffffff !important; color: #111111 !important; }
-  .dp-root { background: #ffffff; color: #111111; padding: 0; min-height: 0; }
+  html, body { background: var(--paper) !important; color: var(--paper-ink) !important; }
+  .dp-root { background: var(--paper); color: var(--paper-ink); padding: 0; min-height: 0; }
   .dp-toolbar { display: none; }
   .dp-sheet { max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; }
   .dp-scroll-hint { display: none; }

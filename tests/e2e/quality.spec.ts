@@ -32,7 +32,7 @@ for (const route of ROUTES) {
         if (document.body.scrollWidth > document.documentElement.clientWidth + 1) {
           bad.push(`body: ${document.body.scrollWidth} > ${document.documentElement.clientWidth}`);
         }
-        for (const el of document.querySelectorAll<HTMLElement>(".card, .card-inset, .step-card")) {
+        for (const el of document.querySelectorAll<HTMLElement>(".card, .card-inset, .zone")) {
           const cs = getComputedStyle(el);
           if (cs.overflowX !== "visible") continue; // scroll containers are fine
           if (el.scrollWidth > el.clientWidth + 2) {
@@ -143,7 +143,7 @@ for (const route of ROUTES) {
           }
           // inline text links inside prose are exempt (WCAG inline exception)
           if (el.tagName === "A" && cs.display === "inline") continue;
-          // account for invisible ::after tap-area expanders (.hit-expand pattern)
+          // account for invisible ::after tap-area expanders (stretched-pseudo pattern)
           let w = r.width;
           let h = r.height;
           const after = getComputedStyle(el, "::after");

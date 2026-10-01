@@ -53,7 +53,7 @@
    beside it (700px up) */
 .opl-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .opl-code { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
-.opl-tick { flex: none; width: 3px; height: 16px; border-radius: 2px; background: var(--tagc, var(--ink-3)); }
+.opl-tick { flex: none; width: 3px; height: 16px; border-radius: var(--r-tag); background: var(--tagc, var(--ink-3)); }
 .opl-code b { font-weight: 700; letter-spacing: 0.02em; font-size: var(--fs-control); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opl-desc { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; font-size: var(--fs-label); color: var(--ink-2); }
 .opl-desc > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

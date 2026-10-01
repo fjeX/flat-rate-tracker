@@ -82,7 +82,9 @@ both are worthless without genuine first-party entry.
 - **Numbers are the content.** Hours, money, RO numbers and timers are the
   substance of nearly every screen; they are always set in a monospace face with
   tabular figures so columns align and digits do not shift while a timer runs.
-- Dark theme is primary; a light theme exists and must stay in parity.
+- Four themes (dark, light, graphite, pitch) and five accent colours, chosen in
+  Settings > Appearance and saved to the tech's account. Dark with the blue accent
+  is the default; every theme and accent must stay in parity.
 - Derived values have real states. A value that cannot be calculated is not the
   same as a value that is absent — the difference must survive into the UI rather
   than collapsing into "no data".
@@ -96,8 +98,8 @@ both are worthless without genuine first-party entry.
   Errors state what happened and what to do next.
 - **Anti-reference:** generic SaaS dashboard energy. FRT should read as a tool
   built by someone who works on cars, not a template with a logo dropped in.
-- **Typography is a deliberate, logged decision** (2026-07-06): IBM Plex Sans for
-  UI, JetBrains Mono for data. Inter was rejected specifically as the most
+- **Typography is a deliberate, logged decision** (re-cut in the 2026-09 visual
+  overhaul): Titillium Web for UI, Azeret Mono for figures. Inter was rejected specifically as the most
   recognisable AI-default font tell. No third family.
 
 ## Evidence on Hand
@@ -126,11 +128,11 @@ both are worthless without genuine first-party entry.
 ## Accessibility & Inclusion
 
 - **WCAG AA is the floor and is now met on text colour**: body text ≥ 4.5:1,
-  large text and UI parts ≥ 3:1, verified against every background token in both
-  themes.
+  large text and UI parts ≥ 3:1, verified against every background token in all
+  four themes.
 - Touch targets ≥ 44px — the app is operated with gloved and greasy thumbs.
-- Colour never carries meaning alone; good/warn/bad always pair with text, icon,
-  or position.
+- Colour never carries meaning alone; good and bad always pair with text, icon,
+  or position. Green is good, warm red is bad; nothing else is a state colour.
 - All motion must respect `prefers-reduced-motion`.
 - Real semantic elements only: `<button>`, `<a href>`, `<label for>`. No
   clickable divs. Every input has a label; every meaningful icon has an

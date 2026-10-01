@@ -262,7 +262,7 @@ export function TimerPip({
     ...(expanded ? { width: size?.w ?? DEFAULT_W, height: size?.h ?? undefined } : {}),
   };
 
-  const borderCls = anyAccruing ? "border-[var(--good)]" : "border-[var(--warn)]";
+  const borderCls = anyAccruing ? "border-[var(--good)]" : "border-[var(--ink-2)]";
   const stopDrag = (e: React.PointerEvent) => e.stopPropagation();
 
   return (
@@ -272,10 +272,10 @@ export function TimerPip({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      className={`select-none touch-none cursor-grab active:cursor-grabbing rounded-[var(--radius)] border-2 ${borderCls} bg-[var(--bg-2)] shadow-[var(--shadow-pop)]`}
+      className={`select-none touch-none cursor-grab active:cursor-grabbing rounded-[var(--r-panel)] border-2 ${borderCls} bg-[var(--panel)] shadow-[var(--lift)]`}
     >
       {expanded ? (
-        <div className="relative flex h-full w-full flex-col rounded-[var(--radius)] p-4">
+        <div className="relative flex h-full w-full flex-col rounded-[var(--r-panel)] p-4">
           <div className="mb-3 flex items-start justify-between gap-2">
             <span className="pip-count">
               {slots.length} timer{slots.length === 1 ? "" : "s"}
@@ -284,7 +284,7 @@ export function TimerPip({
               type="button"
               onPointerDown={stopDrag}
               onClick={() => setExpanded(false)}
-              className="relative flex items-center gap-0.5 py-2.5 text-xs text-[var(--fg-3)] hover:text-[var(--fg-1)] after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
+              className="relative flex items-center gap-0.5 py-2.5 text-xs text-[var(--ink-3)] hover:text-[var(--ink-2)] after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
               aria-label="Minimize timers"
             >
               <ChevronDown className="h-4 w-4" />
@@ -327,7 +327,7 @@ export function TimerPip({
                         ? `Pause timer ${s.slot}`
                         : `Start working timer ${s.slot}`
                     }
-                    className="relative shrink-0 text-[var(--fg-2)] hover:text-[var(--fg-0)] after:absolute after:-inset-3 after:content-['']"
+                    className="relative shrink-0 text-[var(--ink-3)] hover:text-[var(--ink)] after:absolute after:-inset-3 after:content-['']"
                   >
                     {accruing ? (
                       <Pause className="h-4 w-4" />
@@ -355,7 +355,7 @@ export function TimerPip({
             onPointerDown={onResizeDown}
             onPointerMove={onResizeMove}
             onPointerUp={onResizeUp}
-            className="absolute -bottom-0.5 -right-0.5 flex h-11 w-11 cursor-nwse-resize touch-none items-end justify-end rounded-tl-[var(--radius-sm)] p-2 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+            className="absolute -bottom-0.5 -right-0.5 flex h-11 w-11 cursor-nwse-resize touch-none items-end justify-end rounded-tl-[var(--r-sign)] p-2 text-[var(--ink-3)] hover:text-[var(--ink-2)]"
           >
             <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
               <path
@@ -380,14 +380,14 @@ export function TimerPip({
                   lead.status === "working"
                     ? "bg-[var(--good)]"
                     : anyAccruing
-                      ? "bg-[var(--warn)]"
-                      : "bg-[var(--fg-3)]"
+                      ? "bg-[var(--ink-2)]"
+                      : "bg-[var(--ink-3)]"
                 }`}
               />
             </span>
             <RollingNumber
               value={formatElapsed(leadElapsed.work)}
-              className="text-base font-semibold text-[var(--fg-0)]"
+              className="text-base font-semibold text-[var(--ink)]"
             />
             {slots.length > 1 && (
               <Badge tone={STATUS_TONE[lead.status]}>+{slots.length - 1}</Badge>
@@ -397,18 +397,18 @@ export function TimerPip({
               onPointerDown={stopDrag}
               onClick={() => setExpanded(true)}
               aria-label="Expand timers"
-              className="relative text-[var(--fg-2)] hover:text-[var(--fg-1)] after:absolute after:-inset-3.5 after:content-['']"
+              className="relative text-[var(--ink-3)] hover:text-[var(--ink-2)] after:absolute after:-inset-3.5 after:content-['']"
             >
               <ChevronUp className="h-4 w-4" />
             </button>
           </div>
           {leadEntry ? (
-            <span className="mt-0.5 text-xs text-[var(--fg-3)]">
+            <span className="mt-0.5 text-xs text-[var(--ink-3)]">
               #{leadEntry.roNumber}
             </span>
           ) : (
             lead.entryId === null && (
-              <span className="mt-0.5 text-xs text-[var(--fg-3)]">No RO</span>
+              <span className="mt-0.5 text-xs text-[var(--ink-3)]">No RO</span>
             )
           )}
         </div>

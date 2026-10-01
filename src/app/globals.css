@@ -363,8 +363,7 @@
 }
 
 /* ---------- 7. CARRIED OVER FROM THE OLD SYSTEM ----------
-   Not in final.html. Kept so "no raw colour below this block" stays true
-   while the alias bridge runs. */
+   Not in final.html. Kept so "no raw colour below this block" stays true. */
 
 /* op-code category hues: a 3px tick only, never text, never a fill.
    Re-cut 2026-09-29 to the new palette: same eight hues as before, chroma
@@ -397,61 +396,6 @@
   --overlay-fg: #ffffff;
 }
 
-/* ---------- 8. ALIAS BRIDGE (phase 1 → retired by phase 6) ----------
-   Every old token name, pointed at the new name that replaces it, so one
-   deploy re-skins every route with zero component edits. Each later phase
-   deletes the lines whose last user it replaced. Do not add new users of
-   anything in this block: write the new name. */
-:root {
-  --bg-0: var(--wall-2);
-  --bg-1: var(--wall);
-  --bg-2: var(--panel);
-  --bg-3: var(--plate);
-  --bg-4: var(--head-tint);
-  --fg-0: var(--ink);
-  --fg-1: var(--ink-2);
-  --fg-2: var(--ink-3);
-  --fg-3: var(--ink-3);
-
-  /* --brand is text 88 times and a fill 16 times. As text it needs
-     --accent-text (dark blue --accent on the dark wall is ~3.3:1). The fills
-     that carry text (.btn-primary, error pages, avatar, duplicate dialog)
-     were switched to --accent / --accent-ink directly; the rest are bars and
-     dots, where --accent-text is the design's "accent as a mark". */
-  --brand: var(--accent-text);
-  --brand-strong: var(--accent-hover);
-  --brand-ink: var(--accent-ink);
-  --brand-soft: var(--accent-tint);
-  --brand-bg: var(--accent-tint);
-
-  /* --good, --good-bg, --bad, --bad-bg keep their names in the new system */
-  --good-strong: var(--good);
-
-  /* Decided 2026-09-29: today's amber warnings read as NOTE-style (neutral)
-     until each page retags its own in that page's phase. */
-  --warn: var(--ink-2);
-  --warn-bg: var(--note-bg);
-
-  --info: var(--accent-text);
-  --info-bg: var(--accent-tint);
-
-  /* --ring is used as a box-shadow value (incl. `inset var(--ring)`), so it
-     is written as a 3px spread rather than an outline shorthand. */
-  --ring: 0 0 0 var(--w-heavy) var(--focus);
-  --radius: var(--r-panel);
-  --radius-sm: var(--r-sign);
-  --shadow-card: none;
-  --shadow-pop: var(--lift);
-  /* The header, tab strip, bottom bar and save bar still carry --fg-* text,
-     which is dark on light. --trim is dark in BOTH themes, so pointing them
-     at it now would put dark text on a dark bar in light mode. They sit on
-     the wall until the shell is rebuilt with --trim-ink in phase 3. */
-  --bar-bg: var(--wall);
-  --tap-min: var(--tap);
-
-  --background: var(--wall-2);
-  --foreground: var(--ink);
-}
 /* final.html line 952: one flagged hour is longer on a desktop. It lives here,
    not in ui-figures.css, because the partials are imported above the token
    block and a :root rule there loses to the 52px base. */
@@ -463,8 +407,8 @@
 /* ======================= end of token block ======================= */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--wall-2);
+  --color-foreground: var(--ink);
   --font-sans: var(--font-ui);
   --font-mono: var(--font-num);
 }
@@ -474,8 +418,8 @@
 body {
   margin: 0;
   /* Calm Workspace: flat, quiet page ground — cards carry the depth */
-  background: var(--bg-0);
-  color: var(--fg-0);
+  background: var(--wall-2);
+  color: var(--ink);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
@@ -488,54 +432,11 @@ body {
 .mono { font-family: var(--font-num); }
 .tabular { font-variant-numeric: tabular-nums; }
 
-/* ── Layout ───────────────────────────────────────────── */
-.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
-
 .app-main { flex: 1; padding: 16px; max-width: 760px; margin: 0 auto; width: 100%; }
 
 @media (min-width: 900px) {
   .app-main { padding: 24px; max-width: 1080px; }
 }
-
-/* Calm Workspace: sentence-case section labels — quieter than the old
-   uppercase microcaps, sized to read without leaning in */
-.section-title {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--fg-2);
-  font-weight: 550;
-  margin: 0 0 8px 2px;
-  display: flex; justify-content: space-between; align-items: baseline;
-}
-.section-title .link { font-size: 12px; color: var(--brand); text-decoration: none; letter-spacing: normal; text-transform: none; font-weight: 500; }
-
-/* ── Period chip / pill ──────────────────────────────── */
-.pill {
-  font-size: 12px; padding: 4px 11px; border-radius: 999px;
-  background: var(--good-bg); color: var(--good); border: 1px solid transparent;
-  font-weight: 550;
-}
-.pill.warn { background: var(--warn-bg); color: var(--warn); }
-.pill.bad  { background: var(--bad-bg);  color: var(--bad); }
-.pill.brand { background: var(--brand-bg); color: var(--brand); }
-/* was referenced by the dashboard "Getting started" state but never defined */
-.pill.neutral { background: var(--bg-3); color: var(--fg-2); }
-
-/* ── Greeting ────────────────────────────────────────── */
-.greeting {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 16px;
-}
-.greeting .avatar {
-  width: 44px; height: 44px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--accent);
-  font-weight: 700; color: var(--accent-ink); font-size: 16px;
-  flex-shrink: 0;
-}
-.greeting h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-.greeting p  { margin: 2px 0 0; font-size: 14px; color: var(--fg-2); }
 
 /* ── Pace bar ────────────────────────────────────────── */
 .pace {
@@ -550,59 +451,6 @@ body {
 /* Period earnings row under the pace bar — its own dollars read, not a reuse of
    the forecast projection lines it sits beside. */
 
-/* ── Averages — Roomier Classic redesign ────────────── */
-
-.r-readout {
-  display: flex; align-items: center; padding: 6px 4px 0; min-height: 28px;
-}
-.r-readout-main {
-  display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums;
-  flex: 1; min-width: 0;
-}
-.r-readout-label {
-  color: var(--fg-2); font-size: 12px; font-weight: 600;
-  font-family: ui-monospace, Menlo, monospace;
-  text-transform: uppercase; letter-spacing: 0.08em;
-}
-.r-readout-value {
-  color: var(--fg-0); font-size: 34px; font-weight: 700; letter-spacing: -0.02em;
-}
-.r-readout-unit {
-  color: var(--fg-3); font-size: 11px; font-family: ui-monospace, Menlo, monospace;
-}
-
-.r-sub-toggle { display: inline-flex; gap: 6px; align-items: center; }
-
-.r-chart-wrap { width: 100%; }
-.r-chart { width: 100%; display: block; }
-.r-footer {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 4px 0;
-  border-top: 1px solid var(--line-soft); margin-top: 2px;
-}
-.r-footer-stat {
-  display: inline-flex; align-items: baseline; gap: 5px;
-  font-variant-numeric: tabular-nums;
-}
-.r-footer-num { color: var(--fg-0); font-weight: 700; font-size: 13px; }
-.r-footer-cap {
-  color: var(--fg-3); font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.08em; font-family: ui-monospace, Menlo, monospace;
-}
-.r-footer-dot {
-  width: 3px; height: 3px; border-radius: 999px; background: var(--line); flex-shrink: 0;
-}
-
-/* ── Log RO step cards ───────────────────────────────── */
-.step-card {
-  background: var(--bg-1);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  margin-bottom: 14px;
-}
-.step-card.collapsed { box-shadow: none; background: color-mix(in oklab, var(--bg-1) 72%, transparent); }
-
 /* RO# hero input */
 
 /* A real ring, not just the underline colour. Until 2026-09-29 the
@@ -615,17 +463,11 @@ body {
 .opc-search .input { padding-left: 38px; }
 .opc-search .icon {
   position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-  color: var(--fg-3);
+  color: var(--ink-3);
   pointer-events: none;
 }
 
 /* Expand the tappable area to ~44x44 without changing the visual 28x28 box. */
-
-/* Reusable invisible hit-area expander for small controls where real padding
-   would wreck visual density (same trick as .opc-line .remove::after). The host
-   element must not already be absolutely positioned. */
-.hit-expand { position: relative; }
-.hit-expand::after { content: ""; position: absolute; inset: -13px; }
 
 /* Search-clear X inside the op-code search field — invisible ::after expands the
    tap area to ~44px without moving the 14px glyph (mirrors .opc-line .remove). */
@@ -651,10 +493,10 @@ body {
 .opc-dropdown {
   position: absolute; z-index: 30;
   margin-top: 4px; width: 100%;
-  background: var(--bg-2);
+  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-pop);
+  border-radius: var(--r-sign);
+  box-shadow: var(--lift);
   overflow: hidden;
 }
 .opc-dropdown-item {
@@ -663,9 +505,9 @@ body {
   cursor: pointer;
   transition: background 120ms;
   border: none; background: transparent; width: 100%; text-align: left;
-  color: var(--fg-0);
+  color: var(--ink);
 }
-.opc-dropdown-item:hover { background: var(--bg-3); }
+.opc-dropdown-item:hover { background: var(--plate); }
 
 /* Scan banner */
 
@@ -707,13 +549,6 @@ body {
 /* — Pace bar fills from empty on load — same [data-animated] gate as above,
    (the [data-animated] gate is set by the page that renders .pace). — */
 
-/* — Chart bars rise from their baseline — */
-.r-chart rect {
-  transform-box: fill-box;
-  transform-origin: bottom;
-  animation: bar-rise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
 /* — Tactile press feedback on interactive elements (touch-friendly) — */
 .opc-dropdown-item{
   transition: transform 90ms ease, background 120ms, border-color 120ms, color 120ms, filter 120ms;
@@ -728,7 +563,7 @@ body {
 .opc-dropdown-item:focus-visible,
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 
@@ -760,23 +595,6 @@ a:focus-visible {
   justify-content: center;
 }
 
-/* — Pace ring (SVG gauge, single point-in-time read) — */
-.pace-ring { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.pace-ring-center {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center;
-}
-
-/* ── Utilities ───────────────────────────────────────── */
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
 a { color: inherit; }
 
 /* Op code library: page-op-codes.css (phase 5). */
@@ -803,22 +621,18 @@ a { color: inherit; }
 
 /* ── Touch-target floor (Phase 3 quality gate) ──────────
    Compact desktop controls grow to the 44px floor below 900px. */
-/* focus ring for bare/transparent text inputs that opt out of .input —
-   :focus (not :focus-visible) on purpose: text-entry controls always ring */
-.focus-ring:focus { outline: none; box-shadow: var(--ring); }
-
 @media (max-width: 899px) {
   
   /* Every .link, not just the ones in a .section-title. Scoping this to
      .section-title left the same 12px text link failing the floor anywhere
      else it was used (dashboard RecoveredCard, InsightsView,
      DisputeOutcomeCard) — the class is the control, its container isn't. */
-  .link { display: inline-flex; align-items: center; min-height: var(--tap-min); }
+  .link { display: inline-flex; align-items: center; min-height: var(--tap); }
   /* Footer links are already 44 tall; it's the WIDTH that falls short —
      "FAQ" renders 25px. Real min-width rather than a .hit-expand ::after,
      because the footer's 20px gap is narrower than the expander's 26px and
      adjacent links would swallow each other's taps. */
-  .footer-link { min-width: var(--tap-min); justify-content: center; }
+  .footer-link { min-width: var(--tap); justify-content: center; }
   /* Pay Period redesign controls: both set a desktop-density min-height
      (32px / 30px) and neither had a mobile floor to grow into.
      Qualified by tag on purpose — both are defined LOWER in this file than
@@ -851,22 +665,22 @@ a { color: inherit; }
 .pip-rows { display: flex; flex-direction: column; gap: 6px; }
 .pip-row {
   display: flex; align-items: center; gap: 8px;
-  padding: 7px 8px; border-radius: var(--radius-sm);
-  background: var(--bg-2); border: 1px solid var(--line);
+  padding: 7px 8px; border-radius: var(--r-sign);
+  background: var(--panel); border: 1px solid var(--line);
 }
 .pip-row.active { border-color: color-mix(in oklab, var(--good) 30%, transparent); }
 .pip-row .ro {
   font-family: var(--font-num);
-  font-size: 12px; color: var(--brand);
+  font-size: var(--fs-min); color: var(--accent-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
 }
 .pip-row .time {
   margin-left: auto;
   font-family: var(--font-num);
-  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-label); font-weight: 700; font-variant-numeric: tabular-nums;
 }
-.pip-row .why { font-size: 11px; color: var(--fg-3); }
-.pip-count { font-size: 11px; color: var(--fg-3); }
+.pip-row .why { font-size: 11px; color: var(--ink-3); }
+.pip-count { font-size: 11px; color: var(--ink-3); }
 
 /* ══════════════════════════════════════════════════════════════════
    Pay Period page — mode-driven layout
@@ -907,7 +721,7 @@ a { color: inherit; }
 
 .info-bubble {
   display: inline-flex; align-items: center; justify-content: center;
-  width: var(--tap-min); height: var(--tap-min);
+  width: var(--tap); height: var(--tap);
   flex: none;
   margin-right: -6px;           /* optical: pull back to the card's padding edge */
   border: none;
@@ -929,16 +743,16 @@ a { color: inherit; }
 /* Long-form explanation inside the ⓘ modal. Scoped so these element selectors
    can't leak into other modals. */
 .info-bubble-body {
-  font-size: 14px; line-height: 1.6; color: var(--fg-2);
+  font-size: 14px; line-height: 1.6; color: var(--ink-3);
   display: flex; flex-direction: column; gap: 12px;
 }
 .info-bubble-body h3 {
-  font-size: 13px; font-weight: 650; color: var(--fg-1);
+  font-size: 13px; font-weight: 650; color: var(--ink-2);
   margin: 4px 0 -6px;
 }
 .info-bubble-body p { margin: 0; }
-.info-bubble-body strong { color: var(--fg-1); font-weight: 620; }
-.info-bubble-body a { color: var(--brand); text-decoration: underline; }
+.info-bubble-body strong { color: var(--ink-2); font-weight: 620; }
+.info-bubble-body a { color: var(--accent-text); text-decoration: underline; }
 
 /* ── Reconciliation sort control ──────────────────────────────────
    Most shops hand out a printed sheet in RO-number order, so that's the

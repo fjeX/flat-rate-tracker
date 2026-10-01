@@ -52,6 +52,6 @@ export function tagHueVar(
   tag: string | undefined,
   overrides?: Record<string, number>,
 ): string {
-  if (!tag) return "var(--bg-3)";
+  if (!tag) return "var(--plate)";
   return `var(--tag-hue-${tagHueSlot(tag, overrides)})`;
 }

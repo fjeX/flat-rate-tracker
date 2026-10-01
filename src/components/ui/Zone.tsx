@@ -2,12 +2,14 @@ import Link from "next/link";
 import { useId, type ElementType, type ReactNode } from "react";
 
 /**
- * A zone (mock `.zone`): a bounded, named region of the WALL. Heavy rule on
- * top, the name hanging from it as a tab, an optional link or count on the
- * right. No fill and no side borders: the zone holds its own panels.
+ * A zone (`.zone`, ui-surfaces.css): a named section panel, filled one step
+ * off the wall (--zone-fill), with a plain label heading and an optional link
+ * or count on the right. Full-width band on phones, bounded panel wider. The
+ * mock drew it as an open region with a heavy top rule; the fill and the plain
+ * heading replaced that on 2026-09-30 (see the CSS comment).
  *
- * Not `Card` on purpose. Card is a filled panel (66 legacy `.card` uses need
- * containment); Zone is the open region the mock draws. Both share the
+ * Not `Card` on purpose. Card is the heavy-top-rule panel that sits inside a
+ * zone (66 legacy `.card` uses need containment); Zone groups. Both share the
  * `.zone-name` tab.
  *
  * Renders a `<section>` labelled by its name.

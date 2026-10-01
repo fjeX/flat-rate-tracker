@@ -97,14 +97,21 @@ So budget deliberately:
   for a report written from partial notes instead of a completed section.
 - **Two tiers when you are behind, and every section is in one of them.**
   Load-bearing — the money paths and the newest code, must run: §1, §1b, §2,
-  §2b, §2d, §3, §3z–§5, §6, §7, §7b, §7c, §7e, §8, §8h, §8i, §8k, §8l, plus §10
-  whenever `bot/FOCUS.md` exists (Liem asked for that one by hand). §2d is
+  §2b, §2d, §3, §3z–§5, §6, §7, §7b, §7c, §7e, §8, §8g, §8h, §8i, §8k, §8l,
+  §8m, plus §10 whenever `bot/FOCUS.md` exists (Liem asked for that one by
+  hand). §2d is
   listed load-bearing rather than regression-net on purpose: it fires
   automatically as a side effect of §2's already-mandatory work (any heavy line
   you save triggers it), so dropping it for time saves nothing — there is no
-  separate setup to skip.
+  separate setup to skip. **§8g is load-bearing on purpose (promoted
+  2026-10-01):** it takes about 3 minutes and it is the ONLY check in the run
+  that catches deploy drift (the export's `version` against the repo's
+  `CURRENT_BACKUP_VERSION`), so nothing else covers for it when it is dropped.
+  §3z's stored-vs-displayed check does NOT need the export — the "Did I get
+  paid?" paid-hours input shows the stored value directly — so §3z never
+  depends on §8g having run.
   Regression-net — drop these first, recording each as `SKIPPED — time`: §1c,
-  §2a, §2c, §7d, §8b, §8c, §8d, §8e, §8f, §8g, §8j, §9. The regression-net tier
+  §2a, §2c, §7d, §8b, §8c, §8d, §8e, §8f, §8j, §9. The regression-net tier
   watches surfaces that shipped working; dropping one deliberately is cheap, a
   timeout is not. There is no third pile: if a section is not named above,
   treat it as load-bearing and say so in the report.
@@ -138,424 +145,427 @@ Never write the password into the report, screenshots descriptions, or anywhere 
    **RECURRING (also seen YYYY-MM-DD)** instead of being reported as new.
 3. If a previously-broken thing now works, report it under **Fixed since last run**.
 
-## Heads-up: the app is being re-skinned (2026-09-29 onward)
+## How the app looks and is navigated (visual overhaul shipped 2026-09-30)
 
-A new visual design is rolling out in phases. Phase 1 changed **colours,
-fonts and corner radius only** — no layout, wording or positions moved:
-- Fonts are now **Titillium Web** (text) and **Azeret Mono** (numbers). Wide,
-  spaced-out figures like `0 . 0` are the new number font, not a bug.
-- Palette is green-grey (dark default) / grey-white (light). The accent is
-  **blue**, not orange. Cards have no drop shadow and 6px corners.
-- **Everything this file calls "amber" is now neutral grey text on a dark or
-  pale grey field** (e.g. the amber `unpaid rework` pill, the amber "empty?"
-  schedule days, the amber efficiency tier, the "Unpaid rework · N lines"
-  row). Check the element is present and says the right thing; do not report
-  it for not being amber. Green = good and red = bad are unchanged.
-- Phase 2 restyled the shared controls. Nothing moved and no wording changed,
-  but these look different:
-  - **Every on/off switch** is now a labelled `OFF | ON` block (about 92px
-    wide) instead of a small sliding pill. The lit side is the current state.
-    Still `role="switch"` with the same accessible name, so the Quick Add RO,
-    time-of-day, True Time sharing, "Show all lines" and "Open ticket"
-    switches are found the same way.
-  - **Buttons** are square-cornered signs with a 2px outline. The main action
-    is a solid accent fill. **Disabled buttons have a dashed outline**
-    instead of looking faded.
-  - **Status pills** (period status, dispute status, `unpaid rework`, …) are
-    now **outlined word tags with no fill**. "Pill" in this file means that
-    tag.
-  - The **date and time "pills"** on Log RO and Quick Add are now full-size
-    input fields, and they still open the picker on tap.
-  - **Cards** have a thick rule along the top. **Dialogs** have a grey title
-    bar with an ✕ close button.
-- Phase 3 rebuilt the **navigation** and moved the **theme setting**. Pages
-  and features are unchanged; how you reach some of them moved:
-  - **Desktop (≥1024px):** the row of top tabs is gone. A **side rail** on the
-    left lists every page (Dashboard, Log RO, History, Timer, Pay Period,
-    Insights, Schedule, Op Codes, Settings); the current page has a filled
-    circle marker. **Account** and **Sign out** sit at the bottom of the rail.
-  - **Phone:** the top bar is the logo, a **Pay Period** icon and a **☰
-    Directory** button. The Insights / Settings / Account icons and the
-    "Sign out" button that used to be in the header are **inside the
-    Directory** now (a sheet that slides up, with an ✕ to close). The bottom
-    bar is still Dashboard · Log RO · Timer · History · Op Codes; the current
-    page is marked with an accent bar.
-  - **Theme moved from Account to Settings.** /account no longer has the
-    "Color Theme" Dark/Light buttons; it has a "Theme and accent" row with an
-    **Open Appearance** button. **Settings > Appearance** (the 11th entry in
-    the All-settings list on /settings) has four themes (Light, Dark, Graphite, Pitch) and five accent
-    colours (Blue, Orange, Teal, Red, Ink), a preview row, and a **Saved**
-    tag after each change. The choice is saved to the account.
-    **Leave the bot account on Dark + Blue.** If you change it to test, set it
-    back before you finish, or the next run's screenshots will be in the
-    wrong colours.
-  - The Log RO **save bar** is a slim 54px strip sitting directly on top of
-    the bottom bar on phones.
-  - Guests: the same Directory, with a compact Appearance section at the
-    bottom (saved to that browser only).
-- Phase 4 rebuilt **Dashboard, Log RO, Quick Add and Pay Period** (same
-  features, re-arranged). What this file calls a *card* on these pages is now a
-  **zone**: a rounded panel one shade lighter than the page, headed by its
-  name in small capitals (e.g. "PAY PERIOD PACE", "BEFORE YOU START"); on
-  phones it runs edge to edge. Warnings are **tagged fields**: a word tag (NOTE / COST / FIX /
-  SAVED) on a full-width strip; FIX and COST are red, SAVED green, NOTE grey.
-  - **Dashboard:** greeting → page head (avatar, date, "N ROs logged…"; the
-    pace status is a tag at the right: **On track / Near goal / Behind / Getting
-    started**; "Near goal" used to read "Close"). **Today** = headline panel (TODAY ·
-    FLAG and pace/efficiency) + the **Clocked** field (accessible name
-    "Clocked hours today") + a separate **Quick Add RO** button: tapping the
-    flag figure no longer opens Quick Add. **Pay Period Pace** = a zone with a
-    track (the "Today" label above it, the "Goal N" label below its right end,
-    so the two never overlap; no ring) and a "Pay Period" link. The This
-    Week / Pay Period / This Month **tiles are now rows** of a **Flagged to
-    date** table (Span / Flagged / Efficiency; the cell says "53%", not "53%
-    efficiency"), with **Period earnings** under it. Open tickets and **Empty
-    days** are zones under the pace zone. Streak, career and snapshots share
-    one zone ("Best n" is a tag; no flame/snowflake icons). **Recent ROs** are
-    RO tags with duration bars: the **RO number is the button** ("RO 12345"),
-    not the whole row. Flagged Hours chart: range and measure are **button
-    groups with `aria-pressed`**, not tabs with `aria-selected`; the bars are
-    HTML, not SVG; today's bar is the accent colour.
-  - **Log RO:** visible title "New repair order". Date, Time, the open-ticket
-    switch and Scan sit in **Before you start**; the numbered steps sit in
-    **Repair order**: "Enter the RO number", "Add the op codes", "Add the
-    vehicle", "Write notes". Op codes: search, then chips, then lines (chips
-    used to be below the lines); "Total flag hours" → **Flagged total**.
-    Save bar: `0.4h · N lines` over "RO #123 · vehicle". Save RO / Save & New
-    / Cancel labels, all `aria-label`s and ids (`#ro-number`, `#opc-search`,
-    `#quick-add-ro-number`, `#ro-save-error`) are unchanged.
-    - **Op-code chips are toggles** (Log RO and Quick Add). A tapped chip stays
-      on screen and turns **pressed**: accent fill plus a tick, `aria-pressed=
-      "true"` (unpressed chips say `"false"`). **Tap it again and its line is
-      removed.** A chip no longer disappears after you use it. If a code is on
-      two lines, tapping removes the last one and the chip stays pressed until
-      the final line is gone.
-    - **RO numbers are digits only** (Log RO `#ro-number`, Quick Add
-      `#quick-add-ro-number`, and the server). Type a letter or dash and a
-      **FIX** field appears right under the RO box: "RO numbers are digits only.
-      Take out the letters, then save." The field gets `aria-invalid="true"`.
-      **Save RO and Save & New (and Quick Add's Save RO) are disabled until the
-      RO is non-empty and digits-only.** The save bar / footer text reads
-      **"Fill in RO # to save"** when the RO is empty, **"Fix the RO # to save"**
-      when it has a non-digit, and the `0.4h · N lines` summary otherwise. A
-      disabled Save with a bad RO is correct, not a bug; do not try to force it.
-      Test it by typing, never by pressing a disabled Save.
-    - The **Flagged total** row shows `0.0h` from the start, even with no lines.
-  - **Quick Add:** title "Quick Add RO" (still "Quick Add" on the Spiff tab),
-    a big `#` in the RO field, errors as a FIX field right under it, chips
-    before the search, "Total" → **Flagged total**, a new **Open the full
-    form** link, and a footer bar with the status + Cancel + Save RO.
-  - **Pay Period:** the H1 is now "Pay period"; the **period label is a menu
-    button** ("Pay period X, choose another") between the ‹ › arrows, and the
-    status is a tag beside the H1 ("Current pay period" is green). Totals
-    zone: headline panel, then Earnings and Flag hrs rows, then a **spec row**
-    (ROs · Clocked hrs · Efficiency · Upsold) where the four tiles were. **Check
-    the pay** zone holds "What did the work cost me?" and "Did I get paid?" as
-    folds (discrepancy, reconciliation and dispute outcome nest inside the
-    second). Spiffs sit in a **Reference** zone, button **Add spiff / bonus**
-    below the list. RO list: tag rows with duration bars, a "Total, N shown"
-    row, a "Period total, N ROs" row, and "Show all N ROs · M hidden".
-    Custom-dates dialog: Cancel / Save in a bottom bar. Dispute pack: "Back to
-    pay period" with a chevron.
-- Phase 5 rebuilds the remaining pages one at a time, in the same language.
-  - **History:** the H1 is "History" with "N ROs · X.Xh in this range" under
-    it. The **range** (Today / Week / Period / Month / All) and the **sort**
-    (Date / Hours / RO #) are **button groups with `aria-pressed`**
-    (`role="group"` named "Range" and "Sort by"); the "Sort By:" chip row is
-    gone, and the pressed sort button carries the ↓/↑ arrow. Search is a
-    full-size field (placeholder "Search RO#, vehicle, or notes") with an ✕
-    clear button. **Flagged hours** is a zone with the dashboard-style HTML
-    chart (no SVG). **Repair orders** is a zone of compact RO tags **grouped
-    under day headings** ("Yesterday", "Tue, Mar 10", each with "N ROs ·
-    X.Xh"); Month and All group by month; sorting by Hours or RO # drops the
-    headings and puts the date on each tag. The **RO number is the button**
-    that opens the detail dialog, as on the dashboard. On desktop the chart
-    sits to the left and **stays on screen while the list scrolls** — that is
-    deliberate. Open tickets carry an **Open** badge on their tag. "Load more"
-    is a plain outlined button under the list.
-  - **Timer:** the H1 is "Timers" with "N of 3 slots in use" under it. **All
-    three slots are always drawn**: a running timer is a zone headed "TIMER
-    1" with its status as a tag at the right (Currently working / Hold for
-    parts / Hold for approval / Paused); a free slot is a dashed zone headed
-    "TIMER 3" with "Free" at the right, "Nothing on this lift." and a **Start
-    a timer** button — that button IS the add button (there is no separate
-    "Add another timer" control, and with 3 running there is simply no free
-    slot to tap). Inside a running timer: the RO number (a button that opens
-    the detail dialog) and date, the vehicle, the big worked-time clock with
-    "worked" (or "worked · not counting while …") under it and a thin bar that
-    grows one block per worked hour, any "Waiting on parts 3m" lines, a
-    **Line** row (the op-code chip plus a Change button, or a blue **Pick a
-    line** button while no line is set), a **NEXT** field that names the one
-    thing to do ("Pick the line these hours land on. Save unlocks after
-    that." / "Counting. Save when the job is done…") and disappears once time
-    is banked on a bound line, the 4-button status row (`role="group"` "Timer
-    status", `aria-pressed`; Working is green when pressed, the others
-    accent), then Save / Reset / Clear (Save is dashed-disabled until there is
-    time on a bound line). From 700px wide the slots sit side by side. The
-    empty state is a zone with "Start a timer" and a three-step line under it
-    (Start · Pick the line · Save).
-  - **Op Codes:** the H1 is "Op codes" with "Your library: N codes, X.Xh on
-    the books. Drag to reorder." under it and an **Add a code** button in the
-    page head (was "Add"). Search is a full-size field (placeholder "Search
-    code, description, or tag") with an ✕ clear button. **Sort** is a button
-    group with `aria-pressed` (My order / Code / Hours / Added; the pressed
-    one carries ↓/↑, My order has none; each button's accessible name is
-    "Sort by <field>, ascending/descending" while its visible text is the
-    field + arrow) — the "Sort By:" chip row is gone.
-    **Tags** are outlined chips that toggle (`aria-pressed`), each with a
-    3px colour tick at its left instead of the round dot; a pressed chip is
-    the accent fill; a quiet **Clear** button appears once any is pressed.
-    The list is a **Library** zone: a header line "CODE · DESCRIPTION" /
-    "FLAG", then one ruled row per code — grip, the colour tick, the code in
-    bold, the description (notes in italics after " · ", a "N subs" tag),
-    the flag hours as a figure with a small "h", and the pencil / trash
-    buttons (hover-only where there is a mouse, always visible on touch).
-    On phones the description sits under the code. The footing reads
-    "N codes shown" and "X.Xh flagged"; the zone's top right says "N of M
-    shown" only while a search or tag filter is on. §8d's "tag filter chips
-    show a small color dot" is now that tick; the row tick is unchanged.
-  - **Insights:** same sections, same sentences (§7e still applies word for
-    word), in the new language. The order is the same except that from 1024px
-    the all-time half is a two-column grid whose reading order is: What's
-    costing me → Where my time goes → Best days → What's winning (Liem OK'd
-    the layout). The page now opens on a
-    **headline panel** (the accent-coloured block, like the dashboard's
-    Today): four figures — UNPAID THIS WINDOW (red when non-zero, "0h" with
-    "every timed job came in at book" when clean), STRONGEST DAY, LAST PERIOD
-    (the last *finished* period's efficiency, "up from / down from" the one
-    before) and SOLD (share of flagged hours upsold) — with the old opening
-    sentence ("Nothing unpaid in this window." / "Xh you weren't paid for.")
-    as the note under them. Those four figures are derived from the same
-    numbers the sections below print; **if the panel and a section disagree,
-    that is a bug.** Each zone's head also carries a small figure at the right
-    (What's costing you: the total; Best days: the best day; Trend: the last
-    finished period with ↑/↓; What you sold: hours; Claims: recovered). On
-    desktop the shorter zones sit **two across**. The **window chips** are a
-    button group labelled WINDOW with `aria-pressed` (Week / Period / Month /
-    All). Every section is a **zone** with its name in small capitals; the
-    "All time — Ignores the window above" divider is a heavy rule with the
-    heading on it. **What's costing you**: numbered rows with the hours as a
-    figure and an ink bar (red when the row is rework or unpaid clock); no
-    amber anywhere on the page — a "warn"-tier overrun draws in ink. **Where
-    your time goes**: the desktop table is unchanged (sortable headers,
-    `↕ ↑ ↓`); the ratio is an outlined tag (red = bad tier, green = good,
-    plain = in between), `unpaid rework` is a **red** tag (it was amber), and
-    "never timed" is plain dim text; on phones the sort is a three-button
-    group (Worst first / Most used / Code). **Best days**: a By day / By
-    efficiency button group and seven plate cells, the best day outlined
-    green. **Trend**: the bars fill in ink with the current period in the
-    accent, the in-progress bar dimmed, par as a dashed line labelled 100%,
-    labels under the plot with "In progress" on its own line. **What makes a
-    big day** and **What a big day actually tracks with** are now two zones
-    (they were one card with a sub-card). **What you sold**: per-period rows
-    with green bars, then a MOST UPSOLD list. **Claims and recovery**: four
-    labelled figures in a spec row.
-  - **Schedule:** the H1 is "Schedule" with the two-sentence lede; the month
-    picker (‹ › outlined buttons, the month name between them, a quiet
-    **Today** button when you are off the current month) sits at the top
-    right of the page head. The calendar is a **zone named after the month**
-    ("MARCH 2026") with "Nh scheduled" at its right; the legend sits above
-    the grid. **The "amber dot" is gone**: a day that needs a decision carries
-    a small **accent (blue) dot** in its top-right corner, and the legend
-    names it "Needs a decision". Scheduled days are plate cells with the
-    hours under the number (dim = scheduled, bright = logged), today's number
-    is accent, the selected day has an accent outline, a one-day override
-    still shows `*`. When unsettled days exist, a **FIX** status field above
-    the calendar reads "N days need a decision — scheduled, nothing logged."
-    with the ‹ N of M › stepper at its right (was the "unsettled" strip). The
-    day panel is an outlined panel inside the zone (still sticky above the
-    thumb bar on phones): date, a status tag (red "Needs a decision", green
-    "Nh logged", plain otherwise), the **Actual hours worked** field with a
-    blue Save, then Day off / Worked, zero flag / Undo zero day / Change
-    shift as outlined buttons; the shift editor opens under a rule with Save
-    shift (blue) and Reset to pattern. **Weekly pattern** is a zone with
-    "Nh/week" at its right; the Every week / 2-week rotation choice is a
-    button group with `aria-pressed`; the day rows are ruled with a checkbox,
-    the hrs / starts / lunch fields and "out ≈ HH:MM"; the version list is
-    ruled rows with a quiet Remove. §8c's wording ("amber 'empty?' days",
-    "the legend under the grid") means this accent-marked day and the legend
-    above the grid.
-  - **Snapshots:** the H1 is "Snapshots" (was the "Portfolio snapshots"
-    section title) with the next-unlock sentence under it and a quiet
-    **Dashboard** button at the right. The sheets sit in a **Work records**
-    zone ("N on record" at its right), two across on desktop, newest first.
-    **The sheet itself changed everywhere it appears** (this page and the
-    dashboard's snapshot row): a plain panel with a heavy top rule, the
-    eyebrow "FLAT RATE TRACKER · WORK RECORD", the title "Snapshot #N", a
-    green **ON RECORD** tag (was the tilted stamp), the four figures as a
-    spec row (ROs documented / Hours flagged / Avg vs book / Photos on
-    file), the Top operations / Overall efficiency / Range lines, and a
-    label-style footer "GENERATED <date> · RO #<threshold> LINE". Every
-    figure and every sentence is unchanged; §8b's checks still apply word
-    for word.
-  - **Settings and Account:** /settings shows **one setting at a time**. On
-    desktop: the setting on display sits at the left inside a zone named for
-    its group (TRACKING / LOGGING / APPEARANCE / DATA), and an **ALL
-    SETTINGS** zone at the right lists every setting as a row button with a
-    chevron, in a fixed order — the one on display is **highlighted** (dark
-    plate with an accent bar at its left, like the current page in the rail;
-    `aria-current="true"`); tap another and it takes the display. On a phone
-    the list is a **"Setting" dropdown** above the display (the ALL SETTINGS
-    zone is still there, below). **Pay Rates opens by default**; `/settings?section=appearance` (the Account page's "Open Appearance" link; `#appearance` also works)
-    (the Account page's link) opens Appearance. The list, in order: Pay
-    Rates, Pay Period Goal, Pay Period Defaults, Reference hourly rate, Work
-    Schedule & Days Off, Timezone, Contribute to True Time, Quick Add RO,
-    Time of day on each RO, RO Scan Templates, Appearance, Backup (was
-    titled "Data"), Danger Zone. **So to reach any setting named in this
-    file, pick it from that list or dropdown first** — nothing is on screen
-    until it is picked. Each setting is a row: its name and sentence on the
-    left, its control on the right (under it on phones): a switch, a field
-    plus a blue Save, or a button. Every heading, label, id, switch name and sentence is unchanged
-    (§1b, §1c, §7d, §8k, the Data/Import checks all apply as written); the
-    only wording changes are the Data row's title ("Backup") and the "Default
-    type for new lines" select, which is its own row now. Danger Zone has a
-    red rule above it and a red-outlined **Clear all data** button. /account:
-    one PROFILE zone with the rows Your name (First/Last Name), Email Address
-    ("Current: …" then New Email Address) and Password (Current / New /
-    Confirm — the Current Password field is still there and still required),
-    then a PREFERENCES zone with **Week Starts On** as a Sunday / Monday
-    button group (`aria-pressed`) and a "Theme and accent — Moved to
-    Settings > Appearance" row with an **Open Appearance** button (this
-    replaces the one-line link).
-  - **Sign in, Sign up, Forgot password, Reset password** (the signed-out
-    pages): the tower mark and FLAT RATE / TRACKER wordmark replace the logo
-    picture at the top (it links to `/`), and each page is **one panel whose
-    name tab is the page's H1** (SIGN IN / CREATE ACCOUNT / RESET YOUR
-    PASSWORD / SET A NEW PASSWORD / CHECK YOUR EMAIL). Fields have uppercase
-    labels (Email, Password, New password, Confirm new password) and every
-    label still resolves with `getByLabel`. Messages are **tagged status
-    fields**, not coloured boxes: an error is a red **FIX** field
-    (`role="alert"`), "Password updated. Sign in with your new password." is a
-    green **SAVED** field, and the "check your email" / "a reset link is on
-    its way" copy is a **NOTE** field. §8i's wording is unchanged: "Forgot
-    your password?" is still a link under the Sign in button and above the
-    OR rule, "Send reset link" / "Set new password" / "Request a new link"
-    are the button names, and "This page needs a reset link to work." /
-    "That link has expired or has already been used." are the two reset
-    sentences. Continue with Google is an outlined button with Google's mark;
-    Try as Guest sits under a hairline at the foot of Sign in.
-  - **Dialog bodies, wave 1 (RO detail, op code form, spiff form, import
-    confirm).** The dialog *frame* was restyled in phase 2; these are the
-    insides. Common to all of them: field labels are uppercase, errors are
-    red **FIX** status fields (`role="alert"`), and the action buttons moved
-    out of the body into a **sticky footer bar** at the bottom of the dialog
-    (Cancel at the left of the primary; a destructive button sits at the far
-    left). Every id, aria-label, button text and sentence named elsewhere in
-    this file is unchanged unless listed here.
-    - **RO detail.** The date line and the "Logged …" line are still two
-      separate lines (§8k), vehicle under them. The op-code lines are a
-      **ruled table** with Op code / Flag / Actual headers on desktop; on a
-      phone each line is a stacked row (code chip + Upsell chip, description,
-      then "FLAG 1.0 · ACTUAL [field] · trash"). The Actual field is still
-      `opc-hours-input` with the same `aria-label` (§2's property read). The
-      Upsell chip and the remove button keep their accessible names. The
-      totals row that read "Total" now reads **Flagged total** (matching Log
-      RO and Quick Add); "Unpaid rework · N lines" and "Earnings" follow it.
-      "Add op code" is a full-width outlined button that opens the shared
-      search well with pick rows. Footer: **Delete** far left, then **Close**,
-      then **Edit RO** (on an open ticket: Edit ticket + the primary Close
-      ticket). The smoke path (`.history-ro-row` → button "Delete") and every
-      `window.confirm` text are unchanged. Timeline, notes, photos and linked
-      spiffs are wells with ruled rows; "Close photo" / "Delete photo" keep
-      their names.
-    - **Op code form ("New op code" / "Edit op code").** `opc-form-code` and
-      `opc-form-error` unchanged; "Change color for {tag}", "Remove {tag}",
-      "Color N", "Auto (current)", "Sub op code" unchanged (§8d). **"This op
-      code has sub op codes" is now an OFF | ON switch (`role="switch"`), not
-      a checkbox**; same name. The swatch row is a `role="group"` named
-      "Color for {tag}". Sub codes are a ruled table in a well with an **Add
-      sub op code** outlined button under it. Footer: Delete (editing only)
-      far left, Cancel, Save / Save changes.
-    - **Spiff / bonus form** (Quick Add's Spiff tab and the Spiffs add/edit
-      dialogs, §6 field parity still holds). Amount has a `$` prefix,
-      Category is a row of chips that keep `role="radio"` / `aria-checked`
-      inside the "Category" radiogroup, the linked-RO picker is a pick list
-      in a well. Ids `bonus-*`, "Unlink RO", "Close RO picker", "Attach to an
-      RO", Save spiff / Save changes / Saving… unchanged. Its Cancel / Save
-      row sits at the bottom of the form (it is embedded, so it is not the
-      dialog's own footer).
-    - **Import confirm on Settings** is now a real dialog (`role="dialog"`,
-      title "Replace all data?", a header ✕ "Close") instead of a hand-rolled
-      overlay; Cancel and **Replace data** are in its footer. §8g still
-      applies: never click Replace data. "Backup taken" and "Version" are two
-      rows; the replaced / kept lists are ruled rows with counts, "cleared"
-      in red; the "doesn't come across" warnings are **NOTE** fields. The
-      file input "Import backup file", "Import backup…", "Download backup"
-      and `#backup-parse-error` are unchanged. One behaviour change: the ✕
-      does nothing while an import is in flight (Cancel was already disabled
-      there).
-  - **Dialog bodies, waves 2–3 (timer, guest, template editor, bug report,
-    admin inbox, custom period dates).** Same rules as wave 1: footer bar,
-    FIX / NOTE / SAVED status fields, every name below unchanged.
-    - **Timer (§3a, §3b, §8m).** "Put an RO on a timer", "RO #N — Which
-      line?", "RO #N — Pick a line" and "Close out RO #N" use the shared
-      pick-row look (RO number or code chip at the left, hours at the right).
-      The picker's empty / blocked notes are NOTE fields; **"Log a new RO"
-      moved into the picker's footer**. Close out: the Worked / Waiting rows
-      sit in a well, the line choice is still a radio list named
-      `timer-save-line`, the running-total sentence and "Waiting time is
-      logged as unpaid time against this RO" are verbatim, Cancel / "Save &
-      close timer" are in the footer; the receipt titles ("Saved", "Saved
-      with a warning", "Saved — unpaid time also logged") and Done are
-      unchanged. **The timer's Log RO overlay is now a real dialog titled
-      "Log New RO"** (the dialog ✕, named "Close", replaces the old Close
-      button); the full Log RO form with its own save bar sits inside it.
-      The guest timer dialogs mirror all of this (radio name
-      `guest-timer-save-line`; "Log a new RO" is a footer link to /guest/log).
-      The guest RO detail dialog mirrors the signed-in one (Delete / Close in
-      the footer, lines table, "Flagged total").
-    - **RO Template Setup (§1c).** Lede, Template name field, the four field
-      toggles as chips with a hue tick (still `aria-pressed`, same names), a
-      dashed upload well with a new **"Choose a photo"** button (the hidden
-      `#ro-template-file` is unchanged; the well itself is no longer the
-      click target), hint as a NOTE field, errors as a FIX field carrying
-      `#ro-template-error`. Footer: "0 / 4 fields mapped" at the left, then
-      Cancel and Save Template. Cancel still closes without creating a blank
-      template.
-    - **Report a Bug (§8e, §8j).** "What went wrong?" is still
-      `#bug-description`; focus behaviour is unchanged (the dialog ✕ takes
-      focus on open, typing in the box keeps it there). Screenshots are tiles
-      with "Remove screenshot N" buttons; "Add a screenshot" is an outlined
-      button (hidden `#bug-photo-input` unchanged). Cancel / Send report /
-      Done are in the footer; errors are a FIX field, the success state is a
-      SAVED field with the same two sentences. **Do not click Send report.**
-    - **Admin > Bugs "Bug report" dialog.** Close / Save triage in the
-      footer; `triage-severity`, `triage-category`, `triage-status`,
-      `triage-notes` unchanged; screenshot tiles named "View screenshot N of
-      M"; the "Screenshot" lightbox's "Close screenshot" button is square.
-    - **Custom period dates.** No visible change: Cancel / Save dates are now
-      the dialog's own sticky footer instead of a bar inside the form.
-  - **Last pages (guest dashboard, landing, FAQ / About / Contact, Admin >
-    Bugs, crash page).**
-    - **Guests (§8f):** `/guest` is a guest edition of the dashboard: a visible
-      h1 "Dashboard", a PAY PERIOD zone with the flag-hours headline and an
-      "Earned this period" cell that reads "—" until a rate is typed, Today /
-      This Week / This Month as a figures strip, the rate as the shared field
-      (label "Your rate", `$` and `/hr` inside; `aria-label` "Your hourly
-      flat-rate pay" unchanged), and RECENT ROS as RO tags whose RO number
-      opens the guest detail dialog. The old amber banner is a full-width
-      **NOTE** field under the header with the same sentence and the same
-      **"Create a free account"** link (still sets `frt_guest_claim`).
-      `/guest/log`, `/guest/history`, `/guest/op-codes`, `/guest/timer` are
-      unchanged; still no Open-ticket switch on `/guest/log` (§8m).
-    - **Landing (`/`)** keeps every heading, sentence, button text, link and
-      section; its demo tiles, pace bars, RO form, op-code list, discrepancy
-      field and charts are now the app's real parts, the wordmark is the tower
-      mark with "FLAT RATE TRACKER" as text, and the content sits in a
-      `<main>`. **FAQ / About Us / Contact** (§8e) each show an h1 with the
-      page name, a one-line description and a card reading "Coming soon."
-    - **Admin > Bugs** (404 for the bot account, §8e): h1 "Bug reports", the
-      two filters in a row (`#filter-status`, `#filter-severity`, same
-      options), a REPORTS zone with the "N reports" count, rows as row
-      buttons with status / severity / category badges; "Nothing here" empty
-      state unchanged.
-    - **Crash page:** the tower mark over a single "App crashed" panel (same
-      look as Sign in) with an accent-coloured **Reload** button (the one primary); words unchanged.
-- **This is intentional, not breakage.** Judge behaviour and legibility, not
-  whether it looks like previous nights' screenshots. Do flag anything
-  genuinely broken in the new look: overlapping text, unreadable contrast,
-  text the same colour as its background, controls too small to tap,
-  horizontal scrolling.
+The app was re-skinned and re-arranged end to end on 2026-09-29/30. Every page,
+every dialog body, the signed-out pages, the guest pages and the crash page are
+in the new design. **This is the settled look, not a transition: there is no
+"old" version to compare against.** Judge behaviour and legibility, not whether
+a screen resembles a previous night's screenshot. Do flag anything genuinely
+broken in the look: overlapping text, unreadable contrast, text the same colour
+as its background, controls too small to tap, horizontal scrolling.
+
+**Vocabulary in the rest of this file.** Older sections say "card", "tile" and
+"pill". Read them like this: a *card* is whatever block of the page that
+section names (a **zone**, a **fold**, or a settings **row**, described below);
+a *tile* is a cell in a row of figures; a *pill* is an **outlined word tag with
+no fill**. Where a section names a button, label or id, that wording was
+checked against the current app on 2026-10-01 and is exact.
+
+### The look
+
+- **Fonts.** **Titillium Web** (text) and **Azeret Mono** (every figure). Wide,
+  spaced-out figures like `0 . 0` are the number font, not a bug.
+- **Palette.** Dark (green-grey) is the default; Light, Graphite and Pitch also
+  exist. The accent is **blue** by default (Orange, Teal, Red and Ink also
+  exist). Cards have no drop shadow; corners are 6px. **Colour is state and
+  nothing else: green = good, warm red = bad.**
+- **There is no amber anywhere.** Everything this file calls "amber" (the
+  "Unpaid rework · N lines" row, the efficiency middle tier, the "empty?"
+  schedule days, the Insights overrun bars) is plain grey text, an ink bar, or
+  an accent-coloured mark. Check the element is present and says the right
+  thing; do not report it for not being amber.
+- **Switches** are a labelled **OFF | ON** block (about 92px wide); the lit
+  side is the current state. Each is still `role="switch"` with `aria-checked`
+  and an accessible name equal to its row heading ("Time of day on each RO",
+  "Contribute to True Time", "Quick Add RO", "Show all lines", "Open ticket —
+  no op codes yet", "This op code has sub op codes"), so they are found by name.
+- **Buttons** are square-cornered signs with a 2px outline; the main action is
+  a solid accent fill. **A disabled button has a dashed outline** instead of
+  looking faded. A disabled Save that is correct is not a bug (see the
+  RO-number and timer rules below).
+- **Pills are outlined word tags with no fill** (period status, dispute
+  status, `unpaid rework`, Open, Opened, …).
+- **Date and Time** on Log RO and Quick Add are full-size input fields; the
+  whole field opens the picker on tap.
+- **Zones.** What this file calls a card on a page is a **zone**: a panel one
+  shade lighter than the page, headed by its name in small capitals ("PAY
+  PERIOD PACE", "BEFORE YOU START", "REFERENCE"); on phones it runs edge to
+  edge. **Dialogs** have a grey title bar with an ✕ "Close" button, and their
+  action buttons sit in a **sticky footer bar**.
+- **Tagged fields.** Messages are a word tag on a full-width strip: **FIX**
+  (red, errors, `role="alert"`), **COST** (red), **SAVED** / **DONE** (green),
+  **NOTE** (grey), **NEXT** (the one thing to do). Not coloured boxes.
+
+### Navigation
+
+- **Desktop (1024px and up).** There are no top tabs. A **side rail**
+  (`aria-label` "Directory") lists every page — Dashboard, Log RO, History,
+  Timer, Pay Period, Insights, Schedule, Op Codes, Settings — with a filled
+  circle marking the current page. **Account** and **Sign out** sit at the
+  bottom of the rail.
+- **Phone.** The top bar is the logo, a **Pay Period** icon link and a **☰
+  Directory** button (accessible name "Directory: all pages and account"). The
+  Directory is a sheet that slides up, with an ✕ to close; it lists every page
+  plus Account and Sign out. **Insights, Settings, Schedule and Account are
+  reached from the Directory on a phone**, never from the bottom bar. The
+  bottom bar is Dashboard · Log RO · Timer · History · Op Codes, with an accent
+  bar on the current page. The Log RO save bar is a slim 54px strip sitting
+  directly on top of the bottom bar.
+- **Guests** get the same Directory with a compact Appearance section at the
+  bottom (saved to that browser only).
+- **Footer** on every signed-in page: FAQ · About Us · Contact · Report a Bug
+  (§8e).
+
+### Theme lives in Settings > Appearance
+
+- **/account has no Dark/Light buttons.** Its PREFERENCES zone has a "Theme and
+  accent — Moved to Settings > Appearance" row with an **Open Appearance**
+  button, which goes to `/settings?section=appearance`.
+- **Settings > Appearance** has four themes (Light, Dark, Graphite, Pitch) and
+  five accent colours (Blue, Orange, Teal, Red, Ink), a preview row, and a
+  **Saved** tag after each change. The choice is saved to the account.
+- **Leave the bot account on Dark + Blue.** If you change it to test, set it
+  back before you finish, or the next run's screenshots will be in the wrong
+  colours.
+
+### Settings shows one setting at a time
+
+- `/settings` shows **one setting on display**. On desktop it sits at the left
+  inside a zone named for its group (TRACKING / LOGGING / APPEARANCE / DATA),
+  and an **ALL SETTINGS** zone at the right lists every setting as a row button
+  with a chevron; the one on display is highlighted (dark plate with an accent
+  bar at its left, `aria-current="true"`). On a phone the list is also a
+  **"Setting" dropdown** above the display.
+- **Pay Rates opens by default.** `/settings?section=appearance` (`#appearance`
+  also works) opens Appearance.
+- The list, in order: Pay Rates, Pay Period Goal, Pay Period Defaults,
+  Reference hourly rate, Work Schedule & Days Off, Timezone, Contribute to True
+  Time, Quick Add RO, Time of day on each RO, RO Scan Templates, Appearance
+  (the 11th), Backup, Danger Zone. **To reach any setting named in this file,
+  pick it from that list or dropdown first** — nothing else is on screen until
+  it is picked. (**Backup** is the setting older text calls "Data". "Work
+  Schedule & Days Off" is a single "Open schedule calendar" button that goes to
+  /schedule.)
+- Each setting is a row: its name and sentence on the left, its control on the
+  right (under it on phones) — a switch, a field plus a blue Save, or a button.
+  Danger Zone has a red rule above it and a red-outlined **Clear all data**
+  button.
+- **/account** has a PROFILE zone with the rows Your name (First/Last Name),
+  Email Address ("Current: …" then New Email Address) and Password (Current
+  Password / New Password / Confirm Password — Current Password is still there
+  and still required), then a PREFERENCES zone with **Week Starts On** as a
+  Sunday / Monday button group (`aria-pressed`) and the Theme and accent row.
+
+### Dashboard, Log RO, Quick Add, Pay Period
+
+- **Dashboard.** Greeting → page head (avatar, date, "N ROs logged…"; the pace
+  status is a tag at the right: **On track / Near goal / Behind / Getting
+  started**). **Today** = headline panel (TODAY · FLAG and pace/efficiency) +
+  the **Clocked** field (accessible name "Clocked hours today") + a separate
+  **Quick Add RO** button; tapping the flag figure does not open Quick Add.
+  **Pay Period Pace** = a zone with a track (the "Today" label above it, the
+  "Goal N" label below its right end; no ring) and a "Pay Period" link. **Open
+  tickets** and **Empty days** are zones under the pace zone (each only when it
+  has something to show). **Flagged to date** is a table (Span / Flagged /
+  Efficiency; rows This Week, Pay Period, This Month; the efficiency cell says
+  "53%", not "53% efficiency") with **Period earnings** under it. The streak,
+  career-hours and snapshot cards share one zone ("Best n" is a tag). **Recent
+  ROs** are RO tags with duration bars: the **RO number is the button**
+  (`#12345`, accessible name "RO 12345"), not the whole row, and each tag has a
+  quiet **Upsell** button (accessible name "Add an upsell to RO 12345"). The
+  Flagged Hours chart's range and measure are **button groups with
+  `aria-pressed`** (`role="group"` "Chart range" / "Chart measure"); the bars
+  are HTML, not SVG; today's bar is the accent colour.
+- **Log RO.** Visible title "New repair order". **Before you start** holds the
+  Date, Time (when the time-of-day setting is on), the open-ticket switch and
+  the Scan row; the numbered steps sit in **Repair order**: "Enter the RO
+  number", "Add the op codes", "Add the vehicle" (collapsible), "Write notes"
+  (collapsible). Op codes: search, then chips, then lines; the total row is
+  **Flagged total** and shows `0.0h` from the start. Save bar: `0.4h · N lines`
+  over "RO #123 · vehicle". Save RO / Save & New / Cancel labels, all
+  `aria-label`s and ids (`#ro-number`, `#opc-search`, `#quick-add-ro-number`,
+  `#ro-save-error`) are unchanged.
+  - **Op-code chips are toggles** (Log RO and Quick Add). A tapped chip stays
+    on screen and turns **pressed** (accent fill plus a tick, `aria-pressed=
+    "true"`; unpressed chips say `"false"`). **Tap it again and its line is
+    removed.** If a code is on two lines, tapping removes the last one and the
+    chip stays pressed until the final line is gone.
+  - **RO numbers are digits only** (Log RO `#ro-number`, Quick Add
+    `#quick-add-ro-number`, and the server). Type a letter or dash and a **FIX**
+    field appears right under the RO box: "RO numbers are digits only. Take out
+    the letters, then save." The field gets `aria-invalid="true"`. **Save RO and
+    Save & New (and Quick Add's Save RO) are disabled until the RO is non-empty
+    and digits-only.** The save bar / footer text reads **"Fill in RO # to
+    save"** when the RO is empty, **"Fix the RO # to save"** when it has a
+    non-digit, and the `0.4h · N lines` summary otherwise. A disabled Save with
+    a bad RO is correct, not a bug; test it by typing, never by pressing a
+    disabled Save.
+- **Quick Add.** Title "Quick Add RO" (still "Quick Add" on the Spiff tab; the
+  tabs are RO / Spiff), a big `#` in the RO field, errors as a FIX field right
+  under it, chips before the search, **Flagged total**, an **Open the full
+  form** link, and a footer bar with the status + Cancel + Save RO. It only
+  exists on the dashboard, and only while Settings > Quick Add RO is on.
+- **Pay Period.** The H1 is "Pay period"; the **period label is a menu button**
+  ("Pay period X, choose another") between the ‹ › arrows ("Last pay period" /
+  "Next pay period"), and the status is a **tag beside the H1** ("Current pay
+  period" green, "Closed — waiting on pay", "Paid" green). **Period totals**
+  zone: the mode's headline panel, then Earnings (and, once paid, Flag hrs)
+  rows, then a **spec row** (ROs · Hours/Clocked hrs · Efficiency · Upsold).
+  **Check the pay** zone holds **"What did the work cost me?"** and **"Did I get
+  paid?"** as **folds** (a heading button with a chevron and a one-glance state
+  such as "5.2h unpaid" or "Not logged yet"; the ⓘ button sits beside it, never
+  inside it); discrepancy, reconciliation ("Which lines came up short?") and
+  dispute outcome ("Did the claim get paid?") nest inside the second. Mid-period
+  and awaiting pay, "What did the work cost me?" is first and open and "Did I
+  get paid?" is collapsed; once paid, "Did I get paid?" is first and both start
+  open. The right-hand column (below the totals on a phone; two columns from
+  1024px) is the same in every mode: a **Reference** zone holding the **Spiffs &
+  Bonuses** fold (collapsed; button **Add spiff / bonus** below its list), and
+  an **ROs in this period** zone: tag rows with duration bars, a "Total, N
+  shown" row, a "Period total, N ROs" row, and "Show all N ROs · M hidden".
+  Custom-dates dialog: Cancel / Save dates in the footer. Dispute pack: "Back to
+  pay period" with a chevron.
+
+### History, Timer, Op Codes, Insights, Schedule, Snapshots
+
+- **History.** The H1 is "History" with "N ROs · X.Xh in this range" under it.
+  The **range** (Today / Week / Period / Month / All) and the **sort** (Date /
+  Hours / RO #) are **button groups with `aria-pressed`** (`role="group"` named
+  "Range" and "Sort by"); the pressed sort button carries the ↓/↑ arrow. Search
+  is a full-size field (placeholder "Search RO#, vehicle, or notes") with an ✕
+  clear button. **Flagged hours** is a zone with the dashboard-style HTML chart.
+  **Repair orders** is a zone of compact RO tags **grouped under day headings**
+  ("Yesterday", "Tue, Mar 10", each with "N ROs · X.Xh"); Month and All group by
+  month; sorting by Hours or RO # drops the headings and puts the date on each
+  tag. The **RO number is the button** that opens the detail dialog. On desktop
+  the chart sits to the left and **stays on screen while the list scrolls** —
+  deliberate. Open tickets carry an **Open** badge on their tag. "Load more" is
+  a plain outlined button under the list.
+- **Timer.** The H1 is "Timers" with "N of 3 slots in use" under it. **All three
+  slots are always drawn**: a running timer is a zone headed "TIMER 1" with its
+  status as a tag at the right (Currently working / Hold for parts / Hold for
+  approval / Paused); a free slot is a dashed zone headed "TIMER 3" with "Free"
+  at the right, "Nothing on this lift." and a **Start a timer** button — **that
+  button IS the add button** (there is no separate "Add another timer" control,
+  and with 3 running there is no free slot and so no add button at all). The
+  picker ("Put an RO on a timer") also has **Start without an RO**; a timer
+  started that way shows **"No RO yet"** and an **Attach RO** button, and Save
+  stays dashed-disabled until an RO and a line are bound (§3a). Inside a running
+  timer: the RO number (a button that opens the detail dialog) and date, the
+  vehicle, the big worked-time clock with "worked" (or "worked · not counting
+  while …") under it and a thin bar that grows one block per worked hour, any
+  "Waiting on parts 3m" lines, a **Line** row (the op-code chip plus a Change
+  button, or a blue **Pick a line** button while no line is set), a **NEXT**
+  field that names the one thing to do ("Pick the line these hours land on. Save
+  unlocks after that." / "Counting. Save when the job is done…") and goes away
+  once time is banked on a bound line, the 4-button status row (`role="group"`
+  "Timer status", `aria-pressed`; the pressed button is disabled), then Save /
+  Reset / Clear (Save is dashed-disabled until there is time on a bound line).
+  **The four status buttons read Working · Parts · Approval · Pause, but their
+  accessible names are "Currently working", "Hold for parts", "Hold for
+  approval" and "Paused"** — find them by whichever your tool uses. From 700px
+  wide the slots sit side by side. With no timers the page is a zone with "Start
+  a timer" and a three-step line under it (Start · Pick the line · Save).
+- **Op Codes.** The H1 is "Op codes" with "Your library: N codes, X.Xh on the
+  books. Drag to reorder." under it and an **Add a code** button in the page
+  head. Search is a full-size field (placeholder "Search code, description, or
+  tag") with an ✕ clear button. **Sort** is a button group with `aria-pressed`
+  (My order / Code / Hours / Added; the pressed one carries ↓/↑, My order has
+  none; each button's accessible name is "Sort by <field>, ascending/descending"
+  while its visible text is the field + arrow). **Tags** are outlined chips that
+  toggle (`aria-pressed`), each with a 3px colour tick at its left; a pressed
+  chip is the accent fill; a quiet **Clear** button appears once any is pressed.
+  The list is a **Library** zone: a header line "CODE · DESCRIPTION" / "FLAG",
+  then one ruled row per code — grip, the colour tick, the code in bold, the
+  description (notes in italics after " · ", a "N subs" tag), the flag hours as
+  a figure with a small "h", and the pencil / trash buttons (hover-only where
+  there is a mouse, always visible on touch). On phones the description sits
+  under the code. The footing reads "N codes shown" and "X.Xh flagged"; the
+  zone's top right says "N of M shown" only while a search or tag filter is on.
+- **Insights.** The page opens on a **headline panel** (the accent-coloured
+  block, like the dashboard's Today): four figures — UNPAID THIS WINDOW (red
+  when non-zero, "0h" with "every timed job came in at book" when clean),
+  STRONGEST DAY, LAST PERIOD (the last *finished* period's efficiency, "up from
+  / down from" the one before) and SOLD (share of flagged hours upsold) — with
+  the opening sentence ("Nothing unpaid in this window." / "Xh you weren't paid
+  for.") as the note under them. Those four figures are derived from the same
+  numbers the sections below print; **if the panel and a section disagree, that
+  is a bug.** Then the **window chips** (a button group labelled WINDOW with
+  `aria-pressed`: Week / Period / Month / All). The windowed half runs **What's
+  costing you → Where your time goes → Best days beside Where you're winning**
+  (the last two sit side by side from 1024px); then the "All time — Ignores the
+  window above" divider (a heavy rule with the heading on it); then the
+  all-time half, a two-column grid from 1024px whose reading order is What makes
+  a big day → What a big day actually tracks with → Big jobs → The quick stuff →
+  Trend → What you sold → Claims and recovery. Every section is a **zone** with
+  its name in small capitals and, at its right, a small figure (What's costing
+  you: the total; Best days: the best day; Trend: the last finished period with
+  ↑/↓; What you sold: hours; Claims: recovered). §7e's sentences apply word for
+  word. **What's costing you**: numbered rows with the hours as a figure and an
+  ink bar (red when the row is rework or unpaid clock); an overrun draws in ink.
+  **Where your time goes**: the desktop table has sortable headers (`↕ ↑ ↓`);
+  the ratio is an outlined tag (red = bad tier, green = good, plain = in
+  between), `unpaid rework` is a **red** tag, "never timed" is plain dim text;
+  on phones the sort is a three-button group (Worst first / Most used / Code).
+  **Best days**: a By day / By efficiency button group and seven plate cells,
+  the best day outlined green. **Trend**: the bars fill in ink with the current
+  period in the accent, the in-progress bar dimmed, par as a dashed line
+  labelled 100%, labels under the plot with "In progress" on its own line.
+  **What you sold**: per-period rows with green bars, then a MOST UPSOLD list.
+  **Claims and recovery**: four labelled figures in a spec row.
+- **Schedule.** The H1 is "Schedule" with the two-sentence lede; the month
+  picker (‹ › outlined buttons, the month name between them, a quiet **Today**
+  button when you are off the current month) sits at the top right of the page
+  head. The calendar is a **zone named after the month** ("MARCH 2026") with "Nh
+  scheduled" at its right; the legend sits above the grid. **A day that needs a
+  decision carries a small accent (blue) dot** in its top-right corner, and the
+  legend names it "Needs a decision". Each day is a button named like "March 10,
+  2026, needs a decision" / ", day off" / ", 8.0 hours scheduled" / ", 9.2 hours
+  logged" / ", shift overridden". Scheduled days are plate cells with the hours
+  under the number (dim = scheduled, bright = logged), today's number is
+  accent, the selected day has an accent outline, a one-day override still
+  shows `*`, and a day off reads "off". When unsettled days exist, a **FIX**
+  status field above the calendar reads "N days need a decision — scheduled,
+  nothing logged." with the ‹ N of M › stepper at its right (accessible names
+  "Previous unsettled day" / "Next unsettled day"). The day panel is an
+  outlined panel inside the zone (still sticky above the thumb bar on phones):
+  date, a status tag (red "Needs a decision", green "Nh logged", plain "Day
+  off" / "Zero day" / "Scheduled Nh" / "Not a workday"), the **Actual hours
+  worked** field with a blue Save, then Day off (or "Remove day off") / Worked,
+  zero flag / Undo zero day / Change shift (or "Edit shift") as outlined
+  buttons; the shift editor opens under a rule with Save shift (blue) and Reset
+  to pattern. **Weekly pattern** is a zone with "Nh/week" at its right; the
+  Every week / 2-week rotation choice is a button group with `aria-pressed`;
+  the day rows are ruled with a checkbox, the hrs / starts / lunch fields and
+  "out ≈ HH:MM"; the version list is ruled rows with a quiet Remove.
+- **Snapshots.** The H1 is "Snapshots" with the next-unlock sentence under it
+  and a quiet **Dashboard** button at the right. The sheets sit in a **Work
+  records** zone ("N on record" at its right), two across on desktop, newest
+  first. **The sheet** (here and in the dashboard's snapshot row) is a plain
+  panel with a heavy top rule, the eyebrow "FLAT RATE TRACKER · WORK RECORD",
+  the title "Snapshot #N", a green **ON RECORD** tag, the four figures as a spec
+  row (ROs documented / Hours flagged / Avg vs book / Photos on file), the Top
+  operations / Overall efficiency / Range lines, and a label-style footer
+  "GENERATED <date> · RO #<threshold> LINE". §8b's checks apply word for word.
+
+### Signed-out pages
+
+- **Sign in, Sign up, Forgot password, Reset password.** The tower mark and
+  FLAT RATE / TRACKER wordmark sit at the top (it links to `/`), and each page
+  is **one panel whose name tab is the page's H1** (SIGN IN / CREATE ACCOUNT /
+  RESET YOUR PASSWORD / SET A NEW PASSWORD / CHECK YOUR EMAIL). Fields have
+  uppercase labels (Email, Password, New password, Confirm new password) and
+  every label resolves with `getByLabel`. Messages are **tagged status fields**:
+  an error is a red **FIX** field (`role="alert"`), "Password updated. Sign in
+  with your new password." is a green **SAVED** field, and the "check your
+  email" / "a reset link is on its way" copy is a **NOTE** field. "Forgot your
+  password?" is a link under the Sign in button and above the OR rule; "Send
+  reset link" / "Set new password" / "Request a new link" are the button names;
+  "This page needs a reset link to work." / "That link has expired or has
+  already been used." are the two reset sentences. Continue with Google is an
+  outlined button with Google's mark; Try as Guest sits under a hairline at the
+  foot of Sign in.
+- **Guests (§8f).** `/guest` is a guest edition of the dashboard: a visible h1
+  "Dashboard", a PAY PERIOD zone with the flag-hours headline and an "Earned
+  this period" cell that reads "—" until a rate is typed, Today / This Week /
+  This Month as a figures strip, the rate as the shared field (label "Your
+  rate", `$` and `/hr` inside; `aria-label` "Your hourly flat-rate pay"), and
+  RECENT ROS as RO tags whose RO number opens the guest detail dialog. A
+  full-width **NOTE** field under the header carries the "Create a free account"
+  link (which sets `frt_guest_claim`). `/guest/log`, `/guest/history`,
+  `/guest/op-codes`, `/guest/timer` are the same pages in the same language;
+  there is still no Open-ticket switch on `/guest/log` (§8m).
+- **Landing (`/`)** has its demo tiles, pace bars, RO form, op-code list,
+  discrepancy field and charts built from the app's real parts, the tower mark
+  with "FLAT RATE TRACKER" as text, and the content in a `<main>`. **FAQ / About
+  Us / Contact** (§8e) each show an h1 with the page name, a one-line
+  description and a card reading "Coming soon." **Admin > Bugs** (404 for the
+  bot account, §8e): h1 "Bug reports", the two filters in a row
+  (`#filter-status`, `#filter-severity`), a REPORTS zone with the "N reports"
+  count, rows as row buttons with status / severity / category badges; "Nothing
+  here" empty state. **Crash page:** the tower mark over a single "App crashed"
+  panel with an accent-coloured **Reload** button.
+
+### Dialogs
+
+Common to every dialog body: field labels are uppercase, errors are red **FIX**
+status fields (`role="alert"`), and the action buttons are in a **sticky footer
+bar** (Cancel at the left of the primary; a destructive button sits at the far
+left). Every id, aria-label, button text and sentence named elsewhere in this
+file is exact unless listed here.
+
+- **RO detail** (title "RO #N"). The date line and the "Logged …" line are two
+  separate lines (§8k), vehicle under them. The op-code lines are a **ruled
+  table** with Op code / Flag / Actual headers on desktop; on a phone each line
+  is a stacked row (code chip + Upsell chip, description, then "FLAG 1.0 ·
+  ACTUAL [field] · trash"). The Actual field is `opc-hours-input` with the same
+  `aria-label` (§2's property read). The Upsell chip is a toggle
+  (`aria-pressed`, accessible name "Mark <code> as upsell" / "Unmark <code> as
+  upsell"). The totals row reads **Flagged total**; "Unpaid rework · N lines"
+  and "Earnings" follow it. "Add op code" is a full-width outlined button that
+  opens a search well with pick rows. Footer: **Delete** far left, then
+  **Close**, then **Edit RO** (on an open ticket: Edit ticket + the primary
+  Close ticket). The smoke path (`.history-ro-row` → button "Delete") and every
+  `window.confirm` text are unchanged. Timeline, notes, photos and linked
+  spiffs are wells with ruled rows; "Close photo" / "Delete photo" keep their
+  names.
+- **Op code form ("New op code" / "Edit op code").** `opc-form-code` and
+  `opc-form-error`; "Change color for {tag}", "Remove {tag}", "Color N",
+  "Auto", "Sub op code" (§8d). **"This op code has sub op codes" is an OFF | ON
+  switch (`role="switch"`)**. The swatch row is a `role="group"` named "Color
+  for {tag}". Sub codes are a ruled table in a well with an **Add sub op code**
+  outlined button under it. Footer: Delete (editing only) far left, Cancel,
+  Save / Save changes.
+- **Spiff / bonus form** (Quick Add's Spiff tab and the Spiffs add/edit
+  dialogs, §6 field parity holds). Amount has a `$` prefix, Category is a row of
+  chips that keep `role="radio"` / `aria-checked` inside the "Category"
+  radiogroup, the linked-RO picker is a pick list in a well. Ids `bonus-*`,
+  "Unlink RO", "Close RO picker", "Attach to an RO", Save spiff / Save changes /
+  Saving…. Its Cancel / Save row sits at the bottom of the form (it is
+  embedded, so it is not the dialog's own footer).
+- **Import confirm** (Settings > Backup) is a real dialog (`role="dialog"`,
+  title "Replace all data?", a header ✕ "Close"); Cancel and **Replace data**
+  are in its footer. §8g applies: never click Replace data. "Backup taken" and
+  "Version" are two rows; the replaced / kept lists are ruled rows with counts,
+  "cleared" in red; the "doesn't come across" warnings are **NOTE** fields. The
+  buttons are **Download backup** and **Import backup…**; the file input is
+  "Import backup file"; `#backup-parse-error`. The ✕ does nothing while an
+  import is in flight.
+- **Timer dialogs (§3a, §3b, §8m).** "Put an RO on a timer", "RO #N — Which
+  line?", "RO #N — Pick a line" and "Close out RO #N" use pick rows (RO number
+  or code chip at the left, hours at the right). An RO that cannot take a timer
+  stays in the list **disabled, with the reason as a sub-line**. The picker's
+  empty / blocked notes are NOTE fields; **"Log a new RO"** and **"Start without
+  an RO"** are in the picker's footer. Close out: the Worked / Waiting rows sit
+  in a well, the line choice is a radio list named `timer-save-line`, the
+  running-total sentence and "Waiting time is logged as unpaid time against this
+  RO" are verbatim, Cancel / "Save & close timer" are in the footer; the
+  receipt titles ("Saved", "Saved with a warning", "Saved — unpaid time also
+  logged") and Done. **The timer's Log RO overlay is a dialog titled "Log New
+  RO"** (the dialog ✕, named "Close"); the full Log RO form with its own save
+  bar sits inside it. The guest timer dialogs mirror all of this (radio name
+  `guest-timer-save-line`; "Log a new RO" is a footer link to /guest/log), and
+  the guest RO detail dialog mirrors the signed-in one.
+- **RO Template Setup (§1c).** Lede, Template name field, the four field
+  toggles as chips with a hue tick (`aria-pressed`), a dashed upload well with a
+  **"Choose a photo"** button (the hidden `#ro-template-file`; the well itself
+  is not the click target), hint as a NOTE field, errors as a FIX field
+  carrying `#ro-template-error`. Footer: "0 / 4 fields mapped" at the left,
+  then Cancel and Save Template. Cancel closes without creating a blank
+  template.
+- **Report a Bug (§8e, §8j).** "What went wrong?" is `#bug-description`; the
+  dialog ✕ takes focus on open, typing in the box keeps it there. Screenshots
+  are tiles with "Remove screenshot N" buttons; "Add a screenshot" is an
+  outlined button (hidden `#bug-photo-input`). Cancel / Send report / Done are
+  in the footer; the success state is a SAVED field. **Do not click Send
+  report.**
+- **Admin > Bugs "Bug report" dialog.** Close / Save triage in the footer;
+  `triage-severity`, `triage-category`, `triage-status`, `triage-notes`;
+  screenshot tiles named "View screenshot N of M"; the "Screenshot" lightbox's
+  "Close screenshot" button is square.
+- **Custom period dates.** Cancel / Save dates are the dialog's own sticky
+  footer.
 
 ## Nightly checklist
 
@@ -574,9 +584,9 @@ exist, set them once: CP $32/hr, warranty $28/hr, internal $25/hr. From then
 on, exercise labor types and verify dollar amounts everywhere they appear.
 
 ### 1c. RO Scan Templates (Settings — undocumented surface, new)
-On the Settings page, under "Logging," the **"RO Scan Templates"** card
-renders unconditionally — check it every night, not just when something else
-sends you there.
+On the Settings page, pick **RO Scan Templates** from the All settings list
+(it is in the "Logging" group). It renders unconditionally — check it every
+night, not just when something else sends you there.
 - With zero templates: a "No templates yet" note plus a numbered **3-step
   how-to** (Add Template → draw boxes around each field → scan from Log RO).
   All three steps must be present and readable.
@@ -606,7 +616,8 @@ sends you there.
   - At least one **multi-line RO** (2–4 op-code lines with different hours)
   - Mix labor types where the form offers them (CP / warranty / internal / etc.)
   - Realistic RO numbers (5–6 digits), realistic vehicles — fill **year, make,
-    AND model** (the vehicle section may be collapsed; expand it), plausible
+    AND model** (the "Add the vehicle" step is collapsed until you open it;
+    expand it), plausible
     op codes and descriptions (you know cars — write like a tech)
   - **At least one RO number must be a different digit-length than the rest**
     (e.g. one 4-digit number like 993 alongside your usual 5–6 digit ones).
@@ -686,17 +697,19 @@ sends you there.
     it** rather than guess.
 
 ### 2a. Scan RO ticket card (undocumented surface, new)
-At the top of the full Log RO form — new ROs only, it's gone once you're
-editing an existing one — sits a **"Scan RO ticket"** banner: "Auto-fills RO#,
-vehicle and op codes" with a camera button.
+In the **Before you start** zone at the top of the full Log RO form — new ROs
+only, it's gone once you're editing an existing one — sits a **"Scan RO
+ticket"** row: "Auto-fills RO#, vehicle and op codes", with an ⓘ icon button
+and a camera **Scan RO** button.
 - Tap it. **Two correct behaviours, depending on how many templates §1c shows:**
   with 0 or 1 template a real file picker opens; with **2 or more** a "Which
   template?" list opens first, and the picker follows once you choose one. Only
   a tap that does nothing at all is a dead button.
 - The **ⓘ "First-time setup help"** toggle (sits just left of the "Scan RO"
-  button) must open and close an info dropdown explaining how scanning works.
+  button) must open and close a full-width note under the row (not a popover)
+  explaining how scanning works.
 - Upload
-  `/home/liem9319/docker/flat-rate-tracker/docs/design-directions/shots/a-log-light-desktop.png`
+  `/home/liem9319/docker/flat-rate-tracker/bot/fixtures/scan-sample.png`
   — a real file on the VM, and deliberately not an RO. **Give that absolute
   path**, not a repo-relative one: the picker is driven by the Playwright MCP
   server, which resolves relative paths against its own working directory
@@ -711,32 +724,35 @@ vehicle and op codes" with a camera button.
   never retry it into your budget. Report it only once it has done this **three
   nights running**; check the last two reports before you write it up.
 - If a photo is captured and photo evidence is enabled on this account, a
-  green "Photo attached — saved with this RO" chip should appear with a
-  working remove (✕) control.
+  **NOTE** field reading "Photo attached — saved with this RO" should appear
+  with a working remove (✕, accessible name "Remove attached photo") control.
 - **Abandon this form — never save the RO you scanned into.** The capture is
   held for upload on save, so saving writes a junk image into prod storage.
-  Leave the page (or clear it with the ✕ chip) and log §2's ROs on a fresh
-  form.
+  Leave the page (or clear it with the ✕ on that note) and log §2's ROs on a
+  fresh form.
 
 ### 2b. Comebacks / unpaid rework (new 2026-07-27)
 A comeback is work you redo for free, so it **flags zero hours**. Log at least
 one most nights.
 
 - On the full log form, add an op-code line, then tap **"Mark as comeback"** on
-  that line. Verify ALL of these:
+  that line. The button now reads **"Comeback — unpaid"** (`aria-pressed=
+  "true"`). Verify ALL of these:
   - the flag-hours input snaps to **0 and becomes disabled** (you cannot type in
     it) — a comeback line that still carries the library's book time is the
     single most important bug on this screen
-  - the "Flagged total" figure drops accordingly, and a second amber
-    **"Unpaid rework · N lines"** row appears beneath it
-  - an **"Unpaid rework"** card appears with three "whose work" choices: My own
-    work / Another tech's work / Same-visit rework
+  - the "Flagged total" figure drops accordingly, and a second row (plain, not
+    amber) **"Unpaid rework · N lines"** appears beneath it, showing the actual
+    hours ("— add actual hrs" until you enter some)
+  - an **"Unpaid rework"** step (flags 0h) appears under the op-code lines with
+    a "Whose work" choice of three: My own work / Another tech's work /
+    Same-visit rework
 - Pick **"My own work"** → a "Redo of (optional)" RO lookup appears. Type an RO
   number from a previous night, hit **Find**, and pick a match. Picking
   **"Another tech's work"** or **"Same-visit rework"** must HIDE that lookup
   (those have no original RO in this account) — it still showing is a bug.
-- Tapping "Mark as comeback" a second time must **restore the original flag
-  hours**, not leave 0 behind.
+- Tapping the button a second time (it reads "Comeback — unpaid" while on) must
+  **restore the original flag hours**, not leave 0 behind.
 - **The "Redo of" link must survive both round trips** (fixed 2026-08-12,
   `comeback-redoof-reset-on-toggle` — regression-check it):
   - pick a redo-of RO, toggle the comeback flag **off then on** → the link is
@@ -793,8 +809,9 @@ path is covered by unit tests instead.
 - **Every night, record §2c as
   `SKIPPED — no empty day (expected on this account; the bot logs every night)`
   and move on.** Do not re-derive this, do not try another way to seed an
-  empty day, and do not spend time confirming the amber card is absent — it's
-  already established this account can't show it.
+  empty day, and do not spend time confirming no "Needs a decision" day exists
+  on /schedule or the dashboard's Empty days zone — it's already established
+  this account can't show one.
 - **This line must never appear under "Confirmed broken," "Questions," or
   "Suggested tweaks."** It is not open, not a gap, and not something to
   re-request — Liem has already seen and declined this once; asking again in
@@ -858,8 +875,11 @@ regardless of which button.
 
 ### 3. Timers (up to 3 concurrent — reworked 2026-07-24)
 The Timer page runs **up to 3 job timers at once**. The header reads
-"Timers — N of 3". Each timer is bound to one RO and carries a status:
-**Working · Parts · Approval · Pause** (a 4-button row on each card).
+"Timers" with "N of 3 slots in use" under it. Each timer is bound to one RO
+(or, started without an RO, waits for one — §3a) and carries a status:
+**Working · Parts · Approval · Pause** (a 4-button row on each card; those are
+the visible labels, the accessible names are "Currently working", "Hold for
+parts", "Hold for approval" and "Paused").
 
 **This section is split in two on purpose. Do §3a, then leave the page and do
 §3z–§5, then come back for §3b.** The timer needs real elapsed time and you are
@@ -945,11 +965,14 @@ start and save in the same breath records ~0 and proves nothing.
   not report its absence on an agreeing save as a missing screen. **What IS a
   bug: the confirmation appearing and then vanishing on its own**, or naming a
   figure that matches the frozen projection rather than what was saved.
-- Check that a 4th timer cannot be started: with 3 running, the add button
-  reads "All timers in use" and is disabled.
+- Check that a 4th timer cannot be started: with 3 running there is **no free
+  slot and therefore no add button at all** (the free slot IS the add button —
+  "Start a timer" — and none is drawn), and the header reads **"3 of 3 slots in
+  use"**. A 4th timer being unreachable rather than disabled is correct; do not
+  look for a disabled button or an "All timers in use" label.
 - **Attaching the same RO to a second timer branches on how many lines are
-  still free (`handleAttach`, `TimerSlots.tsx:142-164`, mirrored in
-  GuestTimerSlots.tsx) — check both paths, they are both correct:**
+  still free (`handleAttach` in src/components/timer/TimerSlots.tsx, mirrored
+  in GuestTimerSlots.tsx) — check both paths, they are both correct:**
   - **2 or more free lines** ⇒ expect a line picker ("RO #71264 — Which
     line?") that offers ONLY the lines not already on a timer — a busy line
     must never appear in it.
@@ -966,10 +989,12 @@ start and save in the same breath records ~0 and proves nothing.
     test the picker. A three-line RO still has two lines free after the
     first attach, so the picker path actually gets exercised.
   - Three outright refusals (no picker, no auto-bind — zero free lines) are
-    CORRECT, not bugs — `attachBlockReason` in
-    src/components/timer/TimerSlots.tsx:96-107 (mirrored in
-    GuestTimerSlots.tsx, and re-enforced server-side in
-    src/app/actions/timer.ts) blocks the attach in exactly these cases:
+    CORRECT, not bugs. In the "Put an RO on a timer" list a refused RO stays
+    in the list **disabled, with the reason as a sub-line under it** — it is
+    not removed. `attachBlockReason` in
+    src/components/timer/TimerSlots.tsx (mirrored in GuestTimerSlots.tsx, and
+    re-enforced server-side in src/app/actions/timer.ts) blocks the attach in
+    exactly these cases:
     1. the RO has a timer running with no line assigned yet: "On a timer
        that has no line set yet — set that one's line first."
     2. every line is taken and the RO has only one line: "Its only line is
@@ -1042,9 +1067,11 @@ several minutes:
 **Before this section: §3a should already be done and a timer running.** If it
 isn't, go back and arm it now — it needs these sections' worth of elapsed time.
 
-The whole page was restructured. Nine peer cards became a header band plus two
-columns. **Read this before reporting anything on §4–§7 as missing** — most
-"missing" cards have moved, not gone.
+The page is a title bar (H1, period picker, status tag), a **Period totals**
+zone, a **Check the pay** zone holding the two folds, and — in the right-hand
+column — a **Reference** zone (Spiffs & Bonuses) and an **ROs in this period**
+zone. **Read this before reporting anything on §4–§7 as missing** — most
+"missing" cards have moved into a fold, not gone.
 
 **Three modes.** The page changes shape with where the period sits in the pay
 cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
@@ -1055,12 +1082,12 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
 | Awaiting pay | period closed, no paid hours logged | an INPUT: "got your stub?" |
 | Settled | paid hours recorded | paid vs logged, and the shortfall |
 
-- The status is a **coloured pill beside the date** — "Current pay period" /
+- The status is a **tag beside the H1** — "Current pay period" /
   "Closed — waiting on pay" / "Paid".
-- **Custom dates moved OUT of the title menu (2026-08-02).** Beside the status
-  pill there is now either a **"Set custom dates"** button, or — when the period
-  already has custom dates — a **"Custom dates"** pill followed by an **"Edit"**
-  button. The title menu holds only the period jump list plus "Reset to default
+- **Custom dates are NOT in the title menu (since 2026-08-02).** Under the
+  period picker row there is either a **"Set custom dates"** button, or — when
+  the period already has custom dates — a **"Custom dates"** tag followed by an
+  **"Edit"** button (accessible name "Edit custom period dates"). The title menu holds only the period jump list plus "Reset to default
   dates" (reset appears only when dates are custom). A "Set/Edit custom dates"
   entry back inside the menu is a regression.
 - **The custom-dates modal previews its own impact.** Change either date and it
@@ -1074,18 +1101,21 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
   end and confirm it lands in the FOLLOWING period, not the one that closed.
   Work landing in a period whose displayed dates exclude it is the bug this
   fixed; report any recurrence.
-- The hero tile beside Efficiency reads **"Hours · sched"** (or "· mixed") when
-  the denominator came from the work schedule rather than typed clock entries,
-  and plain **"Clocked hrs"** otherwise. It must never read 0.0h next to a
-  non-zero schedule-derived efficiency — that pairing was a bug.
-- **The stats grid must explain its own arithmetic (new 2026-08-14,
-  `payperiod-efficiency-no-provenance`).** Flag hrs ÷ Hours will often NOT equal
-  the Efficiency beside it, because days the app can't measure are excluded from
-  the percentage but still counted in the flagged total. When that happens a
-  caption sits directly under the grid reading **"Not counted above: N.Nh
-  flagged across N day(s) — <reason>…"**. Do the division yourself: if the
-  three tiles disagree and there is NO caption explaining the gap, that is a
-  FAIL. (Divide before you trust it — the page used to print 430.1h, 72.0h and
+- The **Hours cell** beside Efficiency in the spec row reads **"Hours ·
+  sched"** (or "· mixed") when the denominator came from the work schedule
+  rather than typed clock entries, and plain **"Clocked hrs"** otherwise (the
+  Efficiency cell's label carries the same "· sched" / "· mixed" suffix). It
+  must never read 0.0h next to a non-zero schedule-derived efficiency — that
+  pairing was a bug.
+- **The spec row must explain its own arithmetic (new 2026-08-14,
+  `payperiod-efficiency-no-provenance`).** Flagged hours (the headline panel's
+  figure, or the Flag hrs row once the period is paid) ÷ the Hours cell will
+  often NOT equal the Efficiency cell beside it, because days the app can't
+  measure are excluded from the percentage but still counted in the flagged
+  total. When that happens a **NOTE** field sits directly under the spec row
+  reading **"Not counted above: N.Nh flagged across N day(s) — <reason>…"**.
+  Do the division yourself: if the three figures disagree and there is NO note
+  explaining the gap, that is a FAIL. (Divide before you trust it — the page used to print 430.1h, 72.0h and
   397% side by side with nothing said.)
   - **The reason half of that sentence VARIES, and that is correct (new
     2026-09-06, `payperiod-notcounted-caption-reason`).** It used to be one
@@ -1103,13 +1133,17 @@ cycle. Check ALL THREE by switching periods with the `‹ ›` arrows:
   copies that disagreed whenever a period held a scheduled day you had neither
   flagged work on nor confirmed as a real zero. Check a period containing such a
   day specifically — a silent workday you have not resolved.
-- **Nothing is ever hidden by mode.** Cards the mode de-prioritises move below a
-  **"Reference"** divider (the right-hand column on desktop). If a card is
-  genuinely absent rather than demoted, that IS a bug — check the rail before
-  reporting it.
-- The old "Pay Period" heading and the period picker card are gone. The period
-  IS the title; click it for the jump list and the custom-date actions.
-- **Two-column at ≥900px**, single column below. Check both widths.
+- **Nothing is ever hidden by mode.** The mode changes only the **order and
+  what starts expanded** inside **Check the pay** (mid-period and awaiting pay:
+  "What did the work cost me?" first and open, "Did I get paid?" collapsed;
+  once paid: "Did I get paid?" first, both open). The **Reference** and **ROs
+  in this period** zones are the same in every mode. A collapsed fold is not an
+  absent one — open it, and look in the right-hand column, before reporting
+  anything missing; a card that is genuinely absent IS a bug.
+- The page's H1 is "Pay period"; the period label is the menu button (click it
+  for the jump list and, when dates are custom, "Reset to default dates").
+- **Two columns from 1024px** (the rail breakpoint), single column below. Check
+  both widths.
 
 **Entering paid hours writes a `paid_period_hours` row on prod — and that write
 is now reversible.** The **"Reset to unpaid"** control in the "Did I get paid?"
@@ -1172,19 +1206,21 @@ unconditional and unrelated to how often the check runs.
   `68.75` displays as `68.8`. That rounding is intentional and is not
   reportable on its own. The only reportable failure here is a
   **stored-vs-displayed contradiction**: confirm the figure you typed
-  (`74.25`) is still what's actually stored (e.g. via the export capture in
-  §8g) — if the stored value and the hero's rounded display disagree about
-  anything other than that expected rounding, report it.
+  (`74.25`) is still what's actually stored — read it back from the paid-hours
+  input in "Did I get paid?" (open the fold; the input shows the stored value
+  directly, so this does **not** need the §8g export) — if the stored value and
+  the hero's rounded display disagree about anything other than that expected
+  rounding, report it.
 - Then clear it with **Reset to unpaid** — this is a figure you created, so the
   first cleanup rule above applies.
 
-**Info bubbles (ⓘ)** sit beside the collapse chevron on "Did I get paid?",
-"Spiffs & Bonuses" and "What did the work cost me?". Open each one: it must open
-a modal and must NOT toggle the card open/closed. If tapping ⓘ also expands the
-card, report it.
+**Info bubbles (ⓘ)** sit beside each fold's heading button (never inside it)
+on "Did I get paid?", "Spiffs & Bonuses" and "What did the work cost me?". Open
+each one: it must open a modal and must NOT toggle the fold open/closed. If
+tapping ⓘ also expands the fold, report it.
 
 **RO list** is capped at 7 rows with a "Show all N ROs" reveal, and lives in the
-Reference rail in every mode.
+**ROs in this period** zone of the right-hand column in every mode.
 
 ### 4. Pay discrepancy check
 > **Moved 2026-07-30.** This is no longer its own card. It is the first thing
@@ -1218,8 +1254,10 @@ Reference rail in every mode.
   past period, and the list does NOT need a paid figure to render: expand
   "Did I get paid?" on the current period, then "Which lines came up short?"
   underneath it, and place the short number against the longer ones there.
-- **Sort control (new 2026-07-30).** Defaults to **RO number**, because shops
-  hand out a printed sheet in RO order. Check all three options:
+- **Sort control (new 2026-07-30).** A **"Sort by"** dropdown whose options
+  read "RO number — matches your shop's sheet", "Date — newest first" and
+  "Biggest shortfall first". It defaults to **RO number**, because shops hand
+  out a printed sheet in RO order. Check all three options:
   - **RO number** must sort NUMERICALLY, not as text — RO 993 comes BEFORE
     RO 9910. If 9910 sorts first, that's the bug. **This only bites when the
     period's RO numbers span different digit lengths.** §2 now seeds one
@@ -1263,8 +1301,9 @@ Reference rail in every mode.
   before you started testing.
 - If a dispute-pack export exists for short lines, open it and confirm the
   print view renders with the short lines listed.
-- **The "Export discrepancies" block is now ALWAYS on the page** (fixed
-  2026-08-22, `disputepack-hidden-without-variance`). It used to be removed from
+- **The "Export discrepancies" block (buttons **Copy text** and **Print /
+  PDF**) is now ALWAYS on the page** (fixed 2026-08-22,
+  `disputepack-hidden-without-variance`). It used to be removed from
   the DOM entirely whenever Shorted hrs was 0.0h — which hid the pack from a
   period carrying real unpaid rework, and that block is the only way into the
   pack anywhere in the app. So:
@@ -1296,7 +1335,9 @@ verify the saved hours before continuing to §6.
 ### 6. Spiffs & bonuses
 - Add one spiff via the quick-add flow (plausible: "alignment spiff $25",
   "tire spiff $10", etc.). Link it to one of tonight's ROs if the UI allows.
-- Verify it shows on the pay period's Spiffs card and on the RO's detail view.
+- Verify it shows on the pay period's **Spiffs & Bonuses** fold (collapsed by
+  default — expand it; it sits in the Reference zone) and on the RO's detail
+  view.
 - **Before reporting a field-count mismatch between the Pay Period card's Add
   form and Quick Add's Spiff tab: scroll the modal panel to the bottom first.**
   Both surfaces render the identical `BonusForm` component inside the same
@@ -1362,20 +1403,25 @@ verify the saved hours before continuing to §6.
   still running, so it is excluded from BOTH sides of the average and the card
   says "isn't counted yet — that day is still in progress" ("day", not "shift",
   since 2026-09-19: a spiff logged today with no RO also makes today ongoing,
-  and there is no shift to name). When today is ongoing the pay tile is
-  captioned **"Pay on the days counted"**, not "Total pay", and today's flagged
+  and there is no shift to name). When today is ongoing the pay line under the Effective
+  hourly figure is captioned **"Pay on the days counted"**, not "Total pay", and today's flagged
   work AND spiffs are left out of it — so it reading lower than the Spiffs
   card's "Total pay" on the same page is expected, not a mismatch. If the card
   ever reports TODAY as a day with no hours, report it as a FAIL — that is the
   exact bug fixed on 2026-07-30.
 - If it computes, sanity-check the effective hourly figure against the period's
   flag pay + bonuses.
-- **New 2026-07-28 — "What's in that Xh gap"**: when the period has unpaid time
-  on record AND the gap is positive, a breakdown block appears under the
-  Clocked/Flagged/Gap tiles.
+- **New 2026-07-28 — "What's in that Xh gap"**: the breakdown is gated on the
+  period having a **measurable Gap** — the third comparison row (under "At the
+  shop" / "Scheduled" and "Flagged") is labelled **Gap**, its value is positive
+  and not sub-resolution (hours at the shop exceed flagged hours) — AND unpaid
+  time on record. A positive **Difference** (flagged hours exceeding an
+  incomplete set of shop hours) is **not** a Gap, and neither is "Ahead" or a
+  sub-resolution "Gap": none of them has a breakdown, and that is correct.
+  When the gate is met, a breakdown block appears under those rows.
   - The listed parts (Unpaid rework / Waiting on parts or approval / Shop time)
-    plus **"Not accounted for yet"** must sum to the **Gap** tile exactly.
-  - **The Gap tile itself must not change** when unpaid time is added. It is
+    plus **"Not accounted for yet"** must sum to the **Gap** figure exactly.
+  - **The Gap figure itself must not change** when unpaid time is added. It is
     (hours at the shop) − (flagged hours over the same days) and nothing else.
     If adding a comeback moves the Gap, the maths got contaminated — report it
     as a FAIL, not a nitpick.
@@ -1392,9 +1438,10 @@ verify the saved hours before continuing to §6.
     Settings.
   - **New 2026-09-26 — "Difference" is not a Gap; no breakdown under it is
     correct (NOT A BUG — this got re-filed 7 nights running as "breakdown
-    missing").** The breakdown only ever sits under a tile labelled **Gap**.
+    missing").** This is the same gate as the bullet above: the breakdown only
+    ever sits under a row labelled **Gap** with a measurable, positive value.
     When flagged hours exceed hours at the shop AND the shop hours are an
-    incomplete set for the period, the tile is labelled **Difference** (never
+    incomplete set for the period, the row is labelled **Difference** (never
     Gap, never Ahead), the value prints with no sign, and a refusal sentence
     takes the breakdown's place: "<N> days here have flagged work but no
     hours on them, so this is flagged time against an incomplete set of shop
@@ -1403,11 +1450,12 @@ verify the saved hours before continuing to §6.
     it" for N=1, and "No hours at the shop are on record for this period" in
     place of the day-count clause when N=0. That is the ahead branch with
     incomplete hours, never a gap, and having no breakdown there is correct.
-    Below half a display step the tile still reads **Gap**, not
-    Difference/Ahead, regardless of sign — also correct, not this case.
+    Below half a display step the row still reads **Gap**, not
+    Difference/Ahead, regardless of sign — also correct, not this case (and not
+    a "measurable" Gap either, so no breakdown is expected there).
     **File ONLY if:** (a) the day-count in that sentence doesn't match the
     actual number of days with flagged work and no hours on record, or (b) a
-    tile actually labelled **Gap** shows a positive, non-sub-resolution value
+    row actually labelled **Gap** shows a positive, non-sub-resolution value
     AND there is unpaid time on record for the period, and still no breakdown
     block appears underneath it.
 
@@ -1459,7 +1507,8 @@ ledger checks.
     deleted from this list.** Until today there was no way to remove an
     unpaid-time record at all — every row was permanent from the UI, on a
     document a shop reads, and the only escape hatch wiped the whole account.
-    Ledger rows now carry a small trash button; **comeback rows do NOT and must
+    Ledger rows now carry a small trash button (accessible name "Delete unpaid
+    record — <kind, hours, date>"); **comeback rows do NOT and must
     not** — those are op codes on a repair order and are edited on the RO.
     Exercise it on a ledger row you created tonight:
       - The confirm names the record's **reason, hours (two decimals) and
@@ -1698,10 +1747,13 @@ Use §5 to reconcile a line to fewer hours than it flagged.
   then re-check after. They must be **identical** — recovery is a separate
   ledger. If period earnings jumped by the recovered dollars, that's
   double-counting and a FAIL.
-- **Dashboard → "Recovered with FRT"** card appears once something has been
-  recovered. It shows the lifetime figure and "N closed claim(s) · X% got paid".
-  With nothing ever recovered and no claim awaiting an outcome, the card must be
-  **absent** — not a "$0 recovered" tile.
+- **Dashboard → "Recovered with FRT"** row (inside the Flagged to date zone,
+  under Period earnings) appears once something has been recovered, or when a
+  claim nudge is due. It shows the lifetime recovered figure and an **Insights**
+  link — the closed count and win rate live on /insights (§7e), so "N closed
+  claim(s) · X% got paid" back on the dashboard would be the regression. With
+  nothing ever recovered and no claim awaiting an outcome, the row must be
+  **absent** — not a "$0 recovered" row.
 
 ### 7d. True Time consent (new 2026-07-30)
 
@@ -1723,7 +1775,7 @@ leaves their own account, so the checks are about the OFF state holding.
 
 ### 7e. Insights page (NEW 2026-08-02 — newest code, hunt it hard)
 
-A new `/insights` page. Reachable from the desktop side rail and, on mobile, the
+The `/insights` page. Reachable from the desktop side rail and, on mobile, the
 **Directory** (☰ button, top right) — NOT the bottom bar, which stays at 5 items.
 
 It answers the cross-period questions Pay Period is not allowed to: which jobs
@@ -1783,7 +1835,7 @@ recovered. Sections appear only when they have something to say.
     stores `0.01` and walked straight through it.)
   - **Changed 2026-08-04 — a row now has THREE states, check all three.**
     1. **measured** — a real `1.08×`-style ratio with flag and actual hours.
-    2. **unpaid rework** — an amber pill reading `unpaid rework`, with `0.0h`
+    2. **unpaid rework** — a red `unpaid rework` tag, with `0.0h`
        flag against REAL actual hours. This is a code whose lines in the current
        window are all comebacks. It must sort to the **TOP** of the table, above
        the worst measured ratio, and the caption below the table must name the
@@ -1810,7 +1862,7 @@ recovered. Sections appear only when they have something to say.
        "nothing was recorded."
   - **NEW ELEMENT 2026-09-06 (`opcode-name-collision-indistinguishable`): each
     op-code row now carries a small `library` or `custom` origin tag.** It
-    appears in "Where your time goes", "Big jobs", "Maintenance times" and —
+    appears in "Where your time goes", "Big jobs", "The quick stuff" and —
     since 2026-09-13 — "What's costing you". It
     exists because `op_codes.code` has no unique constraint, so a library op
     code and a one-time custom line can display identical text; the tag is read
@@ -1849,7 +1901,7 @@ recovered. Sections appear only when they have something to say.
     that pairing is the tag doing its job, not a bug. Merely similar text is
     never reportable under this check, tag or no tag.
     - **This rule covers four surfaces: "Where your time goes", "Big jobs",
-      "Maintenance times" and "What's costing you".** On the leak board the
+      "The quick stuff" and "What's costing you".** On the leak board the
       same op code can legitimately appear twice for two different reasons
       (an overrun row and a rework row) — that is not a collision either.
       And the board's **ledger** rows carry no origin tag by design, so a
@@ -1932,9 +1984,9 @@ recovered. Sections appear only when they have something to say.
   the closed count or win rate reappears there, it is duplicating /insights.
 
 ### 8. Dashboard & stats sweep
-- Dashboard: pace card / projection shows sane numbers (no NaN, no negative
-  hours, projection roughly consistent with logged history).
-- Pace track past goal: the ring is gone (phase 4). The track's fill stays
+- Dashboard: the Pay Period Pace zone's projection shows sane numbers (no NaN,
+  no negative hours, projection roughly consistent with logged history).
+- Pace track past goal: there is no ring. The track's fill stays
   visually full at 100%, but the track's `aria-label` (`role="img"`, inside the
   "Pay Period Pace" zone) reports the REAL percent (e.g. "… 277 percent of
   goal …"). A capped "100 percent" while true pace is higher is a bug.
@@ -1942,7 +1994,8 @@ recovered. Sections appear only when they have something to say.
 - History filters/search: find one of tonight's ROs by RO number.
 
 ### 8b. Gamification widgets (shipped 2026-07-14)
-The dashboard has three new cards; sanity-check each:
+The dashboard has three cards, sharing one "Streak, career, snapshot" zone;
+sanity-check each:
 - **Logging streak** (heat gauge): shows a work-day count, not calendar days.
   After logging tonight's ROs it should count today. Numbers sane (no NaN,
   streak not larger than days-since-account-creation).
@@ -1984,15 +2037,18 @@ The dashboard has three new cards; sanity-check each:
   Schedule page — tested in section 8c below.
 
 ### 8c. Schedule & efficiency (shipped 2026-07-15)
-A new **Schedule** tab (desktop nav; on mobile it's linked from Settings)
+The **Schedule** page (desktop side rail; on a phone it is in the Directory,
+and Settings > Work Schedule & Days Off has an "Open schedule calendar" button)
 drives schedule-based efficiency: on days without entered clocked hours, the
 efficiency denominator falls back to the scheduled hours.
 
 - **One-time setup (do only if missing):** on /schedule, if no weekly pattern
   exists, set one: Mon–Fri, 8 hrs, starts 08:00, lunch 60 min. If a
   "Suggest from my history" button appears, note whether it prefills sanely.
-- **Calendar sanity:** the month grid renders without overlap; today is
-  ringed; scheduled days show hours; the bot's logged days show flag hours.
+- **Calendar sanity:** the month grid renders without overlap; today's number
+  is in the accent colour; scheduled days show their hours (dim = scheduled,
+  bright = hours you logged); select one of the bot's logged days and the day
+  panel shows its flag hours and RO count.
 - **Tap a past scheduled day** and check the panel opens with sane status
   (scheduled hours / flag / clocked).
 - **Actual hours:** on ONE of tonight's RO days, set actual hours (e.g. 9),
@@ -2002,27 +2058,30 @@ efficiency denominator falls back to the scheduled hours.
   remove it. (Same don't-leave-it-behind rule as before.)
 - **One-day shift override:** on a future date, change the shift (e.g. 10 hrs),
   verify the `*` marker appears, then "Reset to pattern".
-- **Empty-day resolution:** amber "empty?" days are scheduled workdays with
+- **Empty-day resolution:** days carrying the accent **"Needs a decision"** dot
+  (red "Needs a decision" tag in the day panel) are scheduled workdays with
   nothing logged. If one exists, resolve it as "Worked, zero flag", verify the
-  marker changes to "zero day", then **Undo zero day** to put it back.
+  dot goes and the day panel's tag reads "Zero day", then **Undo zero day** to
+  put it back.
 - **Shorter lede (2026-08-04) — do NOT report as missing copy.** The intro was
   cut from seven sentences to two; on a 390px phone the old one filled the
-  entire first screen before a single day was visible. Amber is now explained by
-  the **legend under the grid**, and the weekly pattern explains itself where it
-  sits. Check the legend is present and names the amber state — that is the
-  replacement. "The page no longer explains amber days" is only a bug if the
-  legend is also missing.
+  entire first screen before a single day was visible. The "Needs a decision"
+  dot is explained by the **legend above the grid**, and the weekly pattern
+  explains itself where it sits. Check the legend is present and names that
+  mark — that is the explanation. "The page no longer explains the dot" is
+  only a bug if the legend is also missing.
 - **Dashboard tie-ins:** the Today zone may show **"On Pace"** (live pace vs
   the shift as it passes) instead of Efficiency until clocked hours are
   entered — that's by design. An "Empty days" zone on the
-  dashboard is the same resolver as the calendar's amber days.
-- **Efficiency label (2026-07-16 change):** week/period/month tiles and the
-  pace-card footer now read "N% efficiency" — the old `eff` / `· sched` /
-  `· mixed` suffixes are GONE from the visible text (provenance moved to the
-  hover title). Seeing a bare "efficiency" label is correct, not a regression.
+  dashboard is the same resolver as the calendar's "Needs a decision" days.
+- **Efficiency label (2026-07-16 change):** the dashboard's Flagged to date
+  table reads a bare "N%" (e.g. "53%") in its Efficiency column — the old `eff`
+  / `· sched` / `· mixed` suffixes are GONE from the cell (provenance moved to
+  the cell's hover title). Seeing no suffix is correct, not a regression.
+  (Pay Period's spec row *labels* still say "Efficiency · sched" / "· mixed" —
+  that is the label, and it is correct.)
 - **Tier colors are honest now (2026-07-15 fix):** efficiency < 95% shows
-  the middle tier, < 80% red. Since the 2026-09-29 re-skin the middle tier is
-  **neutral grey, not amber**. Not-green tiles are not a bug; check the tier
+  the middle tier, < 80% red. The middle tier is **neutral grey, not amber**. Not-green tiles are not a bug; check the tier
   matches the number (≥ 95% green, 80–94% grey, < 80% red).
 - **Chart hover efficiency (2026-07-16):** on the dashboard Flagged Hours
   chart (Week tab, Total mode) and the History chart (Today/Week filters),
@@ -2030,19 +2089,20 @@ efficiency denominator falls back to the scheduled hours.
   row. Expected absences (NOT bugs): days with 0 flagged hours, and today
   before clocked hours are entered. Past days show it even from before the
   schedule existed (retro pattern fallback).
-- **Today clocked placeholder (2026-07-16):** the Today tile's Clocked input
+- **Today clocked placeholder (2026-07-16):** the Today zone's Clocked field
   shows today's scheduled paid hours as a grey placeholder (e.g. 8.0) on
   scheduled days. It's a hint only — an empty field still means "no clock
   entered".
 
 ### 8d. Op code tag colors (shipped 2026-07-16)
 Tags in the op code library have user-settable colors (8 theme swatches).
-- On /op-codes, tag filter chips show a small color dot; the row tick uses
-  the first tag's color.
-- Open any op code's edit modal: each tag chip has a color dot — click it,
-  an 8-swatch row + "Auto" appears. Pick a different swatch, verify the row
-  tick and filter-chip dot update, then set it back with **Auto** (don't
-  leave test colors behind).
+- On /op-codes, each tag filter chip has a 3px colour tick at its left; the row
+  tick uses the first tag's color.
+- Open any op code's edit modal: each tag chip has a color dot (accessible name
+  "Change color for {tag}") — click it, an 8-swatch row + "Auto" appears. Pick
+  a different swatch, verify the row tick and filter-chip tick update, then set
+  it back with **Auto** (don't leave test colors behind). The picker closes
+  after each pick; reopen it from the dot to read the state.
 - ⚠️ **Do NOT judge "Auto" by whether the swatch changes color** (this caused a
   false escalation 2026-07-28). Auto clears the override and falls back to a
   hash of the tag name — and for some tags the hash IS the slot that was
@@ -2054,7 +2114,9 @@ Tags in the op code library have user-settable colors (8 theme swatches).
   - the **Auto** button itself renders bold/current when no override is set
   So after clicking Auto: the swatch ring should go from solid to soft, and
   Auto should become the current-looking option. If the ring stays solid and
-  Auto never reads as current, *that* is the bug.
+  Auto never reads as current, *that* is the bug. The accessible names say the
+  same thing: `Color N (current)` = pinned, `Color N (current, automatic)` =
+  auto happened to land there, `Auto (current)` = no override.
 - If picking a color errors with "migration needs to run first", report it —
   that means the tag_colors migration is missing from prod.
 
@@ -2100,9 +2162,12 @@ not a bug).
     the bot must not do that. Testing that it *opens and accepts text* is enough.
 - If the Report a Bug button or modal is missing entirely, note `SKIPPED — not present`.
 
-### 8g. Backup export (rewritten 2026-08-05 — read-only check)
+### 8g. Backup export (rewritten 2026-08-05 — read-only check; load-bearing since 2026-10-01)
 
-Settings → Data has **Export** (download a backup) and **Import** (restore one).
+Settings → **Backup** (pick it from the All settings list) has **Download
+backup** (the export) and **Import backup…** (restore one). **Load-bearing tier:
+it takes about 3 minutes and it is the only deploy-drift check in the run (the
+version compare below); §3z's stored-vs-displayed check does not need it.**
 
 ⛔ **NEVER CLICK IMPORT.** Import REPLACES the entire account — every RO, op code,
 clock, spiff, dispute and pay rate — and there is no undo. Running it would wipe
@@ -2118,12 +2183,12 @@ the streak, snapshots and career hours that §8b checks against. Export only.
   below), so losing the section to a crashed session is expensive. The
   in-page capture below is the sanctioned, **primary** method — not a
   fallback to reach for only after a download fails:
-  1. Before clicking Export, stub `URL.createObjectURL` to capture the
+  1. Before clicking Download backup, stub `URL.createObjectURL` to capture the
      blob's text into a page global (e.g. resolve a `window.__frtBackup`
      promise with `await blob.text()` inside the stub), and neutralise
      `HTMLAnchorElement.prototype.click` so the anchor Export creates never
      fires a real download.
-  2. Click Export normally.
+  2. Click **Download backup** normally.
   3. **Poll the global — it resolves asynchronously** (`blob.text()` is a
      promise), so read it in a loop until it holds the JSON, not once,
      immediately after the click.
@@ -2152,11 +2217,19 @@ the streak, snapshots and career hours that §8b checks against. Export only.
   whatever fields `src/lib/import-remap.ts` currently reads onto each (the
   list below is a snapshot, not the ceiling — if the source has grown more
   fields since, check those too):
-  - Entry op code lines: `paidHours`, `isComeback`, `laborType`, `isUpsell`.
-  - Entries: `loggedTime`.
+  - Entry op code lines: **`actualSource`** (`"timer"` for a timer save,
+    `"estimate"` for a §2d retro-time answer, null for a line with no actual
+    hours or one typed by hand — the key must still exist either way),
+    `paidHours`, `isComeback`, `laborType`, `isUpsell`, plus `subOpCodeId`,
+    `position`, and `custom` / `customCode` / `customDescription`.
+  - Entries: **`status`** (`"open"` or `"closed"`), `loggedTime`, `comebackKind`
+    and `comebackOfEntryId` (null on an ordinary RO — the keys must still
+    exist; on a comeback RO from §2b they carry the kind and the original's
+    id).
   If any of these keys are missing, the export has regressed — the import
   used to drop exactly these, which silently destroyed reconciliation history.
-- If Settings → Data or the Export button is missing, note `SKIPPED — not present`.
+- If Settings → Backup or the Download backup button is missing, note
+  `SKIPPED — not present`.
 
 ### 8h. Dashboard updates after Quick Add WITHOUT a reload (fixed 2026-08-05)
 
@@ -2178,7 +2251,7 @@ Do not just describe this — actually compute the parity and act on it.
 **Part A — RO Quick Add:**
 
 1. On `/dashboard`, note the **Pay Period Pace** flag-hours figure and the top RO
-   in the RO list.
+   in **Recent ROs**.
    - Read the pace from the plain-text twin, not the visible digits:
      `document.querySelector('section[aria-labelledby="z-pace"] .bigline .sr-only').textContent`. The visible
      number is a RollingNumber odometer that renders every digit 0–9, so
@@ -2273,7 +2346,7 @@ second pair of eyes on the wording and the look, not as the primary gate.
    must say the link "has expired or has already been used", NOT "this page
    needs a reset link". The second wording blames the user for a token that
    simply timed out; that exact bug shipped.
-5. **On /account, the Password card must ask for "Current Password"** above New
+5. **On /account, the Password row must ask for "Current Password"** above New
    Password and Confirm Password. If that field is gone, a stolen session is
    enough to take the account over. Report it as CRITICAL. Fill in nothing.
 
@@ -2316,7 +2389,8 @@ cut never drops the same half every night.** Compute `date -u +%d`: on an
 below); on an **even** day-of-month, do Upsell marking first, then Time of
 day. Do not just describe this — actually compute the parity and act on it.
 
-**Time of day on an RO.** Settings → Logging → "Time of day on each RO" is a
+**Time of day on an RO.** Settings → "Time of day on each RO" (group Logging;
+pick it from the list) is a
 switch, **off by default** — this is verified (migration default is
 `not null default false`, and 7 of 8 prod accounts read false). Off means the
 log form shows no time field and no time is stored — that is the designed
@@ -2328,12 +2402,13 @@ alone tonight. End the run with it OFF again (see the last bullet below).
 Turn it ON, then:
 
 - Log an RO. The time field sits beside the date at the top of the form, already
-  filled with the current time in your timezone. **The whole pill must open the
+  filled with the current time in your timezone. **The whole Time field must open the
   picker when clicked, not just the little clock glyph** — clicking the text and
   getting only a caret is the bug this shipped to fix.
-- Change the time to something distinctive (say `07:15`), save, and check the RO
-  row on the dashboard reads `#… · <date> · 7:15 AM`. Then open the RO — the
-  detail modal shows the same time on the date line.
+- Change the time to something distinctive (say `07:15`), save, and check the RO's
+  tag in the dashboard's Recent ROs shows `<date> · 7:15 AM` beside the RO
+  number. Then open the RO — the detail modal shows the same time on the date
+  line.
 - **The "Logged …" line inside the RO modal is a DIFFERENT fact** (when the row
   was written) and will not match the time you typed. That is correct. Do not
   report the two disagreeing.
@@ -2350,10 +2425,14 @@ Turn it ON, then:
   so it's what the bot account should sit at between runs. If the switch is
   already ON when you arrive, that's real signal (something outside this run
   turned it on) and belongs in the report as a finding, not as a state to
-  preserve by leaving it alone.
+  preserve by leaving it alone. (§8m's "Keep flag date" check needs this switch
+  ON and turns it on itself if it is off, then restores it — it does not rely
+  on the order you ran §8k's halves in, and it does not change this rule: the
+  run still ends with the switch OFF.)
 
-**Upsell marking.** On the dashboard's Recent ROs, each row has an **Upsell**
-button between the RO information and the hours.
+**Upsell marking.** On the dashboard's Recent ROs, each RO tag has a quiet
+**Upsell** button in its action slot (accessible name "Add an upsell to RO
+12345").
 
 - Tap it: the RO opens with the op-code picker already up and a checkbox already
   ticked, reading "Mark as an upsell". Add a code and confirm the new line shows
@@ -2459,10 +2538,23 @@ follows is deliberate.
 per day on a *timeline*; its *flag* lands on the day it is *closed*. Nothing
 here is "unpaid time" — see the last bullet.
 
+**Order inside §8m — work the checks in this order:** (1) **open** the
+ticket ("Open one" and the Open-ticket duplicate refusal); (2) **structural
+checks** — the dashboard Open tickets zone and the RO modal's shape (badge, no
+op-code table, Timeline section, no Add-op-code picker); (3) **timeline hours**
+— events and hours, the calendar, close, reopen, the Keep-flag-date check, the
+timer on an open ticket, and editing an open ticket; (4) **focus rotation** —
+tonight's case; (5) **verify clean** — every ticket you opened closed or
+deleted, and the "Time of day on each RO" switch back OFF. **Put the
+focus-rotation case last whenever it ends in a close or a delete** (the
+`day % 5` cases 1, 3 and 4 do): the cleanup rule at the bottom of this section
+("end with every ticket closed or deleted") is then satisfied for free by the
+case itself, and no later step needs a ticket the case consumed.
+
 **Open one.** /log → the new switch **"Open ticket — no op codes yet"** at the
 top of a NEW RO (not on an edit). Turn it on:
 
-- The date pill, the op-code step and the Scan banner disappear. Only the RO
+- The Date and Time fields, the op-code step and the Scan row disappear. Only the RO
   number is required; vehicle and notes are optional. The save button reads
   **Open ticket**. Save it. You land on the dashboard.
 - Open a second ticket with the SAME RO number: the form must refuse with
@@ -2472,12 +2564,12 @@ top of a NEW RO (not on an edit). Turn it on:
 - The switch is signed-in only. On /guest/log it must not exist. If it does,
   that is a real bug.
 
-**Dashboard card.** A new **Open tickets** card sits above the unresolved-days
-card, and ONLY when you have at least one open ticket — zero open means no
-card, not an empty state. One row per ticket: RO number, a status chip (the
+**Dashboard zone.** An **Open tickets** zone ("N open" at its right) sits under
+the Pay Period Pace zone and above the Empty days zone, and ONLY when you have
+at least one open ticket — zero open means no zone, not an empty state. One row per ticket: RO number, a status chip (the
 latest timeline event — a fresh ticket reads **Opened**), "Vehicle not set" or
 the vehicle, **Open N days** (counted from the day it was opened, inclusive),
-and hours-so-far on the right. Oldest-opened first. Tap a row → the RO modal.
+and hours-so-far on the right. Oldest-opened first. Tap the RO number on a row → the RO modal.
 
 **RO modal on an open ticket.** An **Open ticket** badge at the top; no op-code
 table, no Add-op-code picker, no earnings row (nothing has flagged yet).
@@ -2527,8 +2619,9 @@ Instead a **Timeline** section:
 **The calendar — the point of the feature.** With 8.0h logged on yesterday and
 NO closed RO that day:
 
-- Yesterday must NOT appear in the **unresolved days** card ("was this a day
-  off?"). If it does, that is the bug this whole feature exists to fix.
+- Yesterday must NOT appear in the **Empty days** zone ("One scheduled day
+  looks empty" / "N scheduled days look empty" — the "was this a day off?"
+  prompt). If it does, that is the bug this whole feature exists to fix.
 - The **streak** must count yesterday as worked.
 - The dashboard **Today** panel shows "2.5h on 1 open ticket" under the 0.0h
   flag; the **This Week** / **Pay Period** rows of the "Flagged to date" table
@@ -2546,7 +2639,8 @@ NO closed RO that day:
 
 **Close it.** Modal → **Close ticket** → /log opens in close mode: title
 "Close ticket #…", a banner "Closing this ticket", the full op-code editor,
-and the date pill now means the CLOSE date, defaulting to today.
+and the Date field (labelled "Close date") now means the CLOSE date,
+defaulting to today.
 
 - The banner reads **"Timeline says 10.5h worked. Put it on:"** with a line
   picker and an editable actual-hours box. Add two op codes (say 1.2h and
@@ -2588,26 +2682,32 @@ and the date pill now means the CLOSE date, defaulting to today.
   enable. Only a Close
   button that stays disabled for more than ~10 seconds, or an inline error
   that doesn't clear on retry, is a finding.
-- **New 2026-09-26 — Keep flag date now keeps the time too (with "Time of day
-  on each RO" turned ON, §8k).** Liem's ruling: Keep keeps the WHOLE
-  timestamp, not just the date. Turn the time-of-day switch ON for this check.
-  Open (or start) a fresh open ticket and close it once with any op code — a
+- **New 2026-09-26 — Keep flag date now keeps the time too (needs the "Time of
+  day on each RO" switch ON, §8k).** Liem's ruling: Keep keeps the WHOLE
+  timestamp, not just the date. **Before you open the ticket for this check,
+  look at the switch (Settings > Time of day on each RO) and turn it ON
+  yourself if it is OFF** — do not assume §8k left it on (§8k's odd/even order
+  can put its time-of-day half before or after this section, and §8k always
+  ends with the switch OFF). Open (or start) a fresh open ticket and close it
+  once with any op code — a
   time gets stored on that close; note it. Reopen the ticket, then re-close
-  choosing **Keep flag date <old date>** — the Time pill must pre-fill with
+  choosing **Keep flag date <old date>** — the Time field must pre-fill with
   that SAME stored time (not the current time), and after saving the RO's
   time must still equal the noted time. PASS. A time that moved to "now"
   under Keep is a FAIL. Optionally, reopen again and re-close choosing
-  **Move to today** instead: the Time pill should now show the current time,
+  **Move to today** instead: the Time field should now show the current time,
   and the saved time should be whenever you actually saved (current time at
   close), not the old one. As a secondary, optional check: if a ticket has no
   time stored to begin with (switch was off, or time was cleared), Keep must
   leave it with no time — not invent one. Close or delete the fresh ticket
-  per this section's end-of-run rule below, then turn the time-of-day switch
-  back OFF — leaving it ON is exactly the leftover §8k's own end-of-run rule
-  exists to catch.
+  per this section's end-of-run rule below, then **restore the switch to OFF**
+  (the state §8k ends the run in) — leaving it ON is exactly the leftover
+  §8k's own end-of-run rule exists to catch. If you had to turn it on, that
+  restore is mandatory; if it was ON when you arrived, report that under §8k
+  as that section instructs, and still finish with it OFF.
 
-**The timer on an open ticket (Phase 2).** /timer → Add timer → pick the open
-ticket from the RO picker. It attaches with NO "Pick a line" prompt and the
+**The timer on an open ticket (Phase 2).** /timer → **Start a timer** → pick
+the open ticket from the "Put an RO on a timer" list. It attaches with NO "Pick a line" prompt and the
 slot card shows an **Open ticket** badge. Let it run a minute or two, flip it
 to **Parts** and back to **Working**, then Save:
 
@@ -2645,9 +2745,13 @@ in a file nobody re-reads.** Compute `date -u +%d`, then `day % 5`:
 | 3 | **Reopen a ticket, then delete it.** |
 | 4 | **Two tabs:** reopen the ticket in one tab, close it in the other. |
 
-Run only tonight's matching case. Report it in its own subsection under §8m
-("Focus rotation — case N"), **including if it behaved correctly** — a clean
-result on one of these is real coverage, not a null finding to omit.
+Run only tonight's matching case, **as the last check in §8m** (see the order
+above). Report it in its own subsection under §8m ("Focus rotation — case
+N"), **including if it behaved correctly** — a clean result on one of these is
+real coverage, not a null finding to omit. Cases 1, 3 and 4 end in a close or a
+delete, so running them last leaves nothing open and the cleanup rule below is
+met without extra work; cases 0 and 2 leave a ticket open, so close or delete
+it before you finish.
 **Case 3 (`day % 5 == 3`, reopen then delete) removes the ticket it runs on
 — give it its own dedicated ticket, or run it last among §8m's checks, never
 on a ticket an earlier §8m step still needs.**

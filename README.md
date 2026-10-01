@@ -85,9 +85,13 @@ npm run test:visual            # then: docker compose --profile canary rm -sf ap
 
 ## Design system
 
-Tokens live in `src/app/globals.css` (`--bg-*`, `--fg-*`, `--brand`, `--radius`,
-`--ring`, `--tap-min`, …). Components consume tokens — **no hex colors in
-`.tsx`**, no ad-hoc radii. Use the primitives in `src/components/ui/`
-(`Button`, `Input`, `Select`, `Card`, `Badge`, `Field`, `Table`) instead of
-hand-rolling. The quality suite enforces the ergonomics; the snapshot suite
-enforces the look.
+Tokens live in the token block at the top of `src/app/globals.css`: surfaces
+(`--wall`, `--wall-2`, `--panel`, `--plate`), text (`--ink`, `--ink-2`,
+`--ink-3`), the accent (`--accent`, `--accent-text`, `--accent-tint`), state
+(`--good`, `--bad`, nothing else), shape (`--r-panel`, `--r-sign`, `--w-*`) and
+ergonomics (`--tap`, `--gutter`, `--hour`). Four themes and five accents are
+set by `data-theme` / `data-accent` on `<html>`. Components consume tokens —
+**no raw colour below the token block, no hex in `.tsx`**, no ad-hoc radii.
+Shared components are the `src/app/styles/ui-*.css` partials; `DESIGN.md` is
+the written-up system. The quality suite enforces the ergonomics; the snapshot
+suite enforces the look.

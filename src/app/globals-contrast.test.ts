@@ -132,24 +132,6 @@ const PAIRS: Pair[] = [
   ["--accent-mark", "--trim", UI],
 ];
 
-/**
- * Pairs the alias bridge creates that the design never had: an old token
- * that was text now resolves to a new one. These are what the bridge
- * actually paints on screen until each page is rebuilt.
- */
-const BRIDGE_PAIRS: Pair[] = [
-  ["--brand", "--bg-0", TEXT],
-  ["--brand", "--bg-1", TEXT],
-  ["--brand", "--bg-2", TEXT],
-  ["--brand", "--bg-3", TEXT],
-  ["--brand-ink", "--accent", TEXT],
-  ["--warn", "--warn-bg", TEXT],
-  ["--warn", "--bg-1", TEXT],
-  ["--info", "--bg-1", TEXT],
-  ["--fg-3", "--bg-3", TEXT],
-  ["--fg-3", "--bg-4", TEXT],
-];
-
 const combos = THEMES.flatMap((theme) => ACCENTS.map((accent) => ({ theme, accent })));
 
 describe("globals.css token block — WCAG AA", () => {
@@ -164,7 +146,7 @@ describe("globals.css token block — WCAG AA", () => {
 
   it.each(combos)("$theme / $accent: every design pair passes", (ctx) => {
     const t = resolve(ctx);
-    const fails = [...PAIRS, ...BRIDGE_PAIRS]
+    const fails = PAIRS
       .map(([fg, bg, min]) => ({ fg, bg, min, r: ratio(t[fg], t[bg]) }))
       .filter((p) => p.r < p.min)
       .map((p) => `${p.fg} on ${p.bg}: ${p.r.toFixed(2)} < ${p.min}`);
