@@ -421,8 +421,7 @@ function Hero() {
             <StatTile lab="This Month" big="142" unit="hrs" sub={<span className="text-[var(--good)]">101% eff</span>} />
           </div>
           <div
-            className="grid gap-3 max-sm:grid-cols-1"
-            style={{ gridTemplateColumns: "1.25fr 1fr" }}
+            className="grid grid-cols-[1.25fr_1fr] gap-3 max-sm:grid-cols-1"
           >
             <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" />
             <div className="card p-[18px] flex flex-col">
@@ -640,8 +639,7 @@ function GuestMode() {
     <section className="py-[88px] bg-[var(--bg-1)] border-t border-b border-[var(--line)] max-sm:py-14">
       <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
         <div
-          className="grid gap-12 max-[900px]:grid-cols-1 max-[900px]:gap-8"
-          style={{ gridTemplateColumns: "1.1fr 0.9fr" }}
+          className="grid grid-cols-[1.1fr_0.9fr] gap-12 max-[900px]:grid-cols-1 max-[900px]:gap-8"
         >
           <div>
             <Rv>
