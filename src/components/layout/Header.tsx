@@ -1,36 +1,53 @@
-import Link from "next/link";
-import { CalendarRange, Lightbulb, Settings } from "lucide-react";
-import { signOut } from "@/app/actions/auth";
+"use client";
 
-export function Header({ userEmail }: { userEmail?: string | null }) {
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { DirectoryButton } from "./DirectoryDialog";
+import { Icon, LogoMark, LogoWord } from "./icons";
+import { APP_ITEMS, APP_SUB } from "./nav-items";
+
+/**
+ * Phone top bar (final.html .topbar). From 1024px up CSS hides it and the rail
+ * carries the logo instead. Signed out (userEmail null/undefined) it is the
+ * logo alone, unless the shell passes `actions` (guest mode puts its own
+ * directory button there).
+ */
+export function Header({
+  userEmail,
+  timerRunning = false,
+  actions,
+}: {
+  userEmail?: string | null;
+  timerRunning?: boolean;
+  actions?: ReactNode;
+}) {
+  const pathname = usePathname();
+  const onPayPeriod = pathname.startsWith("/pay-period");
   return (
-    <header className="app-header">
-      <Link href="/" className="app-brand">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/frt-logo.png" alt="Flat Rate Tracker" style={{ height: 56, width: "auto" }} />
+    <header className="topbar">
+      <Link
+        href={userEmail ? "/dashboard" : "/"}
+        className="logo"
+        aria-label={userEmail ? "Flat Rate Tracker, go to Dashboard" : "Flat Rate Tracker"}
+      >
+        <LogoMark />
+        <LogoWord />
       </Link>
-      {userEmail && (
-        <div className="app-header-util">
-          {/* Mobile only — these two live in the top tabs on desktop, but drop
-              off the 5-item thumb bar, so surface them in the header on phones. */}
-          <Link href="/pay-period" className="btn btn-ghost btn-sm header-mobile-only" aria-label="Pay Period" style={{ color: "var(--fg-3)" }}>
-            <CalendarRange size={18} />
+      {userEmail ? (
+        <div className="topbar-actions">
+          <Link
+            href="/pay-period"
+            className="iconbtn"
+            aria-label="Pay Period"
+            aria-current={onPayPeriod ? "page" : undefined}
+          >
+            <Icon name="period" />
           </Link>
-          <Link href="/insights" className="btn btn-ghost btn-sm header-mobile-only" aria-label="Insights" style={{ color: "var(--fg-3)" }}>
-            <Lightbulb size={18} />
-          </Link>
-          <Link href="/settings" className="btn btn-ghost btn-sm header-mobile-only" aria-label="Settings" style={{ color: "var(--fg-3)" }}>
-            <Settings size={18} />
-          </Link>
-          <Link href="/account" className="btn btn-ghost btn-sm" style={{ color: "var(--fg-3)" }}>
-            Account
-          </Link>
-          <form action={signOut}>
-            <button type="submit" className="btn btn-ghost btn-sm" style={{ color: "var(--fg-3)" }}>
-              Sign out
-            </button>
-          </form>
+          <DirectoryButton items={APP_ITEMS} sub={APP_SUB} timerRunning={timerRunning} />
         </div>
+      ) : (
+        actions && <div className="topbar-actions">{actions}</div>
       )}
     </header>
   );

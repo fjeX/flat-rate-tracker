@@ -23,23 +23,30 @@ const FIXTURE_COOKIES = [
 ];
 
 type UiFixtures = {
-  theme: "dark" | "light";
+  theme: "dark" | "light" | "dark-pitch";
 };
 
+/** `light-*` → light/blue, `pitch-red-*` → dark-pitch/red, else dark/blue. */
+function lookFor(projectName: string) {
+  if (projectName.startsWith("light")) return { theme: "light", accent: "blue" } as const;
+  if (projectName.startsWith("pitch-red")) return { theme: "dark-pitch", accent: "red" } as const;
+  return { theme: "dark", accent: "blue" } as const;
+}
+
 /**
- * Applies the theme encoded in the project name (`dark-mobile`, `light-desktop`…)
- * before any page script runs, so the <head> theme script paints the right
- * theme on first render — same mechanism a real user's saved preference uses.
+ * Applies the look encoded in the project name (`dark-mobile`, `light-desktop`,
+ * `pitch-red-mobile`…) before any page script runs, so the <head> theme script
+ * paints it on first render — same mechanism a real user's saved preference uses.
  */
 export const test = base.extend<UiFixtures>({
   theme: [
     async ({}, use, testInfo) => {
-      await use(testInfo.project.name.startsWith("light") ? "light" : "dark");
+      await use(lookFor(testInfo.project.name).theme);
     },
     { auto: false },
   ],
   context: async ({ context, baseURL }, use, testInfo) => {
-    const theme = testInfo.project.name.startsWith("light") ? "light" : "dark";
+    const look = lookFor(testInfo.project.name);
     if (baseURL) {
       // `url` and `path` are mutually exclusive here — passing both is rejected
       // with "Cookie should have either url or path". url implies path "/".
@@ -58,18 +65,20 @@ export const test = base.extend<UiFixtures>({
        */
       await context.route(/api\.slimelab\.cc/, (route) => route.abort());
     }
-    await context.addInitScript((t) => {
+    await context.addInitScript(({ theme, accent }) => {
       try {
-        localStorage.setItem("theme", t);
-        localStorage.setItem("accent", "blue");
+        localStorage.setItem("theme", theme);
+        localStorage.setItem("accent", accent);
+        // AppearanceSync copies the ACCOUNT's look (dark/blue for the fixture
+        // user) into localStorage on a browser's first visit. Mark this browser
+        // as already synced for that user, or every light and pitch-red
+        // snapshot would repaint dark/blue after hydration.
+        localStorage.setItem("appearance-synced-user", "00000000-0000-4000-8000-000000000001");
         const root = document.documentElement;
-        root.setAttribute("data-theme", t);
-        root.setAttribute("data-accent", "blue");
-        // theme-light rides along for one release (see src/lib/theme.ts)
-        if (t === "light") root.classList.add("theme-light");
-        else root.classList.remove("theme-light");
+        root.setAttribute("data-theme", theme);
+        root.setAttribute("data-accent", accent);
       } catch {}
-    }, theme);
+    }, look);
     /**
      * Freeze the BROWSER's clock, the same way instrumentation.ts freezes the
      * server's — and for the same reason it overrides the constructor rather

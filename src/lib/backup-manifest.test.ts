@@ -42,6 +42,8 @@ function fullBundle(): ImportBundle {
       defaultLaborType: "warranty",
       shareLaborTimes: true,
       trackRoTime: true,
+      theme: "dark-graphite",
+      accent: "orange",
     },
     opCodes: [
       {
@@ -353,6 +355,21 @@ describe("payload shape", () => {
     // Settings are the opposite rule: absent must stay absent, or restoring an
     // old file would reset a preference the destination account already made.
     expect(built.settings).not.toHaveProperty("track_ro_time");
+  });
+
+  // --- v5: theme + accent round-trip, and the file that predates them -------
+  it("carries theme and accent into the RPC payload under their column names", () => {
+    const built = buildImportPayload(fullBundle(), { newId: () => "NEW" });
+    expect(built.settings).toMatchObject({ theme: "dark-graphite", accent: "orange" });
+  });
+
+  it("omits theme and accent for an older backup so the destination's look is kept", () => {
+    const old = fullBundle();
+    delete old.settings.theme;
+    delete old.settings.accent;
+    const built = buildImportPayload(old, { newId: () => "NEW" });
+    expect(built.settings).not.toHaveProperty("theme");
+    expect(built.settings).not.toHaveProperty("accent");
   });
 
   it("refuses to call a comeback line an upsell, even from a hand-edited file", () => {

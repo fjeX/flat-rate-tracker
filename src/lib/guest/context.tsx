@@ -64,6 +64,8 @@ const defaultSettings: UserSettings = {
   // turn this on — so the log form stays as it is. A guest who signs up gets the
   // real default (off) from their own settings row.
   trackRoTime: false,
+  theme: "dark",
+  accent: "blue",
 };
 
 // Demo tags so the guest library shows off grouping out of the box.

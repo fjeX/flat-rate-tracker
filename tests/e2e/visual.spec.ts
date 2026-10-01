@@ -53,23 +53,16 @@ for (const route of ROUTES) {
         html,
         "positive control failed: <html> class list is unreadable, so the dark-mode theme assertion below would be vacuous",
       ).toHaveClass(/(^|\s)antialiased(\s|$)/);
-      // data-theme is what paints since the 2026-09 overhaul; theme-light is
-      // the one-release compatibility class and is checked alongside it.
+      // data-theme is what paints since the 2026-09 overhaul (the old
+      // theme-light class was dropped in phase 3).
       await expect(
         html,
         `${theme} project rendered with the wrong data-theme — it was reset (hydration recovery?), so this snapshot would be the wrong palette`,
       ).toHaveAttribute("data-theme", theme);
-      if (theme === "light") {
-        await expect(
-          html,
-          "light project rendered without theme-light — the theme class was wiped (hydration recovery?), so this snapshot would be a dark page",
-        ).toHaveClass(/(^|\s)theme-light(\s|$)/);
-      } else {
-        await expect(
-          html,
-          "dark project rendered WITH theme-light",
-        ).not.toHaveClass(/(^|\s)theme-light(\s|$)/);
-      }
+      await expect(
+        html,
+        `${theme} project rendered with the wrong data-accent — AppearanceSync or a hydration re-render overwrote it`,
+      ).toHaveAttribute("data-accent", theme === "dark-pitch" ? "red" : "blue");
       /**
        * No mask. The selector list this used to carry existed purely to hide the
        * bot account's churning data; with the data and the clock both pinned

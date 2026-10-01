@@ -2,11 +2,9 @@
 //
 // The choice lives on <html> as data-theme / data-accent. The <head> script
 // below is the only thing that reads localStorage for it, and it runs before
-// first paint so there is no flash of the default look.
-//
-// `theme-light` (the pre-overhaul class) is still set alongside data-theme for
-// one release, so anything that still greps for it keeps working. Drop it in
-// phase 3 of plans/frt-visual-overhaul-rollout.md.
+// first paint so there is no flash of the default look. The signed-in value
+// lives on user_settings; AppearanceSync copies it into localStorage, so the
+// head script never has to wait on the network.
 
 export const THEMES = ["dark", "light", "dark-graphite", "dark-pitch"] as const;
 export const ACCENTS = ["blue", "orange", "teal", "red", "ink"] as const;
@@ -31,7 +29,6 @@ export function parseAccent(raw: string | null | undefined): Accent {
 export function applyThemeToRoot(root: HTMLElement, theme: Theme, accent?: Accent): void {
   root.dataset.theme = theme;
   if (accent) root.dataset.accent = accent;
-  root.classList.toggle("theme-light", theme === "light");
 }
 
 // Plain ES5 on purpose: it is inlined into <head> and runs before any bundle.
@@ -44,4 +41,4 @@ export const THEME_BOOT_SCRIPT = `(function(){try{var d=document.documentElement
   ACCENTS,
 )}.indexOf(a)<0)a=${JSON.stringify(
   DEFAULT_ACCENT,
-)};d.setAttribute('data-theme',t);d.setAttribute('data-accent',a);if(t==='light')d.classList.add('theme-light');}catch(e){}})();`;
+)};d.setAttribute('data-theme',t);d.setAttribute('data-accent',a);}catch(e){}})();`;

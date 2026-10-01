@@ -6,6 +6,7 @@
 // foreign keys, neither of which a shared settings row could provide).
 import type { Database } from "@/lib/supabase/database.types";
 import type { FieldRegion, LaborType, PeriodOverride, RoTemplate, UserSettings } from "@/lib/types";
+import { DEFAULT_ACCENT, DEFAULT_THEME, parseAccent, parseTheme, type Accent, type Theme } from "@/lib/theme";
 import { getCurrentUserId, retryOnce, type DbClient } from "./_client";
 
 type SettingsRow = Database["public"]["Tables"]["user_settings"]["Row"];
@@ -44,6 +45,10 @@ function toSettings(row: SettingsRow): UserSettings {
     // Same `?? false`, same reason in a different key: an unknown answer must
     // not put a new field in front of someone who never asked for it.
     trackRoTime: row.track_ro_time ?? false,
+    // A pre-migration DB returns no theme/accent key; the parsers turn that
+    // (and any out-of-list value) into the defaults instead of throwing.
+    theme: parseTheme(row.theme),
+    accent: parseAccent(row.accent),
   };
 }
 
@@ -71,6 +76,8 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
       tagColors: {},
       shareLaborTimes: false,
       trackRoTime: false,
+      theme: DEFAULT_THEME,
+      accent: DEFAULT_ACCENT,
     };
   }
   return toSettings(data);
@@ -86,6 +93,8 @@ export type SettingsPatch = {
   tagColors?: Record<string, number>;
   shareLaborTimes?: boolean;
   trackRoTime?: boolean;
+  theme?: Theme;
+  accent?: Accent;
 };
 
 export async function updateSettings(
@@ -112,6 +121,9 @@ export async function updateSettings(
   // Needs a column-level UPDATE grant to be writable at all — granted in
   // 20260816000000_ro_time_and_upsell.sql. See the lock_is_admin migration.
   if (patch.trackRoTime !== undefined) update.track_ro_time = patch.trackRoTime;
+  // Column-level UPDATE grant: 20260929000000_appearance.sql.
+  if (patch.theme !== undefined) update.theme = patch.theme;
+  if (patch.accent !== undefined) update.accent = patch.accent;
 
   const { data, error } = await supabase
     .from("user_settings")

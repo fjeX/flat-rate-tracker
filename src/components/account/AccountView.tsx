@@ -4,9 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateProfile, updateEmail, updatePassword } from "@/app/actions/account";
 import { setWeekStartDayAction } from "@/app/actions/settings";
-import { useStored, writeStored } from "@/lib/client-storage";
-// THEME_KEY is shared with the anti-FOUC <head> script (THEME_BOOT_SCRIPT).
-import { THEME_KEY, applyThemeToRoot } from "@/lib/theme";
+import Link from "next/link";
 
 interface Props {
   initialFirstName: string;
@@ -64,15 +62,6 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
   const [passwordResult, setPasswordResult] = useState<{ error?: string; message?: string }>({});
   const [passwordPending, startPasswordTransition] = useTransition();
 
-  // Theme. Dark is both the default and the server's answer — the real value
-  // lives in localStorage, so it can only be known after hydration.
-  const theme = useStored<"dark" | "light">(
-    THEME_KEY,
-    (raw) => (raw === "light" ? "light" : "dark"),
-    "dark",
-    "dark",
-  );
-
   // Week start preference
   const [weekStartDay, setWeekStartDay] = useState<0 | 1>(initialWeekStartDay);
   const [weekPending, startWeekTransition] = useTransition();
@@ -83,13 +72,6 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
       await setWeekStartDayAction(next);
       router.refresh();
     });
-  }
-
-  function applyTheme(next: "dark" | "light") {
-    // writeStored persists AND notifies, so `theme` above updates from the
-    // store — no separate setState to keep in step with what was written.
-    writeStored(THEME_KEY, next);
-    applyThemeToRoot(document.documentElement, next);
   }
 
   // Handlers
@@ -369,46 +351,12 @@ export function AccountView({ initialFirstName, initialLastName, initialEmail, i
         </div>
       </section>
 
-      {/* ── Theme ────────────────────────────────────────────── */}
-      <section>
-        <h2 className="section-title">Appearance</h2>
-        <div className="card padded-lg">
-          <p className="field-label" style={{ marginBottom: 12 }}>
-            Color Theme
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => applyTheme("dark")}
-              style={{
-                borderColor: theme === "dark" ? "var(--brand)" : "var(--line)",
-                background: theme === "dark" ? "var(--brand-bg)" : "var(--bg-3)",
-                color: theme === "dark" ? "var(--brand)" : "var(--fg-2)",
-                fontWeight: theme === "dark" ? 600 : 400,
-              }}
-            >
-              Dark
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => applyTheme("light")}
-              style={{
-                borderColor: theme === "light" ? "var(--brand)" : "var(--line)",
-                background: theme === "light" ? "var(--brand-bg)" : "var(--bg-3)",
-                color: theme === "light" ? "var(--brand)" : "var(--fg-2)",
-                fontWeight: theme === "light" ? 600 : 400,
-              }}
-            >
-              Light
-            </button>
-          </div>
-          <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--fg-3)" }}>
-            Theme preference is saved to this browser.
-          </p>
-        </div>
-      </section>
+      {/* Theme and accent live in Settings now */}
+      <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)" }}>
+        <Link href="/settings#appearance" className="preview-link">
+          Theme and accent moved to Settings &gt; Appearance
+        </Link>
+      </p>
 
     </div>
   );

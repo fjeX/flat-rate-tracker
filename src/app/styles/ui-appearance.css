@@ -1,0 +1,58 @@
+/* Phase 3: Settings > Appearance (theme radios, accent swatches, preview).
+   Mock: final.html screen-settings. */
+
+.set-group { border: 0; padding: 0; margin: 0; min-width: 0; }
+.set-group + .set-group, .set-group + .appearance-status { margin-top: var(--s5); }
+.set-help { color: var(--ink-2); font-size: var(--fs-label); margin: -2px 0 var(--s2); max-width: 60ch; }
+.opts { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+.opt { position: relative; display: block; cursor: pointer; }
+.opt input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; inset: 0; cursor: pointer; }
+.opt-box {
+  display: flex; align-items: center; gap: var(--s3); min-height: 56px; padding: var(--s2) var(--s3);
+  background: var(--panel); border: var(--w-edge) solid var(--line); border-radius: var(--r-sign);
+  color: var(--ink);
+  transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.opt:hover .opt-box { border-color: var(--ink-3); background: var(--quiet-hover); }
+.opt input:active + .opt-box { background: var(--quiet-active); }
+.opt input:focus-visible + .opt-box { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.opt input:checked + .opt-box { border-color: var(--ink); background: var(--panel); }
+.opt-name { font-weight: 700; font-size: var(--fs-control); line-height: 1.2; }
+.opt-note { display: block; font-weight: 400; font-size: var(--fs-label); color: var(--ink-2); }
+.opt-state { margin-left: auto; display: none; align-items: center; gap: var(--s1); font-size: var(--fs-label); font-weight: 700; color: var(--ink); white-space: nowrap; }
+.opt-state svg { background: var(--block); color: var(--block-ink); border-radius: var(--r-tag); padding: 2px; width: 20px; height: 20px; }
+.opt input:checked + .opt-box .opt-state { display: inline-flex; }
+.appearance-ic { width: 22px; height: 22px; fill: currentColor; fill-rule: evenodd; flex: none; display: block; }
+.appearance-ic-flip { transform: scaleX(-1); }
+.swatch {
+  flex: none; width: 44px; height: 32px; border-radius: var(--r-tag);
+  background: var(--accent); border: var(--w-edge) solid var(--accent-active);
+  display: grid; place-items: center; color: var(--accent-ink);
+  font-weight: 700; font-size: var(--fs-label); line-height: 1;
+}
+.preview {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); padding: var(--s3);
+  background: var(--panel); border: var(--w-edge) solid var(--edge); border-radius: var(--r-panel);
+}
+.preview-link { color: var(--accent-text); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.appearance-status {
+  display: flex; align-items: baseline; gap: var(--s3); padding: var(--s3);
+  border-radius: var(--r-sign); color: var(--ink); background: var(--good-bg);
+}
+.appearance-status.is-bad { background: var(--bad-bg); }
+.appearance-status p { margin: 0; max-width: 72ch; }
+.appearance-status b { font-weight: 700; }
+.appearance-status-tag { font-size: var(--fs-min); font-weight: 700; text-transform: uppercase; letter-spacing: var(--track-label); color: var(--good); }
+.is-bad .appearance-status-tag { color: var(--bad); }
+
+/* Two columns once the container is wide enough. Container query, not viewport,
+   so the same card is right on a page and inside a phone dialog. */
+.appearance { container-type: inline-size; }
+@container (min-width: 30rem) {
+  .appearance:not(.appearance-compact) .opts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Compact: dialog use. One column, tighter boxes, notes hidden to save height. */
+.appearance-compact .opt-box { min-height: 48px; padding: var(--s1) var(--s3); }
+.appearance-compact .opt-note { display: none; }
+.appearance-compact .set-group + .set-group { margin-top: var(--s4); }
+.appearance-status[hidden] { display: none; }

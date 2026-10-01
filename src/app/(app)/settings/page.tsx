@@ -13,6 +13,8 @@ import { TimezoneCard } from "@/components/settings/TimezoneCard";
 import { QuickAddCard } from "@/components/settings/QuickAddCard";
 import { RoTimeCard } from "@/components/settings/RoTimeCard";
 import { TrueTimeCard } from "@/components/settings/TrueTimeCard";
+import { AppearanceCard } from "@/components/settings/AppearanceCard";
+import { Card } from "@/components/ui/Card";
 import Link from "next/link";
 
 export default async function SettingsPage() {
@@ -36,7 +38,17 @@ export default async function SettingsPage() {
     <main className="mx-auto max-w-2xl px-4 py-6">
       <h1 className="text-xl font-semibold" style={{ color: "var(--fg-0)" }}>Settings</h1>
 
-      <section className="mt-6">
+      <section className="mt-6" id="appearance">
+        <Card name="Appearance" paddedLg>
+          <AppearanceCard
+            initialTheme={settings.theme}
+            initialAccent={settings.accent}
+            mode="account"
+          />
+        </Card>
+      </section>
+
+      <section className="mt-8">
         <h2 className="section-title">Tracking</h2>
         <div className="space-y-6">
           <GoalHoursCard initialGoalHours={settings.goalHours} />

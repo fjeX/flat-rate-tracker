@@ -1,7 +1,8 @@
 import { GuestStoreProvider } from "@/lib/guest/context";
 import { Header } from "@/components/layout/Header";
-import { GuestNav } from "@/components/guest/GuestNav";
+import { GuestNav, GuestDirectoryButton } from "@/components/guest/GuestNav";
 import { ClaimAccountLink } from "@/components/guest/ClaimAccountLink";
+import { GuestAppearance } from "@/components/guest/GuestAppearance";
 
 /**
  * Never prerender the guest segment.
@@ -12,7 +13,7 @@ import { ClaimAccountLink } from "@/components/guest/ClaimAccountLink";
  * build-day markup to a browser whose clock is frozen to FIXTURE_NOW, the text
  * disagrees, and React recovers the hydration mismatch by re-rendering from the
  * root. That rewrites <html> from the server props in src/app/layout.tsx
- * (data-theme="dark", no `theme-light`) — so what the <head> theme script set
+ * (data-theme="dark" data-accent="blue") — so what the <head> theme script set
  * is wiped and the light-mode canary photographs a dark page.
  *
  * Segment config cannot live on the pages themselves ("use client" forbids it),
@@ -23,7 +24,7 @@ export const dynamic = "force-dynamic";
 export default function GuestLayout({ children }: { children: React.ReactNode }) {
   return (
     <GuestStoreProvider>
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <div className="shell-frame">
         <div style={{
           borderBottom: "1px solid color-mix(in oklab, var(--warn) 25%, var(--line))",
           background: "color-mix(in oklab, var(--warn) 8%, var(--bg-1))",
@@ -39,7 +40,7 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
           </ClaimAccountLink>{" "}
           to keep your data.
         </div>
-        <Header userEmail={null} />
+        <Header userEmail={null} actions={<GuestDirectoryButton extra={<GuestAppearance />} />} />
         <GuestNav />
         <div style={{ flex: 1 }}>{children}</div>
       </div>

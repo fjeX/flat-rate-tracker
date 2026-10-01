@@ -168,6 +168,31 @@ fonts and corner radius only** — no layout, wording or positions moved:
     input fields, and they still open the picker on tap.
   - **Cards** have a thick rule along the top. **Dialogs** have a grey title
     bar with an ✕ close button.
+- Phase 3 rebuilt the **navigation** and moved the **theme setting**. Pages
+  and features are unchanged; how you reach some of them moved:
+  - **Desktop (≥1024px):** the row of top tabs is gone. A **side rail** on the
+    left lists every page (Dashboard, Log RO, History, Timer, Pay Period,
+    Insights, Schedule, Op Codes, Settings); the current page has a filled
+    circle marker. **Account** and **Sign out** sit at the bottom of the rail.
+  - **Phone:** the top bar is the logo, a **Pay Period** icon and a **☰
+    Directory** button. The Insights / Settings / Account icons and the
+    "Sign out" button that used to be in the header are **inside the
+    Directory** now (a sheet that slides up, with an ✕ to close). The bottom
+    bar is still Dashboard · Log RO · Timer · History · Op Codes; the current
+    page is marked with an accent bar.
+  - **Theme moved from Account to Settings.** /account no longer has the
+    "Color Theme" Dark/Light buttons; it has one line, "Theme and accent moved
+    to Settings > Appearance". **Settings > Appearance** (first section on
+    /settings) has four themes (Light, Dark, Graphite, Pitch) and five accent
+    colours (Blue, Orange, Teal, Red, Ink), a preview row, and a **Saved**
+    tag after each change. The choice is saved to the account.
+    **Leave the bot account on Dark + Blue.** If you change it to test, set it
+    back before you finish, or the next run's screenshots will be in the
+    wrong colours.
+  - The Log RO **save bar** is a slim 54px strip sitting directly on top of
+    the bottom bar on phones.
+  - Guests: the same Directory, with a compact Appearance section at the
+    bottom (saved to that browser only).
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,
@@ -1331,8 +1356,8 @@ leaves their own account, so the checks are about the OFF state holding.
 
 ### 7e. Insights page (NEW 2026-08-02 — newest code, hunt it hard)
 
-A new `/insights` page. Reachable from the desktop top tabs and, on mobile, the
-lightbulb icon in the header (NOT the bottom bar — that stays at 5 items).
+A new `/insights` page. Reachable from the desktop side rail and, on mobile, the
+**Directory** (☰ button, top right) — NOT the bottom bar, which stays at 5 items.
 
 It answers the cross-period questions Pay Period is not allowed to: which jobs
 run long, which days are strongest, how efficiency is trending, and what FRT has

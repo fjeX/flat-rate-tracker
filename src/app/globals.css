@@ -7,6 +7,8 @@
 @import "./styles/ui-fields.css";
 @import "./styles/ui-surfaces.css";
 @import "./styles/ui-figures.css";
+@import "./styles/ui-shell.css";
+@import "./styles/ui-appearance.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1
@@ -457,115 +459,10 @@ body {
 /* ── Layout ───────────────────────────────────────────── */
 .app-shell { display: flex; flex-direction: column; min-height: 100vh; }
 
-.app-header {
-  position: sticky; top: 0; z-index: 30;
-  display: flex; flex-direction: row; align-items: center; justify-content: space-between;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bar-bg);
-  backdrop-filter: blur(12px);
-}
-.app-header-util {
-  display: flex; align-items: center; gap: 4px;
-}
-.app-brand {
-  display: flex; align-items: center;
-  text-decoration: none; color: var(--fg-0);
-}
-.app-brand-mark {
-  width: 34px; height: 34px;
-  display: grid; place-items: center;
-  border-radius: 9px;
-  background: var(--brand-strong);
-  flex-shrink: 0;
-}
-.app-brand-name { font-weight: 600; letter-spacing: -0.01em; font-size: 14px; }
-.app-brand-sub  { display: block; font-size: 11px; color: var(--fg-3); letter-spacing: 0.06em; text-transform: uppercase; line-height: 1; margin-top: 2px; }
-
-.app-tabs {
-  position: sticky; top: 73px; z-index: 25;
-  display: flex; gap: 6px; padding: 6px 8px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bar-bg);
-  backdrop-filter: blur(12px);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.app-tabs::-webkit-scrollbar { display: none; }
-/* Calm Workspace: pill tabs, active = raised surface (no underline) */
-.app-tab {
-  position: relative;
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 9px 16px;
-  min-height: var(--tap-min);
-  font-size: 14px; color: var(--fg-2);
-  white-space: nowrap; cursor: pointer;
-  border: none; background: transparent;
-  border-radius: 999px;
-  text-decoration: none;
-  transition: color 120ms, background 120ms;
-}
-.app-tab:hover { color: var(--fg-1); background: var(--bg-2); }
-.app-tab.active { color: var(--fg-0); font-weight: 550; background: var(--bg-2); }
-
-.app-tab .running-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--good);
-  animation: pulse-good 1.6s ease-in-out infinite;
-}
-
 .app-main { flex: 1; padding: 16px; max-width: 760px; margin: 0 auto; width: 100%; }
 
 @media (min-width: 900px) {
   .app-main { padding: 24px; max-width: 1080px; }
-  .app-header { padding: 12px 24px; }
-  .app-tabs { padding: 2px 16px; top: 81px; }
-}
-
-/* ── Bottom tab bar (mobile thumb nav, Phase 3) ──────────
-   Desktop keeps the top .app-tabs; below 900px those hide and this
-   fixed thumb bar takes over. Sized for one-handed, gloved use. */
-.bottom-nav { display: none; }
-.header-mobile-only { display: none; }
-
-@media (max-width: 899px) {
-  .app-tabs { display: none; }
-  .header-mobile-only { display: inline-flex; }
-
-  /* Keep content + bottom-anchored UI clear of the fixed bar */
-  body { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
-  .pip { bottom: calc(72px + env(safe-area-inset-bottom)); }
-  .save-bar { bottom: calc(72px + env(safe-area-inset-bottom)); }
-
-  .bottom-nav {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-    display: flex; align-items: stretch;
-    background: var(--bar-bg);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid var(--line);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-}
-
-.bottom-tab {
-  flex: 1;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px;
-  padding: 8px 4px 8px;
-  min-height: 54px;
-  color: var(--fg-3);
-  text-decoration: none;
-  transition: color 120ms, transform 90ms ease;
-}
-.bottom-tab:active { transform: scale(0.94); }
-.bottom-tab.active { color: var(--brand); }
-.bottom-tab-icon { position: relative; display: grid; place-items: center; }
-.bottom-tab-label { font-size: 11px; font-weight: 500; letter-spacing: 0.01em; }
-.bottom-running-dot {
-  position: absolute; top: -2px; right: -4px;
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--good);
-  animation: pulse-good 1.6s ease-in-out infinite;
 }
 
 /* Calm Workspace: sentence-case section labels — quieter than the old
@@ -1295,22 +1192,6 @@ button.step-head {
 .scan-banner .label { font-size: 14px; font-weight: 600; }
 .scan-banner .sub   { font-size: 12px; color: var(--fg-3); margin-top: 1px; }
 
-/* Sticky save bar */
-.save-bar {
-  position: sticky; bottom: 16px;
-  margin-top: 16px;
-  background: var(--bar-bg);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  display: flex; align-items: center; justify-content: space-between;
-  box-shadow: var(--shadow-pop);
-  z-index: 20;
-}
-.save-bar .summary { font-size: 13px; color: var(--fg-2); }
-.save-bar .summary b { color: var(--fg-0); font-family: var(--font-num); }
-
 /* ── History page ────────────────────────────────────── */
 .filter-row {
   display: flex; gap: 6px; overflow-x: auto;
@@ -1488,8 +1369,6 @@ button.step-head {
 /* ── Focus-visible (keyboard-only focus ring) ───────────
    Brand-colored ring on every custom interactive class in the file, plus
    a generic fallback for any plain <button>/<a> that isn't covered above. */
-.app-tab:focus-visible,
-.bottom-tab:focus-visible,
 .filter-chip:focus-visible,
 .opc-chip:focus-visible,
 .ro-row:focus-visible,
