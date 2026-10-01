@@ -28,6 +28,9 @@
 @import "./styles/dlg-timer.css";
 @import "./styles/dlg-guest-timer.css";
 @import "./styles/dlg-guest-ro.css";
+@import "./styles/dlg-template.css";
+@import "./styles/dlg-bug-report.css";
+@import "./styles/dlg-bug-inbox.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1

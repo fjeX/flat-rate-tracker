@@ -358,7 +358,6 @@
 /* ===========================================================================
    CUSTOM DATES DIALOG (PeriodOverrideModal)
    =========================================================================== */
-.pp-dlg-actions { margin: var(--s4) calc(-1 * var(--s4)) calc(-1 * var(--s4)); justify-content: flex-end; }
 .pp-delta { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--w-hair) solid var(--line-soft); }
 .pp-delta:last-child { border-bottom: 0; }
 .pp-delta .k { color: var(--ink-2); font-weight: 600; }

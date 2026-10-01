@@ -1,1 +1,46 @@
-/* Phase 5 dialog bodies — dlg-timer. Tokens only; prefix per the brief. */
+/* Phase 5 dialog bodies — the signed-in timer dialogs (TimerSlots: attach
+   picker, line pickers, Log RO; TimerSaveModal: close-out + receipt). Prefix
+   `tmd-`. Tokens only.
+
+   Not a mock-line port: the mock has no timer dialogs, so this assembles the
+   shared parts (.log-picks/.log-pick from page-log.css, .rows/.k/.v from
+   ui-page.css, .card-inset, .sfield, .badge-chip, .btn) and only places them.
+   The guest timer mirrors these class names exactly. */
+
+.tmd-body > * + * { margin-top: var(--s3); }
+
+/* ---------- pick rows (.log-pick is the shared row; these fill it) ---------- */
+.tmd-pick-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
+.tmd-ro { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent-text); letter-spacing: var(--track-num); }
+.tmd-date { font-size: var(--fs-label); color: var(--ink-2); }
+.tmd-pick .log-pick-desc { overflow-wrap: anywhere; }
+.log-pick.tmd-pick .log-pick-act, .log-pick.tmd-opt .log-pick-act { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: var(--track-num); }
+.log-pick:disabled { opacity: 0.55; cursor: not-allowed; }
+.log-pick:disabled:hover { background: var(--panel); border-color: var(--line); }
+.tmd-block { font-weight: 600; }
+
+/* ---------- close-out: radio rows ---------- */
+.tmd-lines { border: 0; margin: 0; padding: 0; min-width: 0; }
+.tmd-opt { cursor: pointer; }
+.tmd-opt:hover { border-color: var(--ink-3); background: var(--quiet-hover); }
+.tmd-opt:focus-within { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.tmd-opt input[type="radio"] { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.tmd-opt .log-pick-txt { flex: 1 1 auto; }
+
+/* ---------- close-out: summary well + sentences ---------- */
+.tmd-well { padding: var(--s1) var(--s3); }
+.tmd-well .rows .v { white-space: nowrap; }
+.tmd-fine { margin: 0; font-size: var(--fs-label); color: var(--ink-2); }
+.tmd-well > .tmd-fine { padding: var(--s2) 0; border-top: var(--w-hair) solid var(--line); }
+.tmd-total { margin: 0; color: var(--ink-2); }
+.tmd-total .num, .tmd-total strong { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: var(--track-num); }
+.tmd-total strong { color: var(--ink); }
+.tmd-sentence { margin: 0; color: var(--ink); }
+.tmd-sentence strong { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: var(--track-num); }
+.tmd-notes { margin-top: var(--s2); }
+.tmd-notes > p { margin: 0; justify-content: flex-start; font-size: var(--fs-label); color: var(--ink-2); line-height: 1.4; }
+.tmd-primary { margin-left: auto; }
+
+/* ---------- Log RO modal: LogRoForm is a full page, so it is told it lives in a panel ---------- */
+.tmd-logro .log-page { padding: 0; max-width: none; }
+.tmd-logro .save-bar { bottom: 0; margin-left: calc(-1 * var(--s4)); margin-right: calc(-1 * var(--s4)); margin-bottom: calc(-1 * var(--s4)); border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Wrench, X } from "lucide-react";
+import { Plus, Wrench } from "lucide-react";
 import type { Entry, NewEntry, OpCode, RoTemplate } from "@/lib/types";
 import { formatDateShort } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
@@ -273,62 +273,14 @@ export function TimerSlots({
 
       {/* Attach-an-RO picker */}
       {pickRoOpen && (
-        <Modal open onClose={() => setPickRoOpen(false)} title="Put an RO on a timer">
-          <div className="space-y-3">
-            {recentEntries.length === 0 ? (
-              <p className="text-sm text-[var(--fg-2)]">
-                The timer clocks against an RO — log one first.
-              </p>
-            ) : (
-              <>
-              {!anyAttachable && (
-                <p className="text-sm text-[var(--fg-2)]">
-                  Every line of every recent RO is already on a timer.
-                </p>
-              )}
-              <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
-                {pickerEntries.map(({ entry: e, blocked }) => {
-                  const vehicle = vehicleLabel(e);
-                  return (
-                    <li key={e.id}>
-                      <button
-                        type="button"
-                        onClick={() => handleAttach(e)}
-                        disabled={pending || blocked !== null}
-                        className="flex w-full min-h-[44px] items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
-                      >
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-2">
-                            <span className="font-mono text-sm text-[var(--brand)]">
-                              #{e.roNumber}
-                            </span>
-                            <span className="text-xs text-[var(--fg-3)]">
-                              {formatDateShort(e.date)}
-                            </span>
-                          </span>
-                          {vehicle && (
-                            <span className="mt-0.5 block truncate text-xs text-[var(--fg-2)]">
-                              {vehicle}
-                            </span>
-                          )}
-                          {blocked && (
-                            <span className="mt-0.5 block text-xs text-[var(--fg-3)]">
-                              {blocked}
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-sm text-[var(--fg-0)]">
-                          {fmtHours(e.flagHours)}h
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              </>
-            )}
+        <Modal
+          open
+          onClose={() => setPickRoOpen(false)}
+          title="Put an RO on a timer"
+          footer={
             <Button
               block
+              variant={recentEntries.length > 0 && anyAttachable ? "line" : "go"}
               onClick={() => {
                 setPickRoOpen(false);
                 setLogRoOpen(true);
@@ -337,6 +289,46 @@ export function TimerSlots({
               <Plus className="h-4 w-4" />
               Log a new RO
             </Button>
+          }
+        >
+          <div className="tmd-body">
+            {recentEntries.length === 0 ? (
+              <StatusField tag="Note" inset>
+                The timer clocks against an RO — log one first.
+              </StatusField>
+            ) : (
+              <>
+                {!anyAttachable && (
+                  <StatusField tag="Note" inset>
+                    Every line of every recent RO is already on a timer.
+                  </StatusField>
+                )}
+                <div className="log-picks">
+                  {pickerEntries.map(({ entry: e, blocked }) => {
+                    const vehicle = vehicleLabel(e);
+                    return (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => handleAttach(e)}
+                        disabled={pending || blocked !== null}
+                        className="log-pick tmd-pick"
+                      >
+                        <span className="log-pick-txt">
+                          <span className="tmd-pick-head">
+                            <span className="tmd-ro">#{e.roNumber}</span>
+                            <span className="tmd-date">{formatDateShort(e.date)}</span>
+                          </span>
+                          {vehicle && <span className="log-pick-desc">{vehicle}</span>}
+                          {blocked && <span className="log-pick-desc tmd-block">{blocked}</span>}
+                        </span>
+                        <span className="log-pick-act">{fmtHours(e.flagHours)}h</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </Modal>
       )}
@@ -384,46 +376,39 @@ export function TimerSlots({
           onClose={() => setAttachLineEntry(null)}
           title={`RO #${attachLineEntry.roNumber} — Which line?`}
         >
-          <div className="space-y-3">
-            <p className="text-sm text-[var(--fg-2)]">
+          <div className="tmd-body">
+            <p className="tmd-fine">
               This RO already has a timer running. Pick the line this second
               timer is for — its hours land on that line only.
             </p>
-            <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
+            <div className="log-picks">
               {freeLinesFor(attachLineEntry).map((line) => {
                 const { code, description } = lineLabelFor(line, libraryById);
                 return (
-                  <li key={line.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const entryId = attachLineEntry.id;
-                        setAttachLineEntry(null);
-                        setPickRoOpen(false);
-                        run(() => attachRoToTimerAction(entryId, line.id));
-                      }}
-                      disabled={pending}
-                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="font-mono text-sm text-[var(--brand)]">
-                          {code}
-                        </span>
-                        {line.custom && <Badge className="ml-2">Other</Badge>}
-                        {description && (
-                          <span className="block truncate text-xs text-[var(--fg-3)]">
-                            {description}
-                          </span>
-                        )}
+                  <button
+                    key={line.id}
+                    type="button"
+                    onClick={() => {
+                      const entryId = attachLineEntry.id;
+                      setAttachLineEntry(null);
+                      setPickRoOpen(false);
+                      run(() => attachRoToTimerAction(entryId, line.id));
+                    }}
+                    disabled={pending}
+                    className="log-pick tmd-pick"
+                  >
+                    <span className="log-pick-txt">
+                      <span className="tmd-pick-head">
+                        <Badge chip mono>{code}</Badge>
+                        {line.custom && <Badge>Other</Badge>}
                       </span>
-                      <span className="shrink-0 text-xs text-[var(--fg-2)]">
-                        {fmtHours(line.flagHours)}h
-                      </span>
-                    </button>
-                  </li>
+                      {description && <span className="log-pick-desc">{description}</span>}
+                    </span>
+                    <span className="log-pick-act">{fmtHours(line.flagHours)}h</span>
+                  </button>
                 );
               })}
-            </ul>
+            </div>
           </div>
         </Modal>
       )}
@@ -434,11 +419,11 @@ export function TimerSlots({
           onClose={() => setLinePickSlotId(null)}
           title={`RO #${linePickEntry.roNumber} — Pick a line`}
         >
-          <div className="space-y-3">
-            <p className="text-sm text-[var(--fg-2)]">
+          <div className="tmd-body">
+            <p className="tmd-fine">
               Which line should this timer&apos;s worked hours land on?
             </p>
-            <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
+            <div className="log-picks">
               {linePickEntry.opCodes.map((line) => {
                 const { code, description } = lineLabelFor(line, libraryById);
                 // Taken by a DIFFERENT slot on this same RO. Now that one RO
@@ -451,65 +436,49 @@ export function TimerSlots({
                     s.lineId === line.id,
                 );
                 return (
-                  <li key={line.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLinePickSlotId(null);
-                        run(() => setTimerLineAction(linePickSlot.id, line.id));
-                      }}
-                      disabled={takenElsewhere}
-                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="font-mono text-sm text-[var(--brand)]">
-                          {code}
-                        </span>
-                        {line.custom && <Badge className="ml-2">Other</Badge>}
-                        {description && (
-                          <span className="block truncate text-xs text-[var(--fg-3)]">
-                            {description}
-                          </span>
-                        )}
-                        {takenElsewhere && (
-                          <span className="block text-xs text-[var(--fg-3)]">
-                            Already on another timer.
-                          </span>
-                        )}
+                  <button
+                    key={line.id}
+                    type="button"
+                    onClick={() => {
+                      setLinePickSlotId(null);
+                      run(() => setTimerLineAction(linePickSlot.id, line.id));
+                    }}
+                    disabled={takenElsewhere}
+                    className="log-pick tmd-pick"
+                  >
+                    <span className="log-pick-txt">
+                      <span className="tmd-pick-head">
+                        <Badge chip mono>{code}</Badge>
+                        {line.custom && <Badge>Other</Badge>}
                       </span>
-                      <span className="shrink-0 text-xs text-[var(--fg-2)]">
-                        {fmtHours(line.flagHours)}h
-                      </span>
-                    </button>
-                  </li>
+                      {description && <span className="log-pick-desc">{description}</span>}
+                      {takenElsewhere && (
+                        <span className="log-pick-desc tmd-block">Already on another timer.</span>
+                      )}
+                    </span>
+                    <span className="log-pick-act">{fmtHours(line.flagHours)}h</span>
+                  </button>
                 );
               })}
-            </ul>
+            </div>
           </div>
         </Modal>
       )}
 
-      {/* Log RO full-screen overlay */}
+      {/* Log RO: the full form in a wide panel. LogRoForm has its own sticky
+          save bar, so the Modal gets no footer. */}
       {logRoOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-0)]">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg-0)]/90 px-4 py-3 backdrop-blur">
-            <h2 className="text-base font-semibold">Log New RO</h2>
-            <Button
-              variant="ghost"
-              onClick={() => setLogRoOpen(false)}
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </Button>
+        <Modal open onClose={() => setLogRoOpen(false)} title="Log New RO" size="xl">
+          <div className="tmd-logro">
+            <LogRoForm
+              initialOpCodes={library}
+              roTemplates={roTemplates}
+              onSave={handleLogRoSave}
+              redirectTo="/timer"
+              checkDuplicates
+            />
           </div>
-          <LogRoForm
-            initialOpCodes={library}
-            roTemplates={roTemplates}
-            onSave={handleLogRoSave}
-            redirectTo="/timer"
-            checkDuplicates
-          />
-        </div>
+        </Modal>
       )}
     </main>
   );

@@ -478,6 +478,47 @@ fonts and corner radius only** — no layout, wording or positions moved:
       and `#backup-parse-error` are unchanged. One behaviour change: the ✕
       does nothing while an import is in flight (Cancel was already disabled
       there).
+  - **Dialog bodies, waves 2–3 (timer, guest, template editor, bug report,
+    admin inbox, custom period dates).** Same rules as wave 1: footer bar,
+    FIX / NOTE / SAVED status fields, every name below unchanged.
+    - **Timer (§3a, §3b, §8m).** "Put an RO on a timer", "RO #N — Which
+      line?", "RO #N — Pick a line" and "Close out RO #N" use the shared
+      pick-row look (RO number or code chip at the left, hours at the right).
+      The picker's empty / blocked notes are NOTE fields; **"Log a new RO"
+      moved into the picker's footer**. Close out: the Worked / Waiting rows
+      sit in a well, the line choice is still a radio list named
+      `timer-save-line`, the running-total sentence and "Waiting time is
+      logged as unpaid time against this RO" are verbatim, Cancel / "Save &
+      close timer" are in the footer; the receipt titles ("Saved", "Saved
+      with a warning", "Saved — unpaid time also logged") and Done are
+      unchanged. **The timer's Log RO overlay is now a real dialog titled
+      "Log New RO"** (the dialog ✕, named "Close", replaces the old Close
+      button); the full Log RO form with its own save bar sits inside it.
+      The guest timer dialogs mirror all of this (radio name
+      `guest-timer-save-line`; "Log a new RO" is a footer link to /guest/log).
+      The guest RO detail dialog mirrors the signed-in one (Delete / Close in
+      the footer, lines table, "Flagged total").
+    - **RO Template Setup (§1c).** Lede, Template name field, the four field
+      toggles as chips with a hue tick (still `aria-pressed`, same names), a
+      dashed upload well with a new **"Choose a photo"** button (the hidden
+      `#ro-template-file` is unchanged; the well itself is no longer the
+      click target), hint as a NOTE field, errors as a FIX field carrying
+      `#ro-template-error`. Footer: "0 / 4 fields mapped" at the left, then
+      Cancel and Save Template. Cancel still closes without creating a blank
+      template.
+    - **Report a Bug (§8e, §8j).** "What went wrong?" is still
+      `#bug-description`; focus behaviour is unchanged (the dialog ✕ takes
+      focus on open, typing in the box keeps it there). Screenshots are tiles
+      with "Remove screenshot N" buttons; "Add a screenshot" is an outlined
+      button (hidden `#bug-photo-input` unchanged). Cancel / Send report /
+      Done are in the footer; errors are a FIX field, the success state is a
+      SAVED field with the same two sentences. **Do not click Send report.**
+    - **Admin > Bugs "Bug report" dialog.** Close / Save triage in the
+      footer; `triage-severity`, `triage-category`, `triage-status`,
+      `triage-notes` unchanged; screenshot tiles named "View screenshot N of
+      M"; the "Screenshot" lightbox's "Close screenshot" button is square.
+    - **Custom period dates.** No visible change: Cancel / Save dates are now
+      the dialog's own sticky footer instead of a bar inside the form.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,

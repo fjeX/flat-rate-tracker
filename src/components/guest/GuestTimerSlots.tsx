@@ -210,64 +210,58 @@ export function GuestTimerSlots() {
 
       {/* Attach-an-RO picker */}
       {pickRoOpen && (
-        <Modal open onClose={() => setPickRoOpen(false)} title="Put an RO on a timer">
-          <div className="space-y-3">
-            {entries.length === 0 ? (
-              <p className="text-sm text-[var(--fg-2)]">
-                The timer clocks against an RO — log one first.
-              </p>
-            ) : (
-              <>
-              {!anyAttachable && (
-                <p className="text-sm text-[var(--fg-2)]">
-                  Every line of every RO is already on a timer.
-                </p>
-              )}
-              <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
-                {attachable.map(({ entry: e, blocked }) => {
-                  const vehicle = vehicleLabel(e);
-                  return (
-                    <li key={e.id}>
-                      <button
-                        type="button"
-                        onClick={() => handleAttach(e)}
-                        disabled={blocked !== null}
-                        className="flex w-full min-h-[44px] items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
-                      >
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-2">
-                            <span className="font-mono text-sm text-[var(--brand)]">
-                              #{e.roNumber}
-                            </span>
-                            <span className="text-xs text-[var(--fg-3)]">
-                              {formatDateShort(e.date)}
-                            </span>
-                          </span>
-                          {vehicle && (
-                            <span className="mt-0.5 block truncate text-xs text-[var(--fg-2)]">
-                              {vehicle}
-                            </span>
-                          )}
-                          {blocked && (
-                            <span className="mt-0.5 block text-xs text-[var(--fg-3)]">
-                              {blocked}
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-sm text-[var(--fg-0)]">
-                          {fmtHours(e.flagHours)}h
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              </>
-            )}
-            <Link href="/guest/log" className="btn btn-block">
+        <Modal
+          open
+          onClose={() => setPickRoOpen(false)}
+          title="Put an RO on a timer"
+          footer={
+            <Link
+              href="/guest/log"
+              className={`btn btn-block ${entries.length > 0 && anyAttachable ? "btn-line" : "btn-go"}`}
+            >
               <Plus className="h-4 w-4" />
               Log a new RO
             </Link>
+          }
+        >
+          <div className="tmd-body">
+            {entries.length === 0 ? (
+              <StatusField tag="Note" inset>
+                The timer clocks against an RO — log one first.
+              </StatusField>
+            ) : (
+              <>
+                {!anyAttachable && (
+                  <StatusField tag="Note" inset>
+                    Every line of every RO is already on a timer.
+                  </StatusField>
+                )}
+                <div className="log-picks">
+                  {attachable.map(({ entry: e, blocked }) => {
+                    const vehicle = vehicleLabel(e);
+                    return (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => handleAttach(e)}
+                        disabled={blocked !== null}
+                        className="log-pick tmd-pick"
+                      >
+                        <span className="log-pick-txt">
+                          <span className="tmd-pick-head">
+                            <span className="tmd-ro">#{e.roNumber}</span>
+                            <span className="tmd-date">{formatDateShort(e.date)}</span>
+                          </span>
+                          {vehicle && <span className="log-pick-desc">{vehicle}</span>}
+                          {blocked && <span className="log-pick-desc tmd-block">{blocked}</span>}
+                        </span>
+                        <span className="log-pick-act">{fmtHours(e.flagHours)}h</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </Modal>
       )}
@@ -281,45 +275,38 @@ export function GuestTimerSlots() {
           onClose={() => setAttachLineEntry(null)}
           title={`RO #${attachLineEntry.roNumber} — Which line?`}
         >
-          <div className="space-y-3">
-            <p className="text-sm text-[var(--fg-2)]">
+          <div className="tmd-body">
+            <p className="tmd-fine">
               This RO already has a timer running. Pick the line this second
               timer is for — its hours land on that line only.
             </p>
-            <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
+            <div className="log-picks">
               {freeLinesFor(attachLineEntry).map((line) => {
                 const { code, description } = lineLabelFor(line, libraryById);
                 return (
-                  <li key={line.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const entryId = attachLineEntry.id;
-                        setAttachLineEntry(null);
-                        setPickRoOpen(false);
-                        setError(attachGuestTimer(entryId, line.id));
-                      }}
-                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="font-mono text-sm text-[var(--brand)]">
-                          {code}
-                        </span>
-                        {line.custom && <Badge className="ml-2">Other</Badge>}
-                        {description && (
-                          <span className="block truncate text-xs text-[var(--fg-3)]">
-                            {description}
-                          </span>
-                        )}
+                  <button
+                    key={line.id}
+                    type="button"
+                    onClick={() => {
+                      const entryId = attachLineEntry.id;
+                      setAttachLineEntry(null);
+                      setPickRoOpen(false);
+                      setError(attachGuestTimer(entryId, line.id));
+                    }}
+                    className="log-pick tmd-pick"
+                  >
+                    <span className="log-pick-txt">
+                      <span className="tmd-pick-head">
+                        <Badge chip mono>{code}</Badge>
+                        {line.custom && <Badge>Other</Badge>}
                       </span>
-                      <span className="shrink-0 text-xs text-[var(--fg-2)]">
-                        {fmtHours(line.flagHours)}h
-                      </span>
-                    </button>
-                  </li>
+                      {description && <span className="log-pick-desc">{description}</span>}
+                    </span>
+                    <span className="log-pick-act">{fmtHours(line.flagHours)}h</span>
+                  </button>
                 );
               })}
-            </ul>
+            </div>
           </div>
         </Modal>
       )}
@@ -330,11 +317,11 @@ export function GuestTimerSlots() {
           onClose={() => setLinePickSlotId(null)}
           title={`RO #${linePickEntry.roNumber} — Pick a line`}
         >
-          <div className="space-y-3">
-            <p className="text-sm text-[var(--fg-2)]">
+          <div className="tmd-body">
+            <p className="tmd-fine">
               Which line should this timer&apos;s worked hours land on?
             </p>
-            <ul className="card-inset divide-y divide-[var(--line-soft)] overflow-hidden">
+            <div className="log-picks">
               {linePickEntry.opCodes.map((line) => {
                 const { code, description } = lineLabelFor(line, libraryById);
                 const takenElsewhere = timers.some(
@@ -344,35 +331,31 @@ export function GuestTimerSlots() {
                     t.lineId === line.id,
                 );
                 return (
-                  <li key={line.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGuestTimerLine(linePickSlot.id, line.id);
-                        setLinePickSlotId(null);
-                      }}
-                      disabled={takenElsewhere}
-                      className="flex w-full min-h-[44px] items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-3)]/40 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="font-mono text-sm text-[var(--brand)]">
-                          {code}
-                        </span>
-                        {line.custom && <Badge className="ml-2">Other</Badge>}
-                        {description && (
-                          <span className="block truncate text-xs text-[var(--fg-3)]">
-                            {description}
-                          </span>
-                        )}
+                  <button
+                    key={line.id}
+                    type="button"
+                    onClick={() => {
+                      setGuestTimerLine(linePickSlot.id, line.id);
+                      setLinePickSlotId(null);
+                    }}
+                    disabled={takenElsewhere}
+                    className="log-pick tmd-pick"
+                  >
+                    <span className="log-pick-txt">
+                      <span className="tmd-pick-head">
+                        <Badge chip mono>{code}</Badge>
+                        {line.custom && <Badge>Other</Badge>}
                       </span>
-                      <span className="shrink-0 text-xs text-[var(--fg-2)]">
-                        {fmtHours(line.flagHours)}h
-                      </span>
-                    </button>
-                  </li>
+                      {description && <span className="log-pick-desc">{description}</span>}
+                      {takenElsewhere && (
+                        <span className="log-pick-desc tmd-block">Already on another timer.</span>
+                      )}
+                    </span>
+                    <span className="log-pick-act">{fmtHours(line.flagHours)}h</span>
+                  </button>
                 );
               })}
-            </ul>
+            </div>
           </div>
         </Modal>
       )}
@@ -420,33 +403,50 @@ function GuestSaveModal({
   const newTotal = Math.round(((existing ?? 0) + workHours) * 100) / 100;
 
   return (
-    <Modal open onClose={onClose} title={`Close out RO #${entry.roNumber}`}>
-      <div className="space-y-4">
-        <div className="card-inset" style={{ padding: 12 }}>
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-sm text-[var(--fg-2)]">Worked</span>
-            <span className="font-mono text-sm text-[var(--fg-0)]">
-              {formatElapsed(elapsed.work)} · {fmtHours(workHours)}h
-            </span>
+    <Modal
+      open
+      onClose={onClose}
+      title={`Close out RO #${entry.roNumber}`}
+      footer={
+        <>
+          <Button variant="quiet" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="go"
+            className="tmd-primary"
+            onClick={() => selected && onSave(selected.id)}
+            disabled={!selected}
+          >
+            Save &amp; close timer
+          </Button>
+        </>
+      }
+    >
+      <div className="tmd-body">
+        <div className="card-inset tmd-well">
+          <div className="rows">
+            <div>
+              <span className="k">Worked</span>
+              <span className="v">
+                {formatElapsed(elapsed.work)} · {fmtHours(workHours)}h
+              </span>
+            </div>
+            {elapsed.holdParts > 0 && (
+              <div>
+                <span className="k">Waiting on parts</span>
+                <span className="v">{formatDuration(elapsed.holdParts)}</span>
+              </div>
+            )}
+            {elapsed.holdApproval > 0 && (
+              <div>
+                <span className="k">Waiting on approval</span>
+                <span className="v">{formatDuration(elapsed.holdApproval)}</span>
+              </div>
+            )}
           </div>
-          {elapsed.holdParts > 0 && (
-            <div className="mt-1.5 flex items-baseline justify-between gap-3">
-              <span className="text-sm text-[var(--warn)]">Waiting on parts</span>
-              <span className="font-mono text-sm text-[var(--warn)]">
-                {formatDuration(elapsed.holdParts)}
-              </span>
-            </div>
-          )}
-          {elapsed.holdApproval > 0 && (
-            <div className="mt-1.5 flex items-baseline justify-between gap-3">
-              <span className="text-sm text-[var(--info)]">Waiting on approval</span>
-              <span className="font-mono text-sm text-[var(--info)]">
-                {formatDuration(elapsed.holdApproval)}
-              </span>
-            </div>
-          )}
           {elapsed.hold > 0 && (
-            <p className="mt-2 text-xs text-[var(--fg-3)]">
+            <p className="tmd-fine">
               Signed in, this waiting time gets recorded against the RO so you
               can show what the day actually cost you. In guest mode it goes
               with the session.
@@ -455,102 +455,68 @@ function GuestSaveModal({
         </div>
 
         {entry.opCodes.length === 0 ? (
-          <p className="rounded-[var(--radius-sm)] bg-[var(--warn-bg)] px-3 py-2 text-sm text-[var(--warn)]">
+          <StatusField tag="Fix" inset>
             This RO has no op codes.
-          </p>
+          </StatusField>
         ) : (
           <>
-            <p className="text-xs text-[var(--fg-3)]">
+            <p className="tmd-fine">
               Which line did the worked time go to? It&apos;s{" "}
-              <strong className="text-[var(--fg-1)]">added</strong> to whatever
-              that line already has.
+              <strong>added</strong> to whatever that line already has.
             </p>
-            <fieldset className="card-inset overflow-hidden">
+            <fieldset className="tmd-lines log-picks">
               <legend className="sr-only">Op code to save time to</legend>
-              <ul className="divide-y divide-[var(--line-soft)]">
-                {entry.opCodes.map((line) => {
-                  const { code, description } = lineLabelFor(line, libraryById);
-                  const active = line.id === selectedId;
-                  return (
-                    <li key={line.id}>
-                      <label
-                        className={`flex cursor-pointer items-start gap-3 px-3 py-2.5 text-sm ${
-                          active
-                            ? "bg-[var(--brand-bg)]"
-                            : "hover:bg-[var(--bg-3)]/40"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="guest-timer-save-line"
-                          checked={active}
-                          onChange={() => setSelectedId(line.id)}
-                          className="mt-1 h-4 w-4 accent-[var(--brand)]"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline gap-2">
-                            <span className="font-mono text-sm text-[var(--brand)]">
-                              {code}
-                            </span>
-                            {line.custom && <Badge>Other</Badge>}
-                            <span className="ml-auto text-xs text-[var(--fg-3)]">
-                              Flag {fmtHours(line.flagHours)}h
-                            </span>
-                          </div>
-                          {description && (
-                            <div className="truncate text-xs text-[var(--fg-3)]">
-                              {description}
-                            </div>
-                          )}
-                          <div className="mt-0.5 text-xs text-[var(--fg-2)]">
-                            Actual:{" "}
-                            {line.actualHours === null
-                              ? "—"
-                              : `${fmtHours(line.actualHours)}h`}
-                          </div>
-                        </div>
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
+              {entry.opCodes.map((line) => {
+                const { code, description } = lineLabelFor(line, libraryById);
+                const active = line.id === selectedId;
+                return (
+                  <label
+                    key={line.id}
+                    className={`log-pick tmd-opt${active ? " is-rec" : ""}`}
+                  >
+                    <input
+                      type="radio"
+                      name="guest-timer-save-line"
+                      checked={active}
+                      onChange={() => setSelectedId(line.id)}
+                    />
+                    <span className="log-pick-txt">
+                      <span className="tmd-pick-head">
+                        <Badge chip mono>{code}</Badge>
+                        {line.custom && <Badge>Other</Badge>}
+                      </span>
+                      {description && <span className="log-pick-desc">{description}</span>}
+                      <span className="log-pick-desc">
+                        Actual:{" "}
+                        {line.actualHours === null
+                          ? "—"
+                          : `${fmtHours(line.actualHours)}h`}
+                      </span>
+                    </span>
+                    <span className="log-pick-act">Flag {fmtHours(line.flagHours)}h</span>
+                  </label>
+                );
+              })}
             </fieldset>
 
             {selected && workHours > 0 && (
-              <p className="text-sm text-[var(--fg-2)]">
+              <p className="tmd-total">
                 {existing === null ? (
                   <>
                     This line has no actual hours yet — it becomes{" "}
-                    <strong className="text-[var(--fg-0)]">
-                      {fmtHours2(workHours)}h
-                    </strong>
-                    .
+                    <strong>{fmtHours2(workHours)}h</strong>.
                   </>
                 ) : (
                   <>
-                    <span className="font-mono">{fmtHours2(existing)}h</span> +{" "}
-                    <span className="font-mono">{fmtHours2(workHours)}h</span> ={" "}
-                    <strong className="font-mono text-[var(--fg-0)]">
-                      {fmtHours2(newTotal)}h
-                    </strong>{" "}
-                    on this line.
+                    <span className="num">{fmtHours2(existing)}h</span> +{" "}
+                    <span className="num">{fmtHours2(workHours)}h</span> ={" "}
+                    <strong>{fmtHours2(newTotal)}h</strong> on this line.
                   </>
                 )}
               </p>
             )}
           </>
         )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button
-            variant="primary"
-            onClick={() => selected && onSave(selected.id)}
-            disabled={!selected}
-          >
-            Save &amp; close timer
-          </Button>
-        </div>
       </div>
     </Modal>
   );

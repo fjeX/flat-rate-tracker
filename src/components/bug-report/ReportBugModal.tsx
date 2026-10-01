@@ -5,11 +5,12 @@
 // viewport are captured silently at submit time so triage can reproduce without
 // a back-and-forth. Screenshots are downscaled client-side before upload.
 import { useRef, useState, useTransition } from "react";
-import { Camera, Loader2, X, CheckCircle2 } from "lucide-react";
+import { Camera, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Field } from "@/components/ui/Field";
 import { Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { StatusField } from "@/components/ui/StatusField";
 import { downscaleImage } from "@/lib/image";
 import { MAX_BUG_PHOTOS, MAX_BUG_DESCRIPTION_CHARS } from "@/lib/bug-reports";
 import { submitBugReport } from "@/app/actions/bug-reports";
@@ -100,24 +101,46 @@ export function ReportBugModal({
   const atCap = photos.length >= MAX_BUG_PHOTOS;
 
   return (
-    <Modal open={open} onClose={handleClose} title="Report a bug">
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title="Report a bug"
+      footer={
+        done ? (
+          <Button variant="go" className="bug-go" onClick={handleClose}>
+            Done
+          </Button>
+        ) : (
+          <>
+            <Button variant="quiet" onClick={handleClose} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              variant="go"
+              className="bug-go"
+              onClick={handleSubmit}
+              disabled={submitting}
+              busy={submitting}
+            >
+              {submitting ? "Sending…" : "Send report"}
+            </Button>
+          </>
+        )
+      }
+    >
       {done ? (
-        <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <CheckCircle2 className="h-10 w-10 text-[var(--good)]" />
-          <div>
-            <p className="text-base font-semibold text-[var(--fg-0)]">Thanks — report sent.</p>
-            <p className="mt-1 text-sm text-[var(--fg-2)]">
+        <div className="bug-body">
+          <StatusField tag="Saved" inset>
+            <p className="bug-thanks">Thanks — report sent.</p>
+            <p>
               We&apos;ll take a look and get it sorted.
               {done.photosFailed > 0 &&
                 ` (${done.photosFailed} screenshot${done.photosFailed > 1 ? "s" : ""} couldn't be attached.)`}
             </p>
-          </div>
-          <Button variant="primary" onClick={handleClose}>
-            Done
-          </Button>
+          </StatusField>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="bug-body">
           <Field
             label="What went wrong?"
             htmlFor="bug-description"
@@ -134,49 +157,42 @@ export function ReportBugModal({
             />
           </Field>
 
-          <div>
-            <div className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wide text-[var(--fg-3)]">
-              <Camera className="h-3.5 w-3.5" aria-hidden="true" />
-              Screenshots
-              <span className="text-[var(--fg-3)] normal-case tracking-normal">
-                (optional, up to {MAX_BUG_PHOTOS})
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {photos.map((p, i) => (
-                <div
-                  key={p.id}
-                  className="relative h-16 w-16 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-3)]"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={p.previewUrl}
-                    alt={`Screenshot ${i + 1} preview`}
-                    className="h-full w-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removePhoto(p.id)}
-                    disabled={submitting}
-                    aria-label={`Remove screenshot ${i + 1}`}
-                    className="absolute right-0.5 top-0.5 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-              ))}
-              {!atCap && (
-                <button
-                  type="button"
+          <section className="bug-shots">
+            <p className="field-label">
+              Screenshots <span className="bug-opt">(optional, up to {MAX_BUG_PHOTOS})</span>
+            </p>
+            {photos.length > 0 && (
+              <div className="bug-grid">
+                {photos.map((p, i) => (
+                  <div key={p.id} className="card-inset bug-tile">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.previewUrl} alt={`Screenshot ${i + 1} preview`} className="bug-thumb" />
+                    <Button
+                      variant="quiet"
+                      className="bug-remove"
+                      onClick={() => removePhoto(p.id)}
+                      disabled={submitting}
+                      aria-label={`Remove screenshot ${i + 1}`}
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!atCap && (
+              <div>
+                <Button
+                  variant="line"
                   onClick={() => fileRef.current?.click()}
                   disabled={submitting}
-                  className="grid h-16 w-16 place-items-center rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)] disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Add a screenshot"
                 >
-                  <Camera className="h-5 w-5" />
-                </button>
-              )}
-            </div>
+                  <Camera size={16} aria-hidden="true" />
+                  Add a screenshot
+                </Button>
+              </div>
+            )}
             <label htmlFor="bug-photo-input" className="sr-only">
               Add screenshots
             </label>
@@ -189,29 +205,13 @@ export function ReportBugModal({
               className="hidden"
               onChange={handleFiles}
             />
-          </div>
+          </section>
 
           {error && (
-            <p role="alert" className="text-sm text-[var(--bad)]">
+            <StatusField tag="Fix" role="alert" inset>
               {error}
-            </p>
+            </StatusField>
           )}
-
-          <div className="flex justify-end gap-2">
-            <Button onClick={handleClose} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? (
-                <>
-                  <Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" />
-                  Sending…
-                </>
-              ) : (
-                "Send report"
-              )}
-            </Button>
-          </div>
         </div>
       )}
     </Modal>

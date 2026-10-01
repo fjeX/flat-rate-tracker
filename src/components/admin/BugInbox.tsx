@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { StatusField } from "@/components/ui/StatusField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BUG_SEVERITIES, BUG_CATEGORIES, BUG_STATUSES } from "@/lib/bug-reports";
 import { listBugPhotosWithUrls, setBugTriage } from "@/app/actions/bug-reports";
@@ -223,65 +224,89 @@ function BugDetail({
   }
 
   return (
-    <Modal open onClose={handleClose} title="Bug report" size="lg">
-      <div className="flex flex-col gap-5">
+    <Modal
+      open
+      onClose={handleClose}
+      title="Bug report"
+      size="lg"
+      footer={
+        <>
+          <Button variant="quiet" onClick={handleClose} disabled={saving}>
+            Close
+          </Button>
+          <Button
+            variant="go"
+            className="inb-save"
+            onClick={handleSave}
+            disabled={saving || !dirty}
+            busy={saving}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="inb-spin" size={16} aria-hidden="true" />
+                Saving…
+              </>
+            ) : (
+              "Save triage"
+            )}
+          </Button>
+        </>
+      }
+    >
+      <div className="inb-body">
         {/* Description */}
-        <div>
-          <div className="mb-1 text-xs uppercase tracking-wide text-[var(--fg-3)]">Description</div>
-          <p className="whitespace-pre-wrap text-sm text-[var(--fg-0)]">{report.description}</p>
-        </div>
+        <section>
+          <div className="field-label">Description</div>
+          <div className="card-inset inb-desc">{report.description}</div>
+        </section>
 
         {/* Screenshots */}
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wide text-[var(--fg-3)]">
-            <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        <section>
+          <div className="field-label inb-label-icon">
+            <ImageIcon size={14} aria-hidden="true" />
             Screenshots
           </div>
           {photosLoading ? (
-            <div className="flex items-center gap-2 text-xs text-[var(--fg-3)]">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <div className="inb-loading">
+              <Loader2 className="inb-spin" size={14} />
               Loading…
             </div>
           ) : photos.length === 0 ? (
-            <p className="text-xs text-[var(--fg-3)]">None attached.</p>
+            <p className="inb-fine">None attached.</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="inb-thumbs">
               {photos.map((p, i) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => setZoom(p.url)}
                   aria-label={`View screenshot ${i + 1} of ${photos.length}`}
-                  className="h-20 w-20 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-3)] transition-colors hover:border-[var(--brand-soft)]"
+                  className="inb-thumb"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={p.url}
-                    alt={`Screenshot ${i + 1} of ${photos.length}`}
-                    className="h-full w-full object-cover"
-                  />
+                  <img src={p.url} alt={`Screenshot ${i + 1} of ${photos.length}`} />
                 </button>
               ))}
             </div>
           )}
-        </div>
+        </section>
 
         {/* Auto-captured context */}
-        <div>
-          <div className="mb-1 text-xs uppercase tracking-wide text-[var(--fg-3)]">Context</div>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <section>
+          <div className="field-label">Context</div>
+          <dl className="rows inb-ctx">
             <ContextRow label="Reported" value={formatDate(report.createdAt)} />
             <ContextRow label="Page" value={report.pageUrl} mono />
             <ContextRow label="Viewport" value={report.viewport} mono />
             <ContextRow label="Build" value={report.appBuild} mono />
             <ContextRow label="Browser" value={report.userAgent} mono />
           </dl>
-        </div>
+        </section>
 
         {/* Triage controls */}
-        <div className="card-inset flex flex-col gap-3 p-3">
-          <div className="text-xs uppercase tracking-wide text-[var(--fg-3)]">Triage</div>
-          <div className="grid gap-3 sm:grid-cols-3">
+        <section className="inb-triage">
+          <div className="field-label">Triage</div>
+          <div className="inb-triage-grid">
             <Field label="Severity" htmlFor="triage-severity">
               <Select
                 id="triage-severity"
@@ -329,29 +354,13 @@ function BugDetail({
               onChange={(e) => setNotes(e.target.value)}
             />
           </Field>
-        </div>
+        </section>
 
         {error && (
-          <p role="alert" className="text-sm text-[var(--bad)]">
+          <StatusField tag="Fix" role="alert" inset>
             {error}
-          </p>
+          </StatusField>
         )}
-
-        <div className="flex justify-end gap-2">
-          <Button onClick={handleClose} disabled={saving}>
-            Close
-          </Button>
-          <Button variant="primary" onClick={handleSave} disabled={saving || !dirty}>
-            {saving ? (
-              <>
-                <Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" />
-                Saving…
-              </>
-            ) : (
-              "Save triage"
-            )}
-          </Button>
-        </div>
       </div>
 
       {zoom && <ScreenshotZoom url={zoom} onClose={() => setZoom(null)} />}
@@ -382,30 +391,30 @@ function ScreenshotZoom({ url, onClose }: { url: string; onClose: () => void }) 
       role="dialog"
       aria-modal="true"
       aria-label="Screenshot"
-      className="fixed inset-0 z-[70] flex flex-col bg-[var(--overlay-scrim)]"
+      className="inb-zoom"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex justify-end px-4 py-3">
+      <div className="inb-zoom-head">
         <button
           ref={closeRef}
           type="button"
           onClick={onClose}
           aria-label="Close screenshot"
-          className="grid h-11 w-11 place-items-center rounded-full text-[var(--overlay-fg)]/80 hover:bg-[var(--overlay-fg)]/10 hover:text-[var(--overlay-fg)]"
+          className="btn btn-quiet inb-zoom-x"
         >
-          <X className="h-5 w-5" aria-hidden="true" />
+          <X size={20} aria-hidden="true" />
         </button>
       </div>
       <div
-        className="flex flex-1 items-center justify-center overflow-hidden p-4"
+        className="inb-zoom-stage"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt="Screenshot, full size" className="max-h-full max-w-full object-contain" />
+        <img src={url} alt="Screenshot, full size" />
       </div>
     </div>
   );
@@ -422,10 +431,10 @@ function ContextRow({
 }) {
   return (
     <>
-      <dt className="text-[var(--fg-3)]">{label}</dt>
-      <dd className={`min-w-0 break-words text-[var(--fg-1)] ${mono ? "font-mono" : ""}`}>
-        {value || "—"}
-      </dd>
+      <div className="inb-ctx-row">
+        <dt className="k">{label}</dt>
+        <dd className={`v${mono ? " inb-mono" : ""}`}>{value || "—"}</dd>
+      </div>
     </>
   );
 }

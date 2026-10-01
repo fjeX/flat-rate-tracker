@@ -1,0 +1,85 @@
+/* Phase 5 dialog body: RO Template Setup (RoTemplateEditor.tsx). Prefix tpl-.
+   Not in the mock; built from its parts: .fchip toggles with a .hue tick,
+   .card-inset well, .sfield Note/Fix, .log-status footer sentence.
+   The four field hues are DATA (they tell the drawn regions apart), not theme
+   tokens: set per theme below, in oklch, mid lightness so the outline reads on
+   a paper photo, with a light halo so it also reads on a dark photo. */
+
+.tpl-body > * + * { margin-top: var(--s4); }
+.tpl-lede { margin: 0; color: var(--ink-2); font-size: var(--fs-body); line-height: 1.45; }
+
+/* ---------- the field hues ---------- */
+.tpl-f-roNumber { --tagc: oklch(0.52 0.19 255); }
+.tpl-f-vehicle  { --tagc: oklch(0.58 0.15 195); }
+.tpl-f-vin      { --tagc: oklch(0.52 0.15 150); }
+.tpl-f-opCodes  { --tagc: oklch(0.52 0.20 310); }
+:root[data-theme^="dark"] .tpl-f-roNumber { --tagc: oklch(0.74 0.14 255); }
+:root[data-theme^="dark"] .tpl-f-vehicle  { --tagc: oklch(0.80 0.12 195); }
+:root[data-theme^="dark"] .tpl-f-vin      { --tagc: oklch(0.80 0.15 150); }
+:root[data-theme^="dark"] .tpl-f-opCodes  { --tagc: oklch(0.76 0.15 310); }
+
+/* ---------- field selector: keep the hue visible on the pressed chip ---------- */
+.tpl-chips .fchip[aria-pressed="true"] .hue { background: var(--tagc); box-shadow: 0 0 0 1px var(--accent-ink); }
+.tpl-chip-ok { width: 14px; height: 14px; flex: none; }
+
+/* ---------- drop zone ---------- */
+.tpl-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: 14rem; padding: var(--s5) var(--s4); text-align: center;
+  border-style: dashed; border-width: var(--w-edge); border-color: var(--line);
+}
+.tpl-drop-ico { width: 28px; height: 28px; color: var(--ink-3); }
+.tpl-drop-title { margin: 0; color: var(--ink); font-size: var(--fs-body); font-weight: 600; }
+.tpl-drop-sub { margin: 0 0 var(--s2); color: var(--ink-3); font-size: var(--fs-label); }
+.tpl-spin { width: 28px; height: 28px; color: var(--ink-2); animation: tpl-turn 1s linear infinite; }
+@keyframes tpl-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tpl-spin { animation: none; } }
+
+/* ---------- canvas (drawing behaviour lives in the component) ---------- */
+.tpl-canvas {
+  position: relative; overflow: hidden; user-select: none; touch-action: none; cursor: crosshair;
+  border: var(--w-edge) solid var(--edge); border-radius: var(--r-sign);
+}
+.tpl-img { display: block; width: 100%; user-select: none; pointer-events: none; }
+
+.tpl-box {
+  position: absolute; box-sizing: border-box;
+  border: 2px solid var(--tagc);
+  background: color-mix(in oklab, var(--tagc) 25%, transparent);
+  box-shadow: 0 0 0 1px var(--overlay-fg);
+}
+.tpl-ghost { border-style: dashed; pointer-events: none; }
+.tpl-box-label {
+  position: absolute; left: -2px; top: -28px; pointer-events: none; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: var(--s1); padding: 2px var(--s2);
+  background: var(--panel); color: var(--ink); border: var(--w-hair) solid var(--edge); border-radius: var(--r-sign);
+  font-size: var(--fs-label); font-weight: 600; line-height: 1.2;
+}
+.tpl-box-label::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--tagc); }
+
+.tpl-handle {
+  position: absolute; width: 12px; height: 12px; box-sizing: border-box;
+  background: var(--panel); border: var(--w-edge) solid var(--edge); border-radius: 2px;
+}
+.tpl-nw { left: -6px; top: -6px; cursor: nw-resize; }
+.tpl-ne { right: -6px; top: -6px; cursor: ne-resize; }
+.tpl-sw { left: -6px; bottom: -6px; cursor: sw-resize; }
+.tpl-se { right: -6px; bottom: -6px; cursor: se-resize; }
+
+.tpl-box-x {
+  position: absolute; right: -10px; top: -10px; z-index: 10; width: 20px; height: 20px; padding: 0;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  background: var(--bad); color: var(--panel); border: var(--w-edge) solid var(--panel); border-radius: 999px;
+}
+.tpl-box-x::after { content: ""; position: absolute; inset: -6px; }
+.tpl-box-x:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.tpl-box-x-ico { width: 12px; height: 12px; }
+
+/* ---------- hint ---------- */
+.tpl-change {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline;
+}
+.tpl-change:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+
+/* ---------- footer ---------- */
+.tpl-foot-act { display: flex; gap: var(--s2); margin-left: auto; }
