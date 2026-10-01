@@ -129,15 +129,6 @@
 .ins-day .num { display: block; margin-top: 4px; font-size: var(--fs-num); }
 .ins-day small { display: block; margin-top: 2px; font-size: var(--fs-min); color: var(--ink-3); }
 
-/* ---------- spec row: four labelled figures (recovery) ---------- */
-.ins-spec { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: var(--s2) 0 0; border-top: var(--w-hair) solid var(--line); border-bottom: var(--w-hair) solid var(--line); }
-@media (min-width: 600px) { .ins-spec { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.ins-spec > div { padding: var(--s2) var(--s2) var(--s3) var(--s3); border-left: var(--w-hair) solid var(--line); min-width: 0; }
-.ins-spec > div:first-child { border-left: 0; padding-left: 0; }
-@media (max-width: 599px) { .ins-spec > div:nth-child(3) { border-left: 0; padding-left: 0; } .ins-spec > div:nth-child(n+3) { border-top: var(--w-hair) solid var(--line); } }
-.ins-spec dt { margin: 0; }
-.ins-spec dd { margin: 4px 0 0; font-size: var(--fs-num); line-height: 1.2; white-space: nowrap; }
-
 /* ---------- trend: six bars against par ---------- */
 .ins-trend { position: relative; margin-top: var(--s4); }
 .ins-trend-plot { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 152px; border-bottom: var(--w-edge) solid var(--ink); }

@@ -1078,23 +1078,23 @@ function RecoverySection({
         </span>
       }
     >
-      <dl className="ins-spec">
+      <dl className="spec">
         <div>
-          <dt className="ins-k">Claims closed</dt>
+          <dt>Claims closed</dt>
           <dd className="num">{lifetime.closedCount}</dd>
         </div>
         <div>
-          <dt className="ins-k">Got paid</dt>
+          <dt>Got paid</dt>
           <dd className="num">{lifetime.winRate === null ? "—" : pct(lifetime.winRate)}</dd>
         </div>
         <div>
-          <dt className="ins-k">Hours recovered</dt>
+          <dt>Hours recovered</dt>
           <dd className="num">
             {lifetime.hourRecoveryRate === null ? "—" : pct(lifetime.hourRecoveryRate)}
           </dd>
         </div>
         <div>
-          <dt className="ins-k">Recovered</dt>
+          <dt>Recovered</dt>
           <dd className="num ins-good">
             {lifetime.recoveredDollars !== null
               ? withPt(fmtMoney(lifetime.recoveredDollars))

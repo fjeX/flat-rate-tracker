@@ -478,10 +478,10 @@ export function ReconciliationCard({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="pp-rowbtn"
+          className="rowbtn"
         >
-          <span className="pp-rowbtn-title">{title}</span>
-          <span>
+          <span>{title}</span>
+          <span className="rowbtn-aside">
             {!open && summary.shortedHours > 0 && (
               <b className="num is-bad">
                 {withPt(fmtHours(summary.shortedHours))}h short
