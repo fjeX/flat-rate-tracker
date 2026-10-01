@@ -152,6 +152,17 @@ for (const route of ROUTES) {
             if (!Number.isNaN(inset) && inset < 0) {
               w += Math.abs(inset) * 2;
               h += Math.abs(inset) * 2;
+            } else if (
+              after.top === "0px" && after.bottom === "0px" &&
+              after.left === "0px" && after.right === "0px" &&
+              el.offsetParent
+            ) {
+              // A stretched link: `::after { inset: 0 }` on a control whose
+              // nearest positioned ancestor is the whole row/tag (History's RO
+              // number over its tag). The tap area IS that ancestor's box.
+              const pr = el.offsetParent.getBoundingClientRect();
+              w = Math.max(w, pr.width);
+              h = Math.max(h, pr.height);
             }
           }
           if (w < MIN - 1 || h < MIN - 1) {
