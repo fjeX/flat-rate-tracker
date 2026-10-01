@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { isoDate, isoDateInTz } from "@/lib/periods";
 import { GoalHoursCard } from "@/components/settings/GoalHoursCard";
 import { PayRatesCard } from "@/components/settings/PayRatesCard";
 import { ReferenceRateCard } from "@/components/settings/ReferenceRateCard";
@@ -27,6 +28,12 @@ export default async function SettingsPage() {
   const overrideCount = Object.keys(settings.periodOverrides).length;
   const cookieStore = await cookies();
   const timezone = cookieStore.get("frt_timezone")?.value ?? "";
+  // "Today" is decided here, once, in the tech's zone, and handed to the client
+  // cards. A client card calling isoDate() during render reads the VM's UTC
+  // clock on the server and the phone's clock in the browser; on the last
+  // evening of a month those are different months, and the pay-period preview
+  // failed hydration on /settings (deploy rolled back 2026-09-30 20:33 PT).
+  const today = timezone ? isoDateInTz(timezone) : isoDate();
 
   // One setting on display at a time (the mock's screen-settings); Pay Rates
   // opens first because it is the one that changes what every other page
@@ -53,7 +60,7 @@ export default async function SettingsPage() {
       id: "period",
       name: "Pay Period Defaults",
       group: "Tracking",
-      content: <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} />,
+      content: <SplitDayCard initialSplitDay={settings.splitDay} overrideCount={overrideCount} today={today} />,
     },
     {
       id: "reference-rate",
