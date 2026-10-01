@@ -21,6 +21,13 @@
 @import "./styles/page-snapshots.css";
 @import "./styles/page-settings.css";
 @import "./styles/page-auth.css";
+@import "./styles/dlg-ro-detail.css";
+@import "./styles/dlg-op-code-form.css";
+@import "./styles/dlg-bonus-form.css";
+@import "./styles/dlg-import.css";
+@import "./styles/dlg-timer.css";
+@import "./styles/dlg-guest-timer.css";
+@import "./styles/dlg-guest-ro.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1

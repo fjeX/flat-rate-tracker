@@ -20,7 +20,8 @@
 // modal only mounts this when the entry is not a guest one.
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { CalendarClock, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, ChevronDown, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import type { Entry, RoEvent, RoEventKind, UnpaidTime } from "@/lib/types";
 import { RO_EVENT_KIND_LABELS, RO_EVENT_PICKABLE_KINDS } from "@/lib/types";
 import { eventLabel, openWorkRows } from "@/lib/open-tickets";
@@ -146,33 +147,33 @@ export function TicketTimeline({
   const workTotal = work.reduce((s, u) => s + u.hours, 0);
 
   return (
-    <div className="card-inset p-3" data-testid="ticket-timeline">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-[var(--fg-3)]">
-          <CalendarClock className="h-3.5 w-3.5" />
+    <div className="card-inset rod-well" data-testid="ticket-timeline">
+      <div className="rod-well-head">
+        <h3 className="field-label rod-well-name">
+          <CalendarClock className="h-4 w-4" aria-hidden="true" />
           Timeline
-        </div>
+        </h3>
         {isOpen && (
           <span className="badge badge-info">Open ticket</span>
         )}
       </div>
 
       {loadError && (
-        <p role="alert" className="mb-2 text-xs text-[var(--bad)]">{loadError}</p>
+        <p role="alert" className="rod-inline-err">{loadError}</p>
       )}
 
       {/* ---- The story ---- */}
-      <ol className="space-y-1.5">
+      <ol className="rod-rule">
         {(events ?? []).map((ev) => (
-          <li key={ev.id} className="flex flex-wrap items-start justify-between gap-x-2 text-sm">
-            <div className="min-w-0">
-              <span className="text-[var(--fg-1)]">{eventLabel(ev)}</span>
-              <span className="ml-2 text-xs text-[var(--fg-3)]">
+          <li key={ev.id}>
+            <div className="rod-main">
+              <span>{eventLabel(ev)}</span>
+              <span className="rod-when">
                 {formatDateShort(ev.date)}
                 {formatLoggedTime(ev.time) && ` · ${formatLoggedTime(ev.time)}`}
               </span>
               {ev.kind !== "custom" && ev.note && (
-                <div className="text-xs italic text-[var(--fg-3)]">{ev.note}</div>
+                <div className="rod-note">{ev.note}</div>
               )}
             </div>
             {isOpen && !TRANSITION_KINDS.has(ev.kind) && (
@@ -188,7 +189,7 @@ export function TicketTimeline({
                   );
                 }}
                 aria-label={`Remove event ${eventLabel(ev)} on ${formatDateShort(ev.date)}`}
-                className="relative rounded-[var(--radius-sm)] p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
+                className="rod-x"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -196,7 +197,7 @@ export function TicketTimeline({
             <InlineAlert
               error={errorFor(`event:${ev.id}`)}
               testId={`event-error-${ev.id}`}
-              className="basis-full"
+              className="rod-basis"
             />
           </li>
         ))}
@@ -214,23 +215,23 @@ export function TicketTimeline({
 
       {/* ---- The hours ---- */}
       {(work.length > 0 || isOpen) && (
-        <div className="mt-3 border-t border-[var(--line)] pt-2">
-          <div className="flex items-center justify-between text-xs text-[var(--fg-3)]">
-            <span>Hours on this ticket</span>
-            <span className="font-mono text-[var(--fg-2)]">{fmtHours(workTotal)}h</span>
+        <div>
+          <div className="rod-hours-head">
+            <span className="field-label">Hours on this ticket</span>
+            <span className="rod-fig">{fmtHours(workTotal)}h</span>
           </div>
           {work.length > 0 && (
-            <ul className="mt-1 space-y-1">
+            <ul className="rod-rule">
               {work.map((u) => (
-                <li key={u.id} className="flex flex-wrap items-center justify-between gap-x-2 text-sm">
-                  <span className="min-w-0 truncate">
-                    <span className="text-[var(--fg-2)]">{formatDateShort(u.date)}</span>
-                    <span className="ml-2 font-mono">{fmtHours(u.hours)}h</span>
+                <li key={u.id}>
+                  <span className="rod-hours-row rod-main">
+                    <span>{formatDateShort(u.date)}</span>
+                    <span className="rod-fig">{fmtHours(u.hours)}h</span>
                     {u.source === "timer" && (
-                      <span className="badge badge-neutral ml-2">timer</span>
+                      <span className="badge badge-neutral">timer</span>
                     )}
                     {u.note && (
-                      <span className="ml-2 text-xs italic text-[var(--fg-3)]">{u.note}</span>
+                      <span className="rod-note">{u.note}</span>
                     )}
                   </span>
                   {isOpen && (
@@ -248,7 +249,7 @@ export function TicketTimeline({
                         );
                       }}
                       aria-label={`Delete ${fmtHours(u.hours)} hours on ${formatDateShort(u.date)}`}
-                      className="relative rounded-[var(--radius-sm)] p-1 text-[var(--fg-3)] hover:text-[var(--bad)] disabled:opacity-30 after:absolute after:-inset-2.5 after:content-['']"
+                      className="rod-x"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -256,7 +257,7 @@ export function TicketTimeline({
                   <InlineAlert
                     error={errorFor(`work:${u.id}`)}
                     testId={`work-error-${u.id}`}
-                    className="basis-full"
+                    className="rod-basis"
                   />
                 </li>
               ))}
@@ -275,13 +276,13 @@ export function TicketTimeline({
       )}
 
       {isOpen && (
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--line)] pt-3">
-          <span className="text-xs text-[var(--fg-3)]">
+        <div className="rod-cta">
+          <span className="rod-fine">
             Op codes known? Close it to log the flag.
           </span>
           <Link
             href={`/log?edit=${entry.id}&close=1`}
-            className="btn btn-primary btn-sm"
+            className="btn btn-go btn-sm"
             data-testid="close-ticket-link"
           >
             Close ticket
@@ -294,15 +295,14 @@ export function TicketTimeline({
           only flips status and writes the `reopened` event; the tech closes
           again through the same close flow to add or edit lines. */}
       {!isOpen && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 border-t border-[var(--line)] pt-3">
-          <span className="text-xs text-[var(--fg-3)]">
+        <div className="rod-cta">
+          <span className="rod-fine">
             Closed by mistake, or a second approved line?
           </span>
-          <button
-            type="button"
+          <Button
+            size="sm"
             disabled={busy}
             data-testid="reopen-ticket"
-            className="btn btn-sm"
             onClick={() =>
               runAction(
                 "reopen",
@@ -312,11 +312,11 @@ export function TicketTimeline({
             }
           >
             Reopen
-          </button>
+          </Button>
           <InlineAlert
             error={errorFor("reopen")}
             testId="reopen-error"
-            className="mt-1 basis-full text-right"
+            className="rod-basis"
           />
         </div>
       )}
@@ -363,7 +363,7 @@ function InlineAlert({
 }) {
   if (!error) return null;
   return (
-    <p role="alert" className={`text-xs text-[var(--bad)] ${className}`} data-testid={testId}>
+    <p role="alert" className={`rod-inline-err ${className}`} data-testid={testId}>
       {error}
     </p>
   );
@@ -390,20 +390,20 @@ function AddEventForm(props: AddFormProps) {
 
   if (!open) {
     return (
-      <button
-        type="button"
+      <Button
+        block
+        className="rod-open-add"
         onClick={() => {
           // A stale banner from the last failed write is not about the form the
           // tech is opening now.
           props.onClearStale();
           setOpen(true);
         }}
-        className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
         data-testid="add-event-open"
       >
-        <Plus className="h-3.5 w-3.5" />
+        <Plus className="h-4 w-4" />
         Add event
-      </button>
+      </Button>
     );
   }
 
@@ -468,74 +468,77 @@ function AddEventFields({
   }
 
   return (
-    <div className="mt-2 space-y-2 rounded-[var(--radius-sm)] border border-[var(--line)] p-2" data-testid="add-event-form">
-      <div className="grid grid-cols-2 gap-2">
-        <label className="text-xs text-[var(--fg-3)]">
-          What happened
-          <select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as RoEventKind)}
-            className="input mt-1 w-full"
-          >
-            {PICKABLE.map((k) => (
-              <option key={k.kind} value={k.kind}>{k.label}</option>
-            ))}
-          </select>
+    <div className="rod-addform" data-testid="add-event-form">
+      <div className="rod-fields">
+        <label className="field">
+          <span className="field-label">What happened</span>
+          <span className="select-wrap">
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as RoEventKind)}
+              className="input select"
+            >
+              {PICKABLE.map((k) => (
+                <option key={k.kind} value={k.kind}>{k.label}</option>
+              ))}
+            </select>
+            <ChevronDown size={16} className="select-chev" aria-hidden />
+          </span>
         </label>
-        <label className="text-xs text-[var(--fg-3)]">
-          Date
+        <label className="field">
+          <span className="field-label">Date</span>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="input mt-1 w-full"
+            className="input"
             required
           />
         </label>
         {/* Note/Label sits directly under "What happened" so picking Custom
             points straight at the field it turns into the label. */}
-        <label className="text-xs text-[var(--fg-3)]">
-          {kind === "custom" ? "Label" : "Note"}
+        <label className="field">
+          <span className="field-label">{kind === "custom" ? "Label" : "Note"}</span>
           <input
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={kind === "custom" ? "e.g. Claim #4471 filed" : "optional"}
-            className="input mt-1 w-full"
+            className="input"
           />
         </label>
-        <label className="text-xs text-[var(--fg-3)]">
-          Time <span className="text-[var(--fg-3)]">(optional)</span>
+        <label className="field">
+          <span className="field-label">Time (optional)</span>
           <input
             type="time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            className="input mt-1 w-full"
+            className="input"
           />
         </label>
       </div>
       <InlineAlert error={error} testId="add-event-error" />
-      <div className="flex justify-end gap-2">
+      <div className="rod-addform-act">
         {/* Cancel is disabled mid-write too: unmounting the body does not
             cancel the write, so letting it close would leave the tech asking
             "did that save?" while the row lands anyway. */}
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
+        <Button
+          variant="quiet"
+          size="sm"
           onClick={onDone}
           disabled={pending || busy}
         >
           Cancel
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
+        </Button>
+        <Button
+          variant="go"
+          size="sm"
           onClick={submit}
           disabled={pending || busy || (kind === "custom" && note.trim() === "")}
           data-testid="add-event-save"
         >
           Add event
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -549,18 +552,18 @@ function AddHoursForm(props: AddFormProps) {
 
   if (!open) {
     return (
-      <button
-        type="button"
+      <Button
+        block
+        className="rod-open-add"
         onClick={() => {
           props.onClearStale();
           setOpen(true);
         }}
-        className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
         data-testid="add-hours-open"
       >
-        <Plus className="h-3.5 w-3.5" />
+        <Plus className="h-4 w-4" />
         Add hours for a day
-      </button>
+      </Button>
     );
   }
 
@@ -610,20 +613,20 @@ function AddHoursFields({
   }
 
   return (
-    <div className="mt-2 space-y-2 rounded-[var(--radius-sm)] border border-[var(--line)] p-2" data-testid="add-hours-form">
-      <div className="grid grid-cols-2 gap-2">
-        <label className="text-xs text-[var(--fg-3)]">
-          Day
+    <div className="rod-addform" data-testid="add-hours-form">
+      <div className="rod-fields">
+        <label className="field">
+          <span className="field-label">Day</span>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="input mt-1 w-full"
+            className="input"
             required
           />
         </label>
-        <label className="text-xs text-[var(--fg-3)]">
-          Hours
+        <label className="field">
+          <span className="field-label">Hours</span>
           <input
             type="number"
             min={0}
@@ -633,45 +636,45 @@ function AddHoursFields({
             value={hours}
             onChange={(e) => setHours(e.target.value)}
             placeholder="8.0"
-            className="input mono tabular mt-1 w-full"
+            className="input num"
             data-testid="add-hours-input"
           />
         </label>
-        <label className="col-span-2 text-xs text-[var(--fg-3)]">
-          Note <span className="text-[var(--fg-3)]">(optional)</span>
+        <label className="field rod-span">
+          <span className="field-label">Note (optional)</span>
           <input
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="teardown, looking for the cause"
-            className="input mt-1 w-full"
+            className="input"
           />
         </label>
       </div>
       {/* Hold time is not hours on the ticket — it stays in its own unpaid
           bucket. Said once, here, where the tech is typing. */}
-      <p className="text-[11px] text-[var(--fg-3)]">
+      <p className="rod-fine">
         Hours you worked on it. Waiting on parts or approval is logged as unpaid time, not here.
       </p>
       <InlineAlert error={error} testId="add-hours-error" />
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
+      <div className="rod-addform-act">
+        <Button
+          variant="quiet"
+          size="sm"
           onClick={onDone}
           disabled={pending || busy}
         >
           Cancel
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
+        </Button>
+        <Button
+          variant="go"
+          size="sm"
           onClick={submit}
           disabled={pending || busy || hours.trim() === ""}
           data-testid="add-hours-save"
         >
           Add hours
-        </button>
+        </Button>
       </div>
     </div>
   );

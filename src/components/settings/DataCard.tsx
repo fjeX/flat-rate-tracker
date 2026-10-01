@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Download, Upload, X } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { exportDataAction, importDataAction } from "@/app/actions/settings";
 import { SUPPORTED_BACKUP_VERSIONS, type ImportBundle } from "@/lib/import-remap";
 import {
@@ -11,6 +11,8 @@ import {
 } from "@/lib/backup-summary";
 import { actionErrorMessage } from "@/lib/action-error";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { StatusField } from "@/components/ui/StatusField";
 import { SettingRow } from "./SettingRow";
 
 export function DataCard() {
@@ -152,44 +154,70 @@ export function DataCard() {
         )}
       </SettingRow>
 
-      {pendingBundle && summary && (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/70 sm:items-center">
-          <div className="card w-full p-6 sm:mx-auto sm:max-w-md" style={{ borderRadius: "var(--radius) var(--radius) 0 0" }}>
-            <div className="mb-4 flex items-start justify-between">
-              <h3 className="text-base font-semibold" style={{ color: "var(--fg-0)" }}>Replace all data?</h3>
-              <button
-                onClick={() => setPendingBundle(null)}
-                aria-label="Close"
-                className="-m-3 flex items-center justify-center p-3"
-                style={{ color: "var(--fg-3)" }}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {summary.exportedAt && (
-              <p className="mb-4 text-xs" style={{ color: "var(--fg-3)" }}>
-                Backup taken {new Date(summary.exportedAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-                {" · "}version {summary.version}
-              </p>
+      <Modal
+        open={pendingBundle != null && summary != null}
+        // Escape, backdrop and the X all land here, same as Cancel. Cancel is
+        // disabled while an import runs, so closing is too: a dialog that
+        // vanished mid-import would hide the refusal sentence when it came.
+        onClose={() => {
+          if (!importPending) setPendingBundle(null);
+        }}
+        title="Replace all data?"
+        footer={
+          <>
+            <Button variant="quiet" onClick={() => setPendingBundle(null)} disabled={importPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="go"
+              className="imp-go"
+              onClick={handleImportConfirm}
+              disabled={importPending}
+            >
+              {importPending ? "Importing…" : "Replace data"}
+            </Button>
+          </>
+        }
+      >
+        {summary && (
+          <div className="imp-body">
+            {importError && (
+              <StatusField tag="Fix" inset role="none">
+                <p role="alert">{importError}</p>
+              </StatusField>
             )}
 
-            <div className="mb-5 max-h-[45vh] overflow-y-auto">
-              <p className="mb-2 text-sm" style={{ color: "var(--fg-2)" }}>
-                This will permanently replace:
-              </p>
-              <ul className="mb-4 space-y-1 text-sm" style={{ color: "var(--fg-1)" }}>
+            {summary.exportedAt && (
+              <div className="rows">
+                <div>
+                  <span className="k">Backup taken</span>
+                  <span className="v num">
+                    {new Date(summary.exportedAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
+                <div>
+                  <span className="k">Version</span>
+                  <span className="v num">{summary.version}</span>
+                </div>
+              </div>
+            )}
+
+            <section>
+              <p className="field-label">This will permanently replace:</p>
+              <ul className="rows imp-list">
                 {replacing.length === 0 && cleared.length === 0 && (
-                  <li style={{ color: "var(--fg-3)" }}>Nothing — this file describes no records.</li>
+                  <li>
+                    <span className="imp-dim">Nothing — this file describes no records.</span>
+                  </li>
                 )}
                 {replacing.map((s) => (
-                  <li key={s.key} className="flex justify-between gap-4">
-                    <span>{s.label}</span>
-                    <span style={{ color: s.count === 0 ? "var(--bad)" : "var(--fg-2)" }}>
+                  <li key={s.key}>
+                    <span className="k">{s.label}</span>
+                    <span className={s.count === 0 ? "v num imp-cleared" : "v num"}>
                       {s.count === 0 ? "cleared" : s.count}
                     </span>
                   </li>
@@ -198,63 +226,43 @@ export function DataCard() {
                     empties it. That is a wipe, so it sits in THIS list, in the
                     same red as a "cleared" count — never under "kept". */}
                 {cleared.map((s) => (
-                  <li key={s.key} style={{ color: "var(--bad)" }}>
+                  <li key={s.key} className="imp-cleared">
                     {s.state === "cleared" && `${s.label} — will be cleared (${s.detail})`}
                   </li>
                 ))}
               </ul>
+            </section>
 
-              {/* An older backup has no key for these tables, and the import
-                  skips a table it can't see — so this data is KEPT, not wiped.
-                  Showing it as "0" alongside the list above is the one thing
-                  this screen must never do. */}
-              {untouched.length > 0 && (
-                <>
-                  <p className="mb-2 text-sm" style={{ color: "var(--fg-2)" }}>
-                    Not described by this backup — your current data is kept:
-                  </p>
-                  <ul className="mb-4 space-y-1 text-sm" style={{ color: "var(--fg-3)" }}>
-                    {untouched.map((s) => (
-                      <li key={s.key}>{s.label}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-
-              <p className="mb-2 text-sm" style={{ color: "var(--fg-2)" }}>
-                Doesn&apos;t come across:
-              </p>
-              <ul className="space-y-1 text-sm" style={{ color: "var(--fg-3)" }}>
-                {summary.warnings.map((w) => (
-                  <li key={w.label}>
-                    <span style={{ color: "var(--fg-2)" }}>{w.label}</span> — {w.detail}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setPendingBundle(null)}
-                disabled={importPending}
-                className="btn flex-1"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleImportConfirm}
-                disabled={importPending}
-                className="btn btn-primary flex-1"
-              >
-                {importPending ? "Importing…" : "Replace data"}
-              </button>
-            </div>
-            {importError && (
-              <p role="alert" className="mt-3 text-sm" style={{ color: "var(--bad)" }}>{importError}</p>
+            {/* An older backup has no key for these tables, and the import
+                skips a table it can't see — so this data is KEPT, not wiped.
+                Showing it as "0" alongside the list above is the one thing
+                this screen must never do. */}
+            {untouched.length > 0 && (
+              <section>
+                <p className="field-label">
+                  Not described by this backup — your current data is kept:
+                </p>
+                <ul className="rows imp-list">
+                  {untouched.map((s) => (
+                    <li key={s.key}>
+                      <span className="k imp-dim">{s.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
+
+            <section>
+              <p className="field-label">Doesn&apos;t come across:</p>
+              {summary.warnings.map((w) => (
+                <StatusField key={w.label} tag="Note" inset>
+                  <b>{w.label}</b> — {w.detail}
+                </StatusField>
+              ))}
+            </section>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </>
   );
 }

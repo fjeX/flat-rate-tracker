@@ -1,0 +1,215 @@
+/* Phase 5 dialog bodies — the RO detail dialog (RoDetailModal, TicketTimeline,
+   EntryPhotos, LinkedSpiffs). Prefix `rod-`. Tokens only.
+
+   Follows final.html's table / rows / spec language: ruled rows on the wall,
+   figures in --font-num, op codes as chips, wells as .card-inset, errors as the
+   tagged Fix field. Shared parts (.table, .input, .btn, .badge, .log-pick,
+   .search-well, .fchip, .sfield) come from ui-*.css and page-log.css; this file
+   only places them. */
+
+.rod-body > * + * { margin-top: var(--s4); }
+
+/* ---------- top: open-ticket line, date / logged lines, vehicle ---------- */
+.rod-open { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.rod-fine { font-size: var(--fs-label); color: var(--ink-2); }
+.rod-meta { padding-bottom: var(--s3); border-bottom: var(--w-hair) solid var(--line); }
+.rod-date { font-size: var(--fs-num); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rod-logged { margin-top: 2px; font-size: var(--fs-label); color: var(--ink-2); }
+.rod-veh { margin-top: var(--s3); }
+.rod-veh-name { font-size: var(--fs-control); font-weight: 700; color: var(--ink); }
+.rod-veh-line { margin-top: 2px; font-size: var(--fs-label); color: var(--ink-2); }
+.rod-veh-line .num { font-family: var(--font-num); letter-spacing: var(--track-num); }
+
+/* ---------- lines table ---------- */
+.rod-lines { border: var(--w-hair) solid var(--line); border-radius: var(--r-sign); background: var(--panel); overflow: hidden; }
+.rod-table th, .rod-table td { height: auto; min-height: 46px; padding-top: var(--s2); padding-bottom: var(--s2); }
+.rod-table thead th { height: 30px; padding-top: 0; padding-bottom: 0; }
+.rod-table td { vertical-align: top; }
+.rod-table td.table-num, .rod-table td.rod-cell-in, .rod-table td.rod-cell-act { vertical-align: top; padding-top: var(--s2); }
+.rod-table th:first-child, .rod-table td:first-child { padding-left: var(--s3); }
+.rod-table th.rod-col-flag, .rod-table td.rod-col-flag { width: 4.5rem; }
+.rod-table th.rod-col-act, .rod-table td.rod-col-act { width: 6.5rem; text-align: right; }
+.rod-table th.rod-col-rm, .rod-table td.rod-col-rm { width: calc(var(--tap) + var(--s3)); padding-left: 0; padding-right: var(--s2); text-align: right; }
+.rod-code { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
+.rod-code-main { font-weight: 700; color: var(--accent-text); letter-spacing: 0.02em; }
+.rod-desc { margin-top: var(--s1); font-size: var(--fs-label); color: var(--ink-2); overflow-wrap: anywhere; }
+.rod-more {
+  display: inline-flex; align-items: center; min-height: var(--tap); margin-left: var(--s1); padding: 0 var(--s1);
+  background: transparent; border: 0; color: var(--accent-text); font: inherit; font-weight: 700; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.rod-more:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.rod-earn { margin-top: var(--s1); font-family: var(--font-num); font-size: var(--fs-label); font-weight: 600; color: var(--good); }
+.rod-rework { margin-top: var(--s1); font-size: var(--fs-label); font-weight: 600; color: var(--ink-2); }
+.rod-line-note { margin-top: var(--s1); font-size: var(--fs-label); font-style: italic; color: var(--ink-2); }
+.rod-table .sfield.is-inset { margin-left: 0; margin-right: 0; }
+
+/* upsell toggle: the shared filter chip, shrunk to sit beside the code */
+.rod-up { min-height: var(--tap); padding: 0 var(--s2); font-size: var(--fs-min); }
+.rod-up:disabled { border-style: dashed; color: var(--disabled-ink); cursor: not-allowed; }
+
+/* the actual-hours field: the shared .input, kept narrow. `.opc-hours-input`
+   stays on the element for the bot's selector; its old-token rule is overridden
+   here (higher specificity) so nothing of it shows through. */
+.input.num.opc-hours-input.rod-hours {
+  width: 5rem; padding: 0 var(--s2); text-align: right;
+  background: var(--field); color: var(--ink); border: var(--w-hair) solid var(--field-line); border-radius: var(--r-sign);
+  font-size: var(--fs-num);
+}
+.input.num.opc-hours-input.rod-hours:hover { border-color: var(--ink); }
+.input.num.opc-hours-input.rod-hours:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 1px; border-color: var(--ink); box-shadow: var(--field-cut); }
+.input.num.opc-hours-input.rod-hours[aria-invalid="true"] { border-color: var(--bad); border-width: var(--w-edge); }
+
+/* icon button (remove a line / an event / a day) */
+.rod-x {
+  display: inline-grid; place-items: center; width: var(--tap); height: var(--tap); flex: none;
+  background: transparent; border: 0; border-radius: var(--r-sign); color: var(--ink-2); cursor: pointer;
+}
+.rod-x:hover { background: var(--bad-bg); color: var(--bad); }
+.rod-x:active { background: var(--quiet-active); }
+.rod-x:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -4px; }
+.rod-x:disabled { color: var(--disabled-ink); cursor: not-allowed; background: transparent; }
+
+/* totals */
+.rod-table .table-foot td { padding-top: var(--s3); padding-bottom: var(--s3); vertical-align: middle; }
+.rod-table .table-foot td.table-num { color: var(--ink); font-size: var(--fs-num); }
+.rod-table .rod-sub td { border-top: var(--w-hair) solid var(--line); border-bottom: 0; font-size: var(--fs-label); font-weight: 700; color: var(--ink-2); vertical-align: middle; }
+.rod-table .rod-sub td.table-num { color: var(--ink-2); }
+.rod-table .rod-sub td.rod-good { color: var(--good); }
+
+/* ---------- add op code ---------- */
+.rod-add > * + * { margin-top: var(--s2); }
+.rod-check { display: flex; align-items: center; gap: var(--s3); min-height: var(--tap); cursor: pointer; font-size: var(--fs-label); color: var(--ink-2); }
+.rod-check input { width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
+.rod-pick-well { padding: var(--s3); }
+.rod-pick-well > * + * { margin-top: var(--s3); }
+.rod-pick-head { display: flex; align-items: center; gap: var(--s3); font-size: var(--fs-label); color: var(--ink-2); }
+.rod-pick-head .rod-code-main { font-weight: 700; }
+.rod-picks { max-height: 14rem; overflow-y: auto; }
+.rod-none { padding: var(--s3) 0; font-size: var(--fs-label); color: var(--ink-2); }
+
+/* ---------- wells: timeline, notes, photos, spiffs ---------- */
+.rod-well { padding: var(--s3); }
+.rod-well-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin-bottom: var(--s2); }
+.field-label.rod-well-name { display: flex; align-items: center; gap: var(--s2); margin: 0; color: var(--ink-2); }
+.rod-well-name .rod-count { color: var(--ink); }
+.rod-notes-text { margin: 0; white-space: pre-wrap; font-size: var(--fs-body); color: var(--ink); }
+
+/* ruled list used by the timeline story, the hours ledger and the spiffs */
+.rod-rule { list-style: none; margin: 0; padding: 0; }
+.rod-rule > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 var(--s3); min-height: 48px; padding: var(--s1) 0; border-bottom: var(--w-hair) solid var(--line); }
+.rod-rule > li:last-child { border-bottom: 0; }
+.rod-rule .rod-main { min-width: 0; flex: 1 1 auto; font-size: var(--fs-body); color: var(--ink); }
+.rod-when { margin-left: var(--s2); font-family: var(--font-num); font-size: var(--fs-label); letter-spacing: var(--track-num); color: var(--ink-2); }
+.rod-note { margin-top: 2px; font-size: var(--fs-label); font-style: italic; color: var(--ink-2); }
+.rod-fig { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: var(--track-num); font-size: var(--fs-num); }
+.rod-fig-good { color: var(--good); }
+.rod-kind { margin-left: var(--s2); font-size: var(--fs-label); color: var(--ink-2); }
+.rod-basis { flex-basis: 100%; }
+
+.rod-hours-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); margin-top: var(--s3); padding-top: var(--s3); border-top: var(--w-hair) solid var(--line); }
+.rod-hours-head .field-label { margin: 0; }
+.rod-hours-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s2); min-width: 0; font-size: var(--fs-body); }
+.rod-hours-row .rod-fig { color: var(--ink); }
+
+/* timeline: add forms and calls to action */
+.rod-addform { margin-top: var(--s3); padding: var(--s3); border: var(--w-hair) solid var(--line); border-radius: var(--r-sign); background: var(--panel); }
+.rod-addform > * + * { margin-top: var(--s3); }
+.rod-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+.rod-fields .rod-span { grid-column: 1 / -1; }
+.rod-addform-act { display: flex; justify-content: flex-end; gap: var(--s2); }
+.rod-addform .rod-fine { margin: 0; }
+.rod-cta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s2) var(--s3); margin-top: var(--s3); padding-top: var(--s3); border-top: var(--w-hair) solid var(--line); }
+.rod-cta .rod-fine { flex: 1 1 12rem; }
+.rod-open-add { margin-top: var(--s3); }
+.rod-inline-err { margin-top: var(--s1); font-size: var(--fs-label); font-weight: 700; color: var(--bad); }
+
+/* ---------- photos ---------- */
+.rod-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr)); gap: var(--s2); }
+.rod-thumb {
+  position: relative; aspect-ratio: 1; display: grid; place-items: center; min-height: var(--tap); padding: 0; overflow: hidden;
+  background: var(--panel); color: var(--ink-2); border: var(--w-edge) solid var(--line); border-radius: var(--r-sign); cursor: pointer;
+}
+.rod-thumb:hover { border-color: var(--ink-3); }
+.rod-thumb:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+.rod-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rod-thumb.is-add { border-style: dashed; background: transparent; }
+.rod-thumb.is-add:hover { background: var(--quiet-hover); color: var(--ink); }
+.rod-thumb:disabled { border-style: dashed; color: var(--disabled-ink); cursor: not-allowed; }
+.rod-loading { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) 0; font-size: var(--fs-label); color: var(--ink-2); }
+.rod-spin { animation: rod-spin 1s linear infinite; }
+@keyframes rod-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rod-spin { animation: none; } }
+.rod-fine-p { margin: var(--s2) 0 0; font-size: var(--fs-label); color: var(--ink-2); }
+
+/* the full-screen photo viewer: a custom role="dialog" over the modal, so it
+   keeps its own scrim and its own chrome, set from the overlay tokens */
+.rod-viewer { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--overlay-scrim); color: var(--overlay-fg); }
+.rod-viewer-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s3) var(--s4); }
+.rod-viewer-k { font-size: var(--fs-min); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--overlay-fg); opacity: 0.6; }
+.rod-viewer-v { font-family: var(--font-num); font-size: var(--fs-body); font-weight: 600; color: var(--overlay-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rod-viewer-x {
+  display: grid; place-items: center; flex: none; width: var(--tap); height: var(--tap);
+  background: transparent; color: var(--overlay-fg); border: var(--w-edge) solid transparent; border-radius: var(--r-sign); cursor: pointer;
+}
+.rod-viewer-x:hover { border-color: var(--overlay-fg); }
+.rod-viewer-x:focus-visible, .rod-viewer-del:focus-visible { outline: var(--w-heavy) solid var(--overlay-fg); outline-offset: 2px; }
+.rod-viewer-stage { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: var(--s4); min-height: 0; }
+.rod-viewer-stage img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.rod-viewer-foot { display: flex; align-items: center; justify-content: center; padding: var(--s3) var(--s4); }
+.rod-viewer-del {
+  display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--tap); padding: 0 var(--s4);
+  background: transparent; color: var(--overlay-fg); border: var(--w-edge) solid var(--overlay-fg); border-radius: var(--r-sign);
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.rod-viewer-del:hover { background: var(--overlay-fg); color: var(--overlay-scrim); }
+.rod-viewer-del:disabled { border-style: dashed; opacity: 0.6; cursor: not-allowed; }
+
+/* ---------- footer: Delete far left, Close then the primary on the right ---------- */
+.rod-foot { display: flex; align-items: center; gap: var(--s2); width: 100%; flex-wrap: wrap; padding: var(--s2) 0; }
+.rod-foot-right { display: flex; align-items: center; gap: var(--s2); margin-left: auto; }
+.rod-foot-err { flex: 1 0 100%; margin: 0; }
+.rod-foot .btn { text-decoration: none; }
+
+/* ---------- phone: a line is a card-row, not a 4-column table ----------
+   Under 700px the three fixed columns left the description ~100px wide
+   (one word per line). The row becomes a grid: code + upsell + description
+   across the top, then Flag · Actual · remove on a second line. The column
+   headers are clipped (still read by AT) and each figure carries its own
+   word instead. The totals rows keep their table shape. */
+@media (max-width: 699px) {
+  .rod-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--s2);
+    padding: var(--s2) var(--s3) var(--s2) 0; border-bottom: var(--w-hair) solid var(--line);
+  }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td { display: block; border-bottom: 0; padding: 0; height: auto; min-height: 0; width: auto; }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td:first-child { grid-column: 1 / -1; padding-left: var(--s3); padding-bottom: var(--s2); }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-flag,
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-act { display: flex; align-items: center; gap: var(--s2); text-align: left; }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-flag { grid-column: 1; padding-left: var(--s3); }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-flag::before,
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-act::before {
+    font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase;
+    color: var(--ink-2); letter-spacing: var(--track-label);
+  }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-flag::before { content: "Flag"; }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-act::before { content: "Actual"; }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-act { grid-column: 2; }
+  .rod-table tbody tr:not(.table-foot):not(.rod-sub) > td.rod-col-rm { grid-column: 3; }
+}
+@media (max-width: 699px) {
+  /* a grid row inside a real <table> is still sized by the table's column
+     algorithm (it came out 208px wide): the table and tbody become blocks too,
+     and the totals rows become flex rows so they keep their two-ended shape */
+  .rod-table, .rod-table tbody { display: block; width: 100%; }
+  .rod-table tbody tr.table-foot, .rod-table tbody tr.rod-sub {
+    display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s3);
+    border-bottom: var(--w-hair) solid var(--line);
+  }
+  .rod-table tbody tr.table-foot { border-top: var(--w-edge) solid var(--edge); }
+  .rod-table tbody tr.table-foot > td, .rod-table tbody tr.rod-sub > td { display: block; border: 0; padding: 0; height: auto; min-height: 0; width: auto; }
+  .rod-table tbody tr.table-foot > td:first-child, .rod-table tbody tr.rod-sub > td:first-child { flex: 1 1 auto; }
+  .rod-table tbody tr.table-foot > td:empty, .rod-table tbody tr.rod-sub > td:empty { display: none; }
+  .rod-table tbody tr:last-child { border-bottom: 0; }
+}

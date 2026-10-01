@@ -23,6 +23,9 @@ import {
   type RecentRo,
 } from "@/app/actions/bonuses";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Field } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
+import { StatusField } from "@/components/ui/StatusField";
 
 export function BonusForm({
   initial,
@@ -97,19 +100,11 @@ export function BonusForm({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="bon-form">
       {/* Amount */}
-      <div>
-        <label
-          htmlFor="bonus-amount"
-          className="field-label"
-        >
-          Amount
-        </label>
-        <div className="flex items-center gap-2 card-inset px-3 py-2 focus-within:border-[var(--brand)] focus-within:shadow-[var(--ring)]">
-          <span className="text-base font-bold text-[var(--fg-3)]" aria-hidden="true">
-            $
-          </span>
+      <Field label="Amount" htmlFor="bonus-amount">
+        <div className="bon-amt">
+          <span aria-hidden="true">$</span>
           <input
             id="bonus-amount"
             ref={amountRef}
@@ -124,17 +119,15 @@ export function BonusForm({
             required
             aria-required="true"
             aria-describedby={error ? "bonus-error" : undefined}
-            className="mono flex-1 bg-transparent text-base font-semibold tabular-nums text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
+            className="input num"
           />
         </div>
-      </div>
+      </Field>
 
       {/* Category */}
-      <div>
-        <div className="field-label mb-2">
-          Category
-        </div>
-        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Category">
+      <div className="field">
+        <div className="field-label">Category</div>
+        <div className="fchips" role="radiogroup" aria-label="Category">
           {BONUS_CATEGORIES.map((c) => {
             const active = c === category;
             return (
@@ -144,11 +137,7 @@ export function BonusForm({
                 role="radio"
                 aria-checked={active}
                 onClick={() => setCategory(c)}
-                className={`rounded-[var(--radius-sm)] border px-3 py-2.5 text-sm ${
-                  active
-                    ? "border-[var(--brand)] bg-[var(--brand-bg)] text-[var(--brand)]"
-                    : "border-[var(--line)] bg-[var(--bg-3)] text-[var(--fg-2)] hover:border-[var(--brand-soft)]"
-                }`}
+                className="fchip bon-chip"
               >
                 {BONUS_CATEGORY_LABELS[c]}
               </button>
@@ -158,14 +147,8 @@ export function BonusForm({
       </div>
 
       {/* Source + Date */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label
-            htmlFor="bonus-source"
-            className="field-label"
-          >
-            Source
-          </label>
+      <div className="bon-pair">
+        <Field label="Source" htmlFor="bonus-source">
           <input
             id="bonus-source"
             type="text"
@@ -173,36 +156,27 @@ export function BonusForm({
             onChange={(e) => setSource(e.target.value)}
             placeholder="tire spiff"
             autoComplete="off"
-            className="input text-sm"
+            className="input"
           />
-        </div>
-        <div>
-          <label
-            htmlFor="bonus-date"
-            className="field-label"
-          >
-            Date
-          </label>
+        </Field>
+        <Field label="Date" htmlFor="bonus-date">
           <input
             id="bonus-date"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="input text-sm"
+            className="pill-input"
           />
-        </div>
+        </Field>
       </div>
 
       {/* Optional RO link */}
       <RoLinkPicker entryId={entryId} onChange={setEntryId} />
 
       {/* Note */}
-      <div>
-        <label
-          htmlFor="bonus-note"
-          className="field-label"
-        >
-          Note <span className="text-[var(--fg-3)]">(optional)</span>
+      <div className="field">
+        <label htmlFor="bonus-note" className="field-label">
+          Note <span className="bon-opt">(optional)</span>
         </label>
         <input
           id="bonus-note"
@@ -211,30 +185,29 @@ export function BonusForm({
           onChange={(e) => setNote(e.target.value)}
           placeholder="anything worth remembering"
           autoComplete="off"
-          className="input text-sm"
+          className="input"
         />
       </div>
 
       {error && (
-        <p id="bonus-error" role="alert" className="text-sm text-[var(--bad)]">
-          {error}
-        </p>
+        <StatusField tag="Fix" role="alert" inset id="bonus-error">
+          <p>{error}</p>
+        </StatusField>
       )}
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="dlg-foot bon-actions">
         {onCancel && (
-          <button type="button" onClick={onCancel} className="btn">
+          <Button variant="quiet" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
+        <Button
+          variant="go"
           onClick={handleSubmit}
           disabled={saving || !amount.trim()}
-          className="btn btn-primary"
         >
           {saving ? "Saving…" : (submitLabel ?? (isEdit ? "Save changes" : "Save spiff"))}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -270,60 +243,53 @@ function RoLinkPicker({
   const linked = entryId ? ros?.find((r) => r.id === entryId) : undefined;
 
   return (
-    <div>
-      <div className="mb-1.5 text-xs uppercase tracking-wide text-[var(--fg-3)]">
-        Linked RO <span className="text-[var(--fg-3)]">(optional)</span>
+    <div className="field">
+      <div className="field-label">
+        Linked RO <span className="bon-opt">(optional)</span>
       </div>
       {entryId ? (
-        <div className="flex items-center justify-between gap-2 card-inset px-3 py-2 text-sm">
-          <span className="flex items-center gap-1.5 min-w-0">
-            <Link2 className="h-3.5 w-3.5 flex-shrink-0 text-[var(--brand)]" />
-            <span className="font-mono text-[var(--brand)]">
-              #{linked?.roNumber ?? "linked"}
-            </span>
+        <div className="card-inset bon-linked">
+          <span className="bon-linked-txt">
+            <Link2 className="bon-ico" aria-hidden="true" />
+            <span className="num bon-ro">#{linked?.roNumber ?? "linked"}</span>
             {linked?.vehicleSummary && (
-              <span className="truncate text-xs text-[var(--fg-3)]">
-                {linked.vehicleSummary}
-              </span>
+              <span className="bon-veh">{linked.vehicleSummary}</span>
             )}
           </span>
-          <button
-            type="button"
+          <Button
+            variant="quiet"
             onClick={() => onChange(null)}
             aria-label="Unlink RO"
-            className="relative text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
           >
-            <X className="h-3.5 w-3.5" />
-          </button>
+            <X className="bon-ico" aria-hidden="true" />
+          </Button>
         </div>
       ) : !open ? (
-        <button
-          type="button"
+        <Button
+          variant="line"
           onClick={() => {
             setOpen(true);
             void ensureLoaded();
           }}
-          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] py-2 text-xs text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)]"
         >
-          <Link2 className="h-3.5 w-3.5" />
+          <Link2 className="bon-ico" aria-hidden="true" />
           Attach to an RO
-        </button>
+        </Button>
       ) : (
-        <div className="card-inset">
-          <div className="flex items-center justify-between border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
+        <div className="card-inset bon-picker">
+          <div className="bon-picker-head">
             <span>Recent ROs</span>
-            <button
-              type="button"
+            <Button
+              variant="quiet"
               onClick={() => setOpen(false)}
               aria-label="Close RO picker"
-              className="relative transition-transform hover:text-[var(--fg-1)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              <X className="bon-ico" aria-hidden="true" />
+            </Button>
           </div>
-          <ul className="max-h-40 overflow-y-auto">
+          <ul className="log-picks bon-picks">
             {loading ? (
-              <li className="px-3 py-2 text-xs text-[var(--fg-3)]">Loading…</li>
+              <li className="bon-empty">Loading…</li>
             ) : ros && ros.length > 0 ? (
               ros.map((r) => (
                 <li key={r.id}>
@@ -333,28 +299,20 @@ function RoLinkPicker({
                       onChange(r.id);
                       setOpen(false);
                     }}
-                    className="flex min-h-[44px] w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)]"
+                    className="log-pick"
                   >
-                    <span className="min-w-0">
-                      <span className="font-mono text-sm text-[var(--brand)]">
-                        #{r.roNumber}
-                      </span>
+                    <span className="log-pick-txt">
+                      <b className="num">#{r.roNumber}</b>
                       {r.vehicleSummary && (
-                        <span className="ml-2 truncate text-xs text-[var(--fg-3)]">
-                          {r.vehicleSummary}
-                        </span>
+                        <span className="log-pick-desc">{r.vehicleSummary}</span>
                       )}
                     </span>
-                    <span className="flex-shrink-0 text-xs text-[var(--fg-3)]">
-                      {r.date}
-                    </span>
+                    <span className="log-pick-act num">{r.date}</span>
                   </button>
                 </li>
               ))
             ) : (
-              <li className="px-3 py-2 text-xs text-[var(--fg-3)]">
-                No recent ROs to link.
-              </li>
+              <li className="bon-empty">No recent ROs to link.</li>
             )}
           </ul>
         </div>

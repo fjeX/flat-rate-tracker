@@ -18,6 +18,7 @@ import {
   uploadEntryPhoto,
 } from "@/app/actions/entry-photos";
 import { actionErrorMessage } from "@/lib/action-error";
+import { StatusField } from "@/components/ui/StatusField";
 
 // "Photographed Jul 7, 2026 · 3:41 PM" — the immutable capture stamp.
 function formatCaptured(iso: string): string {
@@ -117,27 +118,29 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
   const viewerPhoto = viewerId ? photos.find((p) => p.id === viewerId) ?? null : null;
 
   return (
-    <div className="card-inset p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wide text-[var(--fg-3)]">
-        <Camera className="h-3.5 w-3.5" />
-        Photos
-        {photos.length > 0 && <span className="text-[var(--fg-2)]">({photos.length})</span>}
+    <div className="card-inset rod-well">
+      <div className="rod-well-head">
+        <h3 className="field-label rod-well-name">
+          <Camera className="h-4 w-4" aria-hidden="true" />
+          Photos
+          {photos.length > 0 && <span className="rod-count">({photos.length})</span>}
+        </h3>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 py-2 text-xs text-[var(--fg-3)]">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <div className="rod-loading">
+          <Loader2 className="h-4 w-4 rod-spin" />
           Loading…
         </div>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="rod-thumbs">
           {photos.map((photo) => (
             <button
               key={photo.id}
               type="button"
               onClick={() => setViewerId(photo.id)}
               aria-label={`View photo captured ${formatCaptured(photo.capturedAt)}`}
-              className="relative h-16 w-16 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-3)] transition-colors hover:border-[var(--brand-soft)]"
+              className="rod-thumb"
             >
               {urls[photo.id] ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -145,12 +148,9 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
                   src={urls[photo.id]}
                   alt={`RO photo captured ${formatCaptured(photo.capturedAt)}`}
                   loading="lazy"
-                  className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="grid h-full w-full place-items-center text-[var(--fg-3)]">
-                  <Camera className="h-4 w-4" />
-                </span>
+                <Camera className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
           ))}
@@ -160,26 +160,30 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="grid h-16 w-16 place-items-center rounded-[var(--radius-sm)] border border-dashed border-[var(--line-soft)] text-[var(--fg-3)] hover:border-[var(--brand-soft)] hover:text-[var(--fg-1)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rod-thumb is-add"
               aria-label="Attach a photo"
             >
-              {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+              {uploading ? <Loader2 className="h-5 w-5 rod-spin" /> : <Camera className="h-5 w-5" />}
             </button>
           )}
         </div>
       )}
 
       {!loading && photos.length === 0 && !uploading && (
-        <p className="mt-1 text-xs text-[var(--fg-3)]">
+        <p className="rod-fine-p">
           No photos yet. Attach the RO ticket as a timestamped record.
         </p>
       )}
       {atCap && (
-        <p className="mt-2 text-xs text-[var(--fg-3)]">
+        <p className="rod-fine-p">
           Maximum {MAX_PHOTOS_PER_ENTRY} photos per RO.
         </p>
       )}
-      {error && <p role="alert" className="mt-2 text-xs text-[var(--bad)]">{error}</p>}
+      {error && (
+        <StatusField tag="Fix" role="alert" inset>
+          <p>{error}</p>
+        </StatusField>
+      )}
 
       <label htmlFor={`photo-input-${entryId}`} className="sr-only">
         Attach a photo
@@ -236,45 +240,44 @@ function PhotoViewer({
       role="dialog"
       aria-modal="true"
       aria-label="Photo viewer"
-      className="fixed inset-0 z-[60] flex flex-col bg-[var(--overlay-scrim)]"
+      className="rod-viewer"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="rod-viewer-head">
         <div className="min-w-0">
-          <div className="text-xs text-[var(--overlay-fg)]/50">Photographed</div>
-          <div className="truncate text-sm font-medium text-[var(--overlay-fg)]">{formatCaptured(capturedAt)}</div>
+          <div className="rod-viewer-k">Photographed</div>
+          <div className="rod-viewer-v">{formatCaptured(capturedAt)}</div>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close photo"
-          className="grid h-11 w-11 place-items-center rounded-full text-[var(--overlay-fg)]/80 hover:bg-[var(--overlay-fg)]/10 hover:text-[var(--overlay-fg)]"
+          className="rod-viewer-x"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      <div className="flex flex-1 items-center justify-center overflow-hidden p-4">
+      <div className="rod-viewer-stage">
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={url}
             alt={`RO photo captured ${formatCaptured(capturedAt)}`}
-            className="max-h-full max-w-full object-contain"
           />
         ) : (
-          <Loader2 className="h-6 w-6 animate-spin text-[var(--overlay-fg)]/60" />
+          <Loader2 className="h-6 w-6 rod-spin" aria-hidden="true" />
         )}
       </div>
 
-      <div className="flex items-center justify-center px-4 py-3">
+      <div className="rod-viewer-foot">
         <button
           type="button"
           onClick={() => startDelete(async () => { await onDelete(); })}
           disabled={deleting}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--overlay-fg)]/20 px-4 py-2 text-sm text-[var(--overlay-fg)]/90 hover:bg-[var(--overlay-fg)]/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rod-viewer-del"
         >
           <Trash2 className="h-4 w-4" />
           {deleting ? "Deleting…" : "Delete photo"}

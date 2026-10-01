@@ -428,6 +428,56 @@ fonts and corner radius only** — no layout, wording or positions moved:
     "That link has expired or has already been used." are the two reset
     sentences. Continue with Google is an outlined button with Google's mark;
     Try as Guest sits under a hairline at the foot of Sign in.
+  - **Dialog bodies, wave 1 (RO detail, op code form, spiff form, import
+    confirm).** The dialog *frame* was restyled in phase 2; these are the
+    insides. Common to all of them: field labels are uppercase, errors are
+    red **FIX** status fields (`role="alert"`), and the action buttons moved
+    out of the body into a **sticky footer bar** at the bottom of the dialog
+    (Cancel at the left of the primary; a destructive button sits at the far
+    left). Every id, aria-label, button text and sentence named elsewhere in
+    this file is unchanged unless listed here.
+    - **RO detail.** The date line and the "Logged …" line are still two
+      separate lines (§8k), vehicle under them. The op-code lines are a
+      **ruled table** with Op code / Flag / Actual headers on desktop; on a
+      phone each line is a stacked row (code chip + Upsell chip, description,
+      then "FLAG 1.0 · ACTUAL [field] · trash"). The Actual field is still
+      `opc-hours-input` with the same `aria-label` (§2's property read). The
+      Upsell chip and the remove button keep their accessible names. The
+      totals row that read "Total" now reads **Flagged total** (matching Log
+      RO and Quick Add); "Unpaid rework · N lines" and "Earnings" follow it.
+      "Add op code" is a full-width outlined button that opens the shared
+      search well with pick rows. Footer: **Delete** far left, then **Close**,
+      then **Edit RO** (on an open ticket: Edit ticket + the primary Close
+      ticket). The smoke path (`.history-ro-row` → button "Delete") and every
+      `window.confirm` text are unchanged. Timeline, notes, photos and linked
+      spiffs are wells with ruled rows; "Close photo" / "Delete photo" keep
+      their names.
+    - **Op code form ("New op code" / "Edit op code").** `opc-form-code` and
+      `opc-form-error` unchanged; "Change color for {tag}", "Remove {tag}",
+      "Color N", "Auto (current)", "Sub op code" unchanged (§8d). **"This op
+      code has sub op codes" is now an OFF | ON switch (`role="switch"`), not
+      a checkbox**; same name. The swatch row is a `role="group"` named
+      "Color for {tag}". Sub codes are a ruled table in a well with an **Add
+      sub op code** outlined button under it. Footer: Delete (editing only)
+      far left, Cancel, Save / Save changes.
+    - **Spiff / bonus form** (Quick Add's Spiff tab and the Spiffs add/edit
+      dialogs, §6 field parity still holds). Amount has a `$` prefix,
+      Category is a row of chips that keep `role="radio"` / `aria-checked`
+      inside the "Category" radiogroup, the linked-RO picker is a pick list
+      in a well. Ids `bonus-*`, "Unlink RO", "Close RO picker", "Attach to an
+      RO", Save spiff / Save changes / Saving… unchanged. Its Cancel / Save
+      row sits at the bottom of the form (it is embedded, so it is not the
+      dialog's own footer).
+    - **Import confirm on Settings** is now a real dialog (`role="dialog"`,
+      title "Replace all data?", a header ✕ "Close") instead of a hand-rolled
+      overlay; Cancel and **Replace data** are in its footer. §8g still
+      applies: never click Replace data. "Backup taken" and "Version" are two
+      rows; the replaced / kept lists are ruled rows with counts, "cleared"
+      in red; the "doesn't come across" warnings are **NOTE** fields. The
+      file input "Import backup file", "Import backup…", "Download backup"
+      and `#backup-parse-error` are unchanged. One behaviour change: the ✕
+      does nothing while an import is in flight (Cancel was already disabled
+      there).
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,
