@@ -30,8 +30,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 const saveTimerAction = vi.fn();
+const startTimerWithoutRoAction = vi.fn();
+const attachRoToExistingTimerAction = vi.fn();
 vi.mock("@/app/actions/timer", () => ({
   saveTimerAction: (...args: unknown[]) => saveTimerAction(...args),
+  startTimerWithoutRoAction: (...args: unknown[]) => startTimerWithoutRoAction(...args),
+  attachRoToExistingTimerAction: (...args: unknown[]) =>
+    attachRoToExistingTimerAction(...args),
   attachRoToTimerAction: vi.fn(),
   releaseTimerAction: vi.fn(),
   resetTimerAction: vi.fn(),
@@ -228,5 +233,89 @@ describe("TimerSlots — the save receipt survives the save that triggers it", (
     deliverRevalidatedProps(rerender);
     expect(screen.queryByText(/^Saved$/)).toBeNull();
     expect(screen.queryByText(/save & close timer/i)).toBeNull();
+  });
+});
+
+// Product decision (Liem, 2026-09-30): a timer can run with no RO. Saving the
+// time still needs an RO and a line.
+describe("TimerSlots — a timer with no RO", () => {
+  const NO_RO_SLOT: TimerSlot = {
+    ...SLOT,
+    entryId: null,
+    lineId: null,
+    status: "working",
+    startTime: Date.now(),
+    workAccumulated: 0.5 * 3_600_000,
+  };
+
+  function renderNoRo() {
+    return render(
+      <TimerSlots
+        slots={[NO_RO_SLOT]}
+        attachedEntries={[]}
+        caps={{}}
+        recentEntries={[ENTRY]}
+        library={LIBRARY}
+        roTemplates={[]}
+      />,
+    );
+  }
+
+  it("says 'No RO yet', guides with NEXT, and keeps Save disabled despite banked time", () => {
+    renderNoRo();
+    expect(screen.getByText("No RO yet")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^RO / })).toBeNull();
+    expect(screen.getByText("Attach an RO to save these hours.")).toBeTruthy();
+    const save = screen.getByRole("button", { name: /^save$/i }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    // Reset and Clear still work.
+    expect((screen.getByRole("button", { name: /^reset$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /clear timer 1/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("Attach RO opens the picker for this slot and binds the chosen RO to it", async () => {
+    attachRoToExistingTimerAction.mockResolvedValue({});
+    renderNoRo();
+    fireEvent.click(screen.getByRole("button", { name: /^attach ro$/i }));
+    await screen.findByText("Put an RO on a timer");
+    // Not offered from a slot that is already running.
+    expect(screen.queryByRole("button", { name: /start without an ro/i })).toBeNull();
+    fireEvent.click(screen.getByText("#88421").closest("button")!);
+    // One line on the RO: bound straight away, so nobody has to pick it.
+    await waitFor(() =>
+      expect(attachRoToExistingTimerAction).toHaveBeenCalledWith("t-1", "e-1", "line-1"),
+    );
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it("shows the refusal an attach returns", async () => {
+    attachRoToExistingTimerAction.mockResolvedValue({
+      error: "That line of RO #88421 is already on a timer.",
+    });
+    renderNoRo();
+    fireEvent.click(screen.getByRole("button", { name: /^attach ro$/i }));
+    await screen.findByText("Put an RO on a timer");
+    fireEvent.click(screen.getByText("#88421").closest("button")!);
+    await screen.findByText("That line of RO #88421 is already on a timer.");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("offers 'Start without an RO' from a free slot, even with no ROs to pick", async () => {
+    startTimerWithoutRoAction.mockResolvedValue({});
+    render(
+      <TimerSlots
+        slots={[]}
+        attachedEntries={[]}
+        caps={{}}
+        recentEntries={[]}
+        library={LIBRARY}
+        roTemplates={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /start a timer/i }));
+    await screen.findByText("Put an RO on a timer");
+    fireEvent.click(screen.getByRole("button", { name: /start without an ro/i }));
+    await waitFor(() => expect(startTimerWithoutRoAction).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 });

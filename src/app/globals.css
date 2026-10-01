@@ -31,6 +31,9 @@
 @import "./styles/dlg-template.css";
 @import "./styles/dlg-bug-report.css";
 @import "./styles/dlg-bug-inbox.css";
+@import "./styles/page-guest.css";
+@import "./styles/page-landing.css";
+@import "./styles/page-admin-bugs.css";
 
 /* Blocks 1–6 are lifted verbatim from the locked design (final.html, via
    plans/frt-visual-overhaul-tokens.css in Claude-EA) on 2026-09-29, phase 1
@@ -535,68 +538,6 @@ body {
 .greeting h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .greeting p  { margin: 2px 0 0; font-size: 14px; color: var(--fg-2); }
 
-/* ── Stat tiles ──────────────────────────────────────── */
-.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (min-width: 600px) { .stat-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } }
-
-.stat.today-card { grid-column: 1 / -1; }
-@media (min-width: 600px) { .stat.today-card { grid-column: auto; } }
-
-.stat {
-  padding: 14px 16px;
-  border-radius: var(--radius);
-  background: var(--bg-1);
-  border: 1px solid transparent;
-  box-shadow: var(--shadow-card);
-  position: relative;
-}
-.stat .stat-label {
-  font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--fg-3); font-weight: 550;
-}
-.stat .stat-value {
-  font-size: 26px; font-weight: 600; letter-spacing: -0.02em;
-  margin-top: 4px; line-height: 1;
-}
-.stat .stat-value .unit { font-size: 14px; color: var(--fg-2); margin-left: 1px; font-weight: 500; }
-.stat .stat-delta {
-  margin-top: 6px; font-size: 12px; display: inline-flex; align-items: center; gap: 3px;
-}
-.stat .stat-delta.good { color: var(--good); }
-.stat .stat-delta.warn { color: var(--warn); }
-.stat .stat-delta.bad  { color: var(--bad); }
-.stat .stat-delta.neutral { color: var(--fg-3); }
-.stat.featured {
-  background:
-    linear-gradient(180deg, var(--brand-bg), transparent 100%),
-    var(--bg-1);
-  border-color: var(--brand-soft);
-}
-.stat.featured .stat-label { color: var(--brand); }
-.stat.featured .stat-value { color: var(--brand); }
-
-/* ── Efficiency status accents (Phase 2) ─────────────────
-   Thin coloured top edge + tinted value, driven by efficiencyTier().
-   Tiles with no clocked hours have no tier → stay neutral. Placed after
-   .featured so the status colour wins on the value number. */
-.stat.eff-good, .stat.eff-warn, .stat.eff-bad { overflow: hidden; }
-.stat.eff-good::before, .stat.eff-warn::before, .stat.eff-bad::before {
-  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
-}
-.stat.eff-good::before { background: var(--good); }
-.stat.eff-warn::before { background: var(--warn); }
-.stat.eff-bad::before  { background: var(--bad); }
-.stat.eff-good { border-color: color-mix(in oklab, var(--good) 32%, var(--line)); }
-.stat.eff-warn { border-color: color-mix(in oklab, var(--warn) 32%, var(--line)); }
-.stat.eff-bad  { border-color: color-mix(in oklab, var(--bad) 32%, var(--line)); }
-.stat.eff-good .stat-value { color: var(--good); }
-.stat.eff-warn .stat-value { color: var(--warn); }
-.stat.eff-bad  .stat-value { color: var(--bad); }
-
-/* ── Today = hero tile ───────────────────────────────────
-   The orange "now" anchor reads bigger than the context tiles. */
-.stat.today-card .stat-value { font-size: 34px; }
-.stat.today-card .stat-value .unit { font-size: 16px; }
-
 /* ── Pace bar ────────────────────────────────────────── */
 .pace {
   padding: 14px;
@@ -652,129 +593,6 @@ body {
 .r-footer-dot {
   width: 3px; height: 3px; border-radius: 999px; background: var(--line); flex-shrink: 0;
 }
-
-/* ── RO list ─────────────────────────────────────────── */
-.ro-list { }
-/* The row is a container, not a control. It stopped being a <button> when the
-   Upsell shortcut moved inside it — a button nested in a button is invalid HTML
-   and browsers recover by dropping one, which is a coin flip over whether the
-   row or the shortcut still works.
-
-   ORDER: [RO + vehicle + codes] [Upsell] [hours]. The shortcut is its own
-   control between the two, not something crowding the hours column. */
-.ro-row {
-  position: relative;
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  transition: background 120ms;
-  width: 100%;
-}
-.ro-row:last-child { border-bottom: none; }
-.ro-row:hover { background: var(--bg-3); }
-
-.ro-row-main {
-  flex: 1; min-width: 0;
-  cursor: pointer;
-  text-align: left;
-  background: transparent;
-  border: none;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-}
-/* The hit area is the WHOLE row, including the hours, even though the button
-   only wraps the text. Splitting the hours out is what let the Upsell shortcut
-   sit between them; without this, tapping the hours would stop opening the RO —
-   a target that silently shrank. Same stretched-overlay trick the op-code line
-   buttons use, and it keeps both controls real <button>s for the keyboard. */
-.ro-row-main::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-}
-
-/* Its own control, with its own edge, sitting to the right of the RO and
-   vehicle information — deliberately not tucked against the hours, where it
-   read as part of the number. Raised above the row's stretched hit area so it
-   receives its own clicks. */
-.ro-upsell {
-  position: relative;
-  z-index: 1;
-  display: flex; align-items: center; gap: 4px;
-  flex-shrink: 0;
-  min-height: 34px;
-  padding: 0 10px;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-3);
-  cursor: pointer;
-  transition: color 120ms, border-color 120ms, background 120ms;
-}
-.ro-upsell:hover {
-  color: var(--brand);
-  border-color: var(--brand-soft);
-  background: var(--bg-3);
-}
-/* 34px pill, 46px target. A 44px-tall pill would have made every RO row taller
-   for a shortcut, so the hit area is expanded instead — the same trick the
-   op-code line controls use, and quality.spec.ts's touch-target check knows to
-   read this ::after and add its negative inset to the box.
-   Not optional: that check failed on the dashboard at 34px, which is exactly
-   what it is for. */
-.ro-upsell::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
-}
-
-/* Reveal for a capped list (RoList maxRows). Only the Pay Period page caps —
-   a settled period is 50-90 rows and reconciliation is the real drill-down. */
-.ro-show-all {
-  width: 100%;
-  min-height: var(--tap-min);
-  padding: 12px 14px;
-  border: none;
-  background: transparent;
-  color: var(--brand);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  border-top: 1px solid var(--line-soft);
-}
-.ro-show-all:hover { background: var(--bg-2); }
-
-.ro-num {
-  font-family: var(--font-num);
-  font-size: 13px; color: var(--brand); font-weight: 600;
-}
-.ro-meta { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
-.ro-vehicle { font-size: 13px; color: var(--fg-1); }
-.ro-row .grow { flex: 1; min-width: 0; }
-.ro-row .hours {
-  font-family: var(--font-num);
-  font-size: 14px; font-weight: 600;
-}
-.ro-row .hours .unit { color: var(--fg-3); font-weight: 500; margin-left: 1px; }
-
-.ro-codes {
-  display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px;
-}
-.ro-code-chip {
-  font-family: var(--font-num);
-  font-size: 11px;
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 2px 8px;
-  color: var(--fg-2);
-}
-.ro-code-chip .c { color: var(--brand); }
 
 /* ── Log RO step cards ───────────────────────────────── */
 .step-card {
@@ -950,16 +768,6 @@ body {
   from { transform: scaleY(0); }
 }
 
-/* — Dashboard stat tiles stagger in on load —
-   Gated by [data-animated] (set by <EntranceGrid>, WS5) so a router.refresh()
-   after quick-add — which re-renders the tiles in place without remounting
-   the grid — doesn't replay the stagger. Fires once per real mount. */
-.stat-grid:not([data-animated="true"]) .stat { animation: fade-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.stat-grid .stat:nth-child(1) { animation-delay: 0ms; }
-.stat-grid .stat:nth-child(2) { animation-delay: 45ms; }
-.stat-grid .stat:nth-child(3) { animation-delay: 90ms; }
-.stat-grid .stat:nth-child(4) { animation-delay: 135ms; }
-
 /* — Pace bar fills from empty on load — same [data-animated] gate as above,
    via <EntranceGrid animationName="pace-grow"> wrapping .pace. — */
 
@@ -979,13 +787,11 @@ body {
 .opc-dropdown-item:active{
   transform: scale(0.96);
 }
-.ro-row:active { background: var(--bg-4); }
 
 /* ── Focus-visible (keyboard-only focus ring) ───────────
    Brand-colored ring on every custom interactive class in the file, plus
    a generic fallback for any plain <button>/<a> that isn't covered above. */
 .filter-chip:focus-visible,
-.ro-row:focus-visible,
 .opc-dropdown-item:focus-visible,
 button:focus-visible,
 a:focus-visible {

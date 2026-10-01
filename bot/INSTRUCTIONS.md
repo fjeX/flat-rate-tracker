@@ -519,6 +519,32 @@ fonts and corner radius only** — no layout, wording or positions moved:
       M"; the "Screenshot" lightbox's "Close screenshot" button is square.
     - **Custom period dates.** No visible change: Cancel / Save dates are now
       the dialog's own sticky footer instead of a bar inside the form.
+  - **Last pages (guest dashboard, landing, FAQ / About / Contact, Admin >
+    Bugs, crash page).**
+    - **Guests (§8f):** `/guest` is a guest edition of the dashboard: a visible
+      h1 "Dashboard", a PAY PERIOD zone with the flag-hours headline and an
+      "Earned this period" cell that reads "—" until a rate is typed, Today /
+      This Week / This Month as a figures strip, the rate as the shared field
+      (label "Your rate", `$` and `/hr` inside; `aria-label` "Your hourly
+      flat-rate pay" unchanged), and RECENT ROS as RO tags whose RO number
+      opens the guest detail dialog. The old amber banner is a full-width
+      **NOTE** field under the header with the same sentence and the same
+      **"Create a free account"** link (still sets `frt_guest_claim`).
+      `/guest/log`, `/guest/history`, `/guest/op-codes`, `/guest/timer` are
+      unchanged; still no Open-ticket switch on `/guest/log` (§8m).
+    - **Landing (`/`)** keeps every heading, sentence, button text, link and
+      section; its demo tiles, pace bars, RO form, op-code list, discrepancy
+      field and charts are now the app's real parts, the wordmark is the tower
+      mark with "FLAT RATE TRACKER" as text, and the content sits in a
+      `<main>`. **FAQ / About Us / Contact** (§8e) each show an h1 with the
+      page name, a one-line description and a card reading "Coming soon."
+    - **Admin > Bugs** (404 for the bot account, §8e): h1 "Bug reports", the
+      two filters in a row (`#filter-status`, `#filter-severity`, same
+      options), a REPORTS zone with the "N reports" count, rows as row
+      buttons with status / severity / category badges; "Nothing here" empty
+      state unchanged.
+    - **Crash page:** the tower mark over a single "App crashed" panel (same
+      look as Sign in) with a blue **Reload** button; words unchanged.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,
@@ -839,6 +865,14 @@ start and save in the same breath records ~0 and proves nothing.
 - Put an RO on a timer ("Start a timer"), confirm it is **Working**, and note the
   wall-clock time from `date -u` in one Bash call.
 - Then **go straight to §3z and work through §5.** Do not linger on this page.
+- The "Put an RO on a timer" picker also has a **"Start without an RO"** button
+  (since 2026-09-30). A timer started that way is a **no-RO slot**: the card
+  shows "No RO yet" where the RO number would be, the NEXT field says "Attach an
+  RO to save these hours.", and an **Attach RO** button opens the picker for that
+  slot. **Save stays dashed-disabled until an RO and a line are bound — that is
+  correct, not a bug.** You may start **one** no-RO timer per night to exercise
+  this, but you must **Clear** it before you finish (same hygiene as §3b's
+  timers), so it never lingers into the morning.
 
 #### 3b. Close it out — after you finish §5, return to /timer
 - Note `date -u` again. The gap since §3a is your expected elapsed time; it will

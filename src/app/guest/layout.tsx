@@ -2,6 +2,7 @@ import { GuestStoreProvider } from "@/lib/guest/context";
 import { Header } from "@/components/layout/Header";
 import { GuestNav, GuestDirectoryButton } from "@/components/guest/GuestNav";
 import { ClaimAccountLink } from "@/components/guest/ClaimAccountLink";
+import { StatusField } from "@/components/ui/StatusField";
 import { GuestAppearance } from "@/components/guest/GuestAppearance";
 
 /**
@@ -25,24 +26,18 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
   return (
     <GuestStoreProvider>
       <div className="shell-frame">
-        <div style={{
-          borderBottom: "1px solid color-mix(in oklab, var(--warn) 25%, var(--line))",
-          background: "color-mix(in oklab, var(--warn) 8%, var(--bg-1))",
-          padding: "7px 16px",
-          textAlign: "center",
-          fontSize: 12,
-          color: "var(--warn)",
-          letterSpacing: "0.01em",
-        }}>
-          Guest mode — ROs won&apos;t be saved after you close this tab.{" "}
-          <ClaimAccountLink href="/signup" style={{ color: "var(--warn)", fontWeight: 600, textDecoration: "underline" }}>
-            Create a free account
-          </ClaimAccountLink>{" "}
-          to keep your data.
-        </div>
         <Header userEmail={null} actions={<GuestDirectoryButton extra={<GuestAppearance />} />} />
+        <StatusField tag="Note" className="gst-band">
+          <p>
+            Guest mode — ROs won&apos;t be saved after you close this tab.{" "}
+            <ClaimAccountLink href="/signup" className="gst-claim">
+              Create a free account
+            </ClaimAccountLink>{" "}
+            to keep your data.
+          </p>
+        </StatusField>
         <GuestNav />
-        <div style={{ flex: 1 }}>{children}</div>
+        <div className="gst-body">{children}</div>
       </div>
     </GuestStoreProvider>
   );

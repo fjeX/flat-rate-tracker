@@ -29,6 +29,7 @@ import {
   workingSlot,
   type TimerSlot,
 } from "./timer";
+import { capsForSlots } from "./timer-schedule";
 
 const HOUR = 3_600_000;
 const T0 = 1_700_000_000_000; // fixed epoch — no Date.now() in tests
@@ -486,5 +487,28 @@ describe("lineTakenByOtherSlot", () => {
   it("does not confuse the same line id across different ROs", () => {
     const running = [slot("s1", "ro2", "lineA")];
     expect(lineTakenByOtherSlot(running, "s2", "ro1", "lineA")).toBe(false);
+  });
+});
+
+// ── slots with no RO (a timer started without one) ─────────────────────────────
+
+describe("a slot with no RO", () => {
+  const noRo = slot({ id: "n1", slot: 1, entryId: null, lineId: null, status: "working", startTime: T0 });
+
+  it("never conflicts with attaching an RO, and takes no line", () => {
+    expect(attachConflict([noRo], "e1", null)).toBeNull();
+    expect(attachConflict([noRo], "e1", "l1")).toBeNull();
+    expect(lineTakenByOtherSlot([noRo], "other", "e1", "l1")).toBe(false);
+  });
+
+  it("still occupies a slot index", () => {
+    expect(nextFreeSlot([noRo])).toBe(2);
+  });
+
+  it("accrues like any other slot, and gets a cap entry", () => {
+    const e = elapsedFor(noRo, T0 + HOUR, null);
+    expect(e.work).toBe(HOUR);
+    const caps = capsForSlots([noRo], { schedules: null, shiftOverrides: {} });
+    expect(Object.keys(caps)).toEqual(["n1"]);
   });
 });

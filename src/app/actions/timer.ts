@@ -196,6 +196,105 @@ export async function attachRoToTimerAction(
   revalidateTimerScreens();
 }
 
+/** What the no-RO timer actions answer with. They RETURN a refusal rather than
+ * throw: a thrown error from a server action is masked in production, so the
+ * sentence would never reach the tech (server-action-thrown-refusals-masked).
+ * `{}` is success. */
+export type TimerRefusal = { error?: string };
+
+/**
+ * Start a timer that isn't on an RO yet (Liem, 2026-09-30): a tech starts the
+ * clock when the car rolls in and finds the RO number later. The slot is made
+ * with `entry_id = null`, working, clock running. Saving the time still needs
+ * an RO and a line — saveTimerAction refuses a slot with none — so this only
+ * moves the RO step later, it does not remove it.
+ *
+ * Same slot cap as attachRoToTimerAction, and the same one-working-slot rule.
+ */
+export async function startTimerWithoutRoAction(): Promise<TimerRefusal> {
+  const supabase = await createClient();
+  const all = await db.listTimerSlots(supabase);
+
+  const slot = nextFreeSlot(all);
+  if (slot === null) {
+    return {
+      error: `All ${MAX_TIMER_SLOTS} timers are in use. Save or clear one first.`,
+    };
+  }
+
+  const now = Date.now();
+  const ctx = await loadCapContext(supabase);
+  await pauseOtherWorkingSlots(supabase, all, "", now, ctx);
+
+  await db.createTimerSlot(supabase, {
+    slot,
+    entryId: null,
+    lineId: null,
+    status: "working",
+    startTime: now,
+  });
+  revalidateTimerScreens();
+  return {};
+}
+
+/**
+ * Bind an RO to a timer that was started without one. The slot keeps its
+ * status, its clock and everything it has banked — only entry_id (and the line,
+ * when the caller could name one) changes. The same per-line conflict rules as a
+ * fresh attach apply, so the double-count guard can't be walked around by
+ * attaching late.
+ */
+export async function attachRoToExistingTimerAction(
+  timerIdArg: string,
+  entryIdArg: string,
+  lineIdArg: string | null = null,
+): Promise<TimerRefusal> {
+  const timerId = validate(timerIdSchema, timerIdArg);
+  const { entryId, lineId } = validate(attachTimerSchema, {
+    entryId: entryIdArg,
+    lineId: lineIdArg,
+  });
+  const supabase = await createClient();
+
+  const all = await db.listTimerSlots(supabase);
+  const slot = all.find((s) => s.id === timerId);
+  if (!slot) return { error: "That timer is no longer running." };
+  if (slot.entryId) return { error: "This timer already has an RO attached." };
+
+  const entry = await db.getEntry(supabase, entryId);
+  if (!entry) return { error: "That RO no longer exists." };
+  if (lineId && !entry.opCodes.some((l) => l.id === lineId)) {
+    return { error: "That op code line isn't on this RO." };
+  }
+
+  // This slot has no RO, so it can't conflict with itself — `all` goes to
+  // attachConflict as is.
+  const conflict = attachConflict(all, entryId, lineId);
+  if (conflict === "needs-line" && entry.opCodes.length === 0) {
+    return { error: `RO #${entry.roNumber} is already on a timer.` };
+  }
+  switch (conflict) {
+    case "needs-line":
+      return {
+        error:
+          `RO #${entry.roNumber} is already on a timer. Pick which line this ` +
+          `timer is for.`,
+      };
+    case "line-taken":
+      return { error: `That line of RO #${entry.roNumber} is already on a timer.` };
+    case "sibling-unassigned":
+      return {
+        error:
+          `RO #${entry.roNumber} is on a timer that hasn't been assigned a line ` +
+          `yet. Set that timer's line first.`,
+      };
+  }
+
+  await db.updateTimerSlot(supabase, slot.id, { entryId, lineId });
+  revalidateTimerScreens();
+  return {};
+}
+
 /**
  * Change what a timer is doing. Banks the in-flight segment into the bucket it
  * was earned under, then restarts the clock under the new status (or stops it,

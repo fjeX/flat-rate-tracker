@@ -1,0 +1,30 @@
+/* Phase 5 — page-guest. Tokens only; prefix `gst-`.
+   Covers the guest segment's own markup: the Note band the layout puts under
+   the header, and the guest dashboard (/guest), which is the signed-in
+   dashboard's grammar (.pagehead, Zone, Head, .spec, .tags) with the rate as
+   the shared field. Everything else on the guest routes reuses rebuilt views. */
+
+/* ---------- layout: the Note band, full-bleed under the header ---------- */
+.gst-body { flex: 1; }
+.sfield.gst-band { margin: 0; padding-left: var(--gutter); padding-right: var(--gutter); border-top: 0; }
+.gst-band .gst-claim { color: var(--ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: var(--w-tag); }
+.gst-band .gst-claim:hover { text-decoration-thickness: 2.5px; }
+.gst-band .gst-claim:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: 2px; }
+
+/* ---------- the page ---------- */
+.gst-page { width: 100%; max-width: var(--page-max); margin: 0 auto; padding: var(--s4) var(--gutter) var(--s5); }
+:where(.gst-page) .unit { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0; margin-left: 2px; }
+.gst-page .gst-spec { --spec-cols: 3; }
+.gst-page .gst-spec-fig { font-size: var(--fs-fig-row); font-weight: 600; letter-spacing: var(--track-fig); line-height: 1.1; }
+.gst-page .gst-spec .field-label { margin-bottom: var(--s1); }
+.gst-page .head-s .num { font-size: inherit; }
+
+/* ---------- the rate: Field + .input.num with $ and /hr set inside ---------- */
+.gst-page .gst-rate-field { margin-top: var(--s3); max-width: 200px; }
+.gst-rate { position: relative; display: block; }
+.gst-rate .input { padding-left: 26px; padding-right: 34px; text-align: right; appearance: textfield; -moz-appearance: textfield; }
+.gst-rate .input::-webkit-outer-spin-button,
+.gst-rate .input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.gst-rate-pre, .gst-rate-unit { position: absolute; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+.gst-rate-pre { left: var(--s3); font-family: var(--font-num); }
+.gst-rate-unit { right: var(--s3); font-size: var(--fs-label); font-weight: 600; }

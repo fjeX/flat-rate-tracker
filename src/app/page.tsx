@@ -1,9 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Card, Head, HeadCell, HeadCells } from "@/components/ui/Card";
+import { Field } from "@/components/ui/Field";
+import { StatusField } from "@/components/ui/StatusField";
+import { HoursChart, type ChartBar } from "@/components/dashboard/AveragesChart";
+import { LogoMark, LogoWord } from "@/components/layout/icons";
+
+/* The landing's demo visuals are the app's real parts fed static props: Head
+   for the figure tiles, the dashboard's pace track, Field + .input for the RO
+   form, .rows + badge-chip for the op-code list, StatusField for the
+   discrepancy, HoursChart for the bars, .tag for history. Styles: page-landing.css. */
 
 /* ── Scroll reveal ────────────────────────────────────── */
+// Only runs when the visitor has not asked for reduced motion; otherwise
+// nothing is hidden and nothing moves (the CSS is gated the same way).
 function useReveal() {
   useEffect(() => {
     if (!window.matchMedia?.("(prefers-reduced-motion: no-preference)").matches) return;
@@ -59,36 +72,17 @@ function Rv({ children, delay = 0, className = "", style, as: Tag = "div", ...re
   );
 }
 
-/* ── Shared primitives ───────────────────────────────── */
+/* ── Demo visuals (static props, real shared parts) ──── */
 
-function Wordmark({ size = 17 }: { size?: number }) {
-  const height = size <= 15 ? 36 : 60;
-  return (
-    <img
-      src="/frt-logo.png"
-      alt="Flat Rate Tracker"
-      style={{ height, width: "auto", display: "block" }}
-    />
-  );
-}
+type PaceState = "green" | "amber" | "red";
 
-function Pill({ state }: { state: "green" | "amber" | "red" }) {
-  const map = {
-    green: { cls: "bg-[var(--good-bg)] text-[var(--good)]", label: "On pace" },
-    amber: { cls: "bg-[var(--warn-bg)] text-[var(--warn)]", label: "Slightly behind" },
-    red: { cls: "bg-[var(--bad-bg)] text-[var(--bad)]", label: "Behind pace" },
-  };
-  const m = map[state];
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[11px] font-bold tracking-[0.04em] whitespace-nowrap ${m.cls}`}
-    >
-      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      {m.label}
-    </span>
-  );
-}
+const PACE_BADGE: Record<PaceState, { tone: "good" | "warn" | "bad"; label: string }> = {
+  green: { tone: "good", label: "On pace" },
+  amber: { tone: "warn", label: "Slightly behind" },
+  red: { tone: "bad", label: "Behind pace" },
+};
 
+/** The dashboard's pace card: label + state tag, the figure, the track with its today mark. */
 function PaceBar({
   now,
   goal,
@@ -102,184 +96,119 @@ function PaceBar({
   goal: string;
   pct: number;
   todayPct: number;
-  state: "green" | "amber" | "red";
+  state: PaceState;
   compact?: boolean;
   inset?: boolean;
 }) {
+  const b = PACE_BADGE[state];
+  const trackCls = `lp-track${state === "amber" ? " is-slip" : state === "red" ? " is-behind" : ""}`;
+  const vars = { "--lp-pct": `${pct}%`, "--lp-today": `${todayPct}%` } as CSSProperties;
   return (
-    <div className={`${inset ? "card-inset" : "card"} p-[18px]`}>
-      <div className="flex items-center justify-between mb-3.5">
-        <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)]">
-          Pay Period Pace{compact ? "" : " · 9 days left"}
+    <Card inset={inset} className="lp-pace">
+      <div className="lp-pace-top">
+        <span className="lp-label">Pay Period Pace{compact ? "" : " · 9 days left"}</span>
+        <Badge tone={b.tone}>{b.label}</Badge>
+      </div>
+      <div className={`lp-bigline${compact ? " is-compact" : ""}`}>
+        <span>
+          <b className="num">{now}</b>
+          <span className="unit">flag hrs</span>
         </span>
-        <Pill state={state} />
+        <span className="lp-goal">Goal {goal}</span>
       </div>
-      <div className="flex items-baseline justify-between mb-3">
-        <span
-          className="font-mono font-bold text-[var(--fg-0)] whitespace-nowrap"
-          style={{ fontSize: compact ? 16 : 20 }}
-        >
-          {now}
-          <span className="text-[var(--fg-3)] ml-0.5" style={{ fontSize: compact ? 12 : 14 }}>
-            {" "}flag hrs
-          </span>
+      <div className={trackCls} style={vars} aria-hidden="true">
+        <i />
+        <span className="mk">
+          <span>TODAY</span>
         </span>
-        <span className="font-mono text-[var(--fg-3)] text-sm whitespace-nowrap">Goal {goal}</span>
       </div>
-      <div
-        className="relative bg-[var(--bg-3)] rounded-full"
-        style={{ height: compact ? 12 : 14 }}
-      >
-        <div
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{
-            width: `${pct}%`,
-            background: "linear-gradient(90deg, var(--brand-strong), var(--brand))",
-          }}
-        />
-        <div
-          className="absolute -top-[5px] -bottom-[5px] w-0.5 bg-[var(--fg-1)]"
-          style={{ left: `${todayPct}%` }}
-        >
-          <span className="absolute -top-[19px] left-1/2 -translate-x-1/2 font-mono text-[11px] tracking-[0.08em] text-[var(--fg-2)] whitespace-nowrap">
-            TODAY
-          </span>
-        </div>
-      </div>
-    </div>
+    </Card>
   );
 }
 
-function StatTile({
-  lab,
-  big,
-  unit,
-  sub,
-  mini = false,
-  inset = false,
+function bars(values: number[], labels: string[]): ChartBar[] {
+  const max = Math.max(...values);
+  return values.map((value, i) => ({
+    label: labels[i] ?? "",
+    longLabel: labels[i] ?? "",
+    value,
+    isBest: value === max,
+    isCurrent: i === values.length - 1,
+  }));
+}
+
+/** The dashboard's HoursChart on sample data. Hover state is local and does nothing else. */
+function SampleChart({
+  values,
+  labels,
+  tab,
+  ariaLabel,
 }: {
-  lab: string;
-  big: string;
-  unit: string;
-  sub?: React.ReactNode;
-  mini?: boolean;
-  inset?: boolean;
+  values: number[];
+  labels: string[];
+  tab: "week" | "month";
+  ariaLabel: string;
 }) {
+  const [hover, setHover] = useState<number | null>(null);
   return (
-    <div className={`${inset ? "card-inset" : "card rounded-[var(--radius)]"} p-3.5`}>
-      <div className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-2">{lab}</div>
-      <div className="font-mono font-bold text-[var(--fg-0)] leading-none" style={{ fontSize: mini ? 20 : 26 }}>
-        {big}
-        <span className="text-[13px] text-[var(--fg-3)] ml-0.5">{unit}</span>
-      </div>
-      {sub && <div className="font-mono text-[11px] text-[var(--fg-2)] mt-1.5">{sub}</div>}
-    </div>
-  );
-}
-
-function BarChart({ bars, height }: { bars: number[]; height: number }) {
-  return (
-    <div className="flex items-end gap-1.5" style={{ height }}>
-      {bars.map((h, i) => (
-        <div
-          key={i}
-          className={`flex-1 rounded-t-[2px] ${h > 78 ? "bg-[var(--brand-strong)]" : "bg-[var(--bg-4)]"}`}
-          style={{ height: `${h}%` }}
-        />
-      ))}
-    </div>
+    <HoursChart
+      bars={bars(values, labels)}
+      hover={hover}
+      setHover={setHover}
+      tab={tab}
+      mode="total"
+      ariaLabel={ariaLabel}
+    />
   );
 }
 
 function ROForm() {
   return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <label className="block font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
-          RO Number
-        </label>
-        <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[var(--radius-sm)] px-3 py-2.5 flex items-center">
-          <span className="font-mono font-semibold text-[var(--fg-0)] text-base">48213</span>
-        </div>
-      </div>
-      <div>
-        <label className="block font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)] mb-1.5">
-          Op Code
-        </label>
-        <div className="bg-[var(--bg-1)] border border-[var(--line)] rounded-[var(--radius-sm)] px-3 py-2.5 flex items-center gap-2.5">
-          <span className="font-mono font-semibold text-[var(--fg-0)] text-base">BRK-FR</span>
-          <span className="font-mono text-[11px] text-[var(--fg-3)]">Front brake job · 2.4 hrs</span>
-        </div>
-      </div>
-      <div className="flex gap-2 mt-0.5">
-        <button className="btn btn-primary text-[13px] px-3.5 py-2 whitespace-nowrap cursor-default">
-          Save &amp; New
-        </button>
-        <button className="btn text-[13px] px-3.5 py-2 whitespace-nowrap cursor-default">
-          Save
-        </button>
+    <div>
+      <Field label="RO Number" htmlFor="lp-demo-ro">
+        <input id="lp-demo-ro" className="input num" value="48213" readOnly tabIndex={-1} />
+      </Field>
+      <Field label="Op Code" htmlFor="lp-demo-op" hint="Front brake job · 2.4 hrs">
+        <input id="lp-demo-op" className="input num" value="BRK-FR" readOnly tabIndex={-1} />
+      </Field>
+      <div className="lp-form-acts" aria-hidden="true">
+        <span className="btn btn-go">Save &amp; New</span>
+        <span className="btn btn-line">Save</span>
       </div>
     </div>
   );
 }
 
-function Chevron({ open = false }: { open?: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      width="12"
-      height="12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className="text-[var(--fg-3)]"
-      style={{ transform: open ? "rotate(90deg)" : undefined }}
-    >
-      <path d="M6 3.5L10.5 8L6 12.5" />
-    </svg>
-  );
-}
-
 function OpCodeList() {
+  const kids = [
+    { code: "BRK-FR", desc: "Front", hrs: "2.4" },
+    { code: "BRK-RR", desc: "Rear", hrs: "2.1" },
+    { code: "BRK-FL", desc: "Flush", hrs: "0.6" },
+  ];
   return (
-    <div className="flex flex-col gap-px bg-[var(--line)] overflow-hidden">
-      {/* BRK — expanded */}
-      <div
-        className="grid items-center gap-2.5 px-3 py-2.5 bg-[var(--bg-2)]"
-        style={{ gridTemplateColumns: "16px 64px 1fr auto" }}
-      >
-        <Chevron open />
-        <span className="font-mono font-semibold text-[12px] text-[var(--fg-0)]">BRK</span>
-        <span className="text-[13px] font-semibold text-[var(--fg-1)]">Brake Job</span>
-        <span className="font-mono text-[12px] text-[var(--fg-2)]">—</span>
+    <div className="rows">
+      <div>
+        <span className="lp-codes">
+          <Badge chip mono>BRK</Badge>
+          <b>Brake Job</b>
+        </span>
+        <span className="v">—</span>
       </div>
-      {[
-        { code: "BRK-FR", desc: "Front", hrs: "2.4" },
-        { code: "BRK-RR", desc: "Rear", hrs: "2.1" },
-        { code: "BRK-FL", desc: "Flush", hrs: "0.6" },
-      ].map((row) => (
-        <div
-          key={row.code}
-          className="grid items-center gap-2.5 py-2.5 bg-[var(--bg-1)]"
-          style={{ gridTemplateColumns: "64px 1fr auto", paddingLeft: 36, paddingRight: 13 }}
-        >
-          <span className="font-mono font-semibold text-[12px] text-[var(--brand)]">{row.code}</span>
-          <span className="text-[13px] text-[var(--fg-1)]">{row.desc}</span>
-          <span className="font-mono text-[12px] text-[var(--fg-2)]">{row.hrs}</span>
+      {kids.map((r) => (
+        <div key={r.code} className="lp-indent">
+          <span className="lp-codes">
+            <Badge chip mono>{r.code}</Badge>
+            <span className="k">{r.desc}</span>
+          </span>
+          <span className="v num">{r.hrs}</span>
         </div>
       ))}
-      {/* SUSP — collapsed */}
-      <div
-        className="grid items-center gap-2.5 px-3 py-2.5 bg-[var(--bg-2)] opacity-90"
-        style={{ gridTemplateColumns: "16px 64px 1fr auto" }}
-      >
-        <Chevron />
-        <span className="font-mono font-semibold text-[12px] text-[var(--fg-0)]">SUSP</span>
-        <span className="text-[13px] font-semibold text-[var(--fg-1)]">Suspension</span>
-        <span className="font-mono text-[12px] text-[var(--fg-2)]">3 sub-codes</span>
+      <div>
+        <span className="lp-codes">
+          <Badge chip mono>SUSP</Badge>
+          <b>Suspension</b>
+        </span>
+        <span className="v">3 sub-codes</span>
       </div>
     </div>
   );
@@ -287,30 +216,24 @@ function OpCodeList() {
 
 function DiscrepancyCard() {
   return (
-    <div className="flex flex-col gap-2.5">
-      {[
-        { label: "Shop flagged", value: "64.2", unit: "hrs" },
-        { label: "You clocked", value: "66.5", unit: "hrs" },
-      ].map((row) => (
-        <div key={row.label} className="flex items-baseline justify-between">
-          <span className="font-mono text-[12px] tracking-[0.05em] text-[var(--fg-2)]">{row.label}</span>
-          <span className="font-mono font-bold text-lg text-[var(--fg-0)]">
-            {row.value}{" "}
-            <span className="text-[11px] text-[var(--fg-3)] font-normal">{row.unit}</span>
-          </span>
+    <div>
+      <div className="rows">
+        <div>
+          <span className="k">Shop flagged</span>
+          <span className="v num">64.2 <span className="unit">hrs</span></span>
         </div>
-      ))}
-      <div className="h-px bg-[var(--line)] my-0.5" />
-      <div className="flex items-baseline justify-between">
-        <span className="font-mono text-[12px] tracking-[0.05em] text-[var(--fg-1)]">Discrepancy</span>
-        <span className="font-mono font-bold text-lg text-[var(--warn)]">
-          −2.3{" "}
-          <span className="text-[11px] text-[var(--fg-3)] font-normal">hrs</span>
-        </span>
+        <div>
+          <span className="k">You clocked</span>
+          <span className="v num">66.5 <span className="unit">hrs</span></span>
+        </div>
+        <div>
+          <span className="k">Discrepancy</span>
+          <span className="v num lp-bad">−2.3 <span className="unit">hrs</span></span>
+        </div>
       </div>
-      <p className="font-mono text-[12px] text-[var(--fg-3)] leading-relaxed pt-0.5">
+      <StatusField tag="Cost" inset>
         3 ROs may be missing hours. Check before payday.
-      </p>
+      </StatusField>
     </div>
   );
 }
@@ -322,19 +245,24 @@ function HistoryRows() {
     { code: "ALN-4", hrs: "1.8", t: "Today 9:40a" },
   ];
   return (
-    <div className="flex flex-col">
-      {rows.map((r, i) => (
-        <div
-          key={i}
-          className="grid items-center gap-2.5 py-2.5 border-b border-[var(--line)] last:border-b-0"
-          style={{ gridTemplateColumns: "70px 1fr auto" }}
-        >
-          <span className="font-mono font-semibold text-[12px] text-[var(--brand)]">{r.code}</span>
-          <span className="font-mono text-[12px] text-[var(--fg-0)]">{r.hrs} hrs</span>
-          <span className="font-mono text-[11px] text-[var(--fg-3)]">{r.t}</span>
-        </div>
+    <ul className="tags">
+      {rows.map((r) => (
+        <li key={r.code} className="tag">
+          <span className="tag-hole" aria-hidden="true" />
+          <div className="tag-head">
+            <Badge chip mono>{r.code}</Badge>
+            <span className="tag-when">{r.t}</span>
+          </div>
+          <div className="tag-hrs-cell">
+            <span className="tag-hrs">
+              {r.hrs}
+              <span className="unit">hrs</span>
+            </span>
+          </div>
+          <div className="tag-body" />
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -342,28 +270,20 @@ function HistoryRows() {
 
 function Nav() {
   return (
-    <nav
-      className="sticky top-0 z-50 border-b border-[var(--line)]"
-      style={{
-        background: "color-mix(in srgb, var(--bg-0) 82%, transparent)",
-        backdropFilter: "blur(12px)",
-      }}
-    >
-      <div className="max-w-[1180px] mx-auto px-7 flex items-center justify-between h-[76px] max-sm:h-[68px] max-sm:px-[18px]">
-        <Link href="/" className="inline-flex min-h-[44px] items-center no-underline">
-          <Wordmark />
+    <nav className="lp-nav">
+      <div className="lp-wrap lp-nav-in">
+        <Link href="/" className="logo">
+          <LogoMark />
+          <LogoWord />
         </Link>
-        <div className="flex gap-2.5 items-center">
-          <Link href="/guest" className="hidden sm:inline-flex btn btn-ghost">
+        <div className="lp-nav-acts">
+          <Link href="/guest" className="btn btn-quiet lp-nav-hide">
             Try as guest
           </Link>
-          <Link
-            href="/signin"
-            className="hidden sm:inline-flex items-center font-bold text-sm px-4 py-2 rounded-full text-[var(--fg-2)] hover:text-[var(--fg-0)] transition-colors whitespace-nowrap"
-          >
+          <Link href="/signin" className="btn btn-line lp-nav-hide">
             Log in
           </Link>
-          <Link href="/signup" className="btn btn-primary">
+          <Link href="/signup" className="btn btn-go">
             Create free account
           </Link>
         </div>
@@ -373,24 +293,17 @@ function Nav() {
 }
 
 function Hero() {
-  const bars = [42, 55, 38, 67, 49, 72, 58, 80, 61, 44, 69, 88, 52, 75];
+  const values = [4.2, 5.5, 3.8, 6.7, 4.9, 7.2, 5.8, 8.0, 6.1, 4.4, 6.9, 8.8, 5.2, 7.5];
+  const labels = values.map((_, i) => String(i + 1));
   return (
-    <header className="pt-[72px] pb-[88px] max-[900px]:pt-12 max-[900px]:pb-16 max-sm:pt-9 max-sm:pb-[52px]">
-      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex flex-col gap-0">
+    <header className="lp-hero">
+      <div className="lp-wrap">
         <Rv>
-          <h1
-            className="font-extrabold leading-none tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
-            style={{ fontSize: "clamp(33px, 5vw, 56px)", maxWidth: 840 }}
-          >
-            Every RO you log makes you harder to short.
-          </h1>
+          <h1>Every RO you log makes you harder to short.</h1>
         </Rv>
 
         <Rv delay={60}>
-          <p
-            className="text-[var(--fg-2)] leading-[1.55] mt-5 mb-0 max-sm:mt-4"
-            style={{ fontSize: "clamp(16px, 2vw, 18px)", maxWidth: 520 }}
-          >
+          <p className="lp-lede">
             FRT turns your daily work into a record that compounds: proof you got paid right,
             numbers that show your worth, and leverage that grows every single job. Start today;
             thank yourself in a year.
@@ -398,41 +311,36 @@ function Hero() {
         </Rv>
 
         <Rv delay={120}>
-          <div className="flex gap-3 flex-wrap mt-7 max-sm:mt-6 max-sm:flex-col max-sm:items-stretch">
-            <Link href="/signup" className="btn btn-primary btn-lg max-sm:justify-center">
+          <div className="lp-ctas">
+            <Link href="/signup" className="btn btn-go btn-lg">
               Create free account
             </Link>
-            <Link href="/guest" className="btn btn-lg max-sm:justify-center">
+            <Link href="/guest" className="btn btn-line btn-lg">
               Try it first{" "}
-              <span className="font-mono text-[var(--brand)]">— no account →</span>
+              <span className="lp-arrow">— no account →</span>
             </Link>
           </div>
-          <p className="font-mono text-[12px] text-[var(--fg-3)] mt-5 max-sm:mt-[18px]">
-            Free to start · Works on your phone in the bay
-          </p>
+          <p className="lp-fine">Free to start · Works on your phone in the bay</p>
         </Rv>
 
-        {/* Dashboard mock */}
-        <Rv delay={180} className="flex flex-col gap-3 mt-8 max-sm:mt-6">
-          <div className="grid grid-cols-4 gap-2.5 max-sm:grid-cols-2">
-            <StatTile lab="Today" big="6.4" unit="hrs" sub={<span className="text-[var(--good)]">112% eff</span>} />
-            <StatTile lab="This Week" big="38.1" unit="hrs" sub={<span className="text-[var(--good)]">104% eff</span>} />
-            <StatTile lab="Pay Period" big="64.2" unit="hrs" sub={<span className="text-[var(--good)]">98% eff</span>} />
-            <StatTile lab="This Month" big="142" unit="hrs" sub={<span className="text-[var(--good)]">101% eff</span>} />
-          </div>
-          <div
-            className="grid gap-3 max-sm:grid-cols-1"
-            style={{ gridTemplateColumns: "1.25fr 1fr" }}
-          >
+        {/* Dashboard sample */}
+        <Rv delay={180} className="lp-demo">
+          <Head>
+            <HeadCells className="lp-cells">
+              <HeadCell label="Today" value="6.4" unit="hrs" sub="112% eff" />
+              <HeadCell label="This Week" value="38.1" unit="hrs" sub="104% eff" />
+              <HeadCell label="Pay Period" value="64.2" unit="hrs" sub="98% eff" />
+              <HeadCell label="This Month" value="142" unit="hrs" sub="101% eff" />
+            </HeadCells>
+          </Head>
+          <div className="lp-demo-row">
             <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" />
-            <div className="card p-[18px] flex flex-col">
-              <div className="flex items-center justify-between mb-3.5">
-                <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)]">
-                  Flag hrs · 14 days
-                </span>
+            <Card>
+              <div className="lp-pace-top">
+                <span className="lp-label">Flag hrs · 14 days</span>
               </div>
-              <BarChart bars={bars} height={84} />
-            </div>
+              <SampleChart values={values} labels={labels} tab="month" ariaLabel="Flag hours over the last 14 days, sample data" />
+            </Card>
           </div>
         </Rv>
       </div>
@@ -442,32 +350,24 @@ function Hero() {
 
 function PaceSection() {
   return (
-    <section className="py-24 max-[900px]:py-[72px] max-sm:py-14">
-      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
-        <div className="max-w-[620px]">
+    <section className="lp-sec">
+      <div className="lp-wrap">
+        <div className="lp-narrow">
           <Rv>
-            <h2
-              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
-              style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
-            >
-              See your pace at a glance.
-            </h2>
+            <h2>See your pace at a glance.</h2>
           </Rv>
           <Rv delay={60}>
-            <p
-              className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-0"
-              style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
-            >
+            <p className="lp-lede">
               One bar shows everything: how many flag hours you&apos;ve banked, your goal, and a{" "}
-              <strong className="text-[var(--fg-1)]">today</strong>{" "}tick for exactly where you should be.
+              <strong>today</strong>{" "}tick for exactly where you should be.
               Green means you&apos;re good. Color shifts the second you start slipping.
             </p>
           </Rv>
         </div>
 
-        <Rv delay={100} className="mt-10 flex flex-col gap-3.5 max-w-[720px]">
+        <Rv delay={100} className="lp-pace-set">
           <PaceBar now="64.2" goal="88" pct={73} todayPct={68} state="green" />
-          <div className="grid grid-cols-2 gap-3.5 max-sm:grid-cols-1">
+          <div className="lp-pace-two">
             <PaceBar now="48.0" goal="88" pct={55} todayPct={62} state="amber" compact />
             <PaceBar now="33.5" goal="88" pct={38} todayPct={62} state="red" compact />
           </div>
@@ -493,21 +393,16 @@ function HowItWorks() {
     },
   ];
   return (
-    <section className="pb-24 max-[900px]:pb-[72px] max-sm:pb-14">
-      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
+    <section className="lp-sec is-flush-top">
+      <div className="lp-wrap">
         <Rv>
-          <h2
-            className="font-extrabold tracking-tight text-[var(--fg-0)] mt-0 mb-0"
-            style={{ fontSize: 34 }}
-          >
-            You flag the hours. Make sure you get paid for every one.
-          </h2>
+          <h2>You flag the hours. Make sure you get paid for every one.</h2>
         </Rv>
-        <div className="grid grid-cols-3 gap-5 mt-11 max-[900px]:grid-cols-1 max-[900px]:gap-7">
+        <div className="lp-steps">
           {steps.map((s, i) => (
-            <Rv key={s.t} delay={i * 90} className="pt-6 border-t-2 border-[var(--line)]">
-              <h3 className="text-xl font-bold mt-0 mb-2 text-[var(--fg-0)] tracking-tight">{s.t}</h3>
-              <p className="text-[var(--fg-2)] leading-[1.55] m-0 text-base">{s.d}</p>
+            <Rv key={s.t} delay={i * 90} className="lp-step">
+              <h3>{s.t}</h3>
+              <p>{s.d}</p>
             </Rv>
           ))}
         </div>
@@ -518,26 +413,18 @@ function HowItWorks() {
 
 function LongGame() {
   return (
-    <section className="pb-24 max-[900px]:pb-[72px] max-sm:pb-14">
-      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
-        <div className="max-w-[680px]">
+    <section className="lp-sec is-flush-top">
+      <div className="lp-wrap">
+        <div className="lp-narrow">
           <Rv>
-            <h2
-              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
-              style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
-            >
-              Day one, it tracks a job. Year one, it tracks your career.
-            </h2>
+            <h2>Day one, it tracks a job. Year one, it tracks your career.</h2>
           </Rv>
           <Rv delay={60}>
-            <p
-              className="text-[var(--fg-2)] leading-[1.6] mt-5 mb-0"
-              style={{ fontSize: "clamp(16px, 1.8vw, 17px)" }}
-            >
+            <p className="lp-lede">
               Every RO you log is one more data point in the only record that&apos;s actually
-              yours. <strong className="text-[var(--fg-1)]">Day one</strong>, it catches a shorted
-              check. <strong className="text-[var(--fg-1)]">Month six</strong>, it shows your real
-              efficiency across every job type. <strong className="text-[var(--fg-1)]">Year one</strong>,
+              yours. <strong>Day one</strong>, it catches a shorted
+              check. <strong>Month six</strong>, it shows your real
+              efficiency across every job type. <strong>Year one</strong>,
               it&apos;s the case you put on the service manager&apos;s desk when it&apos;s time to
               talk money, or the proof you take to a better shop. Most techs throw that record
               away every payday. You don&apos;t have to.
@@ -555,12 +442,12 @@ const featCards = [
     title: "Real numbers, four ways",
     desc: "Today, this week, pay period, this month: flag hours, clocked hours, and efficiency. No estimates.",
     visual: (
-      <div className="grid grid-cols-2 gap-2">
-        <StatTile lab="Today" big="6.4" unit="h" sub={<span className="text-[var(--good)]">112%</span>} mini inset />
-        <StatTile lab="Week" big="38.1" unit="h" sub={<span className="text-[var(--good)]">104%</span>} mini inset />
-        <StatTile lab="Pay Period" big="64.2" unit="h" sub={<span className="text-[var(--good)]">98%</span>} mini inset />
-        <StatTile lab="Month" big="142" unit="h" sub={<span className="text-[var(--good)]">101%</span>} mini inset />
-      </div>
+      <dl className="spec">
+        <div><dt>Today</dt><dd>6.4<small>h · 112%</small></dd></div>
+        <div><dt>Week</dt><dd>38.1<small>h · 104%</small></dd></div>
+        <div><dt>Pay Period</dt><dd>64.2<small>h · 98%</small></dd></div>
+        <div><dt>Month</dt><dd>142<small>h · 101%</small></dd></div>
+      </dl>
     ),
   },
   {
@@ -592,8 +479,13 @@ const featCards = [
     title: "Every RO, charted",
     desc: "Full sortable log with flag hours over time. Each entry shows op code, hours, and timestamp.",
     visual: (
-      <div className="flex flex-col gap-2.5">
-        <BarChart bars={[40, 58, 46, 70, 55, 78, 62]} height={48} />
+      <div>
+        <SampleChart
+          values={[4.0, 5.8, 4.6, 7.0, 5.5, 7.8, 6.2]}
+          labels={["M", "T", "W", "T", "F", "S", "S"]}
+          tab="week"
+          ariaLabel="Flag hours by day, sample data"
+        />
         <HistoryRows />
       </div>
     ),
@@ -602,31 +494,20 @@ const featCards = [
 
 function Features() {
   return (
-    <section id="features" className="pb-24 max-[900px]:pb-[72px] max-sm:pb-14">
-      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
-        <div className="max-w-[620px]">
+    <section id="features" className="lp-sec is-flush-top">
+      <div className="lp-wrap">
+        <div className="lp-narrow">
           <Rv>
-            <h2
-              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
-              style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
-            >
-              Made for the bay, not the boardroom.
-            </h2>
+            <h2>Made for the bay, not the boardroom.</h2>
           </Rv>
         </div>
 
-        <div className="grid grid-cols-3 gap-[18px] mt-12 max-[900px]:grid-cols-2 max-sm:grid-cols-1 max-sm:mt-8">
+        <div className="lp-feats">
           {featCards.map((f, i) => (
-            <Rv
-              key={f.tag}
-              delay={(i % 3) * 80}
-              className="card rounded-[var(--radius)] p-[22px] flex flex-col hover:border-[var(--brand-soft)] hover:-translate-y-0.5 transition-all duration-200"
-            >
-              <h3 className="text-lg font-bold mt-0 mb-1.5 text-[var(--fg-0)] tracking-tight">
-                {f.title}
-              </h3>
-              <p className="text-[var(--fg-2)] text-sm leading-[1.5] mb-[18px]">{f.desc}</p>
-              <div className="mt-auto">{f.visual}</div>
+            <Rv key={f.tag} delay={(i % 3) * 80} className="lp-feat card padded">
+              <h3>{f.title}</h3>
+              <p>{f.desc}</p>
+              <div className="lp-feat-vis">{f.visual}</div>
             </Rv>
           ))}
         </div>
@@ -637,59 +518,42 @@ function Features() {
 
 function GuestMode() {
   return (
-    <section className="py-[88px] bg-[var(--bg-1)] border-t border-b border-[var(--line)] max-sm:py-14">
-      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
-        <div
-          className="grid gap-12 max-[900px]:grid-cols-1 max-[900px]:gap-8"
-          style={{ gridTemplateColumns: "1.1fr 0.9fr" }}
-        >
+    <section className="lp-sec lp-guest">
+      <div className="lp-wrap">
+        <div className="lp-guest-grid">
           <div>
             <Rv>
-              <h2
-                className="font-extrabold tracking-tight text-[var(--fg-0)] mt-0 mb-0"
-                style={{ fontSize: "clamp(28px, 3.5vw, 40px)" }}
-              >
-                No account? No problem.
-              </h2>
+              <h2>No account? No problem.</h2>
             </Rv>
             <Rv delay={60}>
-              <p
-                className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-7 max-sm:mb-6"
-                style={{ fontSize: "clamp(16px, 1.8vw, 17px)", maxWidth: 440 }}
-              >
+              <p className="lp-lede">
                 Log ROs, check your stats, watch your pace: the whole app, no signup. Your data
                 stays in your browser. Make an account when you&apos;re ready to keep it.
               </p>
             </Rv>
             <Rv delay={120}>
-              <Link href="/guest" className="btn btn-primary btn-lg max-sm:w-full max-sm:justify-center">
+              <Link href="/guest" className="btn btn-go btn-lg">
                 Try it first — no account needed
               </Link>
             </Rv>
           </div>
 
-          <Rv delay={120} className="card rounded-[var(--radius)] p-6">
-            <div className="flex items-center gap-2.5 mb-[18px] flex-wrap">
-              <span className="font-mono text-[11px] font-bold tracking-[0.08em] uppercase text-[var(--brand)] bg-[var(--brand-bg)] px-2.5 py-1.5 rounded-full whitespace-nowrap">
-                ● Guest session
-              </span>
-              <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--fg-3)] ml-auto">
-                saved locally
-              </span>
+          <Rv delay={120} className="card padded">
+            <div className="lp-sess-top">
+              <Badge tone="brand">● Guest session</Badge>
+              <span className="lp-label">saved locally</span>
             </div>
-            <ul className="flex flex-col gap-3 m-0 p-0 list-none">
+            <ul className="lp-checks">
               {[
                 "Log unlimited repair orders",
                 "Full dashboard & pace tracking",
                 "Op code library & history",
                 "Job timer with PiP mode",
               ].map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-sm text-[var(--fg-1)]">
-                  <span className="w-[18px] h-[18px] rounded-full bg-[var(--good-bg)] text-[var(--good)] grid place-items-center flex-shrink-0 mt-px">
+                <li key={item}>
+                  <span className="lp-check">
                     <svg
                       viewBox="0 0 16 16"
-                      width="10"
-                      height="10"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2.25"
@@ -704,7 +568,7 @@ function GuestMode() {
                 </li>
               ))}
             </ul>
-            <p className="font-mono text-[12px] text-[var(--fg-3)] mt-[18px] leading-relaxed">
+            <p className="lp-sess-note">
               Nothing leaves your phone until you create an account, then it all syncs over.
             </p>
           </Rv>
@@ -716,34 +580,23 @@ function GuestMode() {
 
 function FinalCTA() {
   return (
-    <section className="py-24 max-sm:py-16 border-t border-[var(--line)]">
-      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px]">
-        <div className="max-w-[620px]">
+    <section className="lp-sec lp-final">
+      <div className="lp-wrap">
+        <div className="lp-narrow">
           <Rv>
-            <h2
-              className="font-extrabold tracking-tight text-[var(--fg-0)] text-balance mt-0 mb-0"
-              style={{ fontSize: "clamp(28px, 4vw, 44px)" }}
-            >
-              Nobody&apos;s looking out for the tech. So we built the tool that does.
-            </h2>
+            <h2>Nobody&apos;s looking out for the tech. So we built the tool that does.</h2>
           </Rv>
           <Rv delay={60}>
-            <p
-              className="text-[var(--fg-2)] leading-[1.55] mt-4 mb-0"
-              style={{ fontSize: "clamp(16px, 1.8vw, 18px)", maxWidth: 480 }}
-            >
+            <p className="lp-lede">
               Set up in under a minute. See exactly where your pay period stands by your next RO.
             </p>
           </Rv>
           <Rv delay={120}>
-            <div className="flex items-center gap-5 flex-wrap mt-7 max-sm:mt-6">
-              <Link href="/signup" className="btn btn-primary btn-lg max-sm:justify-center">
+            <div className="lp-ctas">
+              <Link href="/signup" className="btn btn-go btn-lg">
                 Create free account
               </Link>
-              <Link
-                href="/guest"
-                className="inline-flex min-h-[44px] items-center font-mono text-sm text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors no-underline"
-              >
+              <Link href="/guest" className="lp-textlink">
                 Try it first — no account →
               </Link>
             </div>
@@ -756,27 +609,24 @@ function FinalCTA() {
 
 function Footer() {
   return (
-    <footer className="border-t border-[var(--line)] py-10">
-      <div className="max-w-[1180px] mx-auto px-7 max-sm:px-[18px] flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start max-sm:gap-[18px]">
-        <Link href="/" className="inline-flex min-h-[44px] items-center no-underline">
-          <Wordmark size={15} />
+    <footer className="lp-foot">
+      <div className="lp-wrap lp-foot-in">
+        <Link href="/" className="logo">
+          <LogoMark />
+          <LogoWord />
         </Link>
-        <div className="flex gap-5">
+        <div className="lp-foot-links">
           {[
             { label: "Features", href: "#features" },
             { label: "Guest mode", href: "/guest" },
             { label: "Sign in", href: "/signin" },
           ].map((l) => (
-            <Link
-              key={l.label}
-              href={l.href}
-              className="inline-flex min-h-[44px] items-center font-mono text-sm text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors whitespace-nowrap no-underline"
-            >
+            <Link key={l.label} href={l.href} className="lp-flink">
               {l.label}
             </Link>
           ))}
         </div>
-        <span className="font-mono text-[12px] text-[var(--fg-3)]">© 2026 Flat Rate Tracker</span>
+        <span className="lp-copy">© 2026 Flat Rate Tracker</span>
       </div>
     </footer>
   );
@@ -786,23 +636,9 @@ function Footer() {
 export default function LandingPage() {
   useReveal();
   return (
-    <>
-      <style>{`
-        @media (prefers-reduced-motion: no-preference) {
-          #lp.lp-animate [data-rv] {
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.65s cubic-bezier(0.22, 0.61, 0.36, 1),
-                        transform 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
-          }
-          #lp.lp-animate [data-rv].rv-in {
-            opacity: 1;
-            transform: none;
-          }
-        }
-      `}</style>
-      <div id="lp" className="min-h-screen selection:bg-[var(--select-bg)] selection:text-[var(--select-ink)]">
-        <Nav />
+    <div id="lp" className="lp">
+      <Nav />
+      <main>
         <Hero />
         <PaceSection />
         <HowItWorks />
@@ -810,8 +646,8 @@ export default function LandingPage() {
         <Features />
         <GuestMode />
         <FinalCTA />
-        <Footer />
-      </div>
-    </>
+      </main>
+      <Footer />
+    </div>
   );
 }

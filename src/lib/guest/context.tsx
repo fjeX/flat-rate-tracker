@@ -36,7 +36,9 @@ type GuestAction =
   | { type: "DELETE_OPCODE"; id: string }
   | { type: "EDIT_OPCODE"; id: string; patch: Pick<OpCode, "code" | "description" | "flagHours" | "notes" | "tags"> }
   | { type: "HYDRATE"; state: GuestState }
-  | { type: "TIMER_ATTACH"; id: string; slot: number; entryId: string; lineId: string | null; now: number }
+  // entryId null = started without an RO (the RO is bound later by TIMER_BIND_RO).
+  | { type: "TIMER_ATTACH"; id: string; slot: number; entryId: string | null; lineId: string | null; now: number }
+  | { type: "TIMER_BIND_RO"; id: string; entryId: string; lineId: string | null }
   | { type: "TIMER_SET_STATUS"; id: string; status: TimerStatus; now: number }
   | { type: "TIMER_SET_LINE"; id: string; lineId: string | null }
   | { type: "TIMER_RESET"; id: string; now: number }
@@ -166,6 +168,17 @@ function reducer(state: GuestState, action: GuestAction): GuestState {
       };
     }
 
+    // Bind an RO to a no-RO slot. Status, clock and banked time are untouched.
+    case "TIMER_BIND_RO":
+      return {
+        ...state,
+        timers: state.timers.map((t) =>
+          t.id === action.id
+            ? { ...t, entryId: action.entryId, lineId: action.lineId }
+            : t,
+        ),
+      };
+
     case "TIMER_SET_STATUS": {
       const base =
         action.status === "working"
@@ -294,6 +307,14 @@ type GuestContextValue = {
   /** Returns an error message when all slots are taken or the RO is already on
    * one, mirroring the server action's refusals. */
   attachGuestTimer: (entryId: string, lineId: string | null) => string | null;
+  /** A timer with no RO yet. Returns a refusal sentence, or null on success. */
+  startGuestTimerWithoutRo: () => string | null;
+  /** Bind an RO to a no-RO timer, keeping its time. Refusal sentence or null. */
+  attachRoToGuestTimer: (
+    id: string,
+    entryId: string,
+    lineId: string | null,
+  ) => string | null;
   setGuestTimerStatus: (id: string, status: TimerStatus) => void;
   setGuestTimerLine: (id: string, lineId: string | null) => void;
   resetGuestTimer: (id: string) => void;
@@ -448,6 +469,41 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
     return null;
   }
 
+  function startGuestTimerWithoutRo(): string | null {
+    const slot = nextFreeSlot(state.timers);
+    if (slot === null) return "All 3 timers are in use. Save or clear one first.";
+    dispatch({
+      type: "TIMER_ATTACH",
+      id: crypto.randomUUID(),
+      slot,
+      entryId: null,
+      lineId: null,
+      now: Date.now(),
+    });
+    return null;
+  }
+
+  function attachRoToGuestTimer(
+    id: string,
+    entryId: string,
+    lineId: string | null,
+  ): string | null {
+    const slot = state.timers.find((t) => t.id === id);
+    if (!slot) return "That timer is no longer running.";
+    if (slot.entryId) return "This timer already has an RO attached.";
+    // The slot has no RO, so it can't conflict with itself.
+    switch (attachConflict(state.timers, entryId, lineId)) {
+      case "needs-line":
+        return "That RO is already on a timer. Pick which line this timer is for.";
+      case "line-taken":
+        return "That line of the RO is already on a timer.";
+      case "sibling-unassigned":
+        return "That RO is on a timer with no line set yet. Set that timer's line first.";
+    }
+    dispatch({ type: "TIMER_BIND_RO", id, entryId, lineId });
+    return null;
+  }
+
   function setGuestTimerStatus(id: string, status: TimerStatus): void {
     dispatch({ type: "TIMER_SET_STATUS", id, status, now: Date.now() });
   }
@@ -501,6 +557,8 @@ export function GuestStoreProvider({ children }: { children: React.ReactNode }) 
         updateEntryHours,
         timers: state.timers,
         attachGuestTimer,
+        startGuestTimerWithoutRo,
+        attachRoToGuestTimer,
         setGuestTimerStatus,
         setGuestTimerLine,
         resetGuestTimer,

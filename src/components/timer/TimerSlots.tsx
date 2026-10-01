@@ -7,11 +7,13 @@ import type { Entry, NewEntry, OpCode, RoTemplate } from "@/lib/types";
 import { formatDateShort } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import {
+  attachRoToExistingTimerAction,
   attachRoToTimerAction,
   releaseTimerAction,
   resetTimerAction,
   setTimerLineAction,
   setTimerStatusAction,
+  startTimerWithoutRoAction,
 } from "@/app/actions/timer";
 import { saveEntry } from "@/app/actions/entries";
 import { isAccruing, MAX_TIMER_SLOTS, type TimerSlot } from "@/lib/timer";
@@ -76,6 +78,9 @@ export function TimerSlots({
   // Set when attaching a SECOND timer to an RO that already has one running:
   // that case has to choose its line before the timer starts.
   const [attachLineEntry, setAttachLineEntry] = useState<Entry | null>(null);
+  // Set when the picker was opened from a no-RO slot's "Attach RO": the chosen
+  // RO then binds to THAT slot (keeping its time) instead of claiming a new one.
+  const [attachTargetId, setAttachTargetId] = useState<string | null>(null);
 
   // Only tick when something is actually banking time — a page full of paused
   // timers has no reason to re-render every second.
@@ -141,12 +146,33 @@ export function TimerSlots({
     setError(null);
     startPending(async () => {
       try {
-        await action();
+        const res = await action();
+        // The no-RO actions return their refusal instead of throwing (a thrown
+        // message is masked in production). Show it; nothing changed.
+        if (res && typeof res === "object" && "error" in res && res.error) {
+          setError(String(res.error));
+          return;
+        }
         router.refresh();
       } catch (err) {
         setError(actionErrorMessage(err, "Failed."));
       }
     });
+  }
+
+  /** Put an RO on a timer: a new slot, or — from a no-RO slot's "Attach RO" —
+   * that slot, with its banked time and status kept. */
+  function attachTo(entryId: string, lineId: string | null): Promise<unknown> {
+    const target = attachTargetId;
+    setAttachTargetId(null);
+    return target
+      ? attachRoToExistingTimerAction(target, entryId, lineId)
+      : attachRoToTimerAction(entryId, lineId);
+  }
+
+  function closePicker() {
+    setPickRoOpen(false);
+    setAttachTargetId(null);
   }
 
   function handleAttach(entry: Entry) {
@@ -170,16 +196,19 @@ export function TimerSlots({
       : entry.opCodes.length === 1 ? entry.opCodes[0].id
       : null;
     setPickRoOpen(false);
-    run(() => attachRoToTimerAction(entry.id, lineId));
+    run(() => attachTo(entry.id, lineId));
   }
 
   async function handleLogRoSave(input: NewEntry) {
     const saved = await saveEntry(input);
     if ("error" in saved) throw new Error(saved.error);
-    await attachRoToTimerAction(
+    const res = await attachTo(
       saved.id,
       saved.opCodes.length === 1 ? saved.opCodes[0].id : null,
     );
+    if (res && typeof res === "object" && "error" in res && res.error) {
+      throw new Error(String(res.error));
+    }
     setLogRoOpen(false);
   }
 
@@ -227,7 +256,10 @@ export function TimerSlots({
             action={
               <Button
                 variant="go"
-                onClick={() => setPickRoOpen(true)}
+                onClick={() => {
+                  setAttachTargetId(null);
+                  setPickRoOpen(true);
+                }}
                 disabled={pending}
               >
                 <Plus size={16} aria-hidden="true" />
@@ -261,11 +293,23 @@ export function TimerSlots({
                 onRelease={() => run(() => releaseTimerAction(slot.id))}
                 onSave={() => setSaveSlotId(slot.id)}
                 onPickLine={() => setLinePickSlotId(slot.id)}
+                onAttachRo={() => {
+                  setAttachTargetId(slot.id);
+                  setPickRoOpen(true);
+                }}
                 onOpenDetail={setDetailEntry}
               />
             ))}
             {FREE_SLOTS.filter((n) => !slots.some((s) => s.slot === n)).map((n) => (
-              <FreeSlot key={`free-${n}`} slot={n} onStart={() => setPickRoOpen(true)} disabled={pending} />
+              <FreeSlot
+                key={`free-${n}`}
+                slot={n}
+                onStart={() => {
+                  setAttachTargetId(null);
+                  setPickRoOpen(true);
+                }}
+                disabled={pending}
+              />
             ))}
           </div>
         </>
@@ -275,20 +319,37 @@ export function TimerSlots({
       {pickRoOpen && (
         <Modal
           open
-          onClose={() => setPickRoOpen(false)}
+          onClose={closePicker}
           title="Put an RO on a timer"
           footer={
-            <Button
-              block
-              variant={recentEntries.length > 0 && anyAttachable ? "line" : "go"}
-              onClick={() => {
-                setPickRoOpen(false);
-                setLogRoOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Log a new RO
-            </Button>
+            <>
+              <Button
+                block
+                variant={recentEntries.length > 0 && anyAttachable ? "line" : "go"}
+                onClick={() => {
+                  setPickRoOpen(false);
+                  setLogRoOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Log a new RO
+              </Button>
+              {/* The RO can come later; saving the time still needs one. Not
+                  offered from a slot that is already running. */}
+              {!attachTargetId && (
+                <Button
+                  block
+                  variant="quiet"
+                  disabled={pending}
+                  onClick={() => {
+                    setPickRoOpen(false);
+                    run(() => startTimerWithoutRoAction());
+                  }}
+                >
+                  Start without an RO
+                </Button>
+              )}
+            </>
           }
         >
           <div className="tmd-body">
@@ -392,7 +453,7 @@ export function TimerSlots({
                       const entryId = attachLineEntry.id;
                       setAttachLineEntry(null);
                       setPickRoOpen(false);
-                      run(() => attachRoToTimerAction(entryId, line.id));
+                      run(() => attachTo(entryId, line.id));
                     }}
                     disabled={pending}
                     className="log-pick tmd-pick"
@@ -468,7 +529,15 @@ export function TimerSlots({
       {/* Log RO: the full form in a wide panel. LogRoForm has its own sticky
           save bar, so the Modal gets no footer. */}
       {logRoOpen && (
-        <Modal open onClose={() => setLogRoOpen(false)} title="Log New RO" size="xl">
+        <Modal
+          open
+          onClose={() => {
+            setLogRoOpen(false);
+            setAttachTargetId(null);
+          }}
+          title="Log New RO"
+          size="xl"
+        >
           <div className="tmd-logro">
             <LogRoForm
               initialOpCodes={library}

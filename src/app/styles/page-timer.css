@@ -62,6 +62,9 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tmr-gone { color: var(--ink-2); }
+/* a timer with no RO yet: the NEXT field, then the one action that unblocks it */
+.tmr-attach { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); margin-top: var(--s3); }
+.tmr-attach .sfield { align-self: stretch; margin-top: 0; }
 
 /* the headline figure: worked time, and only worked time */
 .tmr-fig { margin-top: var(--s3); }

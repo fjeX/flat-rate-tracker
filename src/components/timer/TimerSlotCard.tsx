@@ -128,6 +128,7 @@ export function TimerSlotCard({
   onRelease,
   onSave,
   onPickLine,
+  onAttachRo,
   onOpenDetail,
 }: {
   slot: TimerSlot;
@@ -143,6 +144,8 @@ export function TimerSlotCard({
   onRelease: () => void;
   onSave: () => void;
   onPickLine: () => void;
+  /** Opens the RO picker for THIS slot. Only used while the slot has no RO. */
+  onAttachRo?: () => void;
   onOpenDetail?: (entry: Entry) => void;
 }) {
   const elapsed = elapsedFor(slot, now, capAt);
@@ -179,6 +182,8 @@ export function TimerSlotCard({
     onRelease();
   }
 
+  // Started without an RO (Liem, 2026-09-30): the clock runs, the hours wait.
+  const noRo = slot.entryId === null;
   const vehicle = entry ? vehicleLabel(entry) : "";
   const working = slot.status === "working";
 
@@ -217,9 +222,12 @@ export function TimerSlotCard({
           </div>
           {vehicle && <div className="tmr-veh">{vehicle}</div>}
         </>
+      ) : noRo ? (
+        // Started without an RO, or the RO was deleted out from under the
+        // timer (the FK nulls the link rather than leaving a dangling id).
+        <p className="tmr-gone">No RO yet</p>
       ) : (
-        // The RO was deleted out from under the timer. The FK nulls the link
-        // rather than leaving a dangling id, so say so plainly.
+        // The slot names an RO that could not be loaded.
         <p className="tmr-gone">RO no longer available</p>
       )}
 
@@ -301,6 +309,18 @@ export function TimerSlotCard({
       {/* What to do next. A disabled Save with a tooltip explained nothing on
           a phone (Liem, 2026-09-30); this says the step out loud, and goes
           away once there is nothing left to do but work. */}
+      {noRo && (
+        <div className="tmr-attach">
+          <StatusField tag="Next" inset>
+            Attach an RO to save these hours.
+          </StatusField>
+          {onAttachRo && (
+            <Button variant="go" onClick={onAttachRo} disabled={pending}>
+              Attach RO
+            </Button>
+          )}
+        </div>
+      )}
       {entry && needsLine && (
         <StatusField tag="Next" inset>
           Pick the line these hours land on. Save unlocks after that.
@@ -342,7 +362,9 @@ export function TimerSlotCard({
           onClick={onSave}
           disabled={pending || !entry || !hasTime || needsLine}
           title={
-            needsLine
+            noRo
+              ? "Attach an RO first"
+              : needsLine
               ? "Pick a line first"
               : !hasTime
                 ? "Nothing to save yet"

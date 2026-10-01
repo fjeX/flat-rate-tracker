@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Zone } from "@/components/ui/Zone";
 import { StatusField } from "@/components/ui/StatusField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BUG_SEVERITIES, BUG_CATEGORIES, BUG_STATUSES } from "@/lib/bug-reports";
@@ -76,10 +77,10 @@ export function BugInbox({ initialReports }: { initialReports: BugReport[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="adm-inbox">
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Status" htmlFor="filter-status" className="min-w-[160px]">
+      <div className="adm-filters">
+        <Field label="Status" htmlFor="filter-status" className="adm-filter">
           <Select
             id="filter-status"
             value={statusFilter}
@@ -94,7 +95,7 @@ export function BugInbox({ initialReports }: { initialReports: BugReport[] }) {
             ))}
           </Select>
         </Field>
-        <Field label="Severity" htmlFor="filter-severity" className="min-w-[140px]">
+        <Field label="Severity" htmlFor="filter-severity" className="adm-filter">
           <Select
             id="filter-severity"
             value={severityFilter}
@@ -109,38 +110,41 @@ export function BugInbox({ initialReports }: { initialReports: BugReport[] }) {
             <option value="">Untriaged</option>
           </Select>
         </Field>
-        <span className="pb-2 text-sm text-[var(--fg-3)]">
-          {filtered.length} {filtered.length === 1 ? "report" : "reports"}
-        </span>
       </div>
 
       {/* List */}
-      {filtered.length === 0 ? (
-        <EmptyState title="Nothing here" description="No reports match these filters." />
-      ) : (
-        <div className="flex flex-col gap-2">
-          {filtered.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setSelectedId(r.id)}
-              className="card flex items-center gap-3 p-3 text-left transition-colors hover:border-[var(--brand-soft)]"
-            >
-              <div className="flex shrink-0 flex-col items-start gap-1">
-                <Badge tone={statusTone(r.status)}>{r.status}</Badge>
-                {r.severity && <Badge tone={severityTone(r.severity)}>{r.severity}</Badge>}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-[var(--fg-0)]">{r.description}</p>
-                <p className="mt-0.5 flex items-center gap-2 text-xs text-[var(--fg-3)]">
-                  <span>{formatDate(r.createdAt)}</span>
-                  {r.category && <span>· {r.category}</span>}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+      <Zone
+        name="Reports"
+        aside={`${filtered.length} ${filtered.length === 1 ? "report" : "reports"}`}
+      >
+        {filtered.length === 0 ? (
+          <EmptyState title="Nothing here" description="No reports match these filters." />
+        ) : (
+          <div className="adm-list">
+            {filtered.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setSelectedId(r.id)}
+                className="rowbtn adm-row"
+              >
+                <span>
+                  <span className="adm-title">{r.description}</span>
+                  <span className="adm-meta">
+                    <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                    {r.severity && <Badge tone={severityTone(r.severity)}>{r.severity}</Badge>}
+                    {r.category && <Badge tone="neutral">{r.category}</Badge>}
+                    <span className="adm-date">{formatDate(r.createdAt)}</span>
+                  </span>
+                </span>
+                <svg className="ic ic-sm" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M5.5 7.5L12 14l6.5-6.5 1.8 1.8L12 17.6 3.7 9.3z" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        )}
+      </Zone>
 
       {selected && (
         <BugDetail

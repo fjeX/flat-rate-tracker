@@ -51,6 +51,8 @@ export function GuestTimerSlots() {
     opCodes,
     timers,
     attachGuestTimer,
+    startGuestTimerWithoutRo,
+    attachRoToGuestTimer,
     setGuestTimerStatus,
     setGuestTimerLine,
     resetGuestTimer,
@@ -63,6 +65,8 @@ export function GuestTimerSlots() {
   const [saveSlotId, setSaveSlotId] = useState<string | null>(null);
   const [linePickSlotId, setLinePickSlotId] = useState<string | null>(null);
   const [attachLineEntry, setAttachLineEntry] = useState<Entry | null>(null);
+  // Set when the picker was opened from a no-RO slot's "Attach RO".
+  const [attachTargetId, setAttachTargetId] = useState<string | null>(null);
 
   const now = useTickingNow(timers.some(isAccruing));
 
@@ -118,6 +122,19 @@ export function GuestTimerSlots() {
     ? entryById.get(linePickSlot.entryId)
     : null;
 
+  function attachTo(entryId: string, lineId: string | null): string | null {
+    const target = attachTargetId;
+    setAttachTargetId(null);
+    return target
+      ? attachRoToGuestTimer(target, entryId, lineId)
+      : attachGuestTimer(entryId, lineId);
+  }
+
+  function openPicker(targetId: string | null) {
+    setAttachTargetId(targetId);
+    setPickRoOpen(true);
+  }
+
   function handleAttach(entry: Entry) {
     const free = freeLinesFor(entry);
     // A second timer on the same RO must name its line up front — an unset one
@@ -131,7 +148,7 @@ export function GuestTimerSlots() {
       : entry.opCodes.length === 1 ? entry.opCodes[0].id
       : null;
     setPickRoOpen(false);
-    setError(attachGuestTimer(entry.id, lineId));
+    setError(attachTo(entry.id, lineId));
   }
 
   return (
@@ -160,14 +177,23 @@ export function GuestTimerSlots() {
             description={`Put a car on a timer and its time lands on the RO. Run up to ${MAX_TIMER_SLOTS} at once — one on the lift, one waiting on parts.`}
             action={
               entries.length > 0 ? (
-                <Button variant="go" onClick={() => setPickRoOpen(true)}>
+                <Button variant="go" onClick={() => openPicker(null)}>
                   <Plus size={16} aria-hidden="true" />
                   Start a timer
                 </Button>
               ) : (
-                <Link href="/guest/log" className="btn btn-go btn-sm">
-                  Log an RO first →
-                </Link>
+                <>
+                  <Link href="/guest/log" className="btn btn-go btn-sm">
+                    Log an RO first →
+                  </Link>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    onClick={() => setError(startGuestTimerWithoutRo())}
+                  >
+                    Start without an RO
+                  </Button>
+                </>
               )
             }
           />
@@ -199,10 +225,11 @@ export function GuestTimerSlots() {
                 onRelease={() => releaseGuestTimer(slot.id)}
                 onSave={() => setSaveSlotId(slot.id)}
                 onPickLine={() => setLinePickSlotId(slot.id)}
+                onAttachRo={() => openPicker(slot.id)}
               />
             ))}
             {FREE_SLOTS.filter((n) => !timers.some((s) => s.slot === n)).map((n) => (
-              <FreeSlot key={`free-${n}`} slot={n} onStart={() => setPickRoOpen(true)} disabled={entries.length === 0} />
+              <FreeSlot key={`free-${n}`} slot={n} onStart={() => openPicker(null)} />
             ))}
           </div>
         </>
@@ -212,16 +239,33 @@ export function GuestTimerSlots() {
       {pickRoOpen && (
         <Modal
           open
-          onClose={() => setPickRoOpen(false)}
+          onClose={() => {
+            setPickRoOpen(false);
+            setAttachTargetId(null);
+          }}
           title="Put an RO on a timer"
           footer={
-            <Link
-              href="/guest/log"
-              className={`btn btn-block ${entries.length > 0 && anyAttachable ? "btn-line" : "btn-go"}`}
-            >
-              <Plus className="h-4 w-4" />
-              Log a new RO
-            </Link>
+            <>
+              <Link
+                href="/guest/log"
+                className={`btn btn-block ${entries.length > 0 && anyAttachable ? "btn-line" : "btn-go"}`}
+              >
+                <Plus className="h-4 w-4" />
+                Log a new RO
+              </Link>
+              {!attachTargetId && (
+                <Button
+                  block
+                  variant="quiet"
+                  onClick={() => {
+                    setPickRoOpen(false);
+                    setError(startGuestTimerWithoutRo());
+                  }}
+                >
+                  Start without an RO
+                </Button>
+              )}
+            </>
           }
         >
           <div className="tmd-body">
@@ -291,7 +335,7 @@ export function GuestTimerSlots() {
                       const entryId = attachLineEntry.id;
                       setAttachLineEntry(null);
                       setPickRoOpen(false);
-                      setError(attachGuestTimer(entryId, line.id));
+                      setError(attachTo(entryId, line.id));
                     }}
                     className="log-pick tmd-pick"
                   >

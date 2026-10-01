@@ -11,14 +11,14 @@ import { markGuestClaim } from "@/lib/guest/storage";
 export function ClaimAccountLink({
   href,
   children,
-  style,
+  className,
 }: {
   href: string;
   children: React.ReactNode;
-  style?: React.CSSProperties;
+  className?: string;
 }) {
   return (
-    <Link href={href} style={style} onClick={markGuestClaim}>
+    <Link href={href} className={className} onClick={markGuestClaim}>
       {children}
     </Link>
   );

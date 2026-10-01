@@ -1,0 +1,13 @@
+/* Phase 5 - page-admin-bugs (prefix adm-). Admin > Bugs list: filter row, then a
+   Zone of row buttons (.rowbtn from ui-page.css) with a title line and a meta
+   line of Badges + date. BugDetail / ScreenshotZoom live in dlg-bug-inbox.css.
+   Tokens only. */
+.adm-inbox { display: grid; gap: var(--s5); }
+.adm-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); }
+.adm-filter { min-width: 160px; }
+.adm-list { display: grid; gap: var(--s1); }
+.adm-row { padding-block: var(--s2); }
+.adm-row > span:first-child { display: grid; gap: var(--s1); }
+.adm-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-weight: 500; }
+.adm-date { font-size: var(--fs-label); color: var(--ink-3); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
