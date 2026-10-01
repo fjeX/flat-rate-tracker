@@ -16,6 +16,7 @@ import {
   newBonusSchema,
   newEntrySchema,
   offsetSchema,
+  openTicketSchema,
   openDisputeSchema,
   periodKeySchema,
   reorderOpCodesSchema,
@@ -513,4 +514,24 @@ export async function signOut() {
       expect(unvalidatedActionsIn(source)).toEqual([]);
     });
   }
+});
+
+describe("RO numbers are digits only (new RO and open ticket)", () => {
+  it.each(["48x", "12-34", "RO 123", "١٢٣"])("rejects %s", (ro) => {
+    expect(check(newEntrySchema, entry({ roNumber: ro })).ok).toBe(false);
+    expect(check(openTicketSchema, { roNumber: ro }).ok).toBe(false);
+    const r = check(newEntrySchema, entry({ roNumber: ro }));
+    if (!r.ok) expect(r.error).toMatch(/digits only/i);
+  });
+
+  it("accepts 12345 (and trims surrounding spaces)", () => {
+    expect(check(newEntrySchema, entry({ roNumber: "12345" })).ok).toBe(true);
+    expect(check(openTicketSchema, { roNumber: " 12345 " }).ok).toBe(true);
+  });
+
+  it("an empty RO still reports 'required', not the digits message", () => {
+    const r = check(newEntrySchema, entry({ roNumber: "   " }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("RO number is required.");
+  });
 });

@@ -28,15 +28,20 @@ import {
   setDisputeStatusAction,
 } from "@/app/actions/disputes";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { withPt } from "@/components/ui/Figure";
+import { StatusField } from "@/components/ui/StatusField";
 
-// Tone per lifecycle state. 'answered' is warn, not good: they replied, but the
-// claim isn't settled until the tech records what actually came back.
-const STATUS_TONE: Record<Dispute["status"], string> = {
-  generated: "",
-  submitted: "warn",
-  answered: "warn",
+// Tone per lifecycle state. Only a resolved claim is the good state. 'answered'
+// stays a plain tag: they replied, but the claim isn't settled until the tech
+// records what actually came back.
+const STATUS_TONE: Record<Dispute["status"], "neutral" | "good"> = {
+  generated: "neutral",
+  submitted: "neutral",
+  answered: "neutral",
   resolved: "good",
-  withdrawn: "",
+  withdrawn: "neutral",
 };
 
 // "A closed claim round on this period." The ONE definition of the predicate:
@@ -143,22 +148,18 @@ function OutcomeForm({
   }
 
   return (
-    <div className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] p-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-[var(--fg-2)]">
+    <div className="pp-well pp-stack">
+      <div className="pp-tool-head">
+        <p className="pp-sub">
           What did they actually pay back? Leave dollars blank if you only know
           the hours.
         </p>
-        <button
-          type="button"
-          onClick={fillFromClaim}
-          className="btn btn-sm btn-ghost min-h-11 shrink-0"
-        >
+        <Button variant="quiet" onClick={fillFromClaim}>
           Same as claimed
-        </button>
+        </Button>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
+      <div className="pp-pair">
+        <label className="field">
           <span className="field-label">Recovered hrs</span>
           <input
             type="number"
@@ -168,10 +169,10 @@ function OutcomeForm({
             onChange={(e) => setHoursText(e.target.value)}
             placeholder="—"
             aria-label="Recovered hours"
-            className="input mt-1 text-base font-semibold"
+            className="input mono"
           />
         </label>
-        <label className="block">
+        <label className="field">
           <span className="field-label">Recovered $</span>
           <input
             type="number"
@@ -181,11 +182,11 @@ function OutcomeForm({
             onChange={(e) => setDollarsText(e.target.value)}
             placeholder="—"
             aria-label="Recovered dollars"
-            className="input mt-1 text-base font-semibold"
+            className="input mono"
           />
         </label>
       </div>
-      <label className="block">
+      <label className="field">
         <span className="field-label">What happened</span>
         <textarea
           value={note}
@@ -193,26 +194,21 @@ function OutcomeForm({
           rows={2}
           placeholder="Ray adjusted 3 of the 4 lines…"
           aria-label="Outcome note"
-          className="input mt-1 text-sm"
+          className="input"
         />
       </label>
-      {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={onDone}
-          className="btn btn-sm btn-ghost min-h-11"
-        >
+      {error && (
+        <StatusField tag="Fix" role="alert" inset><p>
+          {error}
+        </p></StatusField>
+      )}
+      <div className="pp-btnrow is-end">
+        <Button variant="quiet" onClick={onDone}>
           Cancel
-        </button>
-        <button
-          type="button"
-          onClick={save}
-          disabled={isPending}
-          className="btn btn-sm btn-primary min-h-11"
-        >
+        </Button>
+        <Button variant="go" onClick={save} disabled={isPending} busy={isPending}>
           {isPending ? "Saving…" : "Close out claim"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -596,9 +592,9 @@ export function DisputeOutcomeCard({
   const Root = embedded ? "div" : "section";
 
   return (
-    <Root className={embedded ? "space-y-3" : "card padded-lg space-y-3"}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">{title}</h2>
+    <Root className={embedded ? "pp-stack" : "card padded-lg pp-stack"}>
+      <div className="pp-sub-head">
+        <h4 className="pp-sub-title">{title}</h4>
         {/* The lifetime "recovered all-time" figure used to sit here. It is
             cross-period data, so under the page's scope rule it belongs on a
             surface that owns lifetime numbers — and the dashboard's
@@ -610,30 +606,30 @@ export function DisputeOutcomeCard({
           the money that already came back is the thing to record before asking
           for more, and the offer's shortfall figure is the one this fixes. */}
       {applyPlan.rows.length > 0 && (
-        <div className="card-inset space-y-2 px-3 py-3">
-          <p className="text-sm">
-            <span className="font-medium text-[var(--fg-1)]">
+        <div className="pp-well pp-stack">
+          <p className="pp-sub">
+            <span className="pp-strong">
               {fmtHours(applyPlan.applyHours)}h came back and isn&apos;t on your
               lines yet.
             </span>{" "}
-            <span className="text-[var(--fg-2)]">
+            <span>
               Until it is, {periodLabel} still reads{" "}
               {fmtHours(shortedHours)}h short and FRT will keep offering to
               claim it again.
             </span>
           </p>
 
-          <ul className="space-y-1 text-xs text-[var(--fg-2)]">
+          <ul className="pp-plain">
             {applyPlan.rows.slice(0, 5).map((row) => (
-              <li key={row.lineId} className="flex flex-wrap gap-x-1">
-                <span className="font-medium text-[var(--fg-1)]">
-                  RO {row.roNumber}
+              <li key={row.lineId}>
+                <span className="pp-strong">
+                  RO <span className="num">{row.roNumber}</span>
                 </span>
                 <span>&middot; {row.code}</span>
                 <span>
                   &middot; paid {row.paidNow === null ? "—" : `${fmtHours(row.paidNow)}h`}{" "}
                   &rarr;{" "}
-                  <span className="font-medium text-[var(--fg-1)]">
+                  <span className="pp-strong">
                     {fmtHours(row.paidAfter)}h
                   </span>
                 </span>
@@ -645,23 +641,29 @@ export function DisputeOutcomeCard({
           </ul>
 
           {showApplyFootnote && (
-            <p className="text-xs text-[var(--fg-3)]">
+            <p className="pp-fine">
               {goodwillNote(applyPlan.unmappedHours)}
             </p>
           )}
 
-          {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
+          {error && (
+            <StatusField tag="Fix" role="alert" inset><p>
+              {error}
+            </p></StatusField>
+          )}
 
-          <button
-            type="button"
-            onClick={applyRecovery}
-            disabled={isPending}
-            className="btn btn-sm btn-primary min-h-11"
-          >
-            {isPending
-              ? "Applying…"
-              : `Apply ${fmtHours(applyPlan.applyHours)}h to ${applyPlan.rows.length} line${applyPlan.rows.length === 1 ? "" : "s"}`}
-          </button>
+          <div className="pp-btnrow">
+            <Button
+              variant="go"
+              onClick={applyRecovery}
+              disabled={isPending}
+              busy={isPending}
+            >
+              {isPending
+                ? "Applying…"
+                : `Apply ${fmtHours(applyPlan.applyHours)}h to ${applyPlan.rows.length} line${applyPlan.rows.length === 1 ? "" : "s"}`}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -670,9 +672,7 @@ export function DisputeOutcomeCard({
           so there is nothing to apply and no button below it — the paragraph IS
           the whole story, which is why it gets card chrome here and none above. */}
       {showGoodwillNote && recovery.rows.length === 0 && (
-        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-          {goodwillNote(recovery.unmappedHours)}
-        </p>
+        <StatusField tag="Note"><p>{goodwillNote(recovery.unmappedHours)}</p></StatusField>
       )}
 
       {/* Two or more closed rounds named the same line, and its paid hours
@@ -688,7 +688,7 @@ export function DisputeOutcomeCard({
           and, where the second round re-asked for the first round's money,
           walked the tech into paying the line twice. */}
       {showDisarmedNote && (
-        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+        <StatusField tag="Note"><p>
           Up to {fmtHours(periodRecovery.disarmedHours)}h recovered on your
           claims for {periodLabel} can&apos;t be applied automatically and may
           not be on your lines yet:{" "}
@@ -703,7 +703,7 @@ export function DisputeOutcomeCard({
           Check each line against your pay stub, and only enter more paid hours
           in &ldquo;Which lines came up short?&rdquo; if the shop paid them
           separately.
-        </p>
+        </p></StatusField>
       )}
 
       {/* Older closed rounds whose recovery found no line — see
@@ -711,7 +711,7 @@ export function DisputeOutcomeCard({
           paragraphs each reading "Xh came back" is N add-this prompts for what
           may be one shortage. */}
       {showOlderUnplacedNote && (
-        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+        <StatusField tag="Note"><p>
           {olderUnplaced.length === 1
             ? `An older claim for ${periodLabel} also`
             : `${olderUnplaced.length} older claims for ${periodLabel} also`}{" "}
@@ -730,14 +730,14 @@ export function DisputeOutcomeCard({
           hours may already be on your lines, or be one payment counted twice.
           FRT won&apos;t write them anywhere. Before changing any line, check
           your pay stub.
-        </p>
+        </p></StatusField>
       )}
 
       {/* No per-line breakdown and a partial settlement: which lines the shop
           paid is a fact the app does not have, and splitting the money evenly
           would be the app inventing the answer. Ask for it instead. */}
       {recovery.needsLineBreakdown && (
-        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+        <StatusField tag="Note"><p>
           {multiClaim ? (
             <>
               {fmtHours(recovery.unmappedHours)}h came back on your latest
@@ -754,7 +754,7 @@ export function DisputeOutcomeCard({
               yourself.
             </>
           )}
-        </p>
+        </p></StatusField>
       )}
 
       {/* The period-total claim. Same dead end as the paragraph above — FRT
@@ -768,7 +768,7 @@ export function DisputeOutcomeCard({
           up short?") — a paraphrase sends the tech looking for a heading that
           isn't on the page. */}
       {showPeriodTotalNote && (
-        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
+        <StatusField tag="Note"><p>
           {multiClaim ? (
             <>
               {fmtHours(recovery.unmappedHours)}h came back on your latest
@@ -785,13 +785,13 @@ export function DisputeOutcomeCard({
               on each line yourself.
             </>
           )}
-        </p>
+        </p></StatusField>
       )}
 
       {applied !== null && applyPlan.rows.length === 0 && (
-        <p className="text-xs text-[var(--good)]">
+        <StatusField tag="Saved"><p>
           Recovery applied to {applied} line{applied === 1 ? "" : "s"}.
-        </p>
+        </p></StatusField>
       )}
 
       {/* Gated on the LIVE claim, not on any claim. A closed one still renders
@@ -799,8 +799,8 @@ export function DisputeOutcomeCard({
           hands back an existing open dispute rather than tripping the unique
           index, so this can never create a second live claim. */}
       {!openDispute && (shortedHours > 0 || canOfferPending) && (
-        <div className="space-y-2">
-          <p className="text-sm text-[var(--fg-2)]">
+        <div className="pp-stack">
+          <p className="pp-sub">
             {shortedHours > 0 ? (
               closedForPeriod ? (
                 <>
@@ -816,7 +816,7 @@ export function DisputeOutcomeCard({
                     <>
                       {" "}
                       &middot;{" "}
-                      <span className="font-medium text-[var(--fg-1)]">
+                      <span className="pp-strong">
                         {fmtHours(recoveredHere)}h already recovered
                       </span>{" "}
                       {/* The figure is a sum over every closed round on this
@@ -848,20 +848,20 @@ export function DisputeOutcomeCard({
           </p>
 
           {canOfferPending && (
-            <label className="card-inset flex cursor-pointer items-start gap-2 px-3 py-2 text-xs">
+            <label className="pp-check">
               <input
                 type="checkbox"
                 checked={claimPending}
                 onChange={(e) => setClaimPending(e.target.checked)}
-                className="mt-0.5 h-4 w-4 flex-shrink-0 accent-[var(--brand)]"
+                className="pp-check-box"
               />
               <span>
-                <span className="font-medium text-[var(--fg-1)]">
+                <span className="pp-strong">
                   Also claim {pendingCount} line
                   {pendingCount === 1 ? "" : "s"} you never marked paid (+
                   {fmtHours(pendingHours)}h)
                 </span>
-                <span className="mt-0.5 block text-[var(--fg-3)]">
+                <span className="pp-fine pp-block">
                   Only if your stub really left them out. An unmarked line
                   usually just means you haven&apos;t reconciled it yet — and a
                   claim for hours you were paid is the one that costs you
@@ -874,13 +874,18 @@ export function DisputeOutcomeCard({
           {/* The only place this error could surface. It used to render solely
               inside the `dispute` branch below, so a failed "Track this
               dispute" was completely silent — the button just did nothing. */}
-          {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
+          {error && (
+            <StatusField tag="Fix" role="alert"><p>
+              {error}
+            </p></StatusField>
+          )}
 
-          <button
-            type="button"
+          <div className="pp-btnrow">
+          <Button
+            variant="go"
             onClick={open}
             disabled={isPending || claimTotal <= 0}
-            className="btn btn-sm btn-primary min-h-11"
+            busy={isPending}
           >
             {/* No figure until there IS one. When the period has no shortfall
                 and the only route is the opt-in above, the resting state read
@@ -891,77 +896,76 @@ export function DisputeOutcomeCard({
               : claimTotal > 0
                 ? `Track this dispute · ${fmtHours(claimTotal)}h`
                 : "Track this dispute"}
-          </button>
+          </Button>
+          </div>
         </div>
       )}
 
       {dispute && (
-        <div className="space-y-3 border-t border-[var(--line)] pt-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`pill ${STATUS_TONE[dispute.status]}`}>
+        <div className="pp-stack pp-sub-body is-ruled">
+          <div className="pp-btnrow is-tags">
+            <Badge tone={STATUS_TONE[dispute.status]}>
               {DISPUTE_STATUS_LABELS[dispute.status]}
-            </span>
-            <span className="text-xs text-[var(--fg-3)]">
+            </Badge>
+            <span className="pp-fine">
               {DISPUTE_SCOPE_LABELS[dispute.scope]}
               {dispute.scope === "lines" && dispute.lines.length > 0
                 ? ` · ${dispute.lines.length} line${dispute.lines.length === 1 ? "" : "s"}`
                 : ""}
             </span>
             {waiting !== null && waiting >= 1 && (
-              <span className="text-xs text-[var(--warn)]">
+              <span className="pp-fine">
                 waiting {waiting} day{waiting === 1 ? "" : "s"}
               </span>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-              <div className="field-label">Claimed</div>
-              <div className="mono mt-1 text-base font-semibold tabular-nums text-[var(--fg-1)]">
-                {fmtHours(dispute.claimedHours)}h
-              </div>
-              {dispute.claimedDollars !== null && (
-                <div className="mt-0.5 text-xs text-[var(--fg-3)]">
-                  {fmtMoney(dispute.claimedDollars)}
-                </div>
-              )}
+          <dl className="pp-rows">
+            <div>
+              <dt className="k">Claimed</dt>
+              <dd className="v num">
+                {withPt(fmtHours(dispute.claimedHours))}
+                <span className="pp-unit">h</span>
+                {dispute.claimedDollars !== null && (
+                  <small>{fmtMoney(dispute.claimedDollars)}</small>
+                )}
+              </dd>
             </div>
-            <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-              <div className="field-label">Recovered</div>
-              <div
-                className={`mono mt-1 text-base font-semibold tabular-nums ${dispute.recoveredHours > 0 ? "text-[var(--good)]" : "text-[var(--fg-3)]"}`}
-              >
-                {fmtHours(dispute.recoveredHours)}h
-              </div>
-              {dispute.recoveredDollars !== null && (
-                <div className="mt-0.5 text-xs text-[var(--fg-3)]">
-                  {fmtMoney(dispute.recoveredDollars)}
-                </div>
-              )}
+            <div>
+              <dt className="k">Recovered</dt>
+              <dd className={`v num${dispute.recoveredHours > 0 ? " is-good" : " is-dim"}`}>
+                {withPt(fmtHours(dispute.recoveredHours))}
+                <span className="pp-unit">h</span>
+                {dispute.recoveredDollars !== null && (
+                  <small>{fmtMoney(dispute.recoveredDollars)}</small>
+                )}
+              </dd>
             </div>
             {outcome !== null && outcome !== "open" && (
-              <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-                <div className="field-label">Outcome</div>
-                <div
-                  className={`mt-1 text-base font-semibold ${outcome === "full" ? "text-[var(--good)]" : outcome === "partial" ? "text-[var(--warn)]" : "text-[var(--bad)]"}`}
+              <div>
+                <dt className="k">Outcome</dt>
+                <dd
+                  className={`v${outcome === "full" ? " is-good" : outcome === "partial" ? "" : " is-bad"}`}
                 >
                   {outcome === "full"
                     ? "Paid in full"
                     : outcome === "partial"
                       ? "Partly paid"
                       : "Denied"}
-                </div>
+                </dd>
               </div>
             )}
-          </div>
+          </dl>
 
           {dispute.note && (
-            <p className="rounded-[var(--radius-sm)] bg-[var(--bg-1)] px-3 py-2 text-sm text-[var(--fg-2)]">
-              {dispute.note}
-            </p>
+            <p className="pp-well pp-sub">{dispute.note}</p>
           )}
 
-          {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
+          {error && (
+            <StatusField tag="Fix" role="alert"><p>
+              {error}
+            </p></StatusField>
+          )}
 
           {/* The form is never closed imperatively — see the comment in
               OutcomeForm.save(). It unmounts when the SERVER says the write
@@ -979,54 +983,49 @@ export function DisputeOutcomeCard({
                deliberately just this one control — no "Record outcome" (that is
                the first-time idiom), no advance, no "Drop it" on a claim that is
                already off the queue. OutcomeForm seeds from what was stored. */
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
+            <div className="pp-btnrow">
+              <Button
+                variant="quiet"
                 onClick={() =>
                   setRecording({ reopen: true, at: dispute.updatedAt })
                 }
-                className="btn btn-sm btn-ghost min-h-11"
               >
                 Correct outcome
-              </button>
+              </Button>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="pp-btnrow">
               {next === "submitted" && (
-                <button
-                  type="button"
+                <Button
+                  variant="go"
                   onClick={() => advance("submitted")}
                   disabled={isPending}
-                  className="btn btn-sm btn-primary min-h-11"
                 >
                   I handed it in
-                </button>
+                </Button>
               )}
               {next === "answered" && (
-                <button
-                  type="button"
+                <Button
+                  variant="go"
                   onClick={() => advance("answered")}
                   disabled={isPending}
-                  className="btn btn-sm btn-primary min-h-11"
                 >
                   They responded
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
+              <Button
+                variant="quiet"
                 onClick={() => setRecording({ reopen: false })}
-                className="btn btn-sm btn-ghost min-h-11"
               >
                 Record outcome
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="quiet"
                 onClick={() => advance("withdrawn")}
                 disabled={isPending}
-                className="btn btn-sm btn-ghost min-h-11"
               >
                 Drop it
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -1039,8 +1038,8 @@ export function DisputeOutcomeCard({
           period a tech opened, including periods with no claim at all. Moved,
           not mirrored: this is a link, never a second copy of the figures. */}
       {lifetime.closedCount > 0 && (
-        <div className="border-t border-[var(--line)] pt-3">
-          <Link href="/insights" className="link text-xs">
+        <div className="pp-sub-body is-ruled">
+          <Link href="/insights" className="pp-link">
             How your claims tend to go →
           </Link>
         </div>

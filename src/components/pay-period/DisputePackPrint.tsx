@@ -5,6 +5,9 @@ import Link from "next/link";
 import type { DisputePack } from "@/lib/dispute-pack";
 import { UNPAID_TIME_KIND_LABELS } from "@/lib/types";
 import { fmtHours2, fmtMoney2 } from "@/lib/format";
+import { Button } from "@/components/ui/Button";
+import { Table, Td, Th } from "@/components/ui/Table";
+import { PpIcon } from "./PpParts";
 
 // 2dp so printed rows reconcile with printed totals. The reconciliation itself
 // happens in lib/dispute-pack and lib/unpaid-summary, which round each dollar
@@ -16,9 +19,11 @@ const fmtH = fmtHours2;
 // 2dp for the same reason on the dollar column — see lib/format.
 const fmtD = fmtMoney2;
 
-// One-page printable variance report. Styles live in dispute-pack.css so it
-// prints as clean black-on-white regardless of the app theme, and the
-// on-screen toolbar disappears when printed to PDF.
+// One-page printable variance report. Styles live in dispute-pack.css. On
+// screen the toolbar and the wall follow the app theme and the accent, in the
+// same language as the rest of the app; the SHEET is always paper (white, black
+// ink) so what you preview is what prints, in every theme. Printed, the toolbar
+// disappears and the page is white and readable in black and white.
 // The unpaid-rework section. Rendered BELOW the variance table with its own
 // totals and never added into the variance total — unpaid rework is not a
 // paid-vs-flagged discrepancy, it is work that flagged nothing at all. Rows with
@@ -54,36 +59,36 @@ function UnpaidReworkSection({ pack }: { pack: DisputePack }) {
           role="region"
           aria-label="Unpaid rework performed by line"
         >
-          <table className="dp-table">
+          <Table className="dp-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>RO #</th>
-                <th>Op code</th>
-                <th>Description</th>
-                <th className="dp-num">Performed</th>
-                <th className="dp-num">Flagged</th>
-                {priced && <th className="dp-num">Value</th>}
+                <Th>Date</Th>
+                <Th>RO #</Th>
+                <Th>Op code</Th>
+                <Th>Description</Th>
+                <Th num>Performed</Th>
+                <Th num>Flagged</Th>
+                {priced && <Th num>Value</Th>}
               </tr>
             </thead>
             <tbody>
               {rework.map((l, i) => (
                 <tr key={`${l.entryId ?? "ledger"}-${i}`}>
-                  <td>{l.date}</td>
-                  <td>{l.roNumber ? `#${l.roNumber}` : "—"}</td>
-                  <td>{l.code ?? UNPAID_TIME_KIND_LABELS[l.kind]}</td>
-                  <td>{l.description || "—"}</td>
-                  <td className="dp-num dp-variance">{fmtH(l.hours)}h</td>
-                  <td className="dp-num">{fmtH(0)}h</td>
+                  <Td>{l.date}</Td>
+                  <Td className="dp-ro">{l.roNumber ? `#${l.roNumber}` : "—"}</Td>
+                  <Td>{l.code ?? UNPAID_TIME_KIND_LABELS[l.kind]}</Td>
+                  <Td>{l.description || "—"}</Td>
+                  <Td num className="dp-variance">{fmtH(l.hours)}h</Td>
+                  <Td num>{fmtH(0)}h</Td>
                   {priced && (
-                    <td className="dp-num dp-variance">
+                    <Td num className="dp-variance">
                       {l.dollars === null ? "—" : fmtD(l.dollars)}
-                    </td>
+                    </Td>
                   )}
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         </div>
         </>
       )}
@@ -134,17 +139,17 @@ export function DisputePackPrint({ pack }: { pack: DisputePack }) {
     <div className="dp-root">
 
       <div className="dp-toolbar">
-        <Link href="/pay-period" className="dp-btn dp-btn-ghost">
-          ← Back to pay period
+        <Link href="/pay-period" className="btn btn-line">
+          <PpIcon name="chev" style={{ transform: "rotate(90deg)" }} />
+          Back to pay period
         </Link>
-        <button
-          type="button"
+        <Button
+          variant="go"
           onClick={() => window.print()}
-          className="dp-btn dp-btn-primary"
           disabled={nothingToPrint}
         >
           Print / Save as PDF
-        </button>
+        </Button>
       </div>
 
       <article className="dp-sheet">
@@ -188,59 +193,59 @@ export function DisputePackPrint({ pack }: { pack: DisputePack }) {
               role="region"
               aria-label="Flagged versus paid variance by line"
             >
-            <table className="dp-table">
+            <Table className="dp-table">
               <thead>
                 <tr>
-                  <th>RO #</th>
-                  <th>Date</th>
-                  <th>Op code</th>
-                  <th>Description</th>
-                  <th className="dp-num">Flagged</th>
-                  <th className="dp-num">Paid</th>
-                  <th className="dp-num">Variance</th>
-                  {pack.hasRates && <th className="dp-num">Amount</th>}
+                  <Th>RO #</Th>
+                  <Th>Date</Th>
+                  <Th>Op code</Th>
+                  <Th>Description</Th>
+                  <Th num>Flagged</Th>
+                  <Th num>Paid</Th>
+                  <Th num>Variance</Th>
+                  {pack.hasRates && <Th num>Amount</Th>}
                 </tr>
               </thead>
               <tbody>
                 {pack.lines.map((l, i) => (
                   <tr key={`${l.entryId}-${i}`}>
-                    <td>#{l.roNumber}</td>
-                    <td>{l.date}</td>
-                    <td>{l.code}</td>
-                    <td>{l.description || "—"}</td>
-                    <td className="dp-num">{fmtH(l.flagged)}h</td>
-                    <td className="dp-num">
+                    <Td className="dp-ro">#{l.roNumber}</Td>
+                    <Td>{l.date}</Td>
+                    <Td>{l.code}</Td>
+                    <Td>{l.description || "—"}</Td>
+                    <Td num>{fmtH(l.flagged)}h</Td>
+                    <Td num>
                       {l.paid === null ? "—" : `${fmtH(l.paid)}h`}
-                    </td>
-                    <td className="dp-num dp-variance">
+                    </Td>
+                    <Td num className="dp-variance">
                       {fmtH(l.deltaHours)}h
-                    </td>
+                    </Td>
                     {pack.hasRates && (
-                      <td className="dp-num dp-variance">
+                      <Td num className="dp-variance">
                         {l.deltaDollars === null ? "—" : fmtD(l.deltaDollars)}
-                      </td>
+                      </Td>
                     )}
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={pack.hasRates ? 6 : 5} className="dp-total-label">
+                  <Td colSpan={pack.hasRates ? 6 : 5} className="dp-total-label">
                     Total variance
-                  </td>
-                  <td className="dp-num dp-variance">
+                  </Td>
+                  <Td num className="dp-variance">
                     {fmtH(pack.totalShortHours)}h
-                  </td>
+                  </Td>
                   {pack.hasRates && (
-                    <td className="dp-num dp-variance">
+                    <Td num className="dp-variance">
                       {pack.totalShortDollars === null
                         ? "—"
                         : fmtD(pack.totalShortDollars)}
-                    </td>
+                    </Td>
                   )}
                 </tr>
               </tfoot>
-            </table>
+            </Table>
             </div>
 
             <footer className="dp-footer">

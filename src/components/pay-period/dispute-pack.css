@@ -1,114 +1,143 @@
-/* Dispute-pack print styles — deliberately monochrome ink-on-paper for a
-   document handed to a service manager; these are print colors, not app
-   theme tokens. Kept in a real stylesheet so no hex lives in .tsx. */
+/* Dispute pack: the printable Flagged vs. Paid Variance Report.
 
+   Two surfaces in one stylesheet, on purpose:
+
+   1. The screen chrome (the wall behind the sheet and the toolbar buttons)
+      follows the app: theme tokens, accent, the shared button look.
+   2. The SHEET is paper. Its colours are literal, print-specific values, not
+      theme tokens: the token block has no colour that stays white in the dark
+      themes, and a document handed to a service manager has to read as black
+      ink on white whether it is previewed in Light or in Pitch. Inside the
+      sheet the tokens the shared Table relies on are redefined to those paper
+      values (see `.dp-sheet`), so the shared parts render as ink on paper too.
+
+   Printed: a white page, no toolbar, no theme, and every rule and figure is
+   dark enough to survive a black-and-white photocopy. */
+
+/* ---------- screen: the wall and the toolbar ---------- */
 .dp-root {
   min-height: 100vh;
-  background: #f4f4f4;
-  padding: 24px 16px 64px;
-  color: #111;
+  background: var(--wall);
+  color: var(--ink);
+  padding: var(--s5) var(--s4) var(--s7);
 }
 .dp-toolbar {
   max-width: 800px;
-  margin: 0 auto 16px;
+  margin: 0 auto var(--s4);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: var(--s3);
 }
-.dp-btn {
-  font-family: var(--font-plex), system-ui, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid #d0d0d0;
-  cursor: pointer;
-  text-decoration: none;
-  color: #111;
-  background: #fff;
-}
-.dp-btn-primary {
-  background: #111;
-  color: #fff;
-  border-color: #111;
-}
-.dp-btn:hover:not(:disabled) { background: #f0f0f0; }
-.dp-btn-primary:hover:not(:disabled) { background: #333; }
-.dp-btn:focus-visible { outline: 2px solid #111; outline-offset: 2px; }
-.dp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- the sheet: paper ---------- */
 .dp-sheet {
+  /* paper values (print-specific; see the note at the top) */
+  --paper: #ffffff;
+  --paper-ink: #111111;
+  --paper-ink-2: #3d3d3d;
+  --paper-ink-3: #575757;
+  --paper-rule: #111111;
+  --paper-hair: #b5b5b5;
+  --paper-soft: #dcdcdc;
+  /* the shared Table reads these, so on the sheet they are paper */
+  --ink: var(--paper-ink);
+  --ink-2: var(--paper-ink-2);
+  --ink-3: var(--paper-ink-3);
+  --line: var(--paper-hair);
+  --line-soft: var(--paper-soft);
+  --edge: var(--paper-rule);
+  --quiet-hover: transparent;
+  --quiet-active: transparent;
+
+  color-scheme: light;
   max-width: 800px;
   margin: 0 auto;
-  background: #fff;
-  color: #111;
-  padding: 40px;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-  font-family: var(--font-plex), system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--paper-ink);
+  padding: var(--s6);
+  border: var(--w-hair) solid var(--paper-hair);
+  border-top: var(--w-heavy) solid var(--paper-rule);
+  border-radius: 0 0 var(--r-panel) var(--r-panel);
+  font-family: var(--font-ui);
   line-height: 1.5;
 }
-.dp-header { border-bottom: 2px solid #111; padding-bottom: 16px; margin-bottom: 24px; }
-.dp-header h1 { font-size: 20px; font-weight: 700; margin: 0 0 12px; letter-spacing: -0.01em; }
-.dp-meta { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0; }
+
+.dp-header { border-bottom: var(--w-edge) solid var(--paper-rule); padding-bottom: var(--s4); margin-bottom: var(--s5); }
+.dp-header h1 { font-size: var(--fs-head); font-weight: 700; line-height: 1.15; margin: 0 0 var(--s3); }
+.dp-meta { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s6); margin: 0; }
 .dp-meta div { display: flex; flex-direction: column; }
-.dp-meta dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #666; }
-.dp-meta dd { margin: 0; font-size: 16px; font-weight: 600; }
-.dp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.dp-table th, .dp-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e2e2e2; vertical-align: top; }
-.dp-table thead th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #555; border-bottom: 1.5px solid #111; }
-.dp-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dp-variance { font-weight: 600; }
-.dp-table tfoot td { border-top: 1.5px solid #111; border-bottom: none; padding-top: 12px; font-weight: 700; }
-.dp-total-label { text-align: right; }
-.dp-footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e2e2e2; font-size: 12px; color: #444; }
-.dp-footer p { margin: 4px 0; }
-.dp-empty { font-size: 16px; color: #444; }
+/* the one label style (mock 367) */
+.dp-meta dt, .dp-sheet .dp-table thead th {
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: var(--track-label);
+  text-transform: uppercase; line-height: 1.3; color: var(--paper-ink-2);
+}
+.dp-meta dd { margin: 0; font-size: var(--fs-control); font-weight: 700; }
+
+/* the variance table: the shared ruled Table, tightened for a page */
+.dp-sheet .dp-table th, .dp-sheet .dp-table td { padding: var(--s2) var(--s3); height: auto; vertical-align: top; text-align: left; }
+.dp-sheet .dp-table thead th { border-bottom: var(--w-edge) solid var(--paper-rule); }
+.dp-sheet .dp-table td { font-size: var(--fs-body); }
+.dp-sheet .dp-table td.table-num, .dp-sheet .dp-table th.table-num { text-align: right; white-space: nowrap; }
+.dp-sheet .dp-table td.table-num { font-size: var(--fs-body); }
+.dp-sheet .dp-table td.dp-ro { font-family: var(--font-num); font-weight: 600; letter-spacing: var(--track-num); white-space: nowrap; }
+.dp-variance { font-weight: 700; }
+.dp-sheet .dp-table tfoot td { border-top: var(--w-edge) solid var(--paper-rule); border-bottom: 0; padding-top: var(--s3); font-weight: 700; }
+.dp-total-label { text-align: right !important; }
+.dp-sheet .dp-table tbody tr:last-child td { border-bottom: 0; }
+
+.dp-footer { margin-top: var(--s5); padding-top: var(--s4); border-top: var(--w-hair) solid var(--paper-hair); font-size: var(--fs-label); color: var(--paper-ink-2); }
+.dp-footer p { margin: var(--s1) 0; }
+.dp-empty { font-size: var(--fs-control); color: var(--paper-ink-2); }
 
 /* "Unpaid rework performed" — its own section with its own totals, visually
    separated from the variance report so the two claims never read as one. */
-.dp-section { margin-top: 32px; padding-top: 20px; border-top: 2px solid #111; }
-.dp-section h2 { font-size: 15px; font-weight: 700; margin: 0 0 6px; }
-.dp-section-lede { font-size: 12px; color: #444; margin: 0 0 14px; }
-.dp-section .dp-note { font-size: 11px; color: #666; margin: 6px 0 0; }
-.dp-section-totals { margin: 14px 0 0; font-size: 13px; }
-.dp-section-totals div { display: flex; justify-content: space-between; gap: 24px; padding: 4px 0; border-bottom: 1px solid #e2e2e2; }
-.dp-section-totals .dp-section-total { border-bottom: none; border-top: 1.5px solid #111; font-weight: 700; padding-top: 8px; }
+.dp-section { margin-top: var(--s6); padding-top: var(--s5); border-top: var(--w-edge) solid var(--paper-rule); }
+.dp-section h2 { font-size: var(--fs-title); font-weight: 700; margin: 0 0 var(--s2); }
+.dp-section-lede { font-size: var(--fs-label); color: var(--paper-ink-2); margin: 0 0 var(--s4); }
+.dp-section .dp-note { font-size: var(--fs-label); color: var(--paper-ink-3); margin: var(--s2) 0 0; }
+.dp-section-totals { margin: var(--s4) 0 0; font-size: var(--fs-body); }
+.dp-section-totals div { display: flex; justify-content: space-between; gap: var(--s5); padding: var(--s1) 0; border-bottom: var(--w-hair) solid var(--paper-soft); }
+.dp-section-totals .dp-section-total { border-bottom: none; border-top: var(--w-edge) solid var(--paper-rule); font-weight: 700; padding-top: var(--s2); }
 .dp-section-totals dt { margin: 0; }
-.dp-section-totals dd { margin: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
-
-@media print {
-  /* Keep the section header with at least the start of its table. */
-  .dp-section { break-inside: avoid-page; }
-}
-
-@media print {
-  .dp-root { background: #fff; padding: 0; }
-  .dp-toolbar { display: none; }
-  .dp-sheet { max-width: none; margin: 0; padding: 0; border-radius: 0; box-shadow: none; }
-  @page { margin: 16mm; }
-}
+.dp-section-totals dd { margin: 0; font-family: var(--font-num); font-weight: 600; letter-spacing: var(--track-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Only meaningful where the table actually scrolls — see the phone block. */
-.dp-scroll-hint { display: none; font-size: 11px; color: #666; margin: 0 0 6px; }
+.dp-scroll-hint { display: none; font-size: var(--fs-label); color: var(--paper-ink-3); margin: 0 0 var(--s2); }
 
-/* On-screen phones: let the variance table scroll inside its own container
-   instead of widening the page. Print layout is unaffected. */
+/* ---------- on-screen phones ----------
+   Let the variance table scroll inside its own container instead of widening
+   the page. Print layout is unaffected. */
 @media screen and (max-width: 640px) {
-  /* The sheet's 40px print margin costs 80px of a 390px screen — a third of
-     the room the table has to work with. Dollars and variance are the whole
-     point of the document, so give the columns the width back on phones. */
-  .dp-sheet { padding: 20px 16px; }
+  /* The sheet's page margin costs a third of a 390px screen — and dollars and
+     variance are the whole point of the document, so give the columns the width
+     back on phones. */
+  .dp-root { padding-left: var(--s3); padding-right: var(--s3); }
+  .dp-sheet { padding: var(--s4) var(--s3); }
   .dp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .dp-table { min-width: 560px; }
   /* Touch devices paint no persistent scrollbar, so a table that scrolls
      inside its own box looks simply cut off — the columns are reachable but
      nothing says so. */
   .dp-scroll-hint { display: block; }
-  .dp-table-wrap:focus-visible { outline: 2px solid #111; outline-offset: 2px; }
 }
+/* A scroll region that only a swipe can reach strands keyboard users, so it
+   takes focus, and the focus has to be visible on paper. */
+.dp-sheet .dp-table-wrap:focus-visible { outline: var(--w-heavy) solid var(--paper-rule); outline-offset: 2px; }
 
-/* On-screen toolbar buttons meet the 44px touch floor (print unaffected) */
-@media screen {
-  .dp-btn { min-height: 44px; }
+/* ---------- print ---------- */
+@media print {
+  /* Whatever the app theme is, the page is white and the ink is black. */
+  html, body { background: #ffffff !important; color: #111111 !important; }
+  .dp-root { background: #ffffff; color: #111111; padding: 0; min-height: 0; }
+  .dp-toolbar { display: none; }
+  .dp-sheet { max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; }
+  .dp-scroll-hint { display: none; }
+  .dp-table-wrap { overflow: visible; }
+  .dp-table { min-width: 0; }
+  /* Keep a row whole, and the section header with at least the start of its table. */
+  .dp-table tr { break-inside: avoid; }
+  .dp-section { break-inside: avoid-page; }
+  @page { margin: 16mm; }
 }

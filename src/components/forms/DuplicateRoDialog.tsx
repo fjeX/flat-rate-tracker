@@ -1,9 +1,9 @@
 "use client";
 
 import { Modal } from "@/components/ui/Modal";
-import { Pencil, Plus } from "lucide-react";
 import type { RoMatch } from "@/lib/types";
 import { formatDateLong, isoDate } from "@/lib/periods";
+import { LogIcon } from "./logParts";
 
 // If the most recent matching entry is this recent, the user is probably still
 // working the same RO (fixing a typo / adding a line) → default to editing it.
@@ -40,13 +40,13 @@ export function DuplicateRoDialog({
 
   return (
     <Modal open onClose={onClose} title={`RO #${roNumber} already exists`}>
-      <p className="pb-3 text-sm text-[var(--fg-2)]">
+      <p className="log-sub">
         {suggestEdit
           ? "You logged this RO number recently — did you mean to edit it?"
           : "This RO number was used before — likely a different repair. Date and vehicle keep them apart."}
       </p>
 
-      <div className="space-y-1.5">
+      <div className="log-picks">
         {matches.map((m, i) => {
           const recommended = suggestEdit && i === 0;
           return (
@@ -54,44 +54,28 @@ export function DuplicateRoDialog({
               key={m.id}
               type="button"
               onClick={() => onEdit(m.id)}
-              className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] border px-3 py-2.5 text-left transition-colors ${
-                recommended
-                  ? "border-[var(--brand-soft)] bg-[var(--brand-bg)] hover:brightness-110"
-                  : "border-[var(--line)] hover:bg-[var(--bg-3)]"
-              }`}
+              className={`log-pick${recommended ? " is-rec" : ""}`}
             >
-              <span className="min-w-0">
-                <span className="block text-sm font-medium text-[var(--fg-0)]">
-                  {formatDateLong(m.date)}
-                </span>
-                <span className="block truncate text-xs text-[var(--fg-2)]">
-                  {m.vehicleSummary || "No vehicle recorded"}
-                </span>
+              <span className="log-pick-txt">
+                <b>{formatDateLong(m.date)}</b>
+                <span className="log-pick-desc">{m.vehicleSummary || "No vehicle recorded"}</span>
               </span>
-              <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--fg-1)]">
-                <Pencil className="h-3.5 w-3.5" />
-                Edit
-              </span>
+              <span className="log-pick-act">Edit</span>
             </button>
           );
         })}
       </div>
 
-      <div className="mt-4 border-t border-[var(--line)] pt-3">
+      <div className="log-dup-new">
         <button
           type="button"
           onClick={onLogNew}
-          style={!suggestEdit ? { color: "var(--accent-ink)" } : undefined}
-          className={`flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-semibold transition-colors ${
-            suggestEdit
-              ? "border border-[var(--line)] text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
-              : "bg-[var(--accent)] hover:bg-[var(--accent-hover)]"
-          }`}
+          className={`btn btn-block ${suggestEdit ? "btn-line" : "btn-go"}`}
         >
-          <Plus className="h-4 w-4" />
+          <LogIcon name="plus" small />
           Log as new entry
         </button>
-        <p className="pt-2 text-center text-xs text-[var(--fg-3)]">
+        <p className="log-fine">
           Same RO number, different repair — kept separate from{" "}
           {matches.length === 1 ? "the one above" : `the ${matches.length} above`}.
         </p>

@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Camera, CheckCircle, ChevronDown, ChevronUp, Info, Loader2, X } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { LogIcon } from "./logParts";
+import { StatusField } from "@/components/ui/StatusField";
 import type { FieldId, OpCode, RoTemplate } from "@/lib/types";
 import type { OcrResult } from "@/lib/ocr";
 
@@ -213,8 +215,11 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
     }
   }
 
+  // `display: contents` on the wrapper: the button row stays beside the "Scan RO
+  // ticket" text in RoScanSection's tool row, while the picker, result note and
+  // details wrap onto full-width rows under it.
   return (
-    <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+    <div className="log-scan">
       {/* No capture attribute — lets mobile browsers offer both camera and gallery. */}
       <input
         ref={inputRef}
@@ -225,68 +230,44 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
       />
 
       {/* Button row: info icon + Scan RO button */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="log-scan-btns">
         <button
           type="button"
           onClick={() => setShowInfo((v) => !v)}
           aria-label="First-time setup help"
-          className="hit-expand"
-          style={{
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            color: showInfo ? "var(--brand)" : "var(--fg-3)",
-            display: "flex",
-            alignItems: "center",
-            padding: 2,
-          }}
+          aria-expanded={showInfo}
+          className="iconbtn"
         >
-          <Info className="h-4 w-4" />
+          <LogIcon name="info" />
         </button>
         <button
           type="button"
           onClick={handleScanClick}
           disabled={status === "loading"}
-          className="flex items-center gap-2 min-h-[44px] rounded-full bg-[var(--bg-3)] px-4 py-2 text-sm text-[var(--fg-1)] hover:bg-[var(--bg-4)] disabled:opacity-60"
+          aria-busy={status === "loading" || undefined}
+          className="btn btn-line"
         >
-          {status === "loading" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Camera className="h-4 w-4 text-[var(--brand)]" />
-          )}
+          <LogIcon name="camera" small />
           {status === "loading" ? "Scanning…" : "Scan RO"}
         </button>
       </div>
 
-      {/* Info dropdown — absolutely positioned, appears below the button row */}
+      {/* First-time help — a full-width note under the row, not a popover */}
       {showInfo && (
-        <div style={{
-          position: "absolute",
-          right: 0,
-          top: "calc(100% + 6px)",
-          zIndex: 50,
-          width: 260,
-          borderRadius: 8,
-          border: "1px solid var(--line)",
-          background: "var(--bg-2)",
-          padding: 12,
-          boxShadow: "var(--shadow-pop)",
-        }}>
-          <p style={{ marginBottom: 8, fontSize: 12, fontWeight: 600, color: "var(--fg-2)" }}>
-            First time scanning? 3 steps to set it up:
-          </p>
-          <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
-            <li style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
-              <span style={{ fontFamily: "monospace", color: "var(--brand)", flexShrink: 0 }}>1.</span>
-              <span>Go to{" "}<Link href="/settings" style={{ color: "var(--brand)" }}>Settings</Link>{" "}and click <span style={{ color: "var(--fg-1)" }}>Add Template</span>.</span>
+        <div className="log-scan-row log-scan-help">
+          <p className="log-scan-help-h">First time scanning? 3 steps to set it up:</p>
+          <ol>
+            <li>
+              <span className="num">1.</span>
+              <span>Go to{" "}<Link href="/settings">Settings</Link>{" "}and click <b>Add Template</b>.</span>
             </li>
-            <li style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
-              <span style={{ fontFamily: "monospace", color: "var(--brand)", flexShrink: 0 }}>2.</span>
+            <li>
+              <span className="num">2.</span>
               <span>Upload a photo of your RO form and draw boxes around each field.</span>
             </li>
-            <li style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
-              <span style={{ fontFamily: "monospace", color: "var(--brand)", flexShrink: 0 }}>3.</span>
-              <span>Come back here and tap <span style={{ color: "var(--fg-1)" }}>Scan RO</span> — the form will auto-fill.</span>
+            <li>
+              <span className="num">3.</span>
+              <span>Come back here and tap <b>Scan RO</b> — the form will auto-fill.</span>
             </li>
           </ol>
         </div>
@@ -294,25 +275,25 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
 
       {/* Template picker — shown only when user has multiple templates */}
       {pickerOpen && (
-        <div className="card-inset w-full p-2 shadow-[var(--shadow-pop)]">
-          <div className="mb-1.5 flex items-center justify-between">
-            <p className="text-xs font-medium text-[var(--fg-2)]">Which template?</p>
+        <div className="log-scan-row log-scan-picker">
+          <div className="log-scan-picker-head">
+            <p className="log-scan-help-h">Which template?</p>
             <button
               type="button"
               onClick={() => setPickerOpen(false)}
-              className="rounded-full p-0.5 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+              className="iconbtn"
               aria-label="Close picker"
             >
-              <X className="h-3.5 w-3.5" />
+              <LogIcon name="x" small />
             </button>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="log-scan-picker-list">
             {templates.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => handlePickTemplate(t)}
-                className="w-full min-h-[44px] rounded-[var(--radius-sm)] bg-[var(--bg-3)] px-3 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-4)]"
+                className="btn btn-line"
               >
                 {t.name}
               </button>
@@ -322,55 +303,53 @@ export function ScanRoButton({ library, templates, onResult, onPhotoCaptured }: 
       )}
 
       {status === "success" && summary && (
-        <p className="flex items-center gap-1 text-xs text-[var(--good)]">
-          <CheckCircle className="h-3 w-3 flex-shrink-0" />
-          {summary}
-        </p>
+        <StatusField tag="Read" tone="good" inset className="log-scan-row">
+          <p>{summary}</p>
+        </StatusField>
       )}
       {status === "error" && (
-        <p className="text-xs text-[var(--bad)]">
-          {summary ?? "Scan failed — fill in manually."}
-        </p>
+        <StatusField tag="Fix" inset className="log-scan-row">
+          <p>{summary ?? "Scan failed — fill in manually."}</p>
+        </StatusField>
       )}
 
       {/* Scan details — hidden on high-confidence full success */}
       {debugRegions && debugRegions.length > 0 && !(status === "success" && confidence === "high") && (
-        <div className="w-full text-right">
+        <div className="log-scan-row">
           <button
             type="button"
             onClick={() => setShowDebug((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+            aria-expanded={showDebug}
+            className="btn btn-quiet btn-sm"
           >
-            {showDebug ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             {showDebug ? "Hide details" : "Scan details"}
+            <LogIcon name="chev" small className="chev" />
           </button>
 
           {showDebug && (
-            <div className="card-inset mt-1 w-full p-3 text-left">
-              <div className="space-y-2">
-                {debugRegions.map((r) => {
-                  const { icon, label } = getRegionStatus(r);
-                  return (
-                    <div key={r.field} className="flex flex-col gap-0.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-[var(--fg-1)]">{FIELD_LABELS[r.field]}</span>
-                        <span className={`flex items-center gap-1 text-xs ${icon === "success" ? "text-[var(--good)]" : icon === "partial" ? "text-[var(--warn)]" : "text-[var(--fg-3)]"}`}>
-                          {icon === "success" && <CheckCircle className="h-3 w-3 flex-shrink-0" />}
-                          {icon === "partial" && <AlertTriangle className="h-3 w-3 flex-shrink-0" />}
-                          {icon === "none"    && <X className="h-3 w-3 flex-shrink-0" />}
-                          {label}
-                        </span>
-                      </div>
-                      {r.rawText && (
-                        <p className="truncate text-xs text-[var(--fg-3)]">
-                          Scanned: {r.rawText.replace(/\n/g, " ")}
-                        </p>
-                      )}
+            <ul className="log-scan-details">
+              {debugRegions.map((r) => {
+                const { icon, label } = getRegionStatus(r);
+                return (
+                  <li key={r.field}>
+                    <div className="log-scan-detail-top">
+                      <span className="log-scan-detail-k">{FIELD_LABELS[r.field]}</span>
+                      <span className="log-scan-detail-v">
+                        <Badge tone={icon === "success" ? "good" : icon === "partial" ? "warn" : "neutral"}>
+                          {icon === "success" ? "Read" : icon === "partial" ? "Partial" : "None"}
+                        </Badge>
+                        {label}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                    {r.rawText && (
+                      <p className="log-scan-detail-raw">
+                        Scanned: {r.rawText.replace(/\n/g, " ")}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}

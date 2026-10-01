@@ -12,6 +12,8 @@ import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
 import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
 import { toText, parseHours, verdictFor } from "@/lib/discrepancy";
 import { actionErrorMessage } from "@/lib/action-error";
+import { withPt } from "@/components/ui/Figure";
+import { StatusField } from "@/components/ui/StatusField";
 
 export function DiscrepancyCard({
   periodKey,
@@ -131,26 +133,26 @@ export function DiscrepancyCard({
 
   const diff = parsedPaid === null ? null : parsedPaid - logged;
 
-  const diffColor =
+  // State only: warm red when hours are missing, green when it matches. Paid
+  // over is neither good nor bad news to act on, so it stays ink.
+  const diffTone =
     verdict === "missing"
-      ? "text-[var(--bad)]"
-      : verdict === "over"
-        ? "text-[var(--warn)]"
-        : verdict === "match"
-          ? "text-[var(--good)]"
-          : "text-[var(--fg-3)]";
+      ? " is-bad"
+      : verdict === "match"
+        ? " is-good"
+        : verdict === "over"
+          ? ""
+          : " is-dim";
 
   const Root = embedded ? "div" : "section";
 
   return (
-    <Root className={embedded ? "space-y-3" : "card padded-lg space-y-3"}>
-      {!embedded && (
-        <h2 className="text-sm font-medium">Pay Discrepancy Check</h2>
-      )}
+    <Root className={embedded ? "pp-stack" : "card padded-lg pp-stack"}>
+      {!embedded && <h2 className="pp-lead">Pay Discrepancy Check</h2>}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="block">
-          <label className="block">
+      <div className="pp-stub">
+        <div className="pp-stub-field">
+          <label className="field">
             <span className="field-label">
               Actual paid flag hrs
             </span>
@@ -210,7 +212,7 @@ export function DiscrepancyCard({
                 }
               }}
               placeholder="—"
-              className="input mt-1 text-lg font-semibold"
+              className="input mono"
             />
           </label>
           {savedPaid !== null && (
@@ -235,28 +237,28 @@ export function DiscrepancyCard({
               // input's, and letting that disable this control is the bug.
               // Ordering is handled by awaiting inFlightSave, not by disabling.
               disabled={isResetting}
-              // Same ghost button every other secondary action on this page
-              // uses. No colour/padding utilities: globals.css is unlayered, so
-              // .btn-sm silently beats a Tailwind px-0 or text-[…] anyway.
-              className="btn btn-sm btn-ghost min-h-11 mt-2"
+              // The quiet button every other secondary action on this page
+              // uses. A raw class, not the Button component, because this
+              // control needs a ref (see resetRef).
+              className="btn btn-sm btn-quiet"
             >
               Reset to unpaid
             </button>
           )}
         </div>
-        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-          <div className="field-label">
-            Logged flag hrs
-          </div>
-          <div className="mt-1 text-lg font-semibold text-[var(--fg-1)]">
-            {fmtHours(logged)}h
-          </div>
+      </div>
+
+      <dl className="pp-rows">
+        <div>
+          <dt className="k">Logged flag hrs</dt>
+          <dd className="v num">
+            {withPt(fmtHours(logged))}
+            <span className="pp-unit">h</span>
+          </dd>
         </div>
-        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-1)] px-3 py-2">
-          <div className="field-label">
-            Difference
-          </div>
-          <div className={`mt-1 text-lg font-semibold ${diffColor}`}>
+        <div>
+          <dt className="k">Difference</dt>
+          <dd className={`v num${diffTone}`}>
             {diff === null
               ? "—"
               : // Format the MAGNITUDE and carry the sign ourselves, the same
@@ -272,25 +274,25 @@ export function DiscrepancyCard({
                 // diff === 0 keeps the empty sign, so a true zero still prints
                 // "0.0h" and never "-0.0h" or "+0.0h".
                 `${diff > 0 ? "+" : diff < 0 ? "-" : ""}${fmtHours(Math.abs(diff))}h`}
-          </div>
+          </dd>
         </div>
-      </div>
+      </dl>
 
-      {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
-      {!error && isPending && (
-        <p className="text-xs text-[var(--fg-3)]">Saving…</p>
+      {error && (
+        <StatusField tag="Fix" role="alert"><p>
+          {error}
+        </p></StatusField>
       )}
+      {!error && isPending && <p className="pp-fine">Saving…</p>}
       {!error && !isPending && dirty && (
-        <p className="text-xs text-[var(--fg-3)]">
-          Press enter or click away to save
-        </p>
+        <p className="pp-fine">Press enter or click away to save</p>
       )}
 
       {verdict === "missing" && diff !== null && (
-        <div className="rounded-[var(--radius-sm)] bg-[var(--bad-bg)] px-3 py-2 text-sm text-[var(--bad)]">
+        <StatusField tag="Cost"><p>
           Missing {fmtHours(-diff)} hours. Review the RO list below — use the
           logged ROs as proof when you talk to your service manager.
-        </div>
+        </p></StatusField>
       )}
     </Root>
   );

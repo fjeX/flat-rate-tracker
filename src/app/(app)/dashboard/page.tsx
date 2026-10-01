@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
@@ -13,14 +12,16 @@ import {
   startOfMonth,
   startOfWeek,
 } from "@/lib/periods";
-import { aggregateStats, aggregateStatsWithSchedule, dailyDenominators, fmtHours, fmtPct } from "@/lib/stats";
+import { aggregateStats, aggregateStatsWithSchedule, dailyDenominators, fmtHours } from "@/lib/stats";
 import { shiftForDate } from "@/lib/schedule";
 import { fmtMoney, hasAnyRate, periodEarnings, ratesToMap } from "@/lib/earnings";
 import { computeForecast } from "@/lib/forecast";
 import { efficiencyDisplay } from "@/lib/efficiency-display";
 import { IMPLAUSIBLE_MULTIPLE } from "@/lib/period-mode";
 import { TodayCard } from "@/components/dashboard/TodayCard";
-import { StatCard } from "@/components/dashboard/StatCard";
+import { FlaggedToDate } from "@/components/dashboard/FlaggedToDate";
+import { PaceZone } from "@/components/dashboard/PaceZone";
+import { Zone } from "@/components/ui/Zone";
 import { StreakCard } from "@/components/dashboard/StreakCard";
 import { UnresolvedDaysCard } from "@/components/dashboard/UnresolvedDaysCard";
 import { OpenTicketsCard } from "@/components/dashboard/OpenTicketsCard";
@@ -28,14 +29,10 @@ import { summarizeOpenTickets } from "@/lib/open-tickets";
 import { CareerOdometerCard } from "@/components/dashboard/CareerOdometerCard";
 import { SnapshotsCard } from "@/components/dashboard/SnapshotsCard";
 import { RecoveredCard } from "@/components/dashboard/RecoveredCard";
-import { RoList } from "@/components/ro/RoList";
+import { RecentRos } from "@/components/dashboard/RecentRos";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { EntranceGrid } from "@/components/ui/EntranceGrid";
-import { PaceRing } from "@/components/ui/PaceRing";
-import { RollingNumber } from "@/components/ui/RollingNumber";
-import { ClipboardList } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -231,11 +228,10 @@ export default async function DashboardPage() {
   // Where the "today" tick sits on the bar (0–1)
   const daysLeft     = periodDays - currentDay;
   const paceTarget  = currentDay / periodDays;
-  // True fraction of goal (can exceed 1); bar/ring geometry clamps to full,
+  // True fraction of goal (can exceed 1); the track clamps to full,
   // but every NUMBER shown reports the real figure (pace-bar-cap escalation).
   const hasGoal     = goalHours > 0;
   const actualFrac  = hasGoal ? statsPeriod.flagHours / goalHours : 0;
-  const actualFill  = Math.min(actualFrac, 1);
 
   // Forward projection — where the period lands if recent pace holds. Computed
   // from the entries already loaded above; no extra fetch.
@@ -264,27 +260,24 @@ export default async function DashboardPage() {
   // which owns period detail (memory/feedback_dashboard_stays_lean.md).
   const periodEfficiency = efficiencyDisplay(statsPeriod);
 
-  // Pill + ring colour follow the projection, not just the current point.
-  // Four states: ahead / close (within 10%) / behind / insufficient-history.
-  let pillClass = "";
+  // The status tag follows the projection, not just the current point.
+  // Four states: ahead / near goal (within 10%) / behind / insufficient-history.
+  // Tone is state colour only: ahead is green, behind is the warm red, and the
+  // two in-betweens are plain tags (Near goal reads NOTE-style, not amber).
+  let pillTone: "good" | "warn" | "bad" | "neutral" = "good";
   let pillLabel = "On track";
-  let ringTier: "good" | "warn" | "bad" | null = null;
   if (!hasGoal || forecast.state === "insufficient-history") {
-    pillClass = "neutral";
+    pillTone = "neutral";
     pillLabel = "Getting started";
-    ringTier = null;
   } else if (forecast.state === "ahead") {
-    pillClass = "";      // default pill = good
+    pillTone = "good";
     pillLabel = "On track";
-    ringTier = "good";
   } else if (forecast.state === "close") {
-    pillClass = "warn";
-    pillLabel = "Close";
-    ringTier = "warn";
+    pillTone = "warn";
+    pillLabel = "Near goal";
   } else {
-    pillClass = "bad";
+    pillTone = "bad";
     pillLabel = "Behind";
-    ringTier = "bad";
   }
 
   // Projection copy — plain language, real status, no filler.
@@ -318,112 +311,25 @@ export default async function DashboardPage() {
     }
   }
 
-  // pace-fill colour: brand for normal progress
-  const paceFillClass = `pace-fill brand`;
-
   return (
-    <main className="app-main" style={{ paddingBottom: 64 }}>
+    <main className="dash-page">
       <GuestSyncEffect />
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-        {/* ── Greeting + Pace card ────────────────────────────── */}
-        <div className="card flush">
-          <div className="greeting">
-            <div className="avatar">{avatarLetter}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1>{formatTodayHeading(today)}</h1>
-              <p>{todayStatusLine}</p>
-            </div>
-            <span className={`pill${pillClass ? " " + pillClass : ""}`}>
-              {pillLabel}
-            </span>
-          </div>
-          <div style={{ height: 1, background: "var(--line)", margin: "0 16px" }} />
-          <EntranceGrid className="pace" animationName="pace-grow">
-            <div className="pace-head">
-              <span className="title">
-                Pay Period Pace
-                <span className="pace-head-meta"> · {daysLeft} {daysLeft === 1 ? "day" : "days"} left</span>
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <PaceRing
-                value={actualFrac}
-                size={64}
-                tier={ringTier}
-                label={`${Math.round(actualFrac * 100)}%`}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="pace-values">
-                  <span className="pace-now">
-                    <RollingNumber value={fmtHours(statsPeriod.flagHours)} /><span className="pace-unit"> flag hrs</span>
-                  </span>
-                  <span className="pace-goal">Goal {goalHours}</span>
-                </div>
-                <div className="pace-track-wrap">
-                  {/* clamp keeps the label's center at least half its width
-                      from either end, so it can never spill past the track */}
-                  <span
-                    className="pace-today-label"
-                    style={{ left: `clamp(20px, ${paceTarget * 100}%, calc(100% - 20px))` }}
-                  >
-                    TODAY
-                  </span>
-                  <div className="pace-track">
-                    <div
-                      className={paceFillClass}
-                      style={{ width: `${actualFill * 100}%` }}
-                    />
-                  </div>
-                  <div
-                    className="pace-target"
-                    style={{ left: `clamp(1px, ${paceTarget * 100}%, calc(100% - 1px))` }}
-                  />
-                </div>
-              </div>
-            </div>
-            {hasGoal && (
-              <div className="pace-forecast">
-                <div className="pace-forecast-proj">{forecastLine}</div>
-                {requiredLine && <div className="pace-forecast-req">{requiredLine}</div>}
-              </div>
-            )}
-            {showMoney && (
-              <div className="pace-earnings">
-                <span className="label">Period earnings</span>
-                <span className="val">{fmtMoney(periodDollars)}</span>
-              </div>
-            )}
-            <div className="pace-foot">
-              <span>{formatPeriodLabel(period)}</span>
-              <span>
-                {periodEfficiency.kind === "shown"
-                  ? `${fmtPct(periodEfficiency.pct)} efficiency`
-                  : `Day ${currentDay} / ${periodDays}`}
-              </span>
-            </div>
-          </EntranceGrid>
+      {/* ── Page head: date, what is logged today, and where the period stands ── */}
+      <div className="pagehead">
+        <span className="who" aria-hidden="true">
+          {avatarLetter}
+        </span>
+        <div className="grow">
+          <h1>{formatTodayHeading(today)}</h1>
+          <p>{todayStatusLine}</p>
         </div>
+        <Badge tone={pillTone}>{pillLabel}</Badge>
+      </div>
 
-        {/* ── Open tickets — absent when there are none ───────── */}
-        {/* Above the unresolved-days card on purpose: an open ticket is the
-            thing most likely to explain a quiet day, and it is the one the
-            tech is actively working. */}
-        <OpenTicketsCard tickets={openTickets} library={library} rates={rateMap} />
-
-        {/* ── Empty scheduled days needing a decision ─────────── */}
-        {unresolvedDays.length > 0 && (
-          <div className="mt-4">
-            <UnresolvedDaysCard days={unresolvedDays} />
-          </div>
-        )}
-
-        {/* Unpaid time lives on the Pay Period page, not here — the dashboard
-            is the at-a-glance surface and this is detail a tech goes looking
-            for when checking a period, not something to greet them daily. */}
-
-        {/* ── Stat tiles ──────────────────────────────────────── */}
-        <EntranceGrid className="stat-grid">
+      <div className="dash">
+        <div>
+          {/* ── Today: headline panel, Clocked, Quick Add ─────────── */}
           <TodayCard
             date={today}
             stats={statsToday}
@@ -437,87 +343,92 @@ export default async function DashboardPage() {
             timezone={tz ?? ""}
             trackRoTime={settings.trackRoTime}
           />
-          <StatCard label="This Week"      stats={statsWeek} />
-          <StatCard label="Pay Period"     stats={statsPeriod} />
-          <StatCard label="This Month"     stats={statsMonth} />
-        </EntranceGrid>
 
-        {/* ── Lifetime dispute recovery ───────────────────────── */}
-        {/* Its own ledger, never folded into the flag-pay numbers above: when a
-            short gets paid it flows through as the line's paid hours going up.
-            Renders nothing until there's something true to say. */}
-        <RecoveredCard disputes={disputes} />
-
-        {/* ── Streak + career odometer ────────────────────────── */}
-        {gamification && (
-          <div className="gami-grid">
-            <StreakCard streak={gamification.streak} />
-            <CareerOdometerCard
-              careerTotal={gamification.careerTotal}
-              careerMilestones={gamification.careerMilestones}
-              weekDelta={gamification.weekDelta}
-            />
-          </div>
-        )}
-
-        {/* ── Recent ROs ──────────────────────────────────────── */}
-        <section>
-          <div className="section-title">
-            Recent ROs
-            <Link href="/history" className="link">View all →</Link>
-          </div>
-          <div className="card flush">
-            <RoList
-              entries={recentEntries}
-              library={library}
-              rates={rateMap}
-              // Dashboard only. The customer approves extra work while the day is
-              // still running, and this is the page that's open then.
-              showAddUpsell
-              emptyState={
-                <EmptyState
-                  icon={<ClipboardList size={22} />}
-                  title="No ROs yet"
-                  description="Every RO you flag here builds your pace and your record."
-                  action={
-                    <Link href="/log" className="btn btn-primary btn-sm">
-                      Log an RO →
-                    </Link>
-                  }
-                />
-              }
-            />
-          </div>
-        </section>
-
-        {/* ── Portfolio snapshots ─────────────────────────────── */}
-        {gamification && (
-          <SnapshotsCard
-            snapshots={gamification.snapshots}
-            roCount={gamification.roCount}
-            nextSnapshotAt={gamification.nextSnapshotAt}
-            timeZone={tz}
+          {/* ── Pay period pace ─────────────────────────────────── */}
+          <PaceZone
+            flagHours={statsPeriod.flagHours}
+            goalHours={goalHours}
+            hasGoal={hasGoal}
+            actualFrac={actualFrac}
+            paceTarget={paceTarget}
+            daysLeft={daysLeft}
+            periodLabel={formatPeriodLabel(period)}
+            forecastLine={forecastLine}
+            requiredLine={requiredLine}
+            dayText={
+              periodEfficiency.kind === "shown" ? null : `Day ${currentDay} / ${periodDays}`
+            }
           />
-        )}
 
-        {/* ── Averages chart ──────────────────────────────────── */}
-        <AveragesChart
-          entries={entries}
-          unpaid={unpaid}
-          denomByDay={denomByDay}
-          today={today}
-          periodStart={period.start}
-          periodEnd={period.end}
-          weekStart={weekStart}
-          weekEnd={weekEnd}
-          monthStart={monthStart}
-          monthEnd={monthEnd}
-          weekStartDay={weekStartDay}
-          splitDay={settings.splitDay}
-        />
+          {/* ── Open tickets — absent when there are none ───────── */}
+          {/* Above the empty-days zone on purpose: an open ticket is the thing
+              most likely to explain a quiet day, and it is the one the tech is
+              actively working. */}
+          <OpenTicketsCard tickets={openTickets} library={library} rates={rateMap} />
 
+          {/* ── Empty scheduled days needing a decision ─────────── */}
+          {unresolvedDays.length > 0 && <UnresolvedDaysCard days={unresolvedDays} />}
+
+          {/* Unpaid time lives on the Pay Period page, not here — the dashboard
+              is the at-a-glance surface and this is detail a tech goes looking
+              for when checking a period, not something to greet them daily. */}
+
+          {/* ── Flagged to date: week, period, month ────────────── */}
+          <FlaggedToDate
+            week={statsWeek}
+            period={statsPeriod}
+            month={statsMonth}
+            earnings={showMoney ? fmtMoney(periodDollars) : null}
+          >
+            {/* Lifetime dispute recovery — its own ledger, never folded into the
+                flag-pay numbers above: when a short gets paid it flows through
+                as the line's paid hours going up. Renders nothing until there's
+                something true to say. */}
+            <RecoveredCard disputes={disputes} />
+          </FlaggedToDate>
+
+          {/* ── Streak, career odometer, portfolio snapshots ────── */}
+          {gamification && (
+            <Zone id="z-rec" name="Streak, career, snapshot">
+              <div className="recs">
+                <StreakCard streak={gamification.streak} />
+                <CareerOdometerCard
+                  careerTotal={gamification.careerTotal}
+                  careerMilestones={gamification.careerMilestones}
+                  weekDelta={gamification.weekDelta}
+                />
+                <SnapshotsCard
+                  snapshots={gamification.snapshots}
+                  roCount={gamification.roCount}
+                  nextSnapshotAt={gamification.nextSnapshotAt}
+                  timeZone={tz}
+                />
+              </div>
+            </Zone>
+          )}
+        </div>
+
+        <div>
+          {/* ── Recent ROs ──────────────────────────────────────── */}
+          <RecentRos entries={recentEntries} library={library} rates={rateMap} />
+
+          {/* ── Flagged hours chart ─────────────────────────────── */}
+          <AveragesChart
+            entries={entries}
+            unpaid={unpaid}
+            denomByDay={denomByDay}
+            today={today}
+            periodStart={period.start}
+            periodEnd={period.end}
+            weekStart={weekStart}
+            weekEnd={weekEnd}
+            monthStart={monthStart}
+            monthEnd={monthEnd}
+            weekStartDay={weekStartDay}
+            splitDay={settings.splitDay}
+          />
+        </div>
       </div>
-
     </main>
   );
 }

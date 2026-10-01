@@ -1,38 +1,34 @@
 "use client";
 
-// The Pay Period page's title row.
+// The Pay Period page's title area, built from final.html #screen-pay-period:
+// the page title with the status marker beside it, then the picker row
+// (last period, the period itself as a menu button, next period), then the
+// custom-dates control under it.
 //
-// Replaces two things the page used to spend vertical space on: a static
-// "Pay Period" <h1> that duplicated the nav label and told you nothing, and a
-// full card holding the period <select> plus the custom-date buttons.
-//
-// The period IS the title. Stepping to the neighbouring period — by far the
-// common case — is one tap on the chevrons. Jumping to an old period, and
-// resetting custom dates, live in the menu behind the title.
-//
-// Custom dates do NOT: they sit beside the status pill. A tech reading their
-// paystub and correcting FRT to match is doing the ordinary thing this page
-// exists for, and a menu is where you put the things people rarely need.
+// Behaviour is unchanged from the version this replaces: stepping to the
+// neighbouring period is one tap, jumping to an old period and resetting custom
+// dates live in the menu behind the period button, and setting custom dates is
+// a plain button beside the status rather than a menu entry (a tech correcting
+// FRT to match a paystub is doing the ordinary thing this page exists for).
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatPeriodLabel, type PeriodRange } from "@/lib/periods";
 import type { PeriodMode } from "@/lib/period-mode";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { PpIcon } from "./PpParts";
 
-// The status is a pill, not fine print: on a page whose whole shape changes
-// with the mode, "which kind of period am I looking at" is the first thing a
-// user needs and the easiest thing to miss. Colour carries it too, so it reads
-// before the words do.
+// The status is a tagged marker beside the title: on a page whose whole shape
+// changes with the mode, "which kind of period am I looking at" is the first
+// thing a user needs. Good (green, with a drawn check) for a live or paid
+// period; a neutral outline for one that is closed and still waiting on pay.
 function statusFor(
   mode: PeriodMode,
   isCurrent: boolean,
-): { label: string; tone: string } {
-  if (mode === "settled") return { label: "Paid", tone: "" };
+): { label: string; good: boolean } {
+  if (mode === "settled") return { label: "Paid", good: true };
   if (mode === "awaiting_pay")
-    return { label: "Closed — waiting on pay", tone: "warn" };
-  return {
-    label: isCurrent ? "Current pay period" : "In progress",
-    tone: "brand",
-  };
+    return { label: "Closed — waiting on pay", good: false };
+  return { label: isCurrent ? "Current pay period" : "In progress", good: true };
 }
 
 export function PeriodTitleBar({
@@ -91,125 +87,130 @@ export function PeriodTitleBar({
   }
 
   const status = statusFor(mode, selected.key === currentKey);
+  const label = formatPeriodLabel(selected);
 
   return (
-    <div className="period-titlebar">
-      <button
-        type="button"
-        className="period-step"
-        onClick={() => olderKey && onPick(olderKey)}
-        disabled={olderKey === null}
-        aria-label="Last pay period"
-      >
-        <ChevronLeft className="h-4 w-4 shrink-0" />
-        <span className="period-step-label">Last pay period</span>
-      </button>
+    <div className="pp-titlebar">
+      <div className="pp-head">
+        <div className="pp-grow">
+          <h1>Pay period</h1>
+        </div>
+        <span className={`pp-marker${status.good ? "" : " is-note"}`}>
+          {status.good && <PpIcon name="check" />}
+          {status.label}
+        </span>
+      </div>
 
-      {/* Status sits BESIDE the date, not under it: it reads as part of the
-          title ("Jul 16 – 31, current pay period") rather than as a caption,
-          and it keeps the header one line tall. Wraps below the title only when
-          the viewport genuinely can't fit both. */}
-      <div className="period-title-main">
-        <button
-          type="button"
-          className="period-title-btn"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-expanded={menuOpen}
-          aria-haspopup="menu"
-        >
-          <h1>{formatPeriodLabel(selected)}</h1>
-          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
-        </button>
-        <span className={`pill ${status.tone}`}>{status.label}</span>
-        {/* Setting the real dates off a paystub is a routine task, not an
-            advanced one — it was buried behind the title menu, which read as
-            "somewhere in settings". It sits beside the status now, where the
-            question "what dates is this actually covering?" gets asked.
-            When dates are already custom the pill states that, so the button
-            only has to offer the verb. */}
-        {hasOverride ? (
+      <div className="pp-picker-wrap">
+        <div className="pp-picker">
+          <Button
+            variant="line"
+            className="btn-field"
+            onClick={() => olderKey && onPick(olderKey)}
+            disabled={olderKey === null}
+            aria-label="Last pay period"
+          >
+            <PpIcon name="chev" style={{ transform: "rotate(90deg)" }} />
+            <span className="lbl" aria-hidden="true">Last pay period</span>
+          </Button>
+
+          <button
+            type="button"
+            className="pp-pick"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            aria-label={`Pay period ${label}, choose another`}
+          >
+            <span>{label}</span>
+            <PpIcon name="chev" className="chev" />
+          </button>
+
+          <Button
+            variant="line"
+            className="btn-field"
+            onClick={() => newerKey && onPick(newerKey)}
+            disabled={newerKey === null}
+            aria-label="Next pay period"
+          >
+            <span className="lbl" aria-hidden="true">Next pay period</span>
+            <PpIcon name="chev" style={{ transform: "rotate(-90deg)" }} />
+          </Button>
+        </div>
+
+        {menuOpen && (
           <>
-            <span className="pill neutral">Custom dates</span>
             <button
               type="button"
-              className="btn btn-sm btn-ghost"
+              className="pp-menu-scrim"
+              aria-label="Close period menu"
+              onClick={() => setMenuOpen(false)}
+            />
+            <div className="pp-menu" ref={menuRef} role="menu">
+              <div className="pp-menu-list">
+                {availablePeriods.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    role="menuitem"
+                    data-active={p.key === selected.key}
+                    className="pp-menu-item"
+                    onClick={() => pick(p.key)}
+                  >
+                    <span>{formatPeriodLabel(p)}</span>
+                    {p.key === currentKey && (
+                      <span className="pp-menu-tag">current</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {/* Custom dates live beside the title, not here. Leaving a second
+                  entry here would mean two paths to one modal — and the one in
+                  the menu would be the one nobody found. Reset stays: it only
+                  exists once dates are custom, and it belongs next to the list
+                  it undoes. */}
+              {hasOverride && (
+                <div className="pp-menu-actions">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="pp-menu-item"
+                    disabled={resetting}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onResetDates();
+                    }}
+                  >
+                    {resetting ? "Resetting…" : "Reset to default dates"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Setting the real dates off a paystub is a routine task, not an
+          advanced one. When dates are already custom the tag says so and the
+          button only has to offer the verb. */}
+      <div className="pp-picker-more">
+        {hasOverride ? (
+          <>
+            <Badge tone="neutral">Custom dates</Badge>
+            <Button
+              variant="quiet"
               onClick={onEditDates}
               aria-label="Edit custom period dates"
             >
               Edit
-            </button>
+            </Button>
           </>
         ) : (
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            onClick={onEditDates}
-          >
+          <Button variant="quiet" onClick={onEditDates}>
             Set custom dates
-          </button>
+          </Button>
         )}
       </div>
-
-      <button
-        type="button"
-        className="period-step"
-        onClick={() => newerKey && onPick(newerKey)}
-        disabled={newerKey === null}
-        aria-label="Next pay period"
-      >
-        <span className="period-step-label">Next pay period</span>
-        <ChevronRight className="h-4 w-4 shrink-0" />
-      </button>
-
-      {menuOpen && (
-        <>
-          <button
-            type="button"
-            className="period-menu-scrim"
-            aria-label="Close period menu"
-            onClick={() => setMenuOpen(false)}
-          />
-          <div className="period-menu" ref={menuRef} role="menu">
-            <div className="period-menu-list">
-              {availablePeriods.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  role="menuitem"
-                  data-active={p.key === selected.key}
-                  className="period-menu-item"
-                  onClick={() => pick(p.key)}
-                >
-                  <span>{formatPeriodLabel(p)}</span>
-                  {p.key === currentKey && (
-                    <span className="period-menu-tag">current</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            {/* Custom dates moved out to the title row. Leaving a second entry
-                here would mean two paths to one modal — and the one in the menu
-                would be the one nobody found. Reset stays: it only exists once
-                dates are custom, and it belongs next to the list it undoes. */}
-            {hasOverride && (
-              <div className="period-menu-actions">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="period-menu-item"
-                  disabled={resetting}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onResetDates();
-                  }}
-                >
-                  {resetting ? "Resetting…" : "Reset to default dates"}
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
     </div>
   );
 }

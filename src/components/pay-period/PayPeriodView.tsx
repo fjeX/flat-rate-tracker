@@ -54,11 +54,13 @@ import { buildUnpaidSummary } from "@/lib/unpaid-summary";
 import { formatPeriodLabel } from "@/lib/periods";
 import { periodMode, projectionLabel, type PeriodMode } from "@/lib/period-mode";
 import { clearPeriodOverrideAction } from "@/app/actions/settings";
-import { RoList } from "@/components/ro/RoList";
 import { reconcileEntries } from "@/lib/reconcile";
 import { PaidCheckCard } from "./PaidCheckCard";
 import { PeriodHero } from "./PeriodHero";
 import { PeriodOverrideModal, scheduleContextFrom } from "./PeriodOverrideModal";
+import { PeriodRoList } from "./PeriodRoList";
+import { StatusField } from "@/components/ui/StatusField";
+import { Zone } from "@/components/ui/Zone";
 import { PeriodStats } from "./PeriodStats";
 import { PeriodTitleBar } from "./PeriodTitleBar";
 import { SpiffsCard } from "./SpiffsCard";
@@ -110,6 +112,16 @@ const LAYOUT: Record<
     open: { paidCheck: true, workCost: true },
     roCap: 7,
   },
+};
+
+// The zone each rail card sits in. The rail is spiffs then the RO list in every
+// mode (see LAYOUT), and the mock names them "Reference" and "ROs in this
+// period". Every key that can appear in a rail has an entry here.
+const RAIL_ZONE: Record<CardKey, { id: string; title: string }> = {
+  spiffs: { id: "pp-z-ref", title: "Reference" },
+  roList: { id: "pp-z-ros", title: "ROs in this period" },
+  paidCheck: { id: "pp-z-paid", title: "Did I get paid?" },
+  workCost: { id: "pp-z-cost", title: "What did the work cost me?" },
 };
 
 export function PayPeriodView({
@@ -342,27 +354,20 @@ export function PayPeriodView({
       />
     ),
     roList: (
-      <section key="roList">
-        <h2 className="section-title">ROs in this period</h2>
-        <RoList
-          entries={entries}
-          library={library}
-          rates={rates}
-          maxRows={layout.roCap}
-          emptyState={
-            <div className="card p-6 text-center">
-              <p className="text-sm text-[var(--fg-2)]">
-                No ROs in this period.
-              </p>
-            </div>
-          }
-        />
-      </section>
+      <PeriodRoList
+        key="roList"
+        entries={entries}
+        library={library}
+        rates={rates}
+        maxRows={layout.roCap}
+        periodFlagHours={stats.flagHours}
+        emptyState={<p className="pp-sub pp-empty">No ROs in this period.</p>}
+      />
     ),
   };
 
   return (
-    <main className="pay-period-page">
+    <main className="pp-page">
       <PeriodTitleBar
         availablePeriods={availablePeriods}
         selected={selected}
@@ -376,61 +381,76 @@ export function PayPeriodView({
       />
 
       {resetError && (
-        <p className="pp-error">{resetError}</p>
+        <StatusField tag="Fix" role="alert" className="pp-error-note"><p>
+          {resetError}
+        </p></StatusField>
       )}
 
-      <div className="pay-period-body">
-        {/* Header band — spans both columns on desktop. The hero answers the
-            mode's question; the stat row is the supporting context. */}
-        <div className="pp-band">
-          {mode === "in_progress" && (
-            <PeriodHero.InProgress
-              flagHours={stats.flagHours}
-              efficiency={stats.efficiency}
-              // Flagged hours the app couldn't pair with a day length. Without
-              // these the hero prints a percentage computed from a numerator
-              // those hours were silently dropped out of, next to a projection
-              // that still counts them — which is how "0% efficiency · well
-              // ahead of your goal so far" shipped.
-              unpairedFlagHours={stats.unpairedFlagHours}
-              unpairedDays={stats.unpairedDays}
-              projection={
-                forecast
-                  ? projectionLabel(forecast, goalHours)
-                  : { kind: "none" }
-              }
-            />
-          )}
-          {mode === "awaiting_pay" && (
-            <PeriodHero.AwaitingPay
-              periodKey={selected.key}
-              flagHours={stats.flagHours}
-              roCount={stats.roCount}
-              onSaved={() => router.refresh()}
-            />
-          )}
-          {mode === "settled" && paidFlagHours !== null && (
-            <PeriodHero.Settled
-              paidFlagHours={paidFlagHours}
-              flagHours={stats.flagHours}
-              shortDollars={shortDollars}
-            />
-          )}
+      <div className="pp-grid">
+        <div>
+          {/* The headline zone. The hero answers the mode's question; the rows,
+              the spec row and the remarks under it are the supporting context.
+              The two share one zone so a figure and the note explaining it can
+              never end up a screen apart. */}
+          <Zone id="pp-z-totals" name="Period totals">
+            {mode === "in_progress" && (
+              <PeriodHero.InProgress
+                flagHours={stats.flagHours}
+                efficiency={stats.efficiency}
+                // Flagged hours the app couldn't pair with a day length. Without
+                // these the hero prints a percentage computed from a numerator
+                // those hours were silently dropped out of, next to a projection
+                // that still counts them — which is how "0% efficiency · well
+                // ahead of your goal so far" shipped.
+                unpairedFlagHours={stats.unpairedFlagHours}
+                unpairedDays={stats.unpairedDays}
+                projection={
+                  forecast
+                    ? projectionLabel(forecast, goalHours)
+                    : { kind: "none" }
+                }
+              />
+            )}
+            {mode === "awaiting_pay" && (
+              <PeriodHero.AwaitingPay
+                periodKey={selected.key}
+                flagHours={stats.flagHours}
+                roCount={stats.roCount}
+                onSaved={() => router.refresh()}
+              />
+            )}
+            {mode === "settled" && paidFlagHours !== null && (
+              <PeriodHero.Settled
+                paidFlagHours={paidFlagHours}
+                flagHours={stats.flagHours}
+                shortDollars={shortDollars}
+              />
+            )}
 
-          <PeriodStats
-            stats={stats}
-            earnings={earnings}
-            warrantyLoss={warrantyLoss}
-            unflaggedTime={unflaggedTime}
-            hideFlagHours={mode !== "settled"}
-          />
+            <PeriodStats
+              stats={stats}
+              earnings={earnings}
+              warrantyLoss={warrantyLoss}
+              unflaggedTime={unflaggedTime}
+              hideFlagHours={mode !== "settled"}
+            />
+          </Zone>
+
+          {/* The two pay-correctness families, in the mode's order. */}
+          <Zone id="pp-z-check" name="Check the pay">
+            {layout.main.map((k) => cards[k])}
+          </Zone>
         </div>
 
-        <div className="pp-main">{layout.main.map((k) => cards[k])}</div>
-
-        <div className="pp-rail">
-          <p className="pp-rail-divider">Reference</p>
-          {layout.rail.map((k) => cards[k])}
+        {/* Reference — the same rail in every mode. Nothing is ever hidden by
+            mode: cards the mode de-prioritises sit here, in a predictable
+            place. */}
+        <div>
+          {layout.rail.map((k) => (
+            <Zone key={k} id={RAIL_ZONE[k].id} name={RAIL_ZONE[k].title}>
+              {cards[k]}
+            </Zone>
+          ))}
         </div>
       </div>
 

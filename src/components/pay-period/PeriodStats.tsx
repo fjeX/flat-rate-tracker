@@ -1,3 +1,4 @@
+import type { CSSProperties, ReactNode } from "react";
 import type { Stats, UnpairedByReason } from "@/lib/stats";
 import {
   fmtHours,
@@ -8,27 +9,33 @@ import {
 import { efficiencyDisplay } from "@/lib/efficiency-display";
 import type { DenomSource } from "@/lib/types";
 import { fmtMoney } from "@/lib/earnings";
-import { EntranceGrid } from "@/components/ui/EntranceGrid";
+import { withPt } from "@/components/ui/Figure";
+import {N} from "./PpParts";
+import { StatusField } from "@/components/ui/StatusField";
 
+// One cell of the spec row (mock `.spec`): a label over a figure, with an
+// optional small line under the figure. `unit` is a word, so it stays on the UI
+// font; the figure itself is set in the figure font.
 function Cell({
   label,
   value,
-  highlighted = false,
+  unit,
   sub,
 }: {
   label: string;
   value: string;
-  highlighted?: boolean;
+  unit?: string;
   /** Small line under the figure — context that would otherwise need a tile. */
-  sub?: string;
+  sub?: ReactNode;
 }) {
   return (
-    <div className={`stat${highlighted ? " featured" : ""}`}>
-      <div className="stat-label">{label}</div>
-      <div className="stat-value tabular">{value}</div>
-      {sub && (
-        <div className="mt-0.5 text-[11px] text-[var(--fg-3)]">{sub}</div>
-      )}
+    <div>
+      <dt>{label}</dt>
+      <dd className="num">
+        {withPt(value)}
+        {unit && <span className="pp-unit">{unit}</span>}
+        {sub && <small>{sub}</small>}
+      </dd>
     </div>
   );
 }
@@ -59,12 +66,12 @@ export function PeriodStats({
     unpairedByReason?: UnpairedByReason;
   };
   // The in-progress and awaiting-pay heroes already carry flagged hours as
-  // their headline figure, so repeating it as a tile directly underneath is
-  // noise. The settled hero shows the shortfall instead, and there the tile
-  // still earns its place.
+  // their headline figure, so repeating it directly underneath is noise. The
+  // settled hero shows the shortfall instead, and there the line still earns
+  // its place.
   hideFlagHours?: boolean;
   // Both null unless the user has priced rates — when null, nothing dollar-based
-  // renders and the grid looks exactly as it did before this feature.
+  // renders.
   earnings?: number | null;
   warrantyLoss?: number | null;
   // Dollar translation of the clock-vs-flag gap on a low-efficiency period. null
@@ -73,11 +80,11 @@ export function PeriodStats({
   unflaggedTime?: { gapHours: number; dollars: number } | null;
 }) {
   /**
-   * Same classifier as the hero directly above this grid.
+   * Same classifier as the hero directly above this block.
    *
-   * PayPeriodView renders PeriodHero and PeriodStats as SIBLINGS inside one
-   * `.pp-band`, so before this gate the band said both of these at once, one
-   * element apart (2026-08-19, the escalated case):
+   * PayPeriodView renders PeriodHero and PeriodStats as siblings in one zone,
+   * so before this gate the zone said both of these at once, one element apart
+   * (2026-08-19, the escalated case):
    *
    *     No efficiency yet — all 42.0h flagged so far landed on 2 days
    *     with no hours to measure them against.
@@ -90,17 +97,48 @@ export function PeriodStats({
    */
   const eff = efficiencyDisplay(stats);
 
+  // The spec row is ROs, hours, efficiency and (once an upsell is marked)
+  // upsold. Flag hours and earnings are dollars-and-hours headlines, so they
+  // stand above it as rows, the way the mock puts Earnings.
+  //
+  // Upsold: self-hiding. A tech who has never marked an upsell sees the row
+  // exactly as it was. Once one is marked it stays visible even at 0.0h,
+  // because a period where you sold nothing is the comparison.
+  const showUpsold = stats.upsellHours > 0;
+  const cols = 3 + (showUpsold ? 1 : 0);
+  const notes = unpairedNotes(stats.unpairedByReason, {
+    flagHours: stats.unpairedFlagHours ?? 0,
+    days: stats.unpairedDays ?? 0,
+  });
+  const hasRemarks =
+    notes.length > 0 ||
+    unflaggedTime !== null ||
+    (warrantyLoss !== null && warrantyLoss > 0);
+
   return (
-    <div className="space-y-2">
-      <EntranceGrid className="stat-grid">
+    <div className="pp-stats">
+      {(!hideFlagHours || earnings !== null) && (
+        <dl className="pp-rows pp-after-head">
+          {!hideFlagHours && (
+            <div>
+              <dt className="k">Flag hrs</dt>
+              <dd className="v is-fig num">
+                {withPt(fmtHours(stats.flagHours))}
+                <span className="pp-unit">h</span>
+              </dd>
+            </div>
+          )}
+          {earnings !== null && (
+            <div>
+              <dt className="k">Earnings</dt>
+              <dd className="v is-fig num">{withPt(fmtMoney(earnings))}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      <dl className="pp-spec" style={{ "--pp-cols": cols } as CSSProperties}>
         <Cell label="ROs" value={String(stats.roCount)} />
-        {!hideFlagHours && (
-          <Cell
-            label="Flag hrs"
-            value={`${fmtHours(stats.flagHours)}h`}
-            highlighted={earnings === null}
-          />
-        )}
         {/* The DENOMINATOR, not the raw clock rows.
             `stats.clockedHours` only sums daily_clock_hours entries, so on a
             schedule-driven period this tile read "0.0h" directly beside
@@ -117,7 +155,8 @@ export function PeriodStats({
                 ? "Hours · mixed"
                 : "Clocked hrs"
           }
-          value={`${fmtHours(stats.denomHours ?? stats.clockedHours)}h`}
+          value={fmtHours(stats.denomHours ?? stats.clockedHours)}
+          unit="h"
         />
         <Cell
           label={
@@ -129,23 +168,16 @@ export function PeriodStats({
           }
           /* Withheld reuses the em dash `fmtPct(null)` already prints for an
              absent figure — no new state to learn, and no second copy of the
-             explanation. The "Not counted above" caption below renders for a
+             explanation. The "Not counted above" note below renders for a
              strict superset of this state (it fires on any unpaired hours at
              all), so the reason is always on screen with the dash. */
           value={eff.kind === "shown" ? fmtPct(eff.pct) : fmtPct(null)}
         />
-        {/* A tile, not a card. The page was rebuilt because it had grown to nine
-            cards of equal weight, and "what did I sell" is one number in the
-            supporting row — not a family alongside "did I get paid" and "what
-            did the work cost me".
-
-            Self-hiding: a tech who has never marked an upsell sees the row
-            exactly as it was. Once one is marked it stays visible even at 0.0h,
-            because a period where you sold nothing is the comparison. */}
-        {stats.upsellHours > 0 && (
+        {showUpsold && (
           <Cell
             label="Upsold"
-            value={`${fmtHours(stats.upsellHours)}h`}
+            value={fmtHours(stats.upsellHours)}
+            unit="h"
             // The share, not a second total. Upsold hours are already inside
             // Flag hrs, and printing them as a peer invites adding the two.
             sub={
@@ -155,54 +187,46 @@ export function PeriodStats({
             }
           />
         )}
-        {earnings !== null && (
-          <Cell label="Earnings" value={fmtMoney(earnings)} highlighted />
-        )}
-      </EntranceGrid>
-      {/* One caption per REASON, not one caption for all of them. A period can
-          hold both kinds at once — a Saturday nobody clocked and a shift still
-          running — and collapsing them into a single sentence is what made this
-          line tell the tech to schedule a day that was simply not over yet. The
-          clause comes from lib/stats so /insights prints the identical wording;
-          the sentence used to be duplicated byte-for-byte in two files, which
-          is how one of them could have been fixed alone. */}
-      {unpairedNotes(stats.unpairedByReason, {
-        flagHours: stats.unpairedFlagHours ?? 0,
-        days: stats.unpairedDays ?? 0,
-      }).map((note) => (
-        <p
-          key={note.kind}
-          className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]"
-        >
-          Not counted above:{" "}
-          <span className="font-medium text-[var(--fg-1)]">
-            {fmtHours(note.flagHours)}h
-          </span>{" "}
-          flagged across {note.days} {note.days === 1 ? "day" : "days"}{" "}
-          {/* The {" "} above is load-bearing. Text that follows an expression
-              container loses its leading space in the JSX transform, which
-              shipped this caption reading "1 daywith no clocked hours".
-              InsightsView's copy of this caption uses explicit separators for
-              the same reason — match it, don't rely on the source newline. */}
-          {unpairedNoteClause(note, "period")}
-        </p>
-      ))}
-      {unflaggedTime !== null && (
-        <p className="card-inset px-3 py-2 text-xs text-[var(--fg-2)]">
-          {fmtHours(unflaggedTime.gapHours)} clocked hours had no flagged work —
-          at your customer-pay rate that window represents{" "}
-          <span className="font-medium text-[var(--fg-1)]">
-            {fmtMoney(unflaggedTime.dollars)}
-          </span>{" "}
-          of unflagged time.
-        </p>
-      )}
-      {warrantyLoss !== null && warrantyLoss > 0 && (
-        <p className="rounded-[var(--radius-sm)] bg-[var(--bad-bg)] px-3 py-2 text-xs text-[var(--fg-2)]">
-          Warranty work cost you{" "}
-          <span className="font-medium text-[var(--bad)]">{fmtMoney(warrantyLoss)}</span>{" "}
-          this period versus customer-pay rates.
-        </p>
+      </dl>
+
+      {hasRemarks && (
+        <div className="pp-remarks">
+          {/* One note per REASON, not one note for all of them. A period can
+              hold both kinds at once — a Saturday nobody clocked and a shift
+              still running — and collapsing them into a single sentence is what
+              made this line tell the tech to schedule a day that was simply not
+              over yet. The clause comes from lib/stats so /insights prints the
+              identical wording; the sentence used to be duplicated byte-for-byte
+              in two files, which is how one of them could have been fixed
+              alone. */}
+          {notes.map((note) => (
+            <StatusField tag="Note" key={note.kind}><p>
+              Not counted above: <N v={`${fmtHours(note.flagHours)}h`} /> flagged
+              across {note.days} {note.days === 1 ? "day" : "days"}{" "}
+              {/* The {" "} above is load-bearing. Text that follows an
+                  expression container loses its leading space in the JSX
+                  transform, which shipped this caption reading "1 daywith no
+                  clocked hours". InsightsView's copy of this caption uses
+                  explicit separators for the same reason — match it, don't rely
+                  on the source newline. */}
+              {unpairedNoteClause(note, "period")}
+            </p></StatusField>
+          ))}
+          {unflaggedTime !== null && (
+            <StatusField tag="Note"><p>
+              <N v={fmtHours(unflaggedTime.gapHours)} />
+              {" "}clocked hours had no flagged work — at your customer-pay rate
+              that window represents <N v={fmtMoney(unflaggedTime.dollars)} /> of
+              unflagged time.
+            </p></StatusField>
+          )}
+          {warrantyLoss !== null && warrantyLoss > 0 && (
+            <StatusField tag="Cost"><p>
+              Warranty work cost you <N v={fmtMoney(warrantyLoss)} className="m" />{" "}
+              this period versus customer-pay rates.
+            </p></StatusField>
+          )}
+        </div>
       )}
     </div>
   );

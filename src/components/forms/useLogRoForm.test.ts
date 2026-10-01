@@ -871,7 +871,7 @@ describe("retro prompt — finishRetro is one-shot per cycle", () => {
     expect(document.querySelector(".modal-panel")).toBeTruthy();
 
     // Answer a chip, then tap "Save time" — the write hangs.
-    const chip = document.querySelector("button.filter-chip") as HTMLButtonElement;
+    const chip = document.querySelector("button.log-chip") as HTMLButtonElement;
     act(() => {
       chip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

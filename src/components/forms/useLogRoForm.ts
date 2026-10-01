@@ -7,6 +7,7 @@
 //
 // This is a mechanical extraction: the logic below is moved verbatim from the
 // original single-file component. No behavior change.
+import { roNumberState } from "@/lib/ro-number";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useStored, writeStored } from "@/lib/client-storage";
@@ -466,14 +467,15 @@ export function useLogRoForm({
 
   const totalFlag = lines.reduce((s, l) => s + (l.flagHours || 0), 0);
 
-  // Quick-add chips: first 6 library codes not already in lines
-  const quickChips = useMemo(
-    () =>
-      library
-        .slice(0, 6)
-        .filter((oc) => !lines.some((l) => l.opCodeId === oc.id)),
-    [library, lines],
-  );
+  // Quick-add chips: the first 6 library codes. They are TOGGLES (mock
+  // final.html): a code already on a line stays put and renders pressed, and
+  // tapping it again removes that line. OpCodeChips works out "pressed" from
+  // `lines`, so this list no longer shrinks as codes are added.
+  const quickChips = useMemo(() => library.slice(0, 6), [library]);
+
+  // RO number gate for the Save buttons and the save-bar text. The server
+  // schema enforces the same rule (digits only, non-empty).
+  const roState = roNumberState(roNumber);
 
   // --- line manipulation ------------------------------------------------
 
@@ -787,6 +789,8 @@ export function useLogRoForm({
           await onSave(input);
         } else {
           const saved = await saveEntry(input, existingEntry?.id);
+          // A refusal comes back as { error } (see saveEntry): show it inline.
+          if (saved && "error" in saved) throw new Error(saved.error);
           // Never navigate away as though the RO was saved unless the persist
           // came back with a real row. If it didn't, surface it and keep the
           // form intact so the work isn't silently lost.
@@ -1015,6 +1019,7 @@ export function useLogRoForm({
     filteredLibrary,
     totalFlag,
     quickChips,
+    roState,
     pickerRef,
     // labor type
     laborTypeEnabled,

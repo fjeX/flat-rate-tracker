@@ -33,7 +33,7 @@ function click(el: HTMLElement) {
 
 /** Pick the first time bucket chip — any answer unlocks "Save time". */
 function pickFirstBucket() {
-  const chip = document.querySelector("button.filter-chip") as HTMLButtonElement;
+  const chip = document.querySelector("button.log-chip") as HTMLButtonElement;
   if (!chip) throw new Error("no bucket chips rendered");
   click(chip);
 }

@@ -12,7 +12,6 @@
 // from awaiting_pay into settled. Hiding that behind a card further down the
 // page is what made the old layout feel like a pile of parts.
 import { useRef, useState, useTransition } from "react";
-import { ArrowRight } from "lucide-react";
 import { fmtHours, fmtPct } from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
 import { parseHours } from "@/lib/discrepancy";
@@ -20,6 +19,11 @@ import { setPaidPeriodHoursAction } from "@/app/actions/paid-periods";
 import { efficiencyDisplay } from "@/lib/efficiency-display";
 import type { ProjectionLabel } from "@/lib/period-mode";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Head, HeadNote } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { withPt } from "@/components/ui/Figure";
+import {N} from "./PpParts";
+import { StatusField } from "@/components/ui/StatusField";
 
 function InProgressHero({
   flagHours,
@@ -50,51 +54,59 @@ function InProgressHero({
   });
 
   return (
-    <section className="period-hero" aria-label="Period progress">
-      <p className="period-hero-eyebrow">Flagged so far</p>
-      <p className="period-hero-figure tabular">
-        {fmtHours(flagHours)}
-        <span className="unit">h</span>
-      </p>
-      <p className="period-hero-support">
-        {/* The projection is NOT suppressed alongside a withheld percentage,
-            and it is not qualified either. It answers a different question —
-            flagged hours against the goal — and that question does not need a
-            measurable day length, so the forecast's raw total is the right
-            input and its claim is true. What was wrong was welding the two
-            clauses into one sentence with a middot: a withheld efficiency and
-            "well ahead of your goal" read as a contradiction sitting side by
-            side, and read as two separate facts once they are two separate
-            lines. So the efficiency clause LEAVES this line when it can't be
-            stated, rather than the projection being censored to protect it. */}
-        {eff.kind === "shown" && <>{fmtPct(eff.pct)} efficiency</>}
-        {eff.kind === "shown" && projection.kind !== "none" && " · "}
-        {projection.kind === "projected" && (
-          // Each figure keeps its unit — and "goal" keeps its number — on one
-          // line. Without this the sentence orphans "goal" onto its own row.
-          <>
-            on this pace you land at{" "}
-            <strong className="whitespace-nowrap">
-              {fmtHours(projection.projected)}h
-            </strong>{" "}
-            of your{" "}
-            <strong className="whitespace-nowrap">
-              {fmtHours(projection.goal)}h goal
-            </strong>
-          </>
-        )}
-        {projection.kind === "no_history" && (
-          <>not enough history yet to project where this period lands</>
-        )}
-        {projection.kind === "implausible" && (
-          <>
-            {projection.state === "behind"
-              ? "tracking behind your goal"
-              : "well ahead of your goal so far"}{" "}
-            — too early in the period for a reliable projection
-          </>
-        )}
-      </p>
+    <section aria-label="Period progress">
+      <Head>
+        <div className="pp-head-main">
+          <span className="head-k">Flagged so far</span>
+          <span className="head-v num">
+            {withPt(fmtHours(flagHours))}
+            <span className="unit">h</span>
+          </span>
+        </div>
+        <HeadNote className="pp-hero-support">
+          {/* The projection is NOT suppressed alongside a withheld percentage,
+              and it is not qualified either. It answers a different question —
+              flagged hours against the goal — and that question does not need a
+              measurable day length, so the forecast's raw total is the right
+              input and its claim is true. What was wrong was welding the two
+              clauses into one sentence with a middot: a withheld efficiency and
+              "well ahead of your goal" read as a contradiction sitting side by
+              side, and read as two separate facts once they are two separate
+              lines. So the efficiency clause LEAVES this line when it can't be
+              stated, rather than the projection being censored to protect it. */}
+          {eff.kind === "shown" && (
+            <>
+              <N v={fmtPct(eff.pct)} /> efficiency
+            </>
+          )}
+          {eff.kind === "shown" && projection.kind !== "none" && " · "}
+          {projection.kind === "projected" && (
+            // Each figure keeps its unit — and "goal" keeps its number — on one
+            // line. Without this the sentence orphans "goal" onto its own row.
+            <>
+              on this pace you land at{" "}
+              <N v={`${fmtHours(projection.projected)}h`} className="whitespace-nowrap" />{" "}
+              of your{" "}
+              {/* Only the figure is mono; "goal" is words. The nowrap span keeps
+                  "45.0h goal" from splitting across rows. */}
+              <span className="whitespace-nowrap">
+                <N v={`${fmtHours(projection.goal)}h`} /> goal
+              </span>
+            </>
+          )}
+          {projection.kind === "no_history" && (
+            <>not enough history yet to project where this period lands</>
+          )}
+          {projection.kind === "implausible" && (
+            <>
+              {projection.state === "behind"
+                ? "tracking behind your goal"
+                : "well ahead of your goal so far"}{" "}
+              — too early in the period for a reliable projection
+            </>
+          )}
+        </HeadNote>
+      </Head>
 
       {/* Never a silent blank — the same rule WorkCostCard states for its
           effective-hourly headline, in the same voice: every branch names what
@@ -107,29 +119,25 @@ function InProgressHero({
           Repeating the instruction two elements apart is the pile-of-parts
           noise the redesign removed; a figure gets one home. */}
       {eff.kind === "all_excluded" && (
-        <p className="card-inset mt-3 px-3 py-2 text-xs text-[var(--fg-2)]">
+        <StatusField tag="Note" className="pp-after-head"><p>
           No efficiency yet — all{" "}
-          <span className="font-medium text-[var(--fg-1)]">
-            {fmtHours(eff.excludedHours)}h
-          </span>{" "}
-          flagged so far landed on {eff.days === 1 ? "a day" : `${eff.days} days`}{" "}
+          <N v={`${fmtHours(eff.excludedHours)}h`} /> flagged so far
+          landed on {eff.days === 1 ? "a day" : `${eff.days} days`}{" "}
           {/* The {" "} above is load-bearing: text following an expression
               container loses its leading space in the JSX transform. Same trap
               that shipped "1 daywith" in PeriodStats. */}
           with no hours to measure {eff.days === 1 ? "it" : "them"} against.
-        </p>
+        </p></StatusField>
       )}
       {eff.kind === "mostly_excluded" && (
-        <p className="card-inset mt-3 px-3 py-2 text-xs text-[var(--fg-2)]">
+        <StatusField tag="Note" className="pp-after-head"><p>
           Efficiency isn&apos;t shown —{" "}
-          <span className="font-medium text-[var(--fg-1)]">
-            {fmtHours(eff.excludedHours)}h
-          </span>{" "}
-          of the {fmtHours(eff.totalHours)}h flagged so far landed on{" "}
+          <N v={`${fmtHours(eff.excludedHours)}h`} /> of the{" "}
+          {fmtHours(eff.totalHours)}h flagged so far landed on{" "}
           {eff.days === 1 ? "a day" : `${eff.days} days`} with no hours to
           measure {eff.days === 1 ? "it" : "them"} against, so the percentage
           would leave out most of your work.
-        </p>
+        </p></StatusField>
       )}
     </section>
   );
@@ -342,19 +350,22 @@ function AwaitingPayHero({
   }
 
   return (
-    <section className="period-hero" aria-label="Log what you were paid">
-      <p className="period-hero-eyebrow">This period is done — got your stub?</p>
-      <p className="period-hero-figure tabular">
-        {fmtHours(flagHours)}
-        <span className="unit">h flagged</span>
-      </p>
-      <p className="period-hero-support">
+    <section aria-label="Log what you were paid">
+      <Head>
+      <div className="pp-head-main">
+        <span className="head-k">This period is done — got your stub?</span>
+        <span className="head-v num">
+          {withPt(fmtHours(flagHours))}
+          <span className="unit">h flagged</span>
+        </span>
+      </div>
+      <HeadNote className="pp-hero-support">
         Enter what you were actually paid and FRT checks it line by line against
-        these <strong>{roCount}</strong> {roCount === 1 ? "RO" : "ROs"}.
-      </p>
+        these <b className="num">{roCount}</b> {roCount === 1 ? "RO" : "ROs"}.
+      </HeadNote>
 
       <form
-        className="period-hero-action"
+        className="pp-hero-action"
         onSubmit={(e) => {
           e.preventDefault();
           commit(true);
@@ -412,13 +423,17 @@ function AwaitingPayHero({
             placeholder="e.g. 74.2"
           />
         </div>
-        <button type="submit" className="btn btn-primary" disabled={saving}>
+        <Button type="submit" variant="go" className="btn-field" disabled={saving} busy={saving}>
           {saving ? "Checking…" : "Check my pay"}
-          {!saving && <ArrowRight className="h-4 w-4" />}
-        </button>
+        </Button>
       </form>
+      </Head>
 
-      {error && <p className="period-hero-error">{error}</p>}
+      {error && (
+        <StatusField tag="Fix" role="alert" className="pp-after-head"><p>
+          <span className="pp-hero-error">{error}</span>
+        </p></StatusField>
+      )}
     </section>
   );
 }
@@ -439,36 +454,44 @@ function SettledHero({
   const isShort = diff < -0.1;
   const isOver = diff > 0.1;
 
+  // State is the colour and the tag word, nothing else: COST (warm red) for a
+  // short stub, SAVED (green) when it matches, a plain NOTE when it was paid
+  // over. The headline panel itself stays the one neutral headline treatment.
+  const kind = isShort ? "cost" : isOver ? "note" : "saved";
+
   return (
-    <section
-      className={`period-hero${isShort ? " is-short" : isOver ? " is-over" : " is-match"}`}
-      aria-label="Pay result for this period"
-    >
-      <p className="period-hero-eyebrow">
-        {isShort ? "Short on this period" : isOver ? "Paid over" : "Paid in full"}
-      </p>
-      <p className="period-hero-figure tabular">
-        {isShort || isOver ? (
-          <>
-            {fmtHours(Math.abs(diff))}
-            <span className="unit">h</span>
-          </>
-        ) : (
-          <>
-            {fmtHours(paidFlagHours)}
-            <span className="unit">h</span>
-          </>
-        )}
-      </p>
-      <p className="period-hero-support">
-        Paid <strong>{fmtHours(paidFlagHours)}h</strong> against{" "}
-        <strong>{fmtHours(flagHours)}h</strong> logged
-        {isShort && shortDollars !== null && (
-          <> — about <strong>{fmtMoney(shortDollars)}</strong> at your customer-pay rate</>
-        )}
-        {!isShort && !isOver && " — no discrepancy to chase"}
-        .
-      </p>
+    <section aria-label="Pay result for this period">
+      <Head>
+        <div className="pp-head-main">
+          <span className="head-k">
+            {isShort ? "Short on this period" : isOver ? "Paid over" : "Paid in full"}
+          </span>
+          <span className="head-v num">
+            {isShort || isOver ? (
+              <>
+                {withPt(fmtHours(Math.abs(diff)))}
+                <span className="unit">h</span>
+              </>
+            ) : (
+              <>
+                {withPt(fmtHours(paidFlagHours))}
+                <span className="unit">h</span>
+              </>
+            )}
+          </span>
+        </div>
+      </Head>
+      <StatusField tag={kind === "cost" ? "Cost" : kind === "saved" ? "Saved" : "Note"} className="pp-after-head"><p>
+        <span className="pp-hero-support">
+          Paid <N v={`${fmtHours(paidFlagHours)}h`} /> against{" "}
+          <N v={`${fmtHours(flagHours)}h`} /> logged
+          {isShort && shortDollars !== null && (
+            <> — about <N v={fmtMoney(shortDollars)} /> at your customer-pay rate</>
+          )}
+          {!isShort && !isOver && " — no discrepancy to chase"}
+          .
+        </span>
+      </p></StatusField>
     </section>
   );
 }

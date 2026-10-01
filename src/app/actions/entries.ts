@@ -85,15 +85,22 @@ export async function getRoMatchById(
   };
 }
 
+// RETURNS { error } for a refused RO (bad RO number, no op codes, ...) rather
+// than throwing: a thrown Error crossing the Server Actions boundary has its
+// message replaced by a generic string in a production build, so the tech would
+// never read "RO numbers are digits only". Callers turn { error } into their
+// own inline error. Unexpected failures (DB down) still throw.
 export async function saveEntry(
   input: NewEntry,
   entryId?: string,
-): Promise<Entry> {
+): Promise<Entry | { error: string }> {
   // --- server-side validation -------------------------------------------
   // `clean` is the PARSED value, not `input`: the schema declares the fields an
   // RO is made of, so anything else a caller attached is gone by this line
   // rather than riding along into the DB mapper.
-  const clean = validate(newEntrySchema, input);
+  const parsed = check(newEntrySchema, input);
+  if (!parsed.ok) return { error: parsed.error };
+  const clean = parsed.data;
   const id = entryId === undefined ? undefined : validate(entryIdSchema, entryId);
 
   const supabase = await createClient();

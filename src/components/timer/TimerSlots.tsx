@@ -171,6 +171,7 @@ export function TimerSlots({
 
   async function handleLogRoSave(input: NewEntry) {
     const saved = await saveEntry(input);
+    if ("error" in saved) throw new Error(saved.error);
     await attachRoToTimerAction(
       saved.id,
       saved.opCodes.length === 1 ? saved.opCodes[0].id : null,

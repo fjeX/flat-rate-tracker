@@ -1,11 +1,13 @@
 "use client";
 
-// Step 3 of the log form: the collapsible Vehicle section (year / make / model /
+// Step 3 of the log form: the collapsible "Add the vehicle" step (year / make / model /
 // VIN / mileage, plus the "auto-fill make" toggle). Presentational — all state
 // lives in useLogRoForm; this component only renders and calls back.
 import { useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Info, Loader2, Sparkles, Undo2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 import { decodeVin, isValidVin } from "@/lib/vin";
+import { LogIcon } from "./logParts";
 
 const COMMON_MAKES = [
   "Acura", "Audi", "BMW", "Buick", "Cadillac", "Chevrolet", "Chrysler",
@@ -111,37 +113,30 @@ export function VehicleFields({
   }
 
   return (
-    <div className={`step-card${vehicleOpen ? " active" : " collapsed"}`}>
+    <div className={`log-step is-fold${vehicleOpen ? " is-open" : ""}`}>
       <button
         type="button"
-        className="step-head"
+        className="log-step-head"
         onClick={() => setVehicleOpen((v) => !v)}
         aria-expanded={vehicleOpen}
         aria-controls="vehicle-step-body"
       >
-        <div className="step-num">{step}</div>
-        <div className="step-title">
-          Vehicle
-          <span className="optional-badge">recommended</span>
-        </div>
-        {vehicleSummary && !vehicleOpen && (
-          <div className="step-summary">{vehicleSummary}</div>
-        )}
-        {vehicleOpen ? <ChevronUp size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: "var(--fg-3)", flexShrink: 0 }} />}
+        <span className="log-step-no">{step}</span>
+        <span className="log-step-title">Add the vehicle</span>
+        <span className="log-step-aside">
+          {vehicleSummary && !vehicleOpen ? (
+            <span className="log-step-sum">{vehicleSummary}</span>
+          ) : (
+            "recommended"
+          )}
+          <LogIcon name="chev" small className="chev" />
+        </span>
       </button>
 
       {vehicleOpen && (
-        <div className="step-body" id="vehicle-step-body">
-          <p style={{
-            display: "flex",
-            gap: 6,
-            alignItems: "flex-start",
-            fontSize: 11,
-            lineHeight: 1.45,
-            color: "var(--fg-2)",
-            marginBottom: 12,
-          }}>
-            <Info size={13} style={{ flexShrink: 0, marginTop: 1, color: "var(--brand)" }} />
+        <div className="log-step-body" id="vehicle-step-body">
+          <p className="log-help">
+            <LogIcon name="info" small />
             <span>
               Optional, but worth it — RO numbers get reused over time. The vehicle
               is what tells repeat RO numbers apart later.
@@ -154,8 +149,8 @@ export function VehicleFields({
             ))}
           </datalist>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-            <div>
+          <div className="log-veh">
+            <div className="field">
               <label className="field-label" htmlFor="ro-year">Year</label>
               <input
                 id="ro-year"
@@ -164,24 +159,20 @@ export function VehicleFields({
                 onChange={(e) => setYear(e.target.value)}
                 inputMode="numeric"
                 placeholder="2000"
-                className="input"
-                style={{ width: "100%" }}
+                className="input mono"
               />
             </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <label className="field-label" htmlFor="ro-make" style={{ margin: 0 }}>Make</label>
+            <div className="field">
+              <div className="log-veh-label">
+                <label className="field-label" htmlFor="ro-make">Make</label>
                 {!isEdit && (
-                  <label className="hit-expand" style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                  <label className="log-auto">
                     <input
                       type="checkbox"
                       checked={autoFill}
                       onChange={(e) => handleAutoFillToggle(e.target.checked)}
-                      style={{ accentColor: "var(--brand)", width: 16, height: 16 }}
                     />
-                    <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-3)" }}>
-                      Auto
-                    </span>
+                    <span>Auto</span>
                   </label>
                 )}
               </div>
@@ -194,18 +185,15 @@ export function VehicleFields({
                 placeholder="Toyota"
                 autoComplete="off"
                 className="input"
-                style={{
-                  width: "100%",
-                  borderColor: autoFill ? "var(--brand-soft)" : undefined,
-                }}
               />
               {autoFill && make && (
-                <p style={{ marginTop: 2, fontSize: 11, color: "var(--brand)" }}>
-                  ✓ Saved — new ROs pre-fill with {make}
+                <p className="log-veh-saved">
+                  <Badge tone="good">Saved</Badge>
+                  <span>New ROs pre-fill with {make}</span>
                 </p>
               )}
             </div>
-            <div>
+            <div className="field">
               <label className="field-label" htmlFor="ro-model">Model</label>
               <input
                 id="ro-model"
@@ -214,15 +202,11 @@ export function VehicleFields({
                 onChange={(e) => setModel(e.target.value)}
                 placeholder="Camry"
                 className="input"
-                style={{ width: "100%" }}
               />
             </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div>
+            <div className="field wide">
               <label className="field-label" htmlFor="ro-vin">VIN</label>
-              <div style={{ position: "relative" }}>
+              <div className="log-vin">
                 <input
                   id="ro-vin"
                   type="text"
@@ -235,26 +219,18 @@ export function VehicleFields({
                   autoCorrect="off"
                   spellCheck={false}
                   className="input mono"
-                  style={{ width: "100%", paddingRight: decoding ? 30 : undefined }}
                   aria-describedby={decodedFields ? "vin-decoded-note" : undefined}
                 />
                 {decoding && (
                   <Loader2
                     size={14}
                     aria-label="Decoding VIN"
-                    className="animate-spin"
-                    style={{
-                      position: "absolute",
-                      right: 9,
-                      top: "50%",
-                      marginTop: -7,
-                      color: "var(--brand)",
-                    }}
+                    className="animate-spin log-vin-spin"
                   />
                 )}
               </div>
             </div>
-            <div>
+            <div className="field wide">
               <label className="field-label" htmlFor="ro-mileage">Mileage</label>
               <input
                 id="ro-mileage"
@@ -263,45 +239,20 @@ export function VehicleFields({
                 value={mileage}
                 onChange={(e) => setMileage(e.target.value)}
                 placeholder="65,000"
-                className="input"
-                style={{ width: "100%" }}
+                className="input mono"
               />
             </div>
           </div>
 
           {decodedFields && (
-            <p
-              id="vin-decoded-note"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                marginTop: 8,
-                fontSize: 11,
-                color: "var(--brand)",
-              }}
-            >
-              <Sparkles size={12} style={{ flexShrink: 0 }} />
+            <p id="vin-decoded-note" className="log-veh-saved">
+              <Badge>Note</Badge>
               <span>Decoded from VIN</span>
               <button
                 type="button"
                 onClick={undoDecode}
-                className="hit-expand"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                  marginLeft: 2,
-                  padding: 0,
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--fg-3)",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                }}
+                className="btn btn-quiet btn-sm"
               >
-                <Undo2 size={11} />
                 Undo
               </button>
             </p>

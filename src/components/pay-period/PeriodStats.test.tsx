@@ -118,7 +118,7 @@ describe("PeriodStats — the efficiency tile", () => {
     expect(screen.getByText("Hours · sched")).toBeTruthy();
     // The denominator tile still states the 8.0h it measured against, so the
     // dash beside it reads as "no ratio", not as "no data".
-    expect(screen.getByText("8.0h")).toBeTruthy();
+    expect(screen.getByText("Hours · sched").parentElement?.textContent).toContain("8.0h");
     // And the caption still explains it, unchanged.
     expect(screen.getByText(/Not counted above/)).toBeTruthy();
   });

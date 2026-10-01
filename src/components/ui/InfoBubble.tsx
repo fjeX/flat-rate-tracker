@@ -12,7 +12,6 @@
 // inside it: a button inside a button is invalid HTML and breaks keyboard
 // navigation.
 import { useState } from "react";
-import { Info } from "lucide-react";
 import { Modal } from "./Modal";
 
 export function InfoBubble({
@@ -37,7 +36,10 @@ export function InfoBubble({
         onClick={() => setOpen(true)}
         aria-label={label ?? `What is "${title}"?`}
       >
-        <Info className="h-4 w-4" aria-hidden="true" />
+        <svg className="info-bubble-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="10" fill="currentColor" />
+          <path className="info-bubble-i" d="M10.75 6.5h2.5V9h-2.5zm0 4h2.5v7h-2.5z" />
+        </svg>
       </button>
 
       {open && (

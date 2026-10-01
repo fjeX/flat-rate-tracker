@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { retroBuckets, type RetroCandidate } from "@/lib/retro-capture";
 import { fmtHours } from "@/lib/format";
+import { withPt } from "@/components/ui/Figure";
 
 export function RetroTimePrompt({
   open,
@@ -73,9 +74,28 @@ export function RetroTimePrompt({
       open={open}
       onClose={onSkip}
       title={single ? "How long did that take?" : "How long did these take?"}
+      footer={
+        <div className="log-dlg-act">
+          {/* Never disabled. Skip is the escape hatch; if a save ever wedges,
+              the one control that gets the tech out must not wedge with it. */}
+          <Button variant="quiet" onClick={onSkip}>
+            Skip
+          </Button>
+          <Button
+            variant="go"
+            onClick={() => {
+              setSaving(true);
+              onSubmit(picked);
+            }}
+            disabled={answered === 0 || saving}
+          >
+            {saving ? "Saving…" : "Save time"}
+          </Button>
+        </div>
+      }
     >
-      <div className="space-y-4">
-        <p className="text-sm" style={{ color: "var(--fg-2)" }}>
+      <div className="log-retro">
+        <p className="log-sub">
           Roughly is fine — close enough to know whether you beat the book.{" "}
           {single
             ? "This is the only job on the ticket big enough to be worth asking about."
@@ -86,33 +106,20 @@ export function RetroTimePrompt({
           const buckets = retroBuckets(c.flagHours);
           const chosen = picked[c.lineId];
           return (
-            <div key={c.lineId} className="space-y-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="min-w-0">
-                  <span
-                    className="mono text-sm font-semibold"
-                    style={{ color: "var(--fg-0)" }}
-                  >
-                    {c.code}
-                  </span>
+            <div key={c.lineId} className="log-retro-line">
+              <div className="log-retro-top">
+                <div className="log-retro-code">
+                  <b className="log-code">{c.code}</b>
                   {c.description && (
-                    <span
-                      className="ml-2 truncate text-xs"
-                      style={{ color: "var(--fg-3)" }}
-                    >
-                      {c.description}
-                    </span>
+                    <span className="log-retro-desc">{c.description}</span>
                   )}
                 </div>
-                <span
-                  className="mono shrink-0 text-xs tabular-nums"
-                  style={{ color: "var(--fg-3)" }}
-                >
-                  flags {fmtHours(c.flagHours)}h
+                <span className="log-retro-flag">
+                  flags <span className="num">{withPt(`${fmtHours(c.flagHours)}h`)}</span>
                 </span>
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
+              <div className="log-chips is-tight">
                 {buckets.map((b) => (
                   <button
                     key={b.label}
@@ -129,7 +136,7 @@ export function RetroTimePrompt({
                           : { ...p, [c.lineId]: b.hours },
                       )
                     }
-                    className={`filter-chip${chosen === b.hours ? " active" : ""}`}
+                    className="log-chip"
                     aria-pressed={chosen === b.hours}
                   >
                     {b.label}
@@ -140,27 +147,10 @@ export function RetroTimePrompt({
           );
         })}
 
-        <p className="text-xs" style={{ color: "var(--fg-3)" }}>
+        <p className="log-fine">
           Saved as an estimate, marked as one. It shapes your own insights and
           stays out of the shared job-time averages.
         </p>
-
-        <div className="flex gap-2 pt-1">
-          {/* Never disabled. Skip is the escape hatch; if a save ever wedges,
-              the one control that gets the tech out must not wedge with it. */}
-          <Button variant="ghost" onClick={onSkip}>
-            Skip
-          </Button>
-          <Button
-            onClick={() => {
-              setSaving(true);
-              onSubmit(picked);
-            }}
-            disabled={answered === 0 || saving}
-          >
-            {saving ? "Saving…" : "Save time"}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

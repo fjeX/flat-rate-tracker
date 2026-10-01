@@ -3,8 +3,12 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { DurationBar } from "@/components/ui/DurationBar";
+import { Field } from "@/components/ui/Field";
+import { withPt } from "@/components/ui/Figure";
 import { Modal } from "@/components/ui/Modal";
 import { PillInput } from "@/components/ui/PillInput";
 import { COMEBACK_KINDS, COMEBACK_KIND_LABELS } from "@/lib/types";
@@ -20,6 +24,9 @@ import {
   type OpCodeDraft,
 } from "@/components/forms/OpCodeModals";
 import { SubOpCodePickerModal } from "@/components/forms/SubOpCodePickerModal";
+import { FlaggedTotal, LogIcon, OpCodeChips } from "@/components/forms/logParts";
+import { StatusField } from "@/components/ui/StatusField";
+import { roBlockedStatus, roNumberState } from "@/lib/ro-number";
 import { BonusForm } from "@/components/bonuses/BonusForm";
 import { FLUSH_EVENT } from "@/components/layout/RefreshFlusher";
 import { notifyDataChanged } from "@/components/layout/CrossTabRefresh";
@@ -150,10 +157,8 @@ export function QuickAddModal({
     );
   }, [search, library]);
 
-  const quickChips = useMemo(
-    () => library.slice(0, 6).filter((oc) => !lines.some((l) => l.opCodeId === oc.id)),
-    [library, lines],
-  );
+  // Toggles, not a shrinking list: a chosen code stays and renders pressed.
+  const quickChips = useMemo(() => library.slice(0, 6), [library]);
 
   const totalFlag = lines.reduce((s, l) => s + (l.flagHours || 0), 0);
 
@@ -359,7 +364,9 @@ export function QuickAddModal({
           isComeback: line.isComeback,
         })),
       };
-      await saveEntry(input);
+      const saved = await saveEntry(input);
+      // A refusal comes back as { error } (see saveEntry): show it inline.
+      if (saved && "error" in saved) throw new Error(saved.error);
       tap();
       onClose();
       router.refresh();
@@ -379,14 +386,55 @@ export function QuickAddModal({
   const childModalOpen =
     customOpen || newLibraryOpen || subPickerOc !== null || dup !== null;
 
+  const roTrimmed = roNumber.trim();
+  // Digits only (see lib/ro-number.ts). Empty and invalid both block Save; the
+  // footer says which.
+  const roState = roNumberState(roNumber);
+  const roBlocked = roBlockedStatus(roState);
+  const roFooter =
+    mode === "ro" ? (
+      <>
+        <div className="log-status" aria-live="polite">
+          {isSubmitting ? (
+            <>
+              <b>Saving</b>
+              <span>RO <span className="num">#{roTrimmed}</span></span>
+            </>
+          ) : roBlocked === null ? (
+            <>
+              <b>
+                <span className="num">{withPt(`${fmtHours(totalFlag)}h`)}</span> · {lines.length} line{lines.length !== 1 ? "s" : ""}
+              </b>
+              <span>RO <span className="num">#{roTrimmed}</span></span>
+            </>
+          ) : (
+            roBlocked
+          )}
+        </div>
+        <Button variant="quiet" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="go"
+          size="sm"
+          onClick={handleSave}
+          disabled={isSubmitting || roState !== "ok"}
+          busy={isSubmitting}
+        >
+          {isSubmitting ? "Saving…" : "Save RO"}
+        </Button>
+      </>
+    ) : undefined;
+
   return (
     <Modal
       open={open}
       onClose={childModalOpen ? () => {} : onClose}
-      title="Quick Add"
+      title={mode === "ro" ? "Quick Add RO" : "Quick Add"}
+      footer={roFooter}
     >
       {/* Mode tabs — RO vs. Spiff/Bonus */}
-      <div className="mb-4 grid grid-cols-2 gap-1 card-inset p-1" role="tablist" aria-label="Quick add mode">
+      <div className="log-seg" role="tablist" aria-label="Quick add mode">
         {(["ro", "spiff"] as const).map((m) => (
           <button
             key={m}
@@ -394,11 +442,6 @@ export function QuickAddModal({
             role="tab"
             aria-selected={mode === m}
             onClick={() => setMode(m)}
-            className={`rounded-full px-3 py-3 text-sm font-medium ${
-              mode === m
-                ? "bg-[var(--bg-3)] text-[var(--fg-0)] shadow-[inset_0_0_0_1px_var(--bg-4)]"
-                : "text-[var(--fg-2)] hover:text-[var(--fg-1)]"
-            }`}
           >
             {m === "ro" ? "RO" : "Spiff"}
           </button>
@@ -408,15 +451,15 @@ export function QuickAddModal({
       {mode === "spiff" ? (
         <BonusForm onSaved={onClose} onCancel={onClose} />
       ) : (
-      <div className="space-y-4">
+      <div className="log-qa">
 
         {/* RO Number */}
-        <div>
-          <label htmlFor="quick-add-ro-number" className="mb-1.5 block text-xs uppercase tracking-wide text-[var(--fg-3)]">
+        <div className="log-qa-ro">
+          <label htmlFor="quick-add-ro-number" className="field-label">
             RO Number
           </label>
-          <div className="flex items-center gap-2 card-inset px-3 py-2 focus-within:border-[var(--brand)] focus-within:shadow-[var(--ring)]">
-            <span className="text-base font-bold text-[var(--fg-3)]" aria-hidden="true">#</span>
+          <div className="log-ro">
+            <span aria-hidden="true">#</span>
             <input
               id="quick-add-ro-number"
               ref={roInputRef}
@@ -434,139 +477,129 @@ export function QuickAddModal({
               autoComplete="off"
               required
               aria-required="true"
-              aria-describedby={error ? "quick-add-error" : undefined}
-              className="mono flex-1 bg-transparent text-base font-semibold tabular-nums text-[var(--fg-0)] placeholder-[var(--fg-3)] focus:outline-none"
+              aria-invalid={roState === "invalid" || Boolean(error)}
+              aria-describedby={
+                roState === "invalid" ? "quick-add-ro-digits" : error ? "quick-add-error" : undefined
+              }
+              className="input mono"
             />
-            {/* Shown rather than captured silently. Quick Add drops the vehicle,
-                the notes and the labor type to stay fast — but those are fields
-                the tech chose to skip, and a timestamp written invisibly is data
-                they never agreed to. One glance, one tap to correct. */}
-            {trackRoTime && (
-              <>
-                <label htmlFor="quick-add-time" className="sr-only">
-                  Time
-                </label>
-                <PillInput
-                  id="quick-add-time"
-                  type="time"
-                  value={loggedTime}
-                  onChange={(e) => setLoggedTime(e.target.value)}
-                />
-              </>
-            )}
           </div>
+          {/* The FIX state: a tagged field under the RO number, where the eye
+              already is. Carries every message this dialog can raise. */}
+          {roState === "invalid" ? (
+            <StatusField tag="Fix" inset id="quick-add-ro-digits" role="alert">
+              <p>RO numbers are digits only. Take out the letters, then save.</p>
+            </StatusField>
+          ) : (
+            error && (
+              <StatusField tag="Fix" inset id="quick-add-error" role="alert">
+                <p>{error}</p>
+              </StatusField>
+            )
+          )}
         </div>
+
+        {/* Shown rather than captured silently. Quick Add drops the vehicle,
+            the notes and the labor type to stay fast — but those are fields
+            the tech chose to skip, and a timestamp written invisibly is data
+            they never agreed to. One glance, one tap to correct. */}
+        {trackRoTime && (
+          <div className="log-qa-time">
+            <Field label="Time" htmlFor="quick-add-time">
+              <PillInput
+                id="quick-add-time"
+                type="time"
+                value={loggedTime}
+                onChange={(e) => setLoggedTime(e.target.value)}
+              />
+            </Field>
+          </div>
+        )}
 
         {/* Op Codes */}
         <div>
-          <div className="mb-2 text-xs uppercase tracking-wide text-[var(--fg-3)]">
-            Op Codes
-          </div>
-
           {/* Quick chips */}
-          {quickChips.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-1.5">
-              {quickChips.map((oc) => (
-                <button
-                  key={oc.id}
-                  type="button"
-                  onClick={() => addFromLibrary(oc)}
-                  className="flex min-h-[38px] items-center gap-1.5 rounded-full bg-[var(--bg-3)] px-3 py-1 text-xs hover:bg-[var(--bg-4)]"
-                >
-                  <span className="font-mono text-[var(--brand)]">{oc.code}</span>
-                  <span className="text-[var(--fg-3)]">
-                    {oc.subOpCodes.length > 0 ? "→" : `${fmtHours(oc.flagHours)}h`}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+          <OpCodeChips chips={quickChips} lines={lines} onAdd={addFromLibrary} onRemoveLine={removeLine} />
 
           {/* Search picker */}
-          <div ref={pickerRef}>
-            <div className="flex items-center gap-2 card-inset px-3 focus-within:border-[var(--brand-soft)] focus-within:shadow-[var(--ring)]">
-              <Search className="h-3.5 w-3.5 flex-shrink-0 text-[var(--fg-3)]" />
-              <label htmlFor="quick-add-search" className="sr-only">Search op codes</label>
-              <input
-                id="quick-add-search"
-                type="text"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPickerOpen(true); }}
-                onFocus={() => setPickerOpen(true)}
-                placeholder="Search op codes…"
-                className="min-h-[44px] w-full bg-transparent text-sm placeholder-[var(--fg-3)] focus:outline-none"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => { setSearch(""); setPickerOpen(false); }}
-                  className="relative text-[var(--fg-3)] hover:text-[var(--fg-1)] after:absolute after:-inset-2 after:content-['']"
-                  aria-label="Clear search"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+          <div ref={pickerRef} className="log-search">
+            <LogIcon name="search" className="log-search-ic" />
+            <label htmlFor="quick-add-search" className="sr-only">Search op codes</label>
+            <input
+              id="quick-add-search"
+              type="search"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPickerOpen(true); }}
+              onFocus={() => setPickerOpen(true)}
+              placeholder="Search op codes…"
+              autoComplete="off"
+              className="input"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => { setSearch(""); setPickerOpen(false); }}
+                className="iconbtn log-search-clear"
+                aria-label="Clear search"
+              >
+                <LogIcon name="x" small />
+              </button>
+            )}
           </div>
           {pickerOpen && dropdownRect && typeof document !== "undefined" && createPortal(
             <div
               ref={dropdownRef}
               style={{ position: "fixed", top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, zIndex: 9999 }}
-              className="card-inset shadow-[var(--shadow-pop)]"
+              className="log-dd is-float"
             >
-              <ul className="max-h-48 overflow-y-auto">
+              <div className="log-dd-list">
                 {filteredLibrary.length === 0 ? (
-                  <li className="px-3 py-2 text-xs text-[var(--fg-3)]">
-                    No matches in your library.
-                  </li>
+                  <div className="log-dd-empty">No matches in your library.</div>
                 ) : (
                   filteredLibrary.map((oc) => (
-                    <li key={oc.id}>
-                      <button
-                        type="button"
-                        onClick={() => addFromLibrary(oc)}
-                        className="flex min-h-[44px] w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--bg-3)]"
-                      >
-                        <span className="min-w-0">
-                          <span className="font-mono text-sm text-[var(--brand)]">
-                            {oc.code}
-                          </span>
-                          <span className="ml-2 text-xs text-[var(--fg-3)]">
-                            {oc.description}
-                          </span>
-                          {oc.subOpCodes.length > 0 && (
-                            <Badge className="ml-1.5">
-                              {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
-                            </Badge>
-                          )}
-                        </span>
-                        <span className="flex-shrink-0 font-mono text-xs text-[var(--fg-2)]">
-                          {oc.subOpCodes.length > 0 ? "select →" : `${fmtHours(oc.flagHours)}h`}
-                        </span>
-                      </button>
-                    </li>
+                    <button
+                      key={oc.id}
+                      type="button"
+                      onClick={() => addFromLibrary(oc)}
+                      className="log-dd-item"
+                    >
+                      <span className="log-dd-main">
+                        <b className="log-code">{oc.code}</b>
+                        <span className="log-dd-desc">{oc.description}</span>
+                        {oc.subOpCodes.length > 0 && (
+                          <Badge chip>
+                            {oc.subOpCodes.length} sub{oc.subOpCodes.length !== 1 ? "s" : ""}
+                          </Badge>
+                        )}
+                      </span>
+                      <span className="log-dd-hrs num">
+                        {oc.subOpCodes.length > 0 ? "select →" : `${fmtHours(oc.flagHours)}h`}
+                      </span>
+                    </button>
                   ))
                 )}
-              </ul>
-              <div className="border-t border-[var(--line)] p-1">
-                <div className="px-2 pb-0.5 pt-1 text-xs text-[var(--fg-3)]">
-                  Other
-                </div>
+              </div>
+              <div className="log-dd-foot">
+                <div className="log-dd-label">Other</div>
                 <button
                   type="button"
                   onClick={() => { setPickerOpen(false); setCustomOpen(true); }}
-                  className="flex min-h-[44px] w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
+                  className="log-dd-item"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Other op code (one-time)
+                  <span className="log-dd-main">
+                    <LogIcon name="plus" small />
+                    Other op code (one-time)
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => { setPickerOpen(false); setNewLibraryOpen(true); }}
-                  className="flex min-h-[44px] w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
+                  className="log-dd-item"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Create new library op code
+                  <span className="log-dd-main">
+                    <LogIcon name="plus" small />
+                    Create new library op code
+                  </span>
                 </button>
               </div>
             </div>,
@@ -575,80 +608,50 @@ export function QuickAddModal({
 
           {/* Lines table */}
           {lines.length > 0 && (
-            <div className="mt-3 card-inset overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--fg-3)]">
-                <div>Op code</div>
-                <div className="w-16 text-right">Flag hrs</div>
-                <div className="w-6" />
-              </div>
-              <ul>
-                {lines.map((line) => {
-                  const { code, description, subCode } = lineLabel(line);
-                  return (
-                    <li
-                      key={line.key}
-                      className="border-b border-[var(--line)] px-3 py-2 last:border-b-0"
-                    >
-                      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-sm text-[var(--brand)]">
-                              {code}
-                            </span>
-                            {subCode && (
-                              <Badge tone="brand" mono>
-                                {subCode}
-                              </Badge>
-                            )}
-                            {line.custom && (
-                              <Badge>
-                                Other
-                              </Badge>
-                            )}
-                          </div>
-                          {description && (
-                            <div className="truncate text-xs text-[var(--fg-3)]">
-                              {description}
-                            </div>
+            <>
+              <div className="log-lines is-flag-only">
+                <div className="log-lines-head" aria-hidden="true">
+                  <span>Code</span>
+                  <span className="r">Flag</span>
+                  <span />
+                </div>
+                <ul>
+                  {lines.map((line) => {
+                    const { code, description, subCode } = lineLabel(line);
+                    return (
+                      <li key={line.key} className="log-line">
+                        <div className="log-line-code">
+                          <b className="log-code">{code}</b>
+                          {subCode && (
+                            <Badge chip mono>
+                              {subCode}
+                            </Badge>
                           )}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              toggleLineComeback(line.key, !line.isComeback)
-                            }
-                            aria-pressed={line.isComeback}
-                            className="opc-comeback-toggle"
-                            data-on={line.isComeback ? "true" : undefined}
-                          >
-                            <RotateCcw size={11} aria-hidden="true" />
-                            {line.isComeback ? "Comeback — unpaid" : "Mark as comeback"}
-                          </button>
+                          {line.custom && <Badge chip>Other</Badge>}
                         </div>
-                        <div className="w-16">
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.1}
-                            value={
-                              line.isComeback
-                                ? 0
-                                : Number.isFinite(line.flagHours)
-                                  ? line.flagHours
-                                  : ""
-                            }
-                            onChange={(e) =>
-                              updateFlagHours(
-                                line.key,
-                                e.target.value === "" ? 0 : Number(e.target.value),
-                              )
-                            }
-                            // Locked, not merely zeroed — see OpCodeLines.
-                            disabled={line.isComeback}
-                            aria-label={`Flag hours for ${code || "op code line"}`}
-                            className="opc-hours-input on-inset w-full"
-                            placeholder="0"
-                          />
-                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          value={
+                            line.isComeback
+                              ? 0
+                              : Number.isFinite(line.flagHours)
+                                ? line.flagHours
+                                : ""
+                          }
+                          onChange={(e) =>
+                            updateFlagHours(
+                              line.key,
+                              e.target.value === "" ? 0 : Number(e.target.value),
+                            )
+                          }
+                          // Locked, not merely zeroed — see OpCodeLines.
+                          disabled={line.isComeback}
+                          aria-label={`Flag hours for ${code || "op code line"}`}
+                          className="input mono log-hrs"
+                          placeholder="0"
+                        />
                         <button
                           type="button"
                           onClick={() => removeLine(line.key)}
@@ -656,72 +659,65 @@ export function QuickAddModal({
                           // does. A constant label on every row of a .map is
                           // how the wrong spiff got deleted on 2026-08-19.
                           aria-label={code ? `Remove line ${code}` : "Remove line"}
-                          className="relative rounded-full p-1 text-[var(--fg-3)] transition-transform hover:text-[var(--bad)] active:scale-[0.96] after:absolute after:-inset-2 after:content-['']"
+                          className="iconbtn"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <LogIcon name="x" small />
                         </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[var(--line)] bg-[var(--bg-1)] px-3 py-2 text-sm">
-                <div className="text-[var(--fg-2)]">Total</div>
-                <div className="w-16 text-right font-mono font-medium">
-                  {fmtHours(totalFlag)}h
-                </div>
-                <div className="w-6" />
+                        {description && <div className="log-line-desc">{description}</div>}
+                        <div className="log-line-dur">
+                          <DurationBar hours={line.isComeback ? 0 : line.flagHours} />
+                        </div>
+                        <div className="log-line-opts">
+                          <Button
+                            variant="quiet"
+                            size="sm"
+                            onClick={() =>
+                              toggleLineComeback(line.key, !line.isComeback)
+                            }
+                            aria-pressed={line.isComeback}
+                            className="log-toggle"
+                          >
+                            {line.isComeback ? "Comeback — unpaid" : "Mark as comeback"}
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-            </div>
+              <FlaggedTotal hours={totalFlag} />
+            </>
           )}
 
           {/* Kind selector — appears only once a line is marked. No "redo of"
               RO lookup here: that's a deliberate search, and quick-add exists to
               be fast. It can be added later from the full log form. */}
           {lines.some((l) => l.isComeback) && (
-            <fieldset className="mt-3 border-0 p-0">
-              <legend className="mb-1.5 text-xs text-[var(--fg-3)]">
-                Whose work came back?
-              </legend>
-              <div className="flex flex-wrap gap-1.5">
+            <fieldset className="log-fieldset log-kind">
+              <legend className="field-label">Whose work came back?</legend>
+              <div className="log-kind-btns">
                 {COMEBACK_KINDS.map((kind) => (
-                  <button
+                  <Button
                     key={kind}
-                    type="button"
+                    variant="quiet"
+                    size="sm"
                     onClick={() => setComebackKind(kind)}
                     aria-pressed={comebackKind === kind}
-                    className="opc-comeback-toggle"
-                    data-on={comebackKind === kind ? "true" : undefined}
+                    className="log-toggle"
                   >
                     {COMEBACK_KIND_LABELS[kind]}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </fieldset>
           )}
         </div>
 
-        {/* Error */}
-        {error && <p id="quick-add-error" role="alert" className="text-sm text-[var(--bad)]">{error}</p>}
-
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSubmitting || !roNumber.trim()}
-            className="btn btn-primary"
-          >
-            {isSubmitting ? "Saving…" : "Save RO"}
-          </button>
-        </div>
+        <p className="log-qa-full">
+          <Link href="/log" className="log-link" onClick={onClose}>
+            Open the full form
+          </Link>
+        </p>
 
       </div>
       )}

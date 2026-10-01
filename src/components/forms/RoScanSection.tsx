@@ -1,11 +1,13 @@
 "use client";
 
-// The "Scan RO ticket" banner shown on new-RO entry. Wraps ScanRoButton and its
-// OCR result callback. Presentational — all state lives in useLogRoForm.
-import { Camera, X } from "lucide-react";
+// The "Scan RO ticket" row in the "Before you start" zone, shown on new-RO
+// entry. Wraps ScanRoButton and its OCR result callback. Presentational — all
+// state lives in useLogRoForm.
 import type { OpCode, RoTemplate } from "@/lib/types";
 import type { OcrResult } from "@/lib/ocr";
 import { ScanRoButton } from "./ScanRoButton";
+import { LogIcon } from "./logParts";
+import { StatusField } from "@/components/ui/StatusField";
 
 export function RoScanSection({
   library,
@@ -24,63 +26,35 @@ export function RoScanSection({
   onPhotoRemove?: () => void;
 }) {
   return (
-    <div>
-      <div className="scan-banner">
-        <div className="ico">
-          <Camera size={20} style={{ color: "var(--brand)" }} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="label">Scan RO ticket</div>
-          <div className="sub">Auto-fills RO#, vehicle and op codes</div>
-        </div>
-        <ScanRoButton
-          library={library}
-          templates={templates}
-          onResult={onResult}
-          onPhotoCaptured={onPhotoCaptured}
-        />
+    <div className="log-tool">
+      <div className="log-tool-txt">
+        <p className="log-lead">Scan RO ticket</p>
+        <p className="log-sub">Auto-fills RO#, vehicle and op codes</p>
       </div>
+      <ScanRoButton
+        library={library}
+        templates={templates}
+        onResult={onResult}
+        onPhotoCaptured={onPhotoCaptured}
+      />
 
       {/* Evidence chip — the scanned photo is retained and saved with the RO. */}
       {photoAttached && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginTop: 8,
-            borderRadius: 8,
-            border: "1px solid color-mix(in oklab, var(--good) 35%, transparent)",
-            background: "color-mix(in oklab, var(--good) 10%, transparent)",
-            padding: "8px 12px",
-            fontSize: 13,
-            color: "var(--good)",
-          }}
-        >
-          <Camera size={15} style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>Photo attached — saved with this RO</span>
-          {onPhotoRemove && (
-            <button
-              type="button"
-              onClick={onPhotoRemove}
-              aria-label="Remove attached photo"
-              className="relative"
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--good)",
-                display: "grid",
-                placeItems: "center",
-                width: 44,
-                height: 44,
-                margin: -12,
-              }}
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
+        <StatusField tag="Note" inset className="log-scan-row">
+          <div className="log-photo">
+            <p>Photo attached — saved with this RO</p>
+            {onPhotoRemove && (
+              <button
+                type="button"
+                onClick={onPhotoRemove}
+                aria-label="Remove attached photo"
+                className="iconbtn"
+              >
+                <LogIcon name="x" small />
+              </button>
+            )}
+          </div>
+        </StatusField>
       )}
     </div>
   );

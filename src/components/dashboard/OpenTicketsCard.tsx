@@ -1,21 +1,27 @@
 "use client";
 
-// Dashboard — Open Tickets card (Open Tickets plan, Phase 1).
+// Dashboard — Open Tickets zone (Open Tickets plan, Phase 1).
 //
 // Renders ONLY when the user has at least one open ticket. Zero open = the
-// card is absent, not an empty state: a quiet dashboard should look quiet.
+// zone is absent, not an empty state: a quiet dashboard should look quiet.
 //
-// One row per ticket, oldest-opened first — the car that has sat longest is
-// the one to chase. The status chip is the ticket's LATEST timeline event
+// One tag per ticket, oldest-opened first — the car that has sat longest is
+// the one to chase. The status word is the ticket's LATEST timeline event
 // (decision 5); days open count from the `opened` event, never created_at.
-// Tap → the same RoDetailModal every other list opens.
+// Tap the RO number → the same RoDetailModal every other list opens.
+//
+// Tags, like Recent ROs, but with no duration bar: the bar is FLAGGED time,
+// and an open ticket has not flagged anything yet. Its hours are open_work
+// rows, attribution beside the flag, so they print as a figure with no bar.
 import { useState } from "react";
-import { FolderOpen } from "lucide-react";
 import type { Entry, OpCode } from "@/lib/types";
 import type { RateMap } from "@/lib/earnings";
 import type { OpenTicketSummary } from "@/lib/open-tickets";
 import { fmtHours } from "@/lib/stats";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
+import { Badge } from "@/components/ui/Badge";
+import { Zone } from "@/components/ui/Zone";
+import { RoTag } from "./RoTag";
 
 export function OpenTicketsCard({
   tickets,
@@ -32,55 +38,48 @@ export function OpenTicketsCard({
     tickets.find((t) => t.entry.id === openId)?.entry ?? null;
 
   return (
-    <section>
-      <div className="section-title">
-        Open tickets
-        <span className="text-[var(--fg-3)]" style={{ letterSpacing: "normal", textTransform: "none", fontWeight: 500 }}>
-          {tickets.length} open
-        </span>
-      </div>
-      <div className="card flush">
-        <div className="ro-list" data-testid="open-tickets-card">
-          {tickets.map((t) => {
-            const vehicle = [t.entry.vehicle.year, t.entry.vehicle.make, t.entry.vehicle.model]
-              .filter(Boolean)
-              .join(" ")
-              .trim();
-            return (
-              <div key={t.entry.id} className="ro-row">
-                <button
-                  type="button"
-                  className="ro-row-main"
-                  onClick={() => setOpenId(t.entry.id)}
-                  aria-label={`Open ticket RO ${t.entry.roNumber}, ${t.statusLabel}, open ${t.daysOpen} day${t.daysOpen === 1 ? "" : "s"}`}
-                >
-                  <div className="grow">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="ro-num">#{t.entry.roNumber}</span>
-                      <span className="badge badge-info">{t.statusLabel}</span>
-                    </div>
-                    {/* "vehicle not set" is a real state, not a blank: the vehicle
-                        is progressive on an open ticket (decision 2). */}
-                    <div className="ro-vehicle" style={vehicle ? undefined : { color: "var(--fg-3)" }}>
-                      {vehicle || "Vehicle not set"}
-                    </div>
-                    <div className="ro-meta">
-                      <FolderOpen size={12} aria-hidden="true" style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />
-                      Open {t.daysOpen} day{t.daysOpen === 1 ? "" : "s"}
-                    </div>
+    <Zone
+      id="z-open"
+      name="Open tickets"
+      aside={
+        <>
+          <span className="num">{tickets.length}</span> open
+        </>
+      }
+    >
+      <ul className="tags" data-testid="open-tickets-card">
+        {tickets.map((t) => {
+          const vehicle = [t.entry.vehicle.year, t.entry.vehicle.make, t.entry.vehicle.model]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          return (
+            <RoTag
+              key={t.entry.id}
+              roNumber={t.entry.roNumber}
+              roLabel={`Open ticket RO ${t.entry.roNumber}, ${t.statusLabel}, open ${t.daysOpen} day${t.daysOpen === 1 ? "" : "s"}`}
+              onOpen={() => setOpenId(t.entry.id)}
+              headExtra={<Badge tone="neutral">{t.statusLabel}</Badge>}
+              // Hours on the ticket so far — open_work rows, never flag. The
+              // flag lands on the close day; this is attribution beside it.
+              hours={fmtHours(t.hours)}
+              hoursTitle="Hours on this ticket so far"
+              body={
+                <>
+                  {/* "vehicle not set" is a real state, not a blank: the vehicle
+                      is progressive on an open ticket (decision 2). */}
+                  <div className={`tag-veh${vehicle ? "" : " is-unset"}`}>
+                    {vehicle || "Vehicle not set"}
                   </div>
-                </button>
-                {/* Hours on the ticket so far — open_work rows, never flag. The
-                    flag lands on the close day; this is attribution beside it. */}
-                <div className="hours tabular" title="Hours on this ticket so far">
-                  {fmtHours(t.hours)}
-                  <span className="unit">h</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                  <p className="tag-meta">
+                    Open <span className="num">{t.daysOpen}</span> day{t.daysOpen === 1 ? "" : "s"}
+                  </p>
+                </>
+              }
+            />
+          );
+        })}
+      </ul>
 
       {openEntry && (
         <RoDetailModal
@@ -90,6 +89,6 @@ export function OpenTicketsCard({
           onClose={() => setOpenId(null)}
         />
       )}
-    </section>
+    </Zone>
   );
 }

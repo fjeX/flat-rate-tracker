@@ -193,6 +193,70 @@ fonts and corner radius only** — no layout, wording or positions moved:
     the bottom bar on phones.
   - Guests: the same Directory, with a compact Appearance section at the
     bottom (saved to that browser only).
+- Phase 4 rebuilt **Dashboard, Log RO, Quick Add and Pay Period** (same
+  features, re-arranged). What this file calls a *card* on these pages is now a
+  **zone**: a rounded panel one shade lighter than the page, headed by its
+  name in small capitals (e.g. "PAY PERIOD PACE", "BEFORE YOU START"); on
+  phones it runs edge to edge. Warnings are **tagged fields**: a word tag (NOTE / COST / FIX /
+  SAVED) on a full-width strip; FIX and COST are red, SAVED green, NOTE grey.
+  - **Dashboard:** greeting → page head (avatar, date, "N ROs logged…"; the
+    pace status is a tag at the right: **On track / Near goal / Behind / Getting
+    started**; "Near goal" used to read "Close"). **Today** = headline panel (TODAY ·
+    FLAG and pace/efficiency) + the **Clocked** field (accessible name
+    "Clocked hours today") + a separate **Quick Add RO** button: tapping the
+    flag figure no longer opens Quick Add. **Pay Period Pace** = a zone with a
+    track (the "Today" label above it, the "Goal N" label below its right end,
+    so the two never overlap; no ring) and a "Pay Period" link. The This
+    Week / Pay Period / This Month **tiles are now rows** of a **Flagged to
+    date** table (Span / Flagged / Efficiency; the cell says "53%", not "53%
+    efficiency"), with **Period earnings** under it. Open tickets and **Empty
+    days** are zones under the pace zone. Streak, career and snapshots share
+    one zone ("Best n" is a tag; no flame/snowflake icons). **Recent ROs** are
+    RO tags with duration bars: the **RO number is the button** ("RO 12345"),
+    not the whole row. Flagged Hours chart: range and measure are **button
+    groups with `aria-pressed`**, not tabs with `aria-selected`; the bars are
+    HTML, not SVG; today's bar is the accent colour.
+  - **Log RO:** visible title "New repair order". Date, Time, the open-ticket
+    switch and Scan sit in **Before you start**; the numbered steps sit in
+    **Repair order**: "Enter the RO number", "Add the op codes", "Add the
+    vehicle", "Write notes". Op codes: search, then chips, then lines (chips
+    used to be below the lines); "Total flag hours" → **Flagged total**.
+    Save bar: `0.4h · N lines` over "RO #123 · vehicle". Save RO / Save & New
+    / Cancel labels, all `aria-label`s and ids (`#ro-number`, `#opc-search`,
+    `#quick-add-ro-number`, `#ro-save-error`) are unchanged.
+    - **Op-code chips are toggles** (Log RO and Quick Add). A tapped chip stays
+      on screen and turns **pressed**: accent fill plus a tick, `aria-pressed=
+      "true"` (unpressed chips say `"false"`). **Tap it again and its line is
+      removed.** A chip no longer disappears after you use it. If a code is on
+      two lines, tapping removes the last one and the chip stays pressed until
+      the final line is gone.
+    - **RO numbers are digits only** (Log RO `#ro-number`, Quick Add
+      `#quick-add-ro-number`, and the server). Type a letter or dash and a
+      **FIX** field appears right under the RO box: "RO numbers are digits only.
+      Take out the letters, then save." The field gets `aria-invalid="true"`.
+      **Save RO and Save & New (and Quick Add's Save RO) are disabled until the
+      RO is non-empty and digits-only.** The save bar / footer text reads
+      **"Fill in RO # to save"** when the RO is empty, **"Fix the RO # to save"**
+      when it has a non-digit, and the `0.4h · N lines` summary otherwise. A
+      disabled Save with a bad RO is correct, not a bug; do not try to force it.
+      Test it by typing, never by pressing a disabled Save.
+    - The **Flagged total** row shows `0.0h` from the start, even with no lines.
+  - **Quick Add:** title "Quick Add RO" (still "Quick Add" on the Spiff tab),
+    a big `#` in the RO field, errors as a FIX field right under it, chips
+    before the search, "Total" → **Flagged total**, a new **Open the full
+    form** link, and a footer bar with the status + Cancel + Save RO.
+  - **Pay Period:** the H1 is now "Pay period"; the **period label is a menu
+    button** ("Pay period X, choose another") between the ‹ › arrows, and the
+    status is a tag beside the H1 ("Current pay period" is green). Totals
+    zone: headline panel, then Earnings and Flag hrs rows, then a **spec row**
+    (ROs · Clocked hrs · Efficiency · Upsold) where the four tiles were. **Check
+    the pay** zone holds "What did the work cost me?" and "Did I get paid?" as
+    folds (discrepancy, reconciliation and dispute outcome nest inside the
+    second). Spiffs sit in a **Reference** zone, button **Add spiff / bonus**
+    below the list. RO list: tag rows with duration bars, a "Total, N shown"
+    row, a "Period total, N ROs" row, and "Show all N ROs · M hidden".
+    Custom-dates dialog: Cancel / Save in a bottom bar. Dispute pack: "Back to
+    pay period" with a chevron.
 - **This is intentional, not breakage.** Judge behaviour and legibility, not
   whether it looks like previous nights' screenshots. Do flag anything
   genuinely broken in the new look: overlapping text, unreadable contrast,
@@ -290,9 +354,9 @@ sends you there.
     for a line known to have actual hours — an empty text scrape on its own
     is not evidence of anything. The file already reads real state this way
     elsewhere, not just the DOM's rendered text: §8h reads the plain-text
-    twin via `document.querySelector('.pace-now .sr-only').textContent`
+    twin via `document.querySelector('section[aria-labelledby="z-pace"] .bigline .sr-only').textContent`
     (the visible digits are a RollingNumber odometer and `innerText` returns
-    garbage), and §8's pace ring reads the real percent off `aria-label`
+    garbage), and §8's pace track reads the real percent off its `aria-label`
     rather than trusting what's displayed — same idiom, different surface.
 - **This delete needs its own scratch RO — don't wait for one to become
   disposable elsewhere.** Right now, log one extra throwaway RO solely to
@@ -369,7 +433,7 @@ one most nights.
   - the flag-hours input snaps to **0 and becomes disabled** (you cannot type in
     it) — a comeback line that still carries the library's book time is the
     single most important bug on this screen
-  - the "Total flag hours" figure drops accordingly, and a second amber
+  - the "Flagged total" figure drops accordingly, and a second amber
     **"Unpaid rework · N lines"** row appears beneath it
   - an **"Unpaid rework"** card appears with three "whose work" choices: My own
     work / Another tech's work / Same-visit rework
@@ -1560,16 +1624,17 @@ recovered. Sections appear only when they have something to say.
 - **Claims and recovery** — the lifetime figures that used to live on Pay
   Period. With no closed claims it must still render, showing "Nothing recovered
   yet" and how it fills in. It must NOT be missing entirely.
-- The dashboard's "Recovered with FRT" card is now just the headline dollar
-  figure plus an "Insights →" link, keeping its stale/needs-outcome nudges. If
+- The dashboard's "Recovered with FRT" row is just the headline dollar
+  figure plus an "Insights" link, keeping its stale/needs-outcome nudges. If
   the closed count or win rate reappears there, it is duplicating /insights.
 
 ### 8. Dashboard & stats sweep
 - Dashboard: pace card / projection shows sane numbers (no NaN, no negative
   hours, projection roughly consistent with logged history).
-- Pace ring/bar past goal (changed 2026-07-15): the ring and bar stay visually
-  full at 100%, but the center label and aria-label report the REAL percent
-  (e.g. "277% of pace goal"). A "100%" label while true pace is higher is a bug.
+- Pace track past goal: the ring is gone (phase 4). The track's fill stays
+  visually full at 100%, but the track's `aria-label` (`role="img"`, inside the
+  "Pay Period Pace" zone) reports the REAL percent (e.g. "… 277 percent of
+  goal …"). A capped "100 percent" while true pace is higher is a bug.
 - Pay period stats reflect tonight's new ROs.
 - History filters/search: find one of tonight's ROs by RO number.
 
@@ -1644,9 +1709,9 @@ efficiency denominator falls back to the scheduled hours.
   sits. Check the legend is present and names the amber state — that is the
   replacement. "The page no longer explains amber days" is only a bug if the
   legend is also missing.
-- **Dashboard tie-ins:** the Today card may show **"On Pace"** (live pace vs
+- **Dashboard tie-ins:** the Today zone may show **"On Pace"** (live pace vs
   the shift as it passes) instead of Efficiency until clocked hours are
-  entered — that's by design. An "N scheduled days look empty" card on the
+  entered — that's by design. An "Empty days" zone on the
   dashboard is the same resolver as the calendar's amber days.
 - **Efficiency label (2026-07-16 change):** week/period/month tiles and the
   pace-card footer now read "N% efficiency" — the old `eff` / `· sched` /
@@ -1812,7 +1877,7 @@ Do not just describe this — actually compute the parity and act on it.
 1. On `/dashboard`, note the **Pay Period Pace** flag-hours figure and the top RO
    in the RO list.
    - Read the pace from the plain-text twin, not the visible digits:
-     `document.querySelector('.pace-now .sr-only').textContent`. The visible
+     `document.querySelector('section[aria-labelledby="z-pace"] .bigline .sr-only').textContent`. The visible
      number is a RollingNumber odometer that renders every digit 0–9, so
      `innerText` returns garbage like `0 1 2 3 4 5…`.
 2. **Leave the tab alone for at least 45 seconds.** Don't click anything — any
@@ -1831,9 +1896,9 @@ Do not just describe this — actually compute the parity and act on it.
    had the identical defect — but do it **on `/pay-period`, not the dashboard**,
    and read a **different** observable, because the pace figure structurally
    cannot move for a spiff. Note that Quick Add cannot be used for this: the
-   Quick Add modal is mounted only on the dashboard's Today card and is behind
+   Quick Add modal is mounted only on the dashboard's Today zone and is behind
    a user preference, so the spiff is added from the Spiffs & Bonuses card's
-   own **Add** button instead.
+   own **Add spiff / bonus** button instead.
    Bonuses are deliberately kept out of hours reconciliation (flag hours and
    pace are flag-hours-only, by design — see the Spiffs card's own copy), so
    watching the pace here would never catch anything either way; use the
@@ -1848,7 +1913,7 @@ Do not just describe this — actually compute the parity and act on it.
      legitimately left this period back at zero.
    - **Leave the tab alone for at least 45 seconds**, same as step 2 — don't
      click anything.
-   - Tap **Add** on the Spiffs & Bonuses card and save a spiff with a real
+   - Tap **Add spiff / bonus** (below the list, in the Reference zone) and save a spiff with a real
      dollar amount (e.g. "alignment spiff $25").
    - **Within ~10 seconds, without reloading and without clicking anything
      else,** re-read the Spiffs total.
@@ -2024,10 +2089,10 @@ now refuses to print it and says why instead. You will see, all of them correct:
 - **Pay Period hero** — "No efficiency yet — all 42.0h flagged so far landed on
   2 days with no hours to measure them against." (or "Efficiency isn't shown —
   30.0h of the 40.0h …" when only most of it is excluded).
-- **Pay Period stat tile** — `Efficiency · sched —`, an em dash, not a number.
+- **Pay Period spec row** — the Efficiency cell shows an em dash, not a number.
 - **Custom-dates / period-override modal** — the Efficiency row reads
   "nothing to compare" with no arrow, instead of a before → after delta.
-- **Dashboard tiles** — the tile drops to `8.0h scheduled` (the hours the
+- **Dashboard "Flagged to date" table** — the Efficiency cell drops to `8.0h scheduled` (the hours the
   figure would have been measured against) rather than a percentage. Note it
   says **scheduled**, not "0.0h clocked" — that older wording was a bug.
   This only applies when a real scheduled or clocked denominator was withheld.
@@ -2048,6 +2113,7 @@ Rules for this section:
   is explained and correct.
 - **A withheld figure and a percentage must never appear together on one
   screen.** If the hero says "No efficiency yet" while the stat tile beside it
+  (the Efficiency cell of the spec row)
   still prints `0%`, THAT is the bug — report it HIGH. Two surfaces disagreeing
   is the real defect; a single honest refusal is not.
 - A genuinely measured **0%** must still print as `0%`. Clocked hours with no
@@ -2161,8 +2227,9 @@ NO closed RO that day:
 - Yesterday must NOT appear in the **unresolved days** card ("was this a day
   off?"). If it does, that is the bug this whole feature exists to fix.
 - The **streak** must count yesterday as worked.
-- The dashboard **Today** tile shows "2.5h on 1 open ticket" under the 0.0h
-  flag; the **This Week** / **Pay Period** tiles show "10.5h on 1 open ticket".
+- The dashboard **Today** panel shows "2.5h on 1 open ticket" under the 0.0h
+  flag; the **This Week** / **Pay Period** rows of the "Flagged to date" table
+  show "10.5h on 1 open ticket" as a sub-row.
   The FLAG figures above those lines must NOT move. Efficiency must NOT move
   (record the % before and after). A "pending efficiency" does not exist and
   must not be reported as missing.

@@ -16,6 +16,14 @@ import { resolveZeroDayAction } from "@/app/actions/schedule";
 import { formatDateLong } from "@/lib/periods";
 import type { UnpaidTimeKind } from "@/lib/types";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Zone } from "@/components/ui/Zone";
+import { StatusField } from "@/components/ui/StatusField";
+import { FiguresInText } from "./Figures";
 
 const SHOW_LIMIT = 5;
 
@@ -95,77 +103,58 @@ export function UnresolvedDaysCard({ days }: { days: string[] }) {
   const hidden = remaining.length - shown.length;
 
   return (
-    <section className="card padded">
-      <h2 className="text-sm font-semibold" style={{ color: "var(--fg-0)" }}>
-        {remaining.length === 1
-          ? "One scheduled day looks empty"
-          : `${remaining.length} scheduled days look empty`}
-      </h2>
-      <p className="mt-1 text-sm" style={{ color: "var(--fg-2)" }}>
-        No ROs or clocked hours on these workdays. They&apos;re left out of
-        your efficiency until you settle them — a day off is excluded, a real
-        zero counts against it, and unpaid work counts the day while recording
-        where the hours went.
-      </p>
-      <ul className="mt-3" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+    <Zone id="z-empty" name="Empty days">
+      <StatusField tag="Note">
+        <p>
+          <b>
+            {remaining.length === 1
+              ? "One scheduled day looks empty"
+              : <FiguresInText text={`${remaining.length} scheduled days look empty`} />}
+          </b>
+        </p>
+        <p>
+          No ROs or clocked hours on these workdays. They&apos;re left out of
+          your efficiency until you settle them — a day off is excluded, a real
+          zero counts against it, and unpaid work counts the day while recording
+          where the hours went.
+        </p>
+      </StatusField>
+      <ul className="days">
         {shown.map((date) => (
-          <li
-            key={date}
-            className="py-2 text-sm"
-            style={{ borderTop: "1px dashed var(--line-soft)", color: "var(--fg-1)" }}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="tabular">{formatDateLong(date)}</span>
-              <span className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  disabled={busyDate !== null}
-                  onClick={() => resolve(date, "day-off")}
-                >
-                  {busyDate === date && unpaidDate !== date ? "Saving…" : "Day off"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  disabled={busyDate !== null}
-                  onClick={() => resolve(date, "worked-zero")}
-                >
-                  Worked, zero flag
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  disabled={busyDate !== null}
-                  aria-expanded={unpaidDate === date}
-                  onClick={() =>
-                    unpaidDate === date ? closeUnpaid() : setUnpaidDate(date)
-                  }
-                >
-                  Worked — unpaid
-                </button>
-              </span>
+          <li key={date}>
+            <div className="lead">{formatDateLong(date)}</div>
+            <div className="days-act">
+              <Button
+                variant="quiet"
+                disabled={busyDate !== null}
+                onClick={() => resolve(date, "day-off")}
+              >
+                {busyDate === date && unpaidDate !== date ? "Saving…" : "Day off"}
+              </Button>
+              <Button
+                variant="quiet"
+                disabled={busyDate !== null}
+                onClick={() => resolve(date, "worked-zero")}
+              >
+                Worked, zero flag
+              </Button>
+              <Button
+                variant="quiet"
+                disabled={busyDate !== null}
+                aria-expanded={unpaidDate === date}
+                onClick={() =>
+                  unpaidDate === date ? closeUnpaid() : setUnpaidDate(date)
+                }
+              >
+                Worked — unpaid
+              </Button>
             </div>
 
             {unpaidDate === date && (
-              <div
-                className="mt-2 rounded-lg p-3"
-                style={{
-                  background: "var(--warn-bg)",
-                  border:
-                    "1px solid color-mix(in oklab, var(--warn) 35%, transparent)",
-                }}
-              >
-                <div className="flex flex-wrap items-end gap-2">
-                  <div>
-                    <label
-                      htmlFor={`unpaid-hours-${date}`}
-                      className="mb-1 block text-xs"
-                      style={{ color: "var(--fg-3)" }}
-                    >
-                      Hours
-                    </label>
-                    <input
+              <Card inset className="days-form">
+                <div className="days-form-row">
+                  <Field label="Hours" htmlFor={`unpaid-hours-${date}`} className="days-hours">
+                    <Input
                       id={`unpaid-hours-${date}`}
                       type="number"
                       min={0}
@@ -174,87 +163,56 @@ export function UnresolvedDaysCard({ days }: { days: string[] }) {
                       inputMode="decimal"
                       value={unpaidHours}
                       onChange={(e) => setUnpaidHours(e.target.value)}
-                      className="input"
-                      style={{ width: 88 }}
+                      mono
                       placeholder="8"
                     />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 190 }}>
-                    <label
-                      htmlFor={`unpaid-kind-${date}`}
-                      className="mb-1 block text-xs"
-                      style={{ color: "var(--fg-3)" }}
-                    >
-                      Where the time went
-                    </label>
-                    <select
+                  </Field>
+                  <Field label="Where the time went" htmlFor={`unpaid-kind-${date}`} className="days-kind">
+                    <Select
                       id={`unpaid-kind-${date}`}
                       value={unpaidKind}
-                      onChange={(e) =>
-                        setUnpaidKind(e.target.value as UnpaidTimeKind)
-                      }
-                      className="input"
-                      style={{ width: "100%" }}
+                      onChange={(e) => setUnpaidKind(e.target.value as UnpaidTimeKind)}
                     >
                       {ZERO_DAY_REASONS.map((r) => (
                         <option key={r.kind} value={r.kind}>
                           {r.label}
                         </option>
                       ))}
-                    </select>
-                  </div>
+                    </Select>
+                  </Field>
                 </div>
-
-                <label
-                  htmlFor={`unpaid-note-${date}`}
-                  className="mb-1 mt-2 block text-xs"
-                  style={{ color: "var(--fg-3)" }}
-                >
-                  Note (optional)
-                </label>
-                <input
-                  id={`unpaid-note-${date}`}
-                  type="text"
-                  value={unpaidNote}
-                  onChange={(e) => setUnpaidNote(e.target.value)}
-                  className="input"
-                  style={{ width: "100%" }}
-                  placeholder="RO 48213 back for the same leak"
-                />
-
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
+                <Field label="Note (optional)" htmlFor={`unpaid-note-${date}`}>
+                  <Input
+                    id={`unpaid-note-${date}`}
+                    type="text"
+                    value={unpaidNote}
+                    onChange={(e) => setUnpaidNote(e.target.value)}
+                    placeholder="RO 48213 back for the same leak"
+                  />
+                </Field>
+                <div className="days-act">
+                  <Button
+                    variant="go"
                     disabled={busyDate !== null}
                     onClick={() => submitUnpaid(date)}
                   >
                     {busyDate === date ? "Saving…" : "Save unpaid day"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    disabled={busyDate !== null}
-                    onClick={closeUnpaid}
-                  >
+                  </Button>
+                  <Button variant="quiet" disabled={busyDate !== null} onClick={closeUnpaid}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </Card>
             )}
           </li>
         ))}
       </ul>
-      {hidden > 0 && (
-        <p className="mt-1 text-sm" style={{ color: "var(--fg-3)" }}>
-          …and {hidden} more once these are settled.
-        </p>
-      )}
+      {hidden > 0 && <p className="fine days-more">…and {hidden} more once these are settled.</p>}
       {error && (
-        <p role="alert" className="mt-2 text-sm" style={{ color: "var(--bad)" }}>
-          {error}
-        </p>
+        <StatusField tag="Fix" role="alert">
+          <p>{error}</p>
+        </StatusField>
       )}
-    </section>
+    </Zone>
   );
 }

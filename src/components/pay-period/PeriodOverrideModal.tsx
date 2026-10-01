@@ -17,6 +17,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { StatusField } from "@/components/ui/StatusField";
 import { formatDateLong, type PeriodRange } from "@/lib/periods";
 import { aggregateStatsAuto, fmtHours, fmtPct, type ScheduleContext } from "@/lib/stats";
 import {
@@ -115,16 +117,14 @@ function DeltaRow({
 }) {
   const changed = before !== after;
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1 text-sm">
-      <span className="text-[var(--fg-3)]">{label}</span>
-      <span className="mono flex items-baseline gap-2 tabular-nums">
-        <span className={changed ? "text-[var(--fg-3)] line-through" : "text-[var(--fg-2)]"}>
-          {before}
-        </span>
+    <div className="pp-delta">
+      <span className="k">{label}</span>
+      <span className="v num">
+        {changed ? <s>{before}</s> : <span>{before}</span>}
         {changed && (
           <>
-            <span className="text-[var(--fg-3)]">→</span>
-            <span className="font-semibold text-[var(--fg-1)]">{after}</span>
+            <span className="arrow">→</span>
+            <span className="to">{after}</span>
           </>
         )}
       </span>
@@ -162,9 +162,9 @@ function EfficiencyDeltaRow({
     return <DeltaRow label="Efficiency" before={b} after={a} />;
   }
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1 text-sm">
-      <span className="text-[var(--fg-3)]">Efficiency</span>
-      <span className="text-right text-[var(--fg-2)]">nothing to compare</span>
+    <div className="pp-delta">
+      <span className="k">Efficiency</span>
+      <span className="v">nothing to compare</span>
     </div>
   );
 }
@@ -262,15 +262,15 @@ function PeriodOverrideBody({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <p className="text-xs text-[var(--fg-3)]">
+    <form onSubmit={submit} className="pp-stack">
+      <p className="pp-sub">
         Set the exact dates your paystub covers. The usual 1st-to-15th split is
         only a starting shape — your shop&apos;s real boundary is whatever the
         stub says, and this is where you tell FRT.
       </p>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block" htmlFor="period-override-start">
+      <div className="pp-pair">
+        <label className="field" htmlFor="period-override-start">
           <span className="field-label">Start</span>
           <input
             id="period-override-start"
@@ -281,10 +281,10 @@ function PeriodOverrideBody({
             aria-required="true"
             aria-invalid={Boolean(error)}
             aria-describedby={error ? "period-override-error" : undefined}
-            className="input mt-1 text-sm"
+            className="input mono"
           />
         </label>
-        <label className="block" htmlFor="period-override-end">
+        <label className="field" htmlFor="period-override-end">
           <span className="field-label">End</span>
           <input
             id="period-override-end"
@@ -295,7 +295,7 @@ function PeriodOverrideBody({
             aria-required="true"
             aria-invalid={Boolean(error)}
             aria-describedby={error ? "period-override-error" : undefined}
-            className="input mt-1 text-sm"
+            className="input mono"
           />
         </label>
       </div>
@@ -303,15 +303,15 @@ function PeriodOverrideBody({
       {/* The impact block. Only once the dates actually differ — showing a table
           of unchanged figures on open would train the eye to ignore it. */}
       {dirty && after !== null && (
-        <div className="card-inset space-y-2 px-3 py-3">
-          <p className="text-xs text-[var(--fg-2)]">
-            <span className="font-medium text-[var(--warn)]">Heads up —</span>{" "}
+        <div className="pp-well pp-stack">
+          <p className="pp-sub">
+            <span className="pp-strong">Heads up —</span>{" "}
             work is filed by date, so this re-files every RO on the days you
             added or removed. These figures change here, and the matching
             amounts move into or out of the neighbouring period:
           </p>
 
-          <div className="divide-y divide-[var(--line-soft)]">
+          <div>
             <DeltaRow
               label="Logged ROs"
               before={String(before.roCount)}
@@ -342,9 +342,9 @@ function PeriodOverrideBody({
 
           {(isWithheld(before.efficiencyDisplay) ||
             isWithheld(after.efficiencyDisplay)) && (
-            <p className="text-xs text-[var(--fg-3)]">
+            <p className="pp-fine">
               No efficiency comparison for these dates —{" "}
-              <span className="font-medium text-[var(--fg-2)]">
+              <span className="pp-strong">
                 {fmtHours(
                   Math.max(
                     excludedHours(before.efficiencyDisplay),
@@ -362,7 +362,7 @@ function PeriodOverrideBody({
             </p>
           )}
 
-          <p className="text-xs text-[var(--fg-3)]">
+          <p className="pp-fine">
             New range: {formatDateLong(start)} – {formatDateLong(end)}.
             {paidFlagHours !== null && (
               <>
@@ -377,33 +377,32 @@ function PeriodOverrideBody({
       )}
 
       {dirty && !valid && (
-        <p className="text-xs text-[var(--bad)]">
+        <StatusField tag="Fix" role="alert" inset><p>
           Start date must be on or before end date.
-        </p>
+        </p></StatusField>
       )}
 
       {error && (
-        <p id="period-override-error" role="alert" className="text-sm text-[var(--bad)]">
-          {error}
-        </p>
+        <StatusField tag="Fix" role="alert" inset><p>
+          <span id="period-override-error">{error}</span>
+        </p></StatusField>
       )}
 
-      <div className="flex justify-end gap-2 pt-2">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isPending}
-          className="btn btn-ghost"
-        >
+      {/* The dialog's action bar (the shared .dlg-foot look). It lives inside
+          the form because the submit button and the pending state do; the
+          negative margin lets it run edge to edge under the padded body. */}
+      <div className="dlg-foot pp-dlg-actions">
+        <Button variant="quiet" onClick={onClose} disabled={isPending}>
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
+          variant="go"
           disabled={isPending || !valid || !dirty}
-          className="btn btn-primary"
+          busy={isPending}
         >
           {isPending ? "Saving…" : "Save dates"}
-        </button>
+        </Button>
       </div>
     </form>
   );
