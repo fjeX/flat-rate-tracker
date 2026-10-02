@@ -445,7 +445,9 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
 
   // ---------------------------------------------------------------------
   // Not carried. Each of these is a decision; `warnUser` marks the ones where
-  // real data stays behind and the user deserves to hear about it up front.
+  // real data is affected (deleted with its parent rows, or left behind) and
+  // the user deserves to hear about it up front; backup-summary.ts decides the
+  // wording per table.
   // ---------------------------------------------------------------------
   entry_photos: {
     carried: false,
