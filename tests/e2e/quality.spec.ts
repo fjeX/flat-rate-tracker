@@ -20,7 +20,7 @@ for (const route of ROUTES) {
       // dev server compiles CSS on demand — don't assert against a page
       // that hasn't received the design system yet
       await page.waitForFunction(
-        () => getComputedStyle(document.documentElement).getPropertyValue("--tap-min").trim() === "44px",
+        () => getComputedStyle(document.documentElement).getPropertyValue("--tap").trim() === "44px",
         undefined,
         { timeout: 15_000 },
       );

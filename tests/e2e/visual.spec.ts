@@ -18,7 +18,7 @@ for (const route of ROUTES) {
       await page.waitForLoadState("networkidle");
       // dev server compiles CSS on demand — never snapshot an unstyled page
       await page.waitForFunction(
-        () => getComputedStyle(document.documentElement).getPropertyValue("--tap-min").trim() === "44px",
+        () => getComputedStyle(document.documentElement).getPropertyValue("--tap").trim() === "44px",
         undefined,
         { timeout: 15_000 },
       );
