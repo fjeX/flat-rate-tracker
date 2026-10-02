@@ -8,6 +8,7 @@ import {
 } from "./entries";
 import type { DbClient } from "./_client";
 import type { NewEntry } from "@/lib/types";
+import { Refusal } from "@/lib/refusal";
 
 // ---------------------------------------------------------------------------
 // Minimal in-memory fake of the slice of the Supabase query builder that the
@@ -594,5 +595,20 @@ describe("addLineActualHours (timer save) — actual_source", () => {
     const id = seed(store, { actual_hours: 1, actual_source: "timer" });
     await addLineActualHours(makeFakeDb(store), id, 1);
     expect(store.entry_op_codes[0]).toMatchObject({ actual_hours: 2, actual_source: "timer" });
+  });
+});
+
+// server-action-thrown-refusals-masked (2026-10-01): the "at least one op
+// code" guard is a sentence for the tech, so it is a Refusal — saveEntry's
+// refusable() wrapper returns it as { error } instead of a masked throw.
+describe("createEntry — the empty-RO guard is a Refusal", () => {
+  it("throws a Refusal (not a plain Error) before touching the DB", async () => {
+    const store = new FakeStore();
+    const err = await createEntry(makeFakeDb(store), newEntry({ opCodes: [] })).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(Refusal);
+    expect((err as Error).message).toBe("At least one op code is required.");
+    expect(store.entries).toHaveLength(0);
   });
 });

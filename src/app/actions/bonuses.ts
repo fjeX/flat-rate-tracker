@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { Refusal, refusable } from "@/lib/refusal";
 import { validate } from "@/lib/validation/core";
 import {
   bonusIdSchema,
@@ -33,42 +34,59 @@ function bonusColumns(input: NewBonus) {
   };
 }
 
-export async function createBonusAction(input: NewBonus): Promise<Bonus> {
-  const clean = validate(newBonusSchema, input);
-  const supabase = await createClient();
-  const bonus = await db.createBonus(supabase, bonusColumns(clean));
-  revalidateBonusScreens();
-  return bonus;
+// The write actions RETURN `{ error }` for a refusal (a bad figure, a spiff
+// that's gone) instead of throwing it: a production build masks the message of
+// an error thrown out of a Server Action, so the sentence would never reach
+// the tech (server-action-thrown-refusals-masked). DB failures still throw.
+export async function createBonusAction(
+  input: NewBonus,
+): Promise<Bonus | { error: string }> {
+  return refusable(async () => {
+    const clean = validate(newBonusSchema, input);
+    const supabase = await createClient();
+    const bonus = await db.createBonus(supabase, bonusColumns(clean));
+    revalidateBonusScreens();
+    return bonus;
+  });
 }
 
 export async function updateBonusAction(
   id: string,
   input: NewBonus,
-): Promise<Bonus> {
-  const bonusId = validate(bonusIdSchema, id);
-  const clean = validate(newBonusSchema, input);
-  const supabase = await createClient();
-  const bonus = await db.updateBonus(supabase, bonusId, bonusColumns(clean));
-  // null = the update matched no row: already deleted, or not this account's.
-  // Reporting that as a save would leave the form showing edited numbers that
-  // are not in the ledger, which is worse than an error on the money screen.
-  if (!bonus) {
-    throw new Error("That spiff no longer exists — nothing was saved.");
-  }
-  revalidateBonusScreens();
-  return bonus;
+): Promise<Bonus | { error: string }> {
+  return refusable(async () => {
+    const bonusId = validate(bonusIdSchema, id);
+    const clean = validate(newBonusSchema, input);
+    const supabase = await createClient();
+    const bonus = await db.updateBonus(supabase, bonusId, bonusColumns(clean));
+    // null = the update matched no row: already deleted, or not this account's.
+    // Reporting that as a save would leave the form showing edited numbers that
+    // are not in the ledger, which is worse than an error on the money screen.
+    if (!bonus) {
+      throw new Refusal("That spiff no longer exists — nothing was saved.");
+    }
+    revalidateBonusScreens();
+    return bonus;
+  });
 }
 
-export async function deleteBonusAction(id: string): Promise<void> {
-  const bonusId = validate(bonusIdSchema, id);
-  const supabase = await createClient();
-  // false = nothing matched, so nothing was deleted. Throwing (rather than
-  // returning quietly) is what puts it in front of the tech: SpiffsCard's catch
-  // is the only thing that reports a failed money delete out loud.
-  if (!(await db.deleteBonus(supabase, bonusId))) {
-    throw new Error("That spiff was not deleted — it may already be gone. Refresh and try again.");
-  }
-  revalidateBonusScreens();
+export async function deleteBonusAction(
+  id: string,
+): Promise<{ error?: string }> {
+  return refusable(async () => {
+    const bonusId = validate(bonusIdSchema, id);
+    const supabase = await createClient();
+    // false = nothing matched, so nothing was deleted. Refusing (rather than
+    // returning quietly) is what puts it in front of the tech: SpiffsCard is
+    // the only thing that reports a failed money delete out loud.
+    if (!(await db.deleteBonus(supabase, bonusId))) {
+      throw new Refusal(
+        "That spiff was not deleted — it may already be gone. Refresh and try again.",
+      );
+    }
+    revalidateBonusScreens();
+    return {};
+  });
 }
 
 // Read-only: bonuses linked to one RO, for the RoDetailModal "linked spiffs" list.

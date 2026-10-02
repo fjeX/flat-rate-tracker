@@ -224,15 +224,25 @@ export function DataCard() {
                     </span>
                   </li>
                 ))}
-                {/* An older backup that predates a core table: the import
-                    empties it. That is a wipe, so it sits in THIS list, in the
-                    same red as a "cleared" count — never under "kept". */}
+                {/* An older backup that predates a core table (or ticket
+                    timelines, which the import clears whatever the file says):
+                    the import empties it. That is a wipe, so it sits in THIS
+                    list, in the same red as a "cleared" count — never under
+                    "kept". */}
                 {cleared.map((s) => (
                   <li key={s.key} className="imp-cleared">
                     {s.state === "cleared" && `${s.label} — will be cleared (${s.detail})`}
                   </li>
                 ))}
               </ul>
+              {/* Not a section of the file — state the import clears no
+                  matter what the file says. Told here, next to the wipe list,
+                  because it is part of what "Replace data" does. */}
+              {summary.sideEffects.map((w) => (
+                <StatusField key={w.label} tag="Note" inset>
+                  <b>{w.label}</b> — {w.detail}
+                </StatusField>
+              ))}
             </section>
 
             {/* An older backup has no key for these tables, and the import
@@ -248,6 +258,11 @@ export function DataCard() {
                   {untouched.map((s) => (
                     <li key={s.key}>
                       <span className="k imp-dim">{s.label}</span>
+                      {/* A keep with a cost (unpaid time loses its RO links):
+                          red, because something IS lost. */}
+                      {s.state === "untouched" && s.detail && (
+                        <span className="imp-cleared"> — {s.detail}</span>
+                      )}
                     </li>
                   ))}
                 </ul>

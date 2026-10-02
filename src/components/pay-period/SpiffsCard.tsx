@@ -241,7 +241,14 @@ function DeleteButton({
     if (!window.confirm(`Delete ${what}? This can't be undone.`)) return;
     start(async () => {
       try {
-        await deleteBonusAction(bonus.id);
+        const res = await deleteBonusAction(bonus.id);
+        // A refusal ("not deleted — may already be gone") comes back as data:
+        // a thrown one is masked in production. Same out-loud alert as a
+        // failure — the row is still there and the tech must be told why.
+        if (res.error) {
+          window.alert(res.error);
+          return;
+        }
         onDeleted();
       } catch (err) {
         // Deleting money is destructive and irreversible: a failure that only

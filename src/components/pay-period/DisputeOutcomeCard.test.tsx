@@ -29,8 +29,8 @@ import React from "react";
 import { DisputeOutcomeCard } from "./DisputeOutcomeCard";
 import type { Dispute, DisputeLine, Entry, EntryOpCode } from "@/lib/types";
 
-// Server actions: the module is "use server" and pulls the db client. Nothing
-// here taps a button, so a stub is enough to keep jsdom out of server code.
+// Server actions: the module is "use server" and pulls the db client. A stub
+// keeps jsdom out of server code; the tap-through cases set their own results.
 vi.mock("@/app/actions/disputes", () => ({
   applyDisputeRecoveryAction: vi.fn(),
   openDisputeAction: vi.fn(),
@@ -457,6 +457,51 @@ describe("DisputeOutcomeCard unmapped-recovery explanations", () => {
       goodwill: 0,
       periodTotal: 0,
       breakdown: 0,
+    });
+  });
+
+  // The missing-breakdown note asks for the same thing the period-total note
+  // does — enter the paid hours on each line — so it has to stop on the same
+  // condition (dispute-breakdown-note-not-gated-on-short). Same itemised,
+  // partial, no-breakdown fixture as the case below, reconciled by hand.
+  const breakdownRound = () =>
+    itemizedRound(
+      2,
+      [
+        disputeLine({ id: "a", entryId: "e1", claimedHours: 3 }),
+        disputeLine({ id: "b", entryId: "e1", code: "ALN", claimedHours: 3 }),
+      ],
+      6,
+    );
+  const breakdownLive = () => [
+    liveRO([liveLine(), liveLine({ id: "l2", customCode: "ALN" })]),
+  ];
+
+  it("stops asking for a line breakdown once the period no longer reads short", () => {
+    const container = renderCard({
+      allDisputes: [breakdownRound()],
+      entries: breakdownLive(),
+      shortedHours: 0,
+    });
+    expect(noteCounts(container)).toEqual({
+      goodwill: 0,
+      periodTotal: 0,
+      breakdown: 0,
+    });
+  });
+
+  it("still asks for a line breakdown while the period reads short", () => {
+    // Control for the case above: same fixture, explicitly short, so the 0
+    // there is the gate and not a fixture that never raised the note.
+    const container = renderCard({
+      allDisputes: [breakdownRound()],
+      entries: breakdownLive(),
+      shortedHours: 0.5,
+    });
+    expect(noteCounts(container)).toEqual({
+      goodwill: 0,
+      periodTotal: 0,
+      breakdown: 1,
     });
   });
 
@@ -995,5 +1040,100 @@ describe("DisputeOutcomeCard multi-claim wording", () => {
         "shows hours not already on a line.",
     ]);
     expect((container.textContent ?? "").replace(/\s+/g, " ")).not.toContain("yourself");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Refusals come back as data and land in the card's error slot
+// ---------------------------------------------------------------------------
+//
+// server-action-thrown-refusals-masked: a production build replaces a thrown
+// action error's message with a generic string, so the dispute actions now
+// RETURN { error } for a refusal. Each call site has to read it — an ignored
+// { error } is worse than the old throw, because the card would then carry on
+// as if the write had happened. One case per action the card calls.
+describe("DisputeOutcomeCard renders a returned refusal", () => {
+  // textContent includes the StatusField's "Fix" tag.
+  const alerts = () =>
+    screen.queryAllByRole("alert").map((a) => a.textContent ?? "");
+
+  it("Track this dispute: shows 'Nothing to dispute' instead of failing silently", async () => {
+    const actions = await import("@/app/actions/disputes");
+    vi.mocked(actions.openDisputeAction).mockResolvedValue({
+      error: "Nothing to dispute in this period.",
+    });
+    renderCard({ allDisputes: [] });
+    fireEvent.click(screen.getByRole("button", { name: /^Track this dispute/ }));
+    expect(await screen.findByText("Nothing to dispute in this period.")).toBeTruthy();
+    expect(alerts()).toEqual(["FixNothing to dispute in this period."]);
+  });
+
+  it("Apply: shows 'That claim no longer exists.'", async () => {
+    const actions = await import("@/app/actions/disputes");
+    vi.mocked(actions.applyDisputeRecoveryAction).mockResolvedValue({
+      error: "That claim no longer exists.",
+    });
+    renderCard({
+      allDisputes: [
+        itemizedRound(0.5, [disputeLine({ entryId: "e1", recoveredHours: 0.5 })]),
+      ],
+      entries: [liveRO([liveLine()])],
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Apply / }));
+    // Pre-existing layout: with no live claim, the card-level slot and the
+    // Apply panel's slot both read the one `error` state, so it shows in each.
+    // This asserts the sentence reaches the screen, not how many slots echo it.
+    const hits = await screen.findAllByText("That claim no longer exists.");
+    expect(hits.length).toBeGreaterThan(0);
+    expect(new Set(alerts())).toEqual(new Set(["FixThat claim no longer exists."]));
+  });
+
+  it("lifecycle tap: shows the refusal from setDisputeStatusAction", async () => {
+    const actions = await import("@/app/actions/disputes");
+    vi.mocked(actions.setDisputeStatusAction).mockResolvedValue({
+      error: "That status isn't one FRT knows.",
+    });
+    const live: Dispute = {
+      ...closedRound("d9", 0),
+      status: "generated",
+      submittedAt: null,
+      answeredAt: null,
+      resolvedAt: null,
+    };
+    render(
+      <DisputeOutcomeCard
+        periodKey={PERIOD_KEY}
+        periodLabel={PERIOD_LABEL}
+        openDispute={live}
+        allDisputes={[live]}
+        entries={[]}
+        library={[]}
+        shortedHours={12.5}
+        pendingCount={0}
+        pendingHours={0}
+        periodEnded
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Drop it" }));
+    expect(await screen.findByText("That status isn't one FRT knows.")).toBeTruthy();
+    expect(actions.setDisputeStatusAction).toHaveBeenCalledWith("d9", "withdrawn");
+  });
+
+  it("Close out claim: shows the refusal from recordDisputeOutcomeAction", async () => {
+    const actions = await import("@/app/actions/disputes");
+    vi.mocked(actions.recordDisputeOutcomeAction).mockResolvedValue({
+      error: "Recovered hours can't be more than 999.",
+    });
+    renderCard({ allDisputes: [closedRound("d1", 4)] });
+    fireEvent.click(screen.getByRole("button", { name: "Correct outcome" }));
+    fireEvent.change(screen.getByLabelText("Recovered hours"), {
+      target: { value: "5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close out claim" }));
+    expect(
+      await screen.findByText("Recovered hours can't be more than 999."),
+    ).toBeTruthy();
+    // Still on the form: a refused save must not look like a saved one.
+    expect(screen.getByRole("button", { name: "Close out claim" })).toBeTruthy();
   });
 });

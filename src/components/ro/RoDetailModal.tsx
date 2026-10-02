@@ -352,7 +352,14 @@ function LineRow({
     setUpsell(next); // optimistic; reverted below if the server refuses
     startUpsell(async () => {
       try {
-        await setLineUpsellAction(line.id, next);
+        const res = await setLineUpsellAction(line.id, next);
+        // A refusal ("a comeback can't also be an upsell") comes back as data —
+        // a thrown one is masked in production. Undo the optimistic flip.
+        if (res.error) {
+          setUpsell(!next);
+          setError(res.error);
+          return;
+        }
         router.refresh();
       } catch (e) {
         setUpsell(!next);
@@ -634,7 +641,7 @@ function AddOpCodePicker({
       : oc.flagHours;
     startTransition(async () => {
       try {
-        await addOpCodeLineToEntryAction(entryId, {
+        const res = await addOpCodeLineToEntryAction(entryId, {
           opCodeId: oc.id,
           custom: false,
           customCode: null,
@@ -646,6 +653,10 @@ function AddOpCodePicker({
           laborType: null,
           isUpsell: markUpsell,
         });
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
         onAdded();
         setSearch("");
         setOpen(false);

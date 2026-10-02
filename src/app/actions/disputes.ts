@@ -9,12 +9,21 @@ import { formatPeriodLabel, getRangeForPeriodKey } from "@/lib/periods";
 import { ratesToMap } from "@/lib/earnings";
 import { type Dispute, type DisputeStatus } from "@/lib/types";
 import { validate } from "@/lib/validation/core";
+import { Refusal, refusable } from "@/lib/refusal";
 import {
   disputeIdSchema,
   disputeOutcomeSchema,
   openDisputeSchema,
   setDisputeStatusSchema,
 } from "@/lib/validation/actions";
+
+// EVERY ACTION HERE RETURNS `{ error }` FOR A REFUSAL, never throws one.
+// A production build replaces a thrown action error's message with a generic
+// string + digest (see src/lib/refusal.ts), so "Nothing to dispute in this
+// period." used to reach the tech as an opaque failure. Each body runs inside
+// refusable(): a Refusal (including a validate() rejection) comes back as data
+// for the card to render; anything else — "Unrecognized period" is an
+// invariant, a DB failure is a bug — still throws and stays loud.
 
 function revalidateDisputeScreens() {
   revalidatePath("/pay-period");
@@ -42,53 +51,54 @@ function revalidateDisputeScreens() {
 export async function openDisputeAction(
   periodKeyArg: string,
   options: { includePending?: boolean } = {},
-): Promise<Dispute> {
-  const clean = validate(openDisputeSchema, { periodKey: periodKeyArg, options });
-  const periodKey = clean.periodKey;
-  const includePending = clean.options.includePending ?? false;
-  const supabase = await createClient();
+): Promise<Dispute | { error: string }> {
+  return refusable(async () => {
+    const clean = validate(openDisputeSchema, { periodKey: periodKeyArg, options });
+    const periodKey = clean.periodKey;
+    const includePending = clean.options.includePending ?? false;
+    const supabase = await createClient();
 
-  // A live dispute already exists for this period — hand it back instead of
-  // tripping the partial unique index. Makes a double-tap idempotent.
-  const existing = await db.getOpenDisputeSafe(supabase, periodKey);
-  if (existing) return existing;
+    // A live dispute already exists for this period — hand it back instead of
+    // tripping the partial unique index. Makes a double-tap idempotent.
+    const existing = await db.getOpenDisputeSafe(supabase, periodKey);
+    if (existing) return existing;
 
-  const settings = await db.getSettings(supabase);
-  const range = getRangeForPeriodKey(
-    periodKey,
-    settings.splitDay,
-    settings.periodOverrides,
-  );
-  if (!range) throw new Error(`Unrecognized period: ${periodKey}`);
+    const settings = await db.getSettings(supabase);
+    const range = getRangeForPeriodKey(
+      periodKey,
+      settings.splitDay,
+      settings.periodOverrides,
+    );
+    if (!range) throw new Error(`Unrecognized period: ${periodKey}`);
 
-  const [entries, library, rateRows] = await Promise.all([
-    db.listEntries(supabase, { from: range.start, to: range.end }),
-    db.listOpCodes(supabase),
-    db.listLaborRates(supabase),
-  ]);
-  const rates = ratesToMap(rateRows);
+    const [entries, library, rateRows] = await Promise.all([
+      db.listEntries(supabase, { from: range.start, to: range.end }),
+      db.listOpCodes(supabase),
+      db.listLaborRates(supabase),
+    ]);
+    const rates = ratesToMap(rateRows);
 
-  // Photo evidence is frozen per line, because the photo can be deleted later —
-  // this is what makes the "do claims with evidence get paid?" comparison honest.
-  const entryIdsWithPhotos = new Set(await db.listEntryIdsWithPhotos(supabase));
+    // Photo evidence is frozen per line, because the photo can be deleted later —
+    // this is what makes the "do claims with evidence get paid?" comparison honest.
+    const entryIdsWithPhotos = new Set(await db.listEntryIdsWithPhotos(supabase));
 
-  const today = new Date().toISOString().slice(0, 10);
-  const pack = buildDisputePack({
-    entries,
-    periodLabel: formatPeriodLabel(range),
-    library,
-    rates,
-    // Off unless the tech asked for it (see the doc comment). Still gated on the
-    // period being over even then — buildDisputePack refuses pending lines
-    // mid-period, because a line nobody has been paid for yet isn't a dispute.
-    includePending,
-    periodEnd: range.end,
-    today,
-    entryIdsWithPhotos,
+    const today = new Date().toISOString().slice(0, 10);
+    const pack = buildDisputePack({
+      entries,
+      periodLabel: formatPeriodLabel(range),
+      library,
+      rates,
+      // Off unless the tech asked for it (see the doc comment). Still gated on the
+      // period being over even then — buildDisputePack refuses pending lines
+      // mid-period, because a line nobody has been paid for yet isn't a dispute.
+      includePending,
+      periodEnd: range.end,
+      today,
+      entryIdsWithPhotos,
   });
 
   if (pack.totalShortHours <= 0) {
-    throw new Error("Nothing to dispute in this period.");
+    throw new Refusal("Nothing to dispute in this period.");
   }
 
   const draft = disputeFromPack(pack, periodKey);
@@ -101,17 +111,21 @@ export async function openDisputeAction(
   const dispute = await db.createDispute(supabase, { ...draft, lines });
   revalidateDisputeScreens();
   return dispute;
+  });
 }
 
 /** Move a dispute along the lifecycle. Timestamps are stamped in the data layer. */
 export async function setDisputeStatusAction(
   id: string,
   status: DisputeStatus,
-): Promise<void> {
-  const clean = validate(setDisputeStatusSchema, { id, status });
-  const supabase = await createClient();
-  await db.updateDispute(supabase, clean.id, { status: clean.status });
-  revalidateDisputeScreens();
+): Promise<{ ok: true } | { error: string }> {
+  return refusable(async () => {
+    const clean = validate(setDisputeStatusSchema, { id, status });
+    const supabase = await createClient();
+    await db.updateDispute(supabase, clean.id, { status: clean.status });
+    revalidateDisputeScreens();
+    return { ok: true as const };
+  });
 }
 
 /**
@@ -129,23 +143,31 @@ export async function recordDisputeOutcomeAction(
     note?: string;
     status?: DisputeStatus;
   },
-): Promise<void> {
-  const clean = validate(disputeOutcomeSchema, { id, input });
-  const supabase = await createClient();
-  await db.updateDispute(supabase, clean.id, {
-    recoveredHours: clean.input.recoveredHours,
-    recoveredDollars: clean.input.recoveredDollars ?? null,
-    note: clean.input.note?.trim() ?? undefined,
-    status: clean.input.status,
+): Promise<{ ok: true } | { error: string }> {
+  return refusable(async () => {
+    const clean = validate(disputeOutcomeSchema, { id, input });
+    const supabase = await createClient();
+    await db.updateDispute(supabase, clean.id, {
+      recoveredHours: clean.input.recoveredHours,
+      recoveredDollars: clean.input.recoveredDollars ?? null,
+      note: clean.input.note?.trim() ?? undefined,
+      status: clean.input.status,
+    });
+    revalidateDisputeScreens();
+    return { ok: true as const };
   });
-  revalidateDisputeScreens();
 }
 
-export async function deleteDisputeAction(id: string): Promise<void> {
-  const disputeId = validate(disputeIdSchema, id);
-  const supabase = await createClient();
-  await db.deleteDispute(supabase, disputeId);
-  revalidateDisputeScreens();
+export async function deleteDisputeAction(
+  id: string,
+): Promise<{ ok: true } | { error: string }> {
+  return refusable(async () => {
+    const disputeId = validate(disputeIdSchema, id);
+    const supabase = await createClient();
+    await db.deleteDispute(supabase, disputeId);
+    revalidateDisputeScreens();
+    return { ok: true as const };
+  });
 }
 
 /**
@@ -164,37 +186,40 @@ export async function deleteDisputeAction(id: string): Promise<void> {
  */
 export async function applyDisputeRecoveryAction(
   disputeIdArg: string,
-): Promise<{ appliedLines: number; appliedHours: number }> {
-  const disputeId = validate(disputeIdSchema, disputeIdArg);
-  const supabase = await createClient();
+): Promise<{ appliedLines: number; appliedHours: number } | { error: string }> {
+  return refusable(async () => {
+    const disputeId = validate(disputeIdSchema, disputeIdArg);
+    const supabase = await createClient();
 
-  const disputes = await db.listDisputes(supabase);
-  const dispute = disputes.find((d) => d.id === disputeId);
-  if (!dispute) throw new Error("That claim no longer exists.");
+    const disputes = await db.listDisputes(supabase);
+    const dispute = disputes.find((d) => d.id === disputeId);
+    // Reachable: a second tab deleted the claim, or a double-tap raced a delete.
+    if (!dispute) throw new Refusal("That claim no longer exists.");
 
-  const settings = await db.getSettings(supabase);
-  const range = getRangeForPeriodKey(
-    dispute.periodKey,
-    settings.splitDay,
-    settings.periodOverrides,
-  );
-  if (!range) throw new Error(`Unrecognized period: ${dispute.periodKey}`);
+    const settings = await db.getSettings(supabase);
+    const range = getRangeForPeriodKey(
+      dispute.periodKey,
+      settings.splitDay,
+      settings.periodOverrides,
+    );
+    if (!range) throw new Error(`Unrecognized period: ${dispute.periodKey}`);
 
-  const [entries, library] = await Promise.all([
-    db.listEntries(supabase, { from: range.start, to: range.end }),
-    db.listOpCodes(supabase),
-  ]);
+    const [entries, library] = await Promise.all([
+      db.listEntries(supabase, { from: range.start, to: range.end }),
+      db.listOpCodes(supabase),
+    ]);
 
-  const plan = pendingRecoveryApplication(dispute, entries, library);
-  if (plan.rows.length === 0) return { appliedLines: 0, appliedHours: 0 };
+    const plan = pendingRecoveryApplication(dispute, entries, library);
+    if (plan.rows.length === 0) return { appliedLines: 0, appliedHours: 0 };
 
-  // Sequential, not Promise.all: these are separate row updates with no
-  // transaction around them, and a half-applied batch is far easier to read
-  // back when the rows went in one at a time in a known order.
-  for (const row of plan.rows) {
-    await db.setLinePaidHours(supabase, row.lineId, row.paidAfter);
-  }
+    // Sequential, not Promise.all: these are separate row updates with no
+    // transaction around them, and a half-applied batch is far easier to read
+    // back when the rows went in one at a time in a known order.
+    for (const row of plan.rows) {
+      await db.setLinePaidHours(supabase, row.lineId, row.paidAfter);
+    }
 
-  revalidateDisputeScreens();
-  return { appliedLines: plan.rows.length, appliedHours: plan.applyHours };
+    revalidateDisputeScreens();
+    return { appliedLines: plan.rows.length, appliedHours: plan.applyHours };
+  });
 }

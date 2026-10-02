@@ -219,6 +219,10 @@ export function ScheduleCard({
           rotationWeeks: rotation,
           weeks,
         });
+        if ("error" in saved) {
+          setError(saved.error);
+          return;
+        }
         setSchedules((prev) =>
           [saved, ...prev.filter((s) => s.effectiveFrom !== saved.effectiveFrom)].sort(
             (a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1),

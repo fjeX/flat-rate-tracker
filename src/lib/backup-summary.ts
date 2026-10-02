@@ -23,8 +23,12 @@ import type { ImportBundle } from "@/lib/import-remap";
 export type BackupSection =
   /** The file describes this table; import replaces the destination's rows with these. */
   | { key: string; label: string; state: "replacing"; count: number }
-  /** The file predates this table. Import leaves what the account already has. */
-  | { key: string; label: string; state: "untouched" }
+  /**
+   * The file predates this table. Import leaves what the account already has.
+   * `detail`, when set, is the caveat on that keep (unpaid time keeps its rows
+   * but loses their links to the repair orders being replaced).
+   */
+  | { key: string; label: string; state: "untouched"; detail?: string }
   /**
    * A CORE table the file doesn't carry. Import refuses the whole file (see
    * missingCoreSectionRefusal) — never "untouched", because the RPC wipes core
@@ -45,6 +49,12 @@ export type BackupSummary = {
   version: number;
   exportedAt: string | null;
   sections: BackupSection[];
+  /**
+   * What the import does to the account BESIDES replacing the sections above —
+   * state the RPC clears whatever the file says. Not data that "doesn't come
+   * across" (that's `warnings`); data that stops existing.
+   */
+  sideEffects: BackupWarning[];
   warnings: BackupWarning[];
   /** Non-null when the file can't be imported at all; the sentence to show. */
   refusal: string | null;
@@ -66,6 +76,47 @@ const SECTIONS: { key: keyof ImportBundle; label: string }[] = [
   { key: "confirmedZeroDays", label: "Confirmed zero days" },
   { key: "portfolioSnapshots", label: "Portfolio snapshots" },
   { key: "careerMilestones", label: "Career milestones" },
+  // v5. Not core and not "untouched when absent" either — see ALWAYS_CLEARED.
+  { key: "roEvents", label: "Ticket timelines" },
+];
+
+/**
+ * Non-core sections the RPC deletes UNCONDITIONALLY but restores only when the
+ * file carries them. Absent therefore means "cleared", never "kept" — and,
+ * unlike a core section, it is not refused by the file alone, because an older
+ * backup genuinely can't carry it. The server refuses instead when the account
+ * actually has rows to lose (importDataAction → ticketTimelineRefusal); the
+ * dialog can only see the file, so it shows the red line.
+ *
+ * ro_events: import_replace_account v6 `DELETE FROM ro_events WHERE user_id =
+ * uid` with no `data ?` guard, and the rows cascade from entries regardless.
+ */
+const ALWAYS_CLEARED: Partial<Record<string, string>> = {
+  roEvents: "this backup predates open tickets",
+};
+
+/**
+ * The caveat on unpaid time kept from an older file. unpaid_time.entry_id and
+ * original_entry_id are ON DELETE SET NULL, and the RPC deletes every entry
+ * whenever the file carries entries (it always does — a core section). So the
+ * rows survive, but their RO links don't, and an open-work row is only
+ * meaningful through the ticket it was logged on.
+ */
+const UNPAID_TIME_KEPT_DETAIL =
+  "kept, but its links to repair orders are cleared because the repair orders are replaced — " +
+  "open-work hours lose their ticket";
+
+/**
+ * Always true, so always said. import_replace_account deletes active_timers
+ * before anything else: a timer points at an RO that is about to stop existing.
+ * The manifest has no `warnUser` for it because nothing "stays behind" — the
+ * timer is simply gone, with its unsaved time.
+ */
+const SIDE_EFFECTS: BackupWarning[] = [
+  {
+    label: "Running timers stop",
+    detail: "any timer running now is cleared, and time on it that hasn't been saved is lost.",
+  },
 ];
 
 /**
@@ -159,19 +210,31 @@ const WARNING_COPY: Partial<Record<TableName, { label: string; detail: string }>
 
 function countOf(value: unknown): number | null {
   if (Array.isArray(value)) return value.length;
-  // shiftOverrides is a date -> shift map, not an array.
+  // Any plain object counts its keys. That is only MEANT for shiftOverrides (a
+  // date -> shift map, not an array), but it also gives `{}` in a list-shaped
+  // section a count of 0 rather than null. Harmless: the importBundleSchema
+  // refuses that file with a sentence before anything is written, so the
+  // dialog's "cleared" for it is never acted on.
   if (value && typeof value === "object") return Object.keys(value).length;
   return null;
 }
 
 export function summarizeBackup(bundle: ImportBundle): BackupSummary {
   const b = bundle as unknown as Record<string, unknown>;
+  // Entries are core, so a file the dialog opens on always carries them — but
+  // say what's true rather than assume it.
+  const entriesReplaced = Array.isArray(b.entries);
 
   const sections: BackupSection[] = SECTIONS.map(({ key, label }) => {
     // hasOwnProperty, not a truthiness check: an empty array is a real value
     // that means "delete what's there", and `?? 0` would have flattened it into
     // the same "0" an absent key produces.
     if (isAbsent(b, key)) {
+      const alwaysCleared = ALWAYS_CLEARED[key];
+      if (alwaysCleared) return { key, label, state: "cleared", detail: alwaysCleared };
+      if (key === "unpaidTime" && entriesReplaced) {
+        return { key, label, state: "untouched", detail: UNPAID_TIME_KEPT_DETAIL };
+      }
       if (!CORE.has(key)) return { key, label, state: "untouched" };
       const reason = allowedAbsenceReason(b.version, key);
       return reason
@@ -180,8 +243,14 @@ export function summarizeBackup(bundle: ImportBundle): BackupSummary {
     }
     const count = countOf(b[key]);
     // A core value that isn't a list is no more usable than an absent one —
-    // never "untouched" for a table the RPC wipes regardless.
-    if (count === null) return { key, label, state: CORE.has(key) ? "missing" : "untouched" };
+    // never "untouched" for a table the RPC wipes regardless. Same for an
+    // always-cleared one, which the server refuses on shape anyway.
+    if (count === null) {
+      if (CORE.has(key)) return { key, label, state: "missing" };
+      const alwaysCleared = ALWAYS_CLEARED[key];
+      if (alwaysCleared) return { key, label, state: "cleared", detail: alwaysCleared };
+      return { key, label, state: "untouched" };
+    }
     return { key, label, state: "replacing", count };
   });
 
@@ -214,6 +283,7 @@ export function summarizeBackup(bundle: ImportBundle): BackupSummary {
     version: bundle.version,
     exportedAt: typeof bundle.exportedAt === "string" ? bundle.exportedAt : null,
     sections,
+    sideEffects: SIDE_EFFECTS.map((e) => ({ ...e })),
     warnings,
     refusal: missingCoreSectionRefusal(bundle),
   };

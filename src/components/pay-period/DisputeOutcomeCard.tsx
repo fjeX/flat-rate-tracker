@@ -122,12 +122,17 @@ function OutcomeForm({
     setError(null);
     startTransition(async () => {
       try {
-        await recordDisputeOutcomeAction(dispute.id, {
+        const res = await recordDisputeOutcomeAction(dispute.id, {
           recoveredHours: hours,
           recoveredDollars: dollars,
           note,
           status: "resolved",
         });
+        // A refusal comes back as data (a thrown one would be masked in prod).
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
         // Deliberately NO onDone() here. router.refresh() is not awaitable —
         // it schedules a refresh, so closing the form from this callback (in
         // either order) unmounts it before the resolved data arrives, and the
@@ -358,7 +363,11 @@ export function DisputeOutcomeCard({
     setError(null);
     startTransition(async () => {
       try {
-        await setDisputeStatusAction(dispute.id, to);
+        const res = await setDisputeStatusAction(dispute.id, to);
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
         router.refresh();
       } catch (e) {
         setError(actionErrorMessage(e, "Failed to update."));
@@ -370,7 +379,14 @@ export function DisputeOutcomeCard({
     setError(null);
     startTransition(async () => {
       try {
-        await openDisputeAction(periodKey, { includePending: claimPending });
+        const res = await openDisputeAction(periodKey, {
+          includePending: claimPending,
+        });
+        // "Nothing to dispute in this period." lands here, as a sentence.
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
         router.refresh();
       } catch (e) {
         setError(actionErrorMessage(e, "Failed to start tracking."));
@@ -387,6 +403,10 @@ export function DisputeOutcomeCard({
     startTransition(async () => {
       try {
         const result = await applyDisputeRecoveryAction(round.id);
+        if ("error" in result) {
+          setError(result.error);
+          return;
+        }
         setApplied(result.appliedLines);
         router.refresh();
       } catch (e) {
@@ -497,6 +517,12 @@ export function DisputeOutcomeCard({
       ({ r, i }) => i > 0 && r !== applyRound && r.plan.unmappedHours > 0,
     );
   const showOlderUnplacedNote = olderUnplaced.length > 0 && shortedHours > 0;
+  // The missing-breakdown note asks the tech to enter paid hours per line —
+  // the same ask as the period-total note, so it stops on the same condition:
+  // once the period no longer reads short, the hours are already entered.
+  // Only the RENDER is gated; unmappedIsUnplaceable and showApplyFootnote read
+  // needsLineBreakdown raw, for mutual exclusion, and must keep doing so.
+  const showBreakdownNote = recovery.needsLineBreakdown && shortedHours > 0;
   const ordinal = (n: number) => {
     const t = n % 100;
     if (t >= 11 && t <= 13) return `${n}th`;
@@ -736,7 +762,7 @@ export function DisputeOutcomeCard({
       {/* No per-line breakdown and a partial settlement: which lines the shop
           paid is a fact the app does not have, and splitting the money evenly
           would be the app inventing the answer. Ask for it instead. */}
-      {recovery.needsLineBreakdown && (
+      {showBreakdownNote && (
         <StatusField tag="Note"><p>
           {multiClaim ? (
             <>

@@ -198,7 +198,14 @@ function DayDock({
     setError(null);
     startTransition(async () => {
       try {
-        await fn();
+        const res = await fn();
+        // Converted actions return their refusal as `{ error }` instead of
+        // throwing (a thrown sentence is masked in production). Nothing
+        // changed, so no refresh and the day doesn't settle.
+        if (res && typeof res === "object" && "error" in res && res.error) {
+          setError(String(res.error));
+          return;
+        }
         router.refresh();
         if (settles) onSettled(day.date);
       } catch (err) {

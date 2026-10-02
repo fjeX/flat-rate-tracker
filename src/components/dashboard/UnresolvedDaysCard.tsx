@@ -64,7 +64,12 @@ export function UnresolvedDaysCard({ days }: { days: string[] }) {
     setBusyDate(date);
     startTransition(async () => {
       try {
-        await resolveZeroDayAction(date, resolution);
+        const res = await resolveZeroDayAction(date, resolution);
+        // A refusal comes back as data (a thrown one is masked in production).
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
         setRemaining((prev) => prev.filter((d) => d !== date));
       } catch (err) {
         setError(actionErrorMessage(err, "Couldn't save — try again."));
@@ -84,11 +89,15 @@ export function UnresolvedDaysCard({ days }: { days: string[] }) {
     setBusyDate(date);
     startTransition(async () => {
       try {
-        await resolveZeroDayAction(date, "worked-unpaid", {
+        const res = await resolveZeroDayAction(date, "worked-unpaid", {
           hours,
           kind: unpaidKind,
           note: unpaidNote,
         });
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
         setRemaining((prev) => prev.filter((d) => d !== date));
         closeUnpaid();
       } catch (err) {

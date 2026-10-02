@@ -86,6 +86,11 @@ export function BonusForm({
           isEdit && initial
             ? await updateBonusAction(initial.id, input)
             : await createBonusAction(input);
+        // A refusal comes back as data (a thrown one is masked in production).
+        if ("error" in saved) {
+          setError(saved.error);
+          return;
+        }
         tap();
         router.refresh();
         // Same stale-tree hazard as Quick Add — see RefreshFlusher (c655c010).

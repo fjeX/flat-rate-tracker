@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Refusal } from "@/lib/refusal";
 
 /**
  * The parse boundary for server actions.
@@ -55,16 +56,18 @@ function firstMessage(error: z.ZodError): string {
 /**
  * Validate and return the parsed value, or throw with a user-readable message.
  *
- * Throwing is right for the majority of actions: they are called from a client
- * component inside a try/catch that surfaces `err.message`, so an invalid
- * argument reads as a sentence rather than a stack trace.
+ * Throws a `Refusal` (an Error subclass), not a plain Error: a validation
+ * sentence is written for the tech, and a production build masks the message
+ * of any error thrown out of a Server Action (server-action-thrown-refusals-
+ * masked). An action wrapped in `refusable()` therefore RETURNS it as
+ * `{ error }`; an unwrapped action still throws exactly as before.
  */
 export function validate<S extends z.ZodType>(
   schema: S,
   value: unknown,
 ): z.output<S> {
   const result = schema.safeParse(value);
-  if (!result.success) throw new Error(firstMessage(result.error));
+  if (!result.success) throw new Refusal(firstMessage(result.error));
   return result.data;
 }
 

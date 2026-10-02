@@ -184,9 +184,13 @@ export function TimerPip({
   const leadElapsed = elapsedFor(lead, now, caps[lead.id] ?? null);
   const leadEntry = lead.entryId ? entryById.get(lead.entryId) : null;
 
-  function run(action: () => Promise<void>) {
+  function run(action: () => Promise<unknown>) {
     startPending(async () => {
       try {
+        // A refused status flip now RETURNS `{ error }` instead of throwing.
+        // Ignored here exactly as a throw always was: the pip has no error
+        // slot, and the refresh below repaints the true state (a refused flip
+        // changed nothing), which the timer page then explains.
         await action();
       } catch {
         // Non-critical in pip context — the timer page surfaces real errors.

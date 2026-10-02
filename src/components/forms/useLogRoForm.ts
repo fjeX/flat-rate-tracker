@@ -323,6 +323,10 @@ export function useLogRoForm({
       const compressed = await downscaleImage(blob);
       const fd = new FormData();
       fd.append("photo", compressed, "ro.jpg");
+      // A refusal now comes back as `{ error }` rather than a throw; it is
+      // ignored for the same reason a thrown failure is — deliberately: the RO
+      // already saved, and the scan photo is best-effort evidence. Surfacing
+      // it here would put an error banner over a successful save.
       await uploadEntryPhoto(entryId, fd);
     } catch {
       // Swallow — the entry saved fine; the photo just didn't attach.

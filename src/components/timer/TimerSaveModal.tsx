@@ -389,6 +389,13 @@ export function TimerSaveModal({
     startPending(async () => {
       try {
         const res = await saveTimerAction(slot.id, isOpenTicket ? null : (selected?.id ?? null));
+        // A refusal ("Pick an op code…", "That RO no longer exists.") comes back
+        // as data — a thrown one is masked in production. Nothing was written;
+        // the modal stays open with the sentence.
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
         tap();
         // Three reasons the tech still needs a receipt:
         //   - the unpaid ledger didn't write (the worked hours still did),

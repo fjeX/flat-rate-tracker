@@ -15,18 +15,35 @@ const enforceRateLimit = vi.fn();
 const reportServerError = vi.fn();
 const listAllUserPhotoPaths = vi.fn();
 const revalidatePath = vi.fn();
+// The read-only ro_events head count importDataAction makes for a file with no
+// `roEvents` key. Records the table and filter so a test can prove it is scoped.
+const roEventsCount = vi.fn();
+const fromCalls: { table: string; eq?: [string, unknown] }[] = [];
 
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePath(...a) }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     rpc: (...a: unknown[]) => rpc(...a),
+    from: (table: string) => {
+      const call: { table: string; eq?: [string, unknown] } = { table };
+      fromCalls.push(call);
+      return {
+        select: () => ({
+          eq: (col: string, val: unknown) => {
+            call.eq = [col, val];
+            return roEventsCount();
+          },
+        }),
+      };
+    },
     storage: { from: () => ({ remove: (...a: unknown[]) => storageRemove(...a) }) },
   }),
 }));
 vi.mock("@/lib/db", () => ({
   getCurrentUserId: async () => "user-1",
   listAllUserPhotoPaths: (...a: unknown[]) => listAllUserPhotoPaths(...a),
+  isMissingTable: (e: { code?: string }) => e?.code === "PGRST205" || e?.code === "42P01",
 }));
 vi.mock("@/lib/report-error-server", () => ({
   reportServerError: (...a: unknown[]) => reportServerError(...a),
@@ -78,6 +95,8 @@ beforeEach(() => {
   storageRemove.mockResolvedValue({ error: null });
   enforceRateLimit.mockResolvedValue(undefined);
   listAllUserPhotoPaths.mockResolvedValue([]);
+  roEventsCount.mockResolvedValue({ count: 0, error: null });
+  fromCalls.length = 0;
 });
 
 describe("importDataAction refusals come back as data", () => {
@@ -311,5 +330,110 @@ describe("importDataAction — v1 predates spiffs", () => {
         "This backup is missing its daily clock records section, so nothing was imported — your current data is unchanged.",
     });
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+// A refused file must not spend one of the tech's 5 imports/hour. Every check
+// that reads only the file — shape, dates, the claim-total integrity checks in
+// buildImportPayload — and the ticket-timeline refusal run before the limiter.
+describe("importDataAction — refused files are refused for free", () => {
+  it.each<[string, Bundle]>([
+    ["a bad entry date", bundle({ entries: [{ date: "09/01/2026", roNumber: "4411" }] })],
+    ["a bad clock date", bundle({ dailyClocks: [{ date: "yesterday" }] })],
+    ["a bad bonus date", bundle({ bonuses: [{ date: "x" }] })],
+    ["a bad unpaid-time date", bundle({ unpaidTime: [{ date: "x" }] })],
+    [
+      "a self-contradicting dispute claim",
+      bundle({
+        disputes: [
+          {
+            id: "D1",
+            periodKey: "2026-08-01",
+            claimedHours: 5,
+            lines: [{ id: "L0", claimedHours: 1 }],
+          },
+        ],
+      }),
+    ],
+    ["a nested shape the builder would crash on", bundle({ disputes: [{ id: "D1", lines: "abc" }] })],
+  ])("%s never calls enforceRateLimit", async (_l, b) => {
+    const res = await importDataAction(b);
+    expect(res.error).toBeTruthy();
+    expect(enforceRateLimit).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("an accepted file does spend a slot, keyed to the signed-in user", async () => {
+    await expect(importDataAction(bundle({ roEvents: [] }))).resolves.toEqual({});
+    expect(enforceRateLimit).toHaveBeenCalledTimes(1);
+    expect(enforceRateLimit.mock.calls[0][1]).toBe("user-1");
+  });
+});
+
+// import-nested-shape-crashes-masked: these used to pass the schema and throw
+// a TypeError inside buildImportPayload — masked in production.
+describe("importDataAction — malformed nested shapes come back as a sentence", () => {
+  it.each<[string, Bundle, string]>([
+    ["disputes[].lines as a string", bundle({ disputes: [{ id: "D1", lines: "abc" }] }), "A dispute's lines must be a list."],
+    ["opCodes[].subOpCodes holding null", bundle({ opCodes: [{ id: "O1", subOpCodes: [null] }] }), "An op code's variants must be a list of records."],
+    ["entries[].opCodes as a number", bundle({ entries: [{ id: "E1", date: "2026-01-01", opCodes: 5 }] }), "An RO's op code lines must be a list."],
+    ["confirmedZeroDays as a string", bundle({ confirmedZeroDays: "2026-01-01" }), "Confirmed zero days must be a list of dates."],
+    ["roEvents holding null", bundle({ roEvents: [null] }), "Ticket timelines must be a list of records."],
+    ["shiftOverrides as a number", bundle({ shiftOverrides: 5 }), "Shift overrides are malformed."],
+  ])("%s", async (_l, b, msg) => {
+    await expect(importDataAction(b)).resolves.toEqual({ error: msg });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+// import-dialog-undisclosed-deletes: import_replace_account (v6) deletes
+// ro_events unconditionally and restores them only when the file carries the
+// key. A pre-open-tickets file would erase every timeline. Liem's rule:
+// refuse it when the account has any.
+describe("importDataAction — a backup without ticket timelines can't erase the account's", () => {
+  const sentence = (n: number, noun: string) =>
+    `This backup is from before open tickets existed, and this account has ${n} ticket timeline ${noun} that importing it would erase, so nothing was imported. Export a fresh backup first, or import on an account without open tickets.`;
+
+  it.each<[string, Bundle]>([
+    ["absent", bundle()],
+    ["absent on a v4 file", bundle({ version: 4 })],
+  ])("refuses when roEvents is %s and the account has timelines", async (_l, b) => {
+    roEventsCount.mockResolvedValue({ count: 7, error: null });
+    await expect(importDataAction(b)).resolves.toEqual({ error: sentence(7, "events") });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(enforceRateLimit).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+    // A read-only count on the right table, scoped to the signed-in user.
+    expect(fromCalls).toEqual([{ table: "ro_events", eq: ["user_id", "user-1"] }]);
+  });
+
+  it("singular wording for one event", async () => {
+    roEventsCount.mockResolvedValue({ count: 1, error: null });
+    await expect(importDataAction(bundle())).resolves.toEqual({ error: sentence(1, "event") });
+  });
+
+  it("imports when the account has no timelines to lose", async () => {
+    roEventsCount.mockResolvedValue({ count: 0, error: null });
+    await expect(importDataAction(bundle())).resolves.toEqual({});
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("imports when the database predates the ro_events table", async () => {
+    roEventsCount.mockResolvedValue({ count: null, error: { code: "PGRST205", message: "schema cache" } });
+    await expect(importDataAction(bundle())).resolves.toEqual({});
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("still throws a genuine fault from the count", async () => {
+    roEventsCount.mockResolvedValue({ count: null, error: { code: "08006", message: "connection lost" } });
+    await expect(importDataAction(bundle())).rejects.toMatchObject({ code: "08006" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("a file that carries roEvents (even empty) never asks — it replaces them", async () => {
+    roEventsCount.mockResolvedValue({ count: 7, error: null });
+    await expect(importDataAction(bundle({ roEvents: [] }))).resolves.toEqual({});
+    expect(fromCalls).toEqual([]);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

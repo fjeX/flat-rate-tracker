@@ -141,3 +141,49 @@ describe("DataCard — v1 backup that predates spiffs", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });
+
+// import-dialog-undisclosed-deletes: the dialog must say what the RPC does
+// beyond the listed sections.
+describe("DataCard — disclosures in the confirm dialog", () => {
+  async function openWith(raw: Record<string, unknown>) {
+    render(<DataCard />);
+    const input = screen.getByLabelText("Import backup file") as HTMLInputElement;
+    const file = new File([JSON.stringify(raw)], "b.json", { type: "application/json" });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+    expect(await screen.findByText("Replace all data?")).toBeTruthy();
+  }
+
+  it("always says running timers stop", async () => {
+    await openWith({ ...JSON.parse(BACKUP), roEvents: [] });
+    expect(screen.getByText("Running timers stop")).toBeTruthy();
+    expect(
+      screen.getByText(/any timer running now is cleared, and time on it that hasn't been saved is lost\./),
+    ).toBeTruthy();
+  });
+
+  it("a file without ticket timelines shows the red cleared line, in the replace list", async () => {
+    await openWith(JSON.parse(BACKUP));
+    const li = screen.getByText("Ticket timelines — will be cleared (this backup predates open tickets)");
+    expect(li.tagName).toBe("LI");
+    expect(li.className).toContain("imp-cleared");
+    const keptList = screen.getByText(/your current data is kept/).nextElementSibling!;
+    expect(keptList.textContent).not.toMatch(/Ticket timelines/);
+  });
+
+  it("a file with ticket timelines shows 'Ticket timelines N'", async () => {
+    await openWith({ ...JSON.parse(BACKUP), roEvents: [{ id: "a" }, { id: "b" }] });
+    const label = screen.getByText("Ticket timelines");
+    expect(label.nextElementSibling?.textContent).toBe("2");
+    expect(screen.queryByText(/predates open tickets/)).toBeNull();
+  });
+
+  it("unpaid time kept from an older file says its RO links are cleared", async () => {
+    await openWith(JSON.parse(BACKUP));
+    const keptList = screen.getByText(/your current data is kept/).nextElementSibling!;
+    expect(keptList.textContent).toMatch(
+      /Unpaid time — kept, but its links to repair orders are cleared because the repair orders are replaced — open-work hours lose their ticket/,
+    );
+  });
+});

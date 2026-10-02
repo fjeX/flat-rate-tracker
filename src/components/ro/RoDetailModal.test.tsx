@@ -17,11 +17,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/app/actions/entries", () => ({
-  addOpCodeLineToEntryAction: vi.fn(),
+  // Both now RETURN their refusal as { error } (server-action-thrown-
+  // refusals-masked); {} is success.
+  addOpCodeLineToEntryAction: vi.fn(async () => ({})),
   deleteEntryAction: vi.fn(),
   deleteEntryLineAction: vi.fn(),
   setLineActualHoursAction: vi.fn(),
-  setLineUpsellAction: vi.fn(),
+  setLineUpsellAction: vi.fn(async () => ({})),
 }));
 vi.mock("@/app/actions/entry-photos", () => ({
   listEntryPhotosAction: vi.fn(async () => []),

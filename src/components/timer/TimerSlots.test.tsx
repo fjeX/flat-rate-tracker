@@ -40,10 +40,12 @@ vi.mock("@/app/actions/timer", () => ({
   attachRoToExistingTimerAction: (...args: unknown[]) =>
     attachRoToExistingTimerAction(...args),
   attachRoToTimerAction: (...args: unknown[]) => attachRoToTimerAction(...args),
-  releaseTimerAction: vi.fn(),
-  resetTimerAction: vi.fn(),
-  setTimerLineAction: vi.fn(),
-  setTimerStatusAction: vi.fn(),
+  // Every timer action now RETURNS its refusal as { error }
+  // (server-action-thrown-refusals-masked); {} is success.
+  releaseTimerAction: vi.fn(async () => ({})),
+  resetTimerAction: vi.fn(async () => ({})),
+  setTimerLineAction: vi.fn(async () => ({})),
+  setTimerStatusAction: vi.fn(async () => ({})),
 }));
 vi.mock("@/app/actions/entries", () => ({
   saveEntry: (...args: unknown[]) => saveEntry(...args),
@@ -354,5 +356,34 @@ describe("TimerSlots — a timer with no RO", () => {
     expect(attachRoToExistingTimerAction).toHaveBeenLastCalledWith("t-1", "e-1", "line-1");
     // Never fell through to claiming a new slot.
     expect(attachRoToTimerAction).not.toHaveBeenCalled();
+  });
+});
+
+// server-action-thrown-refusals-masked (2026-10-01): attachRoToTimerAction
+// used to THROW its refusals, which a production build masks. It now returns
+// them, and the card must show the sentence rather than a generic failure.
+describe("TimerSlots — a refused attach to a new slot", () => {
+  it("shows the sentence attachRoToTimerAction returns, and does not refresh", async () => {
+    attachRoToTimerAction.mockResolvedValue({
+      error: "All 3 timers are in use. Save or clear one first.",
+    });
+    render(
+      <TimerSlots
+        slots={[]}
+        attachedEntries={[]}
+        caps={{}}
+        recentEntries={[ENTRY]}
+        library={LIBRARY}
+        roTemplates={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /start a timer/i }));
+    await screen.findByText("Put an RO on a timer");
+    fireEvent.click(screen.getByText("#88421").closest("button")!);
+    await waitFor(() =>
+      expect(attachRoToTimerAction).toHaveBeenCalledWith("e-1", "line-1"),
+    );
+    await screen.findByText("All 3 timers are in use. Save or clear one first.");
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

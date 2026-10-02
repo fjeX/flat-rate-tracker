@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { refusable } from "@/lib/refusal";
 import { syncObservations } from "@/lib/true-time-sync";
 import { check, validate } from "@/lib/validation/core";
 import {
@@ -94,62 +95,66 @@ export async function saveEntry(
   input: NewEntry,
   entryId?: string,
 ): Promise<Entry | { error: string }> {
-  // --- server-side validation -------------------------------------------
-  // `clean` is the PARSED value, not `input`: the schema declares the fields an
-  // RO is made of, so anything else a caller attached is gone by this line
-  // rather than riding along into the DB mapper.
-  const parsed = check(newEntrySchema, input);
-  if (!parsed.ok) return { error: parsed.error };
-  const clean = parsed.data;
-  const id = entryId === undefined ? undefined : validate(entryIdSchema, entryId);
+  // refusable(): the entry-id parse and db.createEntry's "at least one op
+  // code" guard throw Refusals; this turns them into `{ error }` too.
+  return refusable(async () => {
+    // --- server-side validation -------------------------------------------
+    // `clean` is the PARSED value, not `input`: the schema declares the fields an
+    // RO is made of, so anything else a caller attached is gone by this line
+    // rather than riding along into the DB mapper.
+    const parsed = check(newEntrySchema, input);
+    if (!parsed.ok) return { error: parsed.error };
+    const clean = parsed.data;
+    const id = entryId === undefined ? undefined : validate(entryIdSchema, entryId);
 
-  const supabase = await createClient();
+    const supabase = await createClient();
 
-  // Normalize the comeback invariants server-side rather than trusting the
-  // client. The DB CHECK would reject a comeback line carrying flag hours, but
-  // that surfaces as a raw constraint violation; deciding it here means one
-  // consistent answer no matter which form (or future caller) sent it.
-  const hasComebackLines = clean.opCodes.some((l) => l.isComeback);
-  const opCodes = clean.opCodes.map((l) =>
-    l.isComeback ? { ...l, flagHours: 0 } : l,
-  );
+    // Normalize the comeback invariants server-side rather than trusting the
+    // client. The DB CHECK would reject a comeback line carrying flag hours, but
+    // that surfaces as a raw constraint violation; deciding it here means one
+    // consistent answer no matter which form (or future caller) sent it.
+    const hasComebackLines = clean.opCodes.some((l) => l.isComeback);
+    const opCodes = clean.opCodes.map((l) =>
+      l.isComeback ? { ...l, flagHours: 0 } : l,
+    );
 
-  // RO numbers are intentionally NOT unique — shops recycle them, so the same
-  // number can be a different repair months later. Duplicate awareness lives in
-  // the client (findDuplicateRos + the duplicate-RO prompt); the server just
-  // persists what it's told.
+    // RO numbers are intentionally NOT unique — shops recycle them, so the same
+    // number can be a different repair months later. Duplicate awareness lives in
+    // the client (findDuplicateRos + the duplicate-RO prompt); the server just
+    // persists what it's told.
 
-  const normalized: NewEntry = {
-    ...clean,
-    notes: clean.notes.trim(),
-    opCodes,
-    // Entry-level comeback metadata without a single marked line describes
-    // nothing. Clearing it here also means EDITING a comeback back into a
-    // normal RO actually clears the columns instead of leaving them stale.
-    comebackKind: hasComebackLines ? clean.comebackKind : null,
-    comebackOfEntryId:
-      hasComebackLines && clean.comebackKind === "comeback_own"
-        ? clean.comebackOfEntryId
-        : null,
-  };
+    const normalized: NewEntry = {
+      ...clean,
+      notes: clean.notes.trim(),
+      opCodes,
+      // Entry-level comeback metadata without a single marked line describes
+      // nothing. Clearing it here also means EDITING a comeback back into a
+      // normal RO actually clears the columns instead of leaving them stale.
+      comebackKind: hasComebackLines ? clean.comebackKind : null,
+      comebackOfEntryId:
+        hasComebackLines && clean.comebackKind === "comeback_own"
+          ? clean.comebackOfEntryId
+          : null,
+    };
 
-  const entry = id
-    ? await db.updateEntry(supabase, id, normalized)
-    : await db.createEntry(supabase, normalized);
+    const entry = id
+      ? await db.updateEntry(supabase, id, normalized)
+      : await db.createEntry(supabase, normalized);
 
-  await syncObservations(supabase, entry.id);
+    await syncObservations(supabase, entry.id);
 
-  // Revalidate everything that displays entries. NB: "/" is the marketing
-  // landing page — the app dashboard lives at "/dashboard" and must be listed
-  // explicitly or its Recent-ROs / stats stay stale after a mutation.
-  revalidatePath("/");
-  revalidatePath("/dashboard");
-  revalidatePath("/history");
-  revalidatePath("/pay-period");
-  revalidatePath("/insights");
-  revalidatePath("/log");
+    // Revalidate everything that displays entries. NB: "/" is the marketing
+    // landing page — the app dashboard lives at "/dashboard" and must be listed
+    // explicitly or its Recent-ROs / stats stay stale after a mutation.
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+    revalidatePath("/history");
+    revalidatePath("/pay-period");
+    revalidatePath("/insights");
+    revalidatePath("/log");
 
-  return entry;
+    return entry;
+  });
 }
 
 export async function deleteEntryLineAction(lineId: string): Promise<void> {
@@ -180,23 +185,30 @@ export async function deleteEntryAction(id: string): Promise<void> {
   revalidatePath("/insights");
 }
 
+// Returns `{ error }` for a refusal (a validation sentence) rather than
+// throwing it — a thrown sentence is masked in production
+// (server-action-thrown-refusals-masked). `{}` is success.
+//
+// A DB failure still THROWS. This used to catch it and rethrow its raw message
+// as if it were a sentence for the tech, which (a) production masked anyway and
+// (b) would only ever have shown a Postgres error. It is a failure, not a
+// refusal, so it stays loud.
 export async function addOpCodeLineToEntryAction(
   entryId: string,
   line: Omit<NewEntryOpCode, "position">,
-): Promise<void> {
-  const clean = validate(addLineSchema, { entryId, line });
-  const supabase = await createClient();
-  try {
+): Promise<{ error?: string }> {
+  return refusable(async () => {
+    const clean = validate(addLineSchema, { entryId, line });
+    const supabase = await createClient();
     await db.addEntryLine(supabase, clean.entryId, clean.line);
-  } catch (err) {
-    throw new Error(err instanceof Error ? err.message : "Failed to add op code.");
-  }
-  await syncObservations(supabase, clean.entryId);
-  revalidatePath("/");
-  revalidatePath("/dashboard");
-  revalidatePath("/history");
-  revalidatePath("/pay-period");
-  revalidatePath("/insights");
+    await syncObservations(supabase, clean.entryId);
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+    revalidatePath("/history");
+    revalidatePath("/pay-period");
+    revalidatePath("/insights");
+    return {};
+  });
 }
 
 // Record (or clear) the hours a line actually took.
@@ -255,18 +267,24 @@ export async function setLineActualHoursAction(
 // No True Time sync: this changes nothing about flag or actual hours, so the
 // observations it would recompute are byte-identical. Every other line mutation
 // here calls syncObservations because it moves one of those two numbers.
+//
+// Returns `{ error }` for a refusal — chiefly db.setLineUpsell's "a comeback
+// can't also be an upsell" — rather than throwing it (masked in production).
 export async function setLineUpsellAction(
   lineId: string,
   isUpsell: boolean,
-): Promise<void> {
-  const clean = validate(setLineUpsellSchema, { lineId, isUpsell });
-  const supabase = await createClient();
-  await db.setLineUpsell(supabase, clean.lineId, clean.isUpsell);
-  revalidatePath("/");
-  revalidatePath("/dashboard");
-  revalidatePath("/history");
-  revalidatePath("/pay-period");
-  revalidatePath("/insights");
+): Promise<{ error?: string }> {
+  return refusable(async () => {
+    const clean = validate(setLineUpsellSchema, { lineId, isUpsell });
+    const supabase = await createClient();
+    await db.setLineUpsell(supabase, clean.lineId, clean.isUpsell);
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+    revalidatePath("/history");
+    revalidatePath("/pay-period");
+    revalidatePath("/insights");
+    return {};
+  });
 }
 
 // Record (or clear) the flag hours the shop actually paid on a single RO line.

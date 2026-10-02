@@ -904,9 +904,35 @@ export const timezoneSchema = z
  * must be present — see missingCoreSectionRefusal in lib/backup-summary. That
  * lives there rather than as `.optional()` removals here so the confirm dialog
  * and the server share one rule and one sentence.
+ *
+ * NESTED SHAPES (import-nested-shape-crashes-masked, 2026-10-01)
+ * Checking only the top-level rows let a file through whose NESTED lists
+ * buildImportPayload iterates — a dispute's `lines`, an op code's
+ * `subOpCodes`, an RO's `opCodes` — as a string, a number, or a list holding
+ * null. Those passed here and then died as a TypeError inside the builder,
+ * which the action does not convert, so the tech got the masked production
+ * error instead of a sentence. Every nested list the builder walks is typed
+ * below to exactly what lib/backup-bundle.ts emits (the export is the
+ * canonical shape), and still optional/nullable wherever the builder reads it
+ * through `?? []` — so no file that imported before is refused now.
  */
 const looseRows = (label: string) =>
   z.array(z.looseObject({}), { error: `${label} must be a list.` }).optional();
+
+/**
+ * A list nested inside a row (dispute lines, op-code variants, RO lines). Each
+ * element must be an object — the builder reads fields off it — and the list
+ * itself may be absent or null because the builder falls back to `?? []`.
+ */
+const nestedRows = (label: string) =>
+  z
+    .array(z.looseObject({}, { error: `${label} must be a list of records.` }), {
+      error: `${label} must be a list.`,
+    })
+    .nullable()
+    .optional();
+
+const SHIFT_OVERRIDES_MESSAGE = "Shift overrides are malformed.";
 
 export const importBundleSchema = z.looseObject({
   version: z.number({ error: "That file isn't a Flat Rate Tracker backup." }),
@@ -934,8 +960,14 @@ export const importBundleSchema = z.looseObject({
     theme: z.string().optional(),
     accent: z.string().optional(),
   }),
-  entries: z.array(z.looseObject({}), { error: "Invalid backup format." }),
-  opCodes: z.array(z.looseObject({}), { error: "Invalid backup format." }),
+  entries: z.array(
+    z.looseObject({ opCodes: nestedRows("An RO's op code lines") }),
+    { error: "Invalid backup format." },
+  ),
+  opCodes: z.array(
+    z.looseObject({ subOpCodes: nestedRows("An op code's variants") }),
+    { error: "Invalid backup format." },
+  ),
   dailyClocks: looseRows("Clock records"),
   paidPeriods: looseRows("Paid periods"),
   entryPhotos: looseRows("Photos"),
@@ -943,14 +975,46 @@ export const importBundleSchema = z.looseObject({
   // decides; this schema only type-checks what's there).
   bonuses: looseRows("Spiffs").nullable(),
   laborRates: looseRows("Labor rates"),
-  disputes: looseRows("Disputes"),
+  disputes: z
+    .array(z.looseObject({ lines: nestedRows("A dispute's lines") }), {
+      error: "Disputes must be a list.",
+    })
+    .optional(),
   unpaidTime: looseRows("Unpaid time"),
   workSchedules: looseRows("Schedules"),
   daysOff: looseRows("Days off"),
-  shiftOverrides: z.unknown().optional(),
-  confirmedZeroDays: z.unknown().optional(),
+  // date -> ShiftDef (lib/schedule), the read shape of listShiftOverridesSafe.
+  // Was z.unknown(): a number or string here reached Object.entries in the
+  // builder and became junk rows. Typed, not range-checked — the values were
+  // validated by shiftDefSchema when they were first saved.
+  shiftOverrides: z
+    .record(
+      z.string(),
+      z.looseObject(
+        {
+          start: z.string({ error: SHIFT_OVERRIDES_MESSAGE }),
+          end: z.string({ error: SHIFT_OVERRIDES_MESSAGE }),
+          breakMin: z.number({ error: SHIFT_OVERRIDES_MESSAGE }),
+        },
+        { error: SHIFT_OVERRIDES_MESSAGE },
+      ),
+      { error: SHIFT_OVERRIDES_MESSAGE },
+    )
+    .optional(),
+  // Bare "YYYY-MM-DD" strings, as listConfirmedZeroDaysSafe returns them.
+  confirmedZeroDays: z
+    .array(z.string(), { error: "Confirmed zero days must be a list of dates." })
+    .optional(),
   portfolioSnapshots: looseRows("Snapshots"),
   careerMilestones: looseRows("Milestones"),
+  // v5. Was missing from this schema entirely. The builder resolves each row's
+  // entryId through a lookup that tolerates anything (an unresolved id drops
+  // the event), so the rows only need to be objects.
+  roEvents: z
+    .array(z.looseObject({}, { error: "Ticket timelines must be a list of records." }), {
+      error: "Ticket timelines must be a list.",
+    })
+    .optional(),
 });
 
 // ---------------------------------------------------------------------------

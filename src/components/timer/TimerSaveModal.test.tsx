@@ -644,3 +644,19 @@ describe("TimerSaveReceipt — the title carries the new fact", () => {
     expect(screen.getByText("Saved with a warning")).toBeTruthy();
   });
 });
+
+// server-action-thrown-refusals-masked (2026-10-01): saveTimerAction RETURNS
+// its refusal instead of throwing it (a thrown sentence is masked in
+// production). The modal must show it and stay open — nothing was saved.
+describe("TimerSaveModal — a refused save", () => {
+  it("shows the returned sentence and hands nothing back", async () => {
+    saveTimerAction.mockResolvedValue({ error: "That RO no longer exists." });
+    const { onSaved } = renderModal();
+    await save();
+
+    await screen.findByText("That RO no longer exists.");
+    // The transition settles: the button is back, ready for a retry.
+    await screen.findByRole("button", { name: /save & close timer/i });
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+});

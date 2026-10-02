@@ -14,6 +14,7 @@ import {
 import { missingCoreSectionRefusal } from "@/lib/backup-summary";
 import { buildBackupBundle } from "@/lib/backup-bundle";
 import { reportServerError } from "@/lib/report-error-server";
+import { Refusal, refusable } from "@/lib/refusal";
 import { enforceRateLimit, LIMITS, RateLimitError } from "@/lib/rate-limit";
 import { check, validate } from "@/lib/validation/core";
 import {
@@ -51,11 +52,24 @@ function revalidateAll() {
   revalidatePath("/settings");
 }
 
+// A hole against a pinned neighbour is a REFUSAL — a sentence written for the
+// tech, so it is thrown as Refusal and comes back as `{ error }` through
+// refusable(). Thrown as a plain Error it was replaced by the generic
+// production message (server-action-thrown-refusals-masked) and the tech never
+// learned which days would be orphaned. Schema/auth failures still throw.
 export async function setPeriodOverrideAction(
   periodKeyArg: string,
   startArg: string,
   endArg: string,
-): Promise<void> {
+): Promise<{ ok: true } | { error: string }> {
+  return refusable(() => setPeriodOverride(periodKeyArg, startArg, endArg));
+}
+
+async function setPeriodOverride(
+  periodKeyArg: string,
+  startArg: string,
+  endArg: string,
+): Promise<{ ok: true }> {
   const {
     periodKey,
     start,
@@ -78,13 +92,13 @@ export async function setPeriodOverrideAction(
   if (neighbors) {
     const prev = settings.periodOverrides[neighbors.prev];
     if (prev && start > addDays(prev.end, 1)) {
-      throw new Error(
+      throw new Refusal(
         `That would leave ${orphanedDays(addDays(prev.end, 1), addDays(start, -1))} in no pay period. The previous one ends ${formatDateLong(prev.end)}, so this one has to start ${formatDateLong(addDays(prev.end, 1))} or earlier.`,
       );
     }
     const next = settings.periodOverrides[neighbors.next];
     if (next && end < addDays(next.start, -1)) {
-      throw new Error(
+      throw new Refusal(
         `That would leave ${orphanedDays(addDays(end, 1), addDays(next.start, -1))} in no pay period. The next one starts ${formatDateLong(next.start)}, so this one has to end ${formatDateLong(addDays(next.start, -1))} or later.`,
       );
     }
@@ -97,6 +111,7 @@ export async function setPeriodOverrideAction(
   await db.updateSettings(supabase, { periodOverrides: next });
 
   revalidatePeriodScreens();
+  return { ok: true };
 }
 
 // "Jul 31" for a one-day hole, "Jul 31 – Aug 2" for a longer one.
@@ -378,23 +393,11 @@ export async function importDataAction(
   if (!shape.ok) return { error: shape.error };
 
   const supabase = await createClient();
-
-  // Gated AFTER the shape checks, deliberately: a malformed file is refused for
-  // free and never costs the user a slot in their own hourly budget. Same order
-  // the auth actions use.
-  try {
-    await enforceRateLimit(
-      "import-data",
-      await db.getCurrentUserId(supabase),
-      LIMITS.importData,
-      "Too many imports in a short time — please wait a few minutes.",
-    );
-  } catch (err) {
-    // The limit is a refusal the tech needs to read; anything else (no signed-in
-    // user, a DB fault) is a genuine failure and keeps throwing.
-    if (err instanceof RateLimitError) return { error: err.message };
-    throw err;
-  }
+  // Auth before going further. Everything above is a type check on the file;
+  // what follows mints an id per record and reads the account, which an
+  // anonymous caller has no business making the server do. (This used to
+  // happen only inside the limiter call, after the date checks.)
+  const userId = await db.getCurrentUserId(supabase);
 
   // Validate dates up front purely to give a readable message. The import
   // itself is atomic now, so a bad value further in would roll the whole thing
@@ -415,12 +418,6 @@ export async function importDataAction(
     if (!DATE_RE.test(u.date)) return { error: "Invalid date in unpaid time record." };
   }
 
-  // Read the photo paths BEFORE the replace: the rows are about to go with the
-  // entries cascade, so this is the last chance to learn which binaries the
-  // account owned. Nothing is removed here — the purge runs only after the DB
-  // transaction commits, so a failed import leaves the files where they are.
-  const oldPhotoPaths = await db.listAllUserPhotoPaths(supabase);
-
   // Fresh ids for every record, all internal references re-pointed. Without
   // this the insert collides with the SOURCE account's rows on a shared
   // database (23505) and importing into a second account can never succeed.
@@ -428,7 +425,8 @@ export async function importDataAction(
   // It also refuses a file whose content contradicts itself (a dispute claim
   // whose header disagrees with its lines, etc.). That refusal is a sentence
   // for the tech, so it comes back as data like every refusal above; anything
-  // else thrown here is a bug in this code and keeps throwing.
+  // else thrown here is a bug in this code and keeps throwing. It is a pure
+  // function of the file — no read, no write — so it runs before the limiter.
   let payload: ReturnType<typeof buildImportPayload>;
   try {
     payload = buildImportPayload(bundle);
@@ -436,6 +434,45 @@ export async function importDataAction(
     if (err instanceof ImportRefusal) return { error: err.message };
     throw err;
   }
+
+  // import_replace_account deletes ro_events UNCONDITIONALLY and restores them
+  // only when the payload carries the key. A file from before open tickets
+  // (no `roEvents`) would therefore erase every ticket timeline on the account
+  // with nothing to put back — refuse it while there is something to lose.
+  // The confirm dialog can only see the file, so it shows the red line; this
+  // is the half that knows what the ACCOUNT holds. A key present but empty is
+  // a real "I have none" and imports, same rule as the core sections.
+  // (`roEvents: null` never gets here — the schema refuses it, like any other
+  // section; an app-made file omits the key rather than nulling it.)
+  if (bundle.roEvents === undefined) {
+    const n = await countTicketTimelines(supabase, userId);
+    if (n > 0) return { error: ticketTimelineRefusal(n) };
+  }
+
+  // Gated AFTER every refusal above, deliberately: a file the server would
+  // refuse — wrong shape, bad date, self-contradicting claim, or one that would
+  // erase ticket timelines — is refused for free and never costs the user a slot
+  // in their own hourly budget. Only a file that is about to be written spends
+  // one.
+  try {
+    await enforceRateLimit(
+      "import-data",
+      userId,
+      LIMITS.importData,
+      "Too many imports in a short time — please wait a few minutes.",
+    );
+  } catch (err) {
+    // The limit is a refusal the tech needs to read; anything else (no signed-in
+    // user, a DB fault) is a genuine failure and keeps throwing.
+    if (err instanceof RateLimitError) return { error: err.message };
+    throw err;
+  }
+
+  // Read the photo paths BEFORE the replace: the rows are about to go with the
+  // entries cascade, so this is the last chance to learn which binaries the
+  // account owned. Nothing is removed here — the purge runs only after the DB
+  // transaction commits, so a failed import leaves the files where they are.
+  const oldPhotoPaths = await db.listAllUserPhotoPaths(supabase);
 
   // One call, one transaction. The wipe and the restore either both land or
   // neither does — the old sequence of separate deletes and inserts could wipe
@@ -478,6 +515,35 @@ export async function importDataAction(
   return {};
 }
 
+
+/**
+ * How many ro_events rows the signed-in account has. Read-only head count.
+ * A database that predates the table (migrations are applied by hand on the
+ * VM) has none to lose, so a missing table reads as 0.
+ */
+async function countTicketTimelines(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("ro_events")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  if (error) {
+    if (db.isMissingTable(error)) return 0;
+    throw error;
+  }
+  return count ?? 0;
+}
+
+function ticketTimelineRefusal(n: number): string {
+  return (
+    `This backup is from before open tickets existed, and this account has ${n} ` +
+    `ticket timeline ${n === 1 ? "event" : "events"} that importing it would erase, ` +
+    `so nothing was imported. Export a fresh backup first, or import on an account ` +
+    `without open tickets.`
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Clear all data

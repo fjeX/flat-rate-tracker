@@ -196,6 +196,10 @@ vi.mock("@/lib/db", () => ({
 const {
   saveTimerAction,
   setTimerStatusAction,
+  setTimerLineAction,
+  resetTimerAction,
+  releaseTimerAction,
+  attachRoToTimerAction,
   startTimerWithoutRoAction,
   attachRoToExistingTimerAction,
 } = await import("./timer");
@@ -225,12 +229,18 @@ beforeEach(() => {
 
 const ONE_HOUR_MS = 3_600_000;
 
+/** The success shape of saveTimerAction, failing the test on a refusal. */
+function saved<T extends object>(res: T | { error: string }): T {
+  if ("error" in res) throw new Error(`unexpected refusal: ${res.error}`);
+  return res;
+}
+
 describe("saveTimerAction — open lineless ticket (Open Tickets Phase 2)", () => {
   it("writes exactly one open_work row, source timer, and returns target ticket with correct previous/total", async () => {
     state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS })];
     state.entry = makeEntry({ status: "open", opCodes: [] });
 
-    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null);
+    const res = saved(await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null));
 
     const writes = calls.filter((c) => c.startsWith("createUnpaidTime:"));
     expect(writes).toEqual(["createUnpaidTime:open_work"]);
@@ -255,19 +265,19 @@ describe("saveTimerAction — open lineless ticket (Open Tickets Phase 2)", () =
       { entryId: state.entry.id, kind: "open_work", hours: 2.5, source: "manual" },
     ];
 
-    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null);
+    const res = saved(await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null));
 
     expect(res.previousHours).toBe(2.5);
     expect(res.totalHours).toBe(3.5);
   });
 
-  it("throws when a lineId is passed for a lineless open ticket", async () => {
+  it("refuses (returns, not throws) when a lineId is passed for a lineless open ticket", async () => {
     state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS })];
     state.entry = makeEntry({ status: "open", opCodes: [] });
 
     await expect(
       saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID),
-    ).rejects.toThrow("That op code line isn't on this RO.");
+    ).resolves.toEqual({ error: "That op code line isn't on this RO." });
     expect(calls).not.toContain("deleteTimerSlot");
     expect(state.ledger).toHaveLength(0);
   });
@@ -276,7 +286,7 @@ describe("saveTimerAction — open lineless ticket (Open Tickets Phase 2)", () =
     state.slots = [makeSlot({ workAccumulated: 0 })];
     state.entry = makeEntry({ status: "open", opCodes: [] });
 
-    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null);
+    const res = saved(await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null));
 
     expect(calls.filter((c) => c.startsWith("createUnpaidTime:"))).toHaveLength(0);
     expect(res.target).toBe("ticket");
@@ -299,7 +309,7 @@ describe("saveTimerAction — open lineless ticket (Open Tickets Phase 2)", () =
 });
 
 describe("saveTimerAction — entries with lines (unchanged path)", () => {
-  it("throws 'Pick an op code' when the entry has lines and lineId is null", async () => {
+  it("refuses with 'Pick an op code' when the entry has lines and lineId is null", async () => {
     state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS })];
     state.entry = makeEntry({
       status: "open",
@@ -320,9 +330,9 @@ describe("saveTimerAction — entries with lines (unchanged path)", () => {
       ],
     });
 
-    await expect(saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null)).rejects.toThrow(
-      "Pick an op code to save this time to.",
-    );
+    await expect(saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null)).resolves.toEqual({
+      error: "Pick an op code to save this time to.",
+    });
     expect(calls).not.toContain("deleteTimerSlot");
   });
 
@@ -347,7 +357,7 @@ describe("saveTimerAction — entries with lines (unchanged path)", () => {
       ],
     });
 
-    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID);
+    const res = saved(await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID));
 
     expect(calls).toContain(`addLineActualHours:${LINE_ID}`);
     expect(res.target).toBe("line");
@@ -387,7 +397,7 @@ describe("saveTimerAction — True Time sync (timer-save-skips-true-time-sync)",
     state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS, lineId: LINE_ID })];
     state.entry = linedEntry("closed");
 
-    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID);
+    const res = saved(await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID));
 
     expect(res.target).toBe("line");
     expect(state.syncs).toHaveLength(1);
@@ -430,7 +440,7 @@ describe("saveTimerAction — True Time sync (timer-save-skips-true-time-sync)",
     state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS })];
     state.entry = makeEntry({ status: "open", opCodes: [] });
 
-    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null);
+    const res = saved(await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", null));
 
     expect(res.target).toBe("ticket");
     expect(calls).not.toContain("syncEntryLaborTimeObservations");
@@ -441,7 +451,7 @@ describe("saveTimerAction — True Time sync (timer-save-skips-true-time-sync)",
     state.entry = linedEntry("closed");
     state.failSyncObservations = true;
 
-    const res = await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID);
+    const res = saved(await saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID));
 
     expect(res.target).toBe("line");
     expect(res.totalHours).toBe(3);
@@ -571,15 +581,16 @@ describe("setTimerStatusAction — hold flips write ro_events on open tickets", 
     state.entry = makeEntry({ status: "open" });
     state.failCreateRoEvent = true;
 
-    await expect(setTimerStatusAction("aaaaaaaa-1111-4111-8111-111111111111", "hold_parts")).resolves.toBeUndefined();
+    await expect(setTimerStatusAction("aaaaaaaa-1111-4111-8111-111111111111", "hold_parts")).resolves.toEqual({});
     expect(reportServerError).toHaveBeenCalledTimes(1);
     expect(calls).toContain("updateTimerSlot");
   });
 });
 
 // Product decision (Liem, 2026-09-30): a timer can run with no RO; saving the
-// time still needs one. The new actions RETURN refusals (a thrown message is
-// masked in production), the old ones keep throwing.
+// time still needs one. These actions RETURN refusals (a thrown message is
+// masked in production); since 2026-10-01 the older ones do too — see the
+// "refusals come back as data" block at the end of this file.
 describe("startTimerWithoutRoAction", () => {
   it("creates a working slot with a null entry in the lowest free index, clock running", async () => {
     state.slots = [makeSlot({ slot: 1, status: "paused" })];
@@ -705,8 +716,118 @@ describe("saveTimerAction — a slot with no RO", () => {
     state.slots = [makeSlot({ entryId: null, workAccumulated: ONE_HOUR_MS })];
     await expect(
       saveTimerAction("aaaaaaaa-1111-4111-8111-111111111111", LINE_ID),
-    ).rejects.toThrow("This timer has no RO attached.");
+    ).resolves.toEqual({ error: "This timer has no RO attached." });
     expect(state.deletedSlotIds).toHaveLength(0);
     expect(calls).not.toContain("addLineActualHours:" + LINE_ID);
+  });
+});
+
+// server-action-thrown-refusals-masked (2026-10-01): a production build masks
+// the message of any error thrown out of a Server Action, so every refusal in
+// the six older timer actions must come back as `{ error }`. A genuine failure
+// must STILL throw — refusable() only catches Refusals.
+describe("timer actions — refusals come back as data", () => {
+  const TIMER_ID = "aaaaaaaa-1111-4111-8111-111111111111";
+  const ENTRY_ID = "eeeeeeee-0000-4000-8000-000000000001";
+  const OTHER_ENTRY_ID = "eeeeeeee-0000-4000-8000-000000000009";
+
+  it("attachRoToTimerAction: a gone RO, a taken line, and a full house are all returned", async () => {
+    state.entry = null;
+    expect(await attachRoToTimerAction(ENTRY_ID, null)).toEqual({
+      error: "That RO no longer exists.",
+    });
+
+    state.entry = makeEntry({ status: "closed", opCodes: [{ id: LINE_ID } as never] });
+    state.slots = [makeSlot({ entryId: ENTRY_ID, lineId: LINE_ID })];
+    expect(await attachRoToTimerAction(ENTRY_ID, LINE_ID)).toEqual({
+      error: "That line of RO #55555 is already on a timer.",
+    });
+
+    state.entry = makeEntry({ id: OTHER_ENTRY_ID });
+    state.slots = [1, 2, 3].map((n) =>
+      makeSlot({ id: `aaaaaaaa-1111-4111-8111-11111111111${n}`, slot: n }),
+    );
+    expect(await attachRoToTimerAction(OTHER_ENTRY_ID, null)).toEqual({
+      error: "All 3 timers are in use. Save or clear one first.",
+    });
+    expect(state.createdSlots).toHaveLength(0);
+  });
+
+  it("attachRoToTimerAction: success is {}", async () => {
+    state.entry = makeEntry({ status: "closed", opCodes: [{ id: LINE_ID } as never] });
+    expect(await attachRoToTimerAction(ENTRY_ID, LINE_ID)).toEqual({});
+    expect(state.createdSlots).toHaveLength(1);
+  });
+
+  it("a validation sentence is returned too (validate() throws a Refusal)", async () => {
+    const res = await attachRoToTimerAction("not-an-id", null);
+    expect(typeof res.error).toBe("string");
+    const res2 = await setTimerStatusAction(TIMER_ID, "napping");
+    expect(typeof res2.error).toBe("string");
+    expect(state.createdSlots).toHaveLength(0);
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+
+  it("status / line / reset / release refuse a timer that is gone", async () => {
+    state.slots = [];
+    const gone = { error: "That timer is no longer running." };
+    expect(await setTimerStatusAction(TIMER_ID, "working")).toEqual(gone);
+    expect(await setTimerLineAction(TIMER_ID, null)).toEqual(gone);
+    expect(await resetTimerAction(TIMER_ID)).toEqual(gone);
+    expect(await releaseTimerAction(TIMER_ID)).toEqual(gone);
+    expect(state.deletedSlotIds).toHaveLength(0);
+  });
+
+  it("setTimerLineAction refuses a foreign line, a taken line, and a slot with no RO", async () => {
+    state.slots = [makeSlot()];
+    state.entry = makeEntry({ opCodes: [] });
+    expect(await setTimerLineAction(TIMER_ID, LINE_ID)).toEqual({
+      error: "That op code line isn't on this RO.",
+    });
+
+    state.entry = makeEntry({ opCodes: [{ id: LINE_ID } as never] });
+    state.slots = [
+      makeSlot(),
+      makeSlot({ id: "aaaaaaaa-1111-4111-8111-111111111112", slot: 2, lineId: LINE_ID }),
+    ];
+    expect(await setTimerLineAction(TIMER_ID, LINE_ID)).toEqual({
+      error: "That line of RO #55555 is already on another timer.",
+    });
+
+    state.slots = [makeSlot({ entryId: null })];
+    expect(await setTimerLineAction(TIMER_ID, LINE_ID)).toEqual({
+      error: "This timer has no RO attached.",
+    });
+    expect(state.updatedSlots).toHaveLength(0);
+  });
+
+  it("success is {} for status / line / reset / release", async () => {
+    state.slots = [makeSlot()];
+    state.entry = makeEntry({ opCodes: [{ id: LINE_ID } as never] });
+    expect(await setTimerStatusAction(TIMER_ID, "paused")).toEqual({});
+    expect(await setTimerLineAction(TIMER_ID, LINE_ID)).toEqual({});
+    expect(await resetTimerAction(TIMER_ID)).toEqual({});
+    expect(await releaseTimerAction(TIMER_ID)).toEqual({});
+    expect(state.deletedSlotIds).toEqual([TIMER_ID]);
+  });
+
+  it("saveTimerAction refuses an RO that is gone", async () => {
+    state.slots = [makeSlot({ workAccumulated: ONE_HOUR_MS })];
+    state.entry = null;
+    expect(await saveTimerAction(TIMER_ID, LINE_ID)).toEqual({
+      error: "That RO no longer exists.",
+    });
+    expect(state.deletedSlotIds).toHaveLength(0);
+  });
+
+  it("a plain Error (a real failure) still THROWS — it is not a refusal", async () => {
+    // The save is covered above ("propagates a write failure"); this is the
+    // refusable() wrapper on the void actions. listTimerSlots resolving to
+    // garbage makes requireSlot's .find blow up with a TypeError.
+    state.slots = null as never;
+    await expect(setTimerStatusAction(TIMER_ID, "working")).rejects.toThrow(TypeError);
+    await expect(releaseTimerAction(TIMER_ID)).rejects.toThrow(TypeError);
+    state.entry = makeEntry();
+    await expect(attachRoToTimerAction(ENTRY_ID, null)).rejects.toThrow(TypeError);
   });
 });

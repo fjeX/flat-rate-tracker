@@ -89,6 +89,12 @@ export function EntryPhotos({ entryId }: { entryId: string }) {
         const fd = new FormData();
         fd.append("photo", compressed, "ro.jpg");
         const created = await uploadEntryPhoto(entryId, fd);
+        // A refusal (too large, cap reached, rate-limited) comes back as data —
+        // a thrown one is masked in production.
+        if ("error" in created) {
+          setError(created.error);
+          return;
+        }
         setPhotos((prev) => [...prev, created]);
         await ensureUrl(created);
       } catch (err) {

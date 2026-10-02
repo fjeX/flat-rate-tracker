@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import type { EntryPhoto } from "@/lib/types";
 import { MAX_PHOTOS_PER_ENTRY, MAX_PHOTO_BYTES } from "@/lib/photos";
-import { enforceRateLimit, LIMITS } from "@/lib/rate-limit";
+import { enforceRateLimit, LIMITS, RateLimitError } from "@/lib/rate-limit";
+import { Refusal, refusable } from "@/lib/refusal";
 import { validate } from "@/lib/validation/core";
 import {
   entryIdSchema,
@@ -21,66 +22,80 @@ const SIGNED_URL_TTL_SECONDS = 60;
 
 // Upload one already-compressed photo and link it to an entry.
 // Path: {user_id}/{entry_id}/{uuid}.jpg
+//
+// RETURNS `{ error }` for a refusal (too large, not an image, cap reached,
+// rate-limited) instead of throwing it: a production build masks the message
+// of an error thrown out of a Server Action, so the tech would read an opaque
+// failure (server-action-thrown-refusals-masked). Storage/DB failures and the
+// auth guard still throw.
 export async function uploadEntryPhoto(
   entryId: string,
   formData: FormData,
-): Promise<EntryPhoto> {
-  const id = validate(entryIdSchema, entryId);
-  const photo0 = formData.get("photo");
-  // `formData.get` returns `File | string | null`, so a caller can send a plain
-  // string here — the old cast made that a File as far as the compiler knew,
-  // and it reached storage.upload() as one.
-  const file = photo0 instanceof File ? photo0 : null;
-  if (!file || file.size === 0) throw new Error("No photo provided.");
-  if (file.size > MAX_PHOTO_BYTES) {
-    throw new Error("Photo is too large — try again.");
-  }
-  // Uploaded with contentType image/jpeg regardless of what arrives, so a file
-  // that announces itself as something else is announcing a mismatch. An empty
-  // type is still allowed: some clients send nothing at all.
-  if (file.type && !file.type.startsWith("image/")) {
-    throw new Error("Only image files can be attached to an RO.");
-  }
+): Promise<EntryPhoto | { error: string }> {
+  return refusable(async () => {
+    const id = validate(entryIdSchema, entryId);
+    const photo0 = formData.get("photo");
+    // `formData.get` returns `File | string | null`, so a caller can send a plain
+    // string here — the old cast made that a File as far as the compiler knew,
+    // and it reached storage.upload() as one.
+    const file = photo0 instanceof File ? photo0 : null;
+    if (!file || file.size === 0) throw new Refusal("No photo provided.");
+    if (file.size > MAX_PHOTO_BYTES) {
+      throw new Refusal("Photo is too large — try again.");
+    }
+    // Uploaded with contentType image/jpeg regardless of what arrives, so a file
+    // that announces itself as something else is announcing a mismatch. An empty
+    // type is still allowed: some clients send nothing at all.
+    if (file.type && !file.type.startsWith("image/")) {
+      throw new Refusal("Only image files can be attached to an RO.");
+    }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated.");
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not authenticated.");
 
-  // MAX_PHOTOS_PER_ENTRY caps how many photos one RO can hold and MAX_PHOTO_BYTES
-  // caps each file, but nothing capped how many ENTRIES a caller creates photos
-  // on — so total storage growth per account was unbounded. This is the missing
-  // third bound. 60/hour is far more than a tech documenting a day's ROs.
-  await enforceRateLimit(
-    "photo-upload",
-    user.id,
-    LIMITS.photoUpload,
-    "Too many photo uploads in a short time — please wait a few minutes.",
-  );
+    // MAX_PHOTOS_PER_ENTRY caps how many photos one RO can hold and MAX_PHOTO_BYTES
+    // caps each file, but nothing capped how many ENTRIES a caller creates photos
+    // on — so total storage growth per account was unbounded. This is the missing
+    // third bound. 60/hour is far more than a tech documenting a day's ROs.
+    // Its "please wait" sentence is a refusal too, so it is re-thrown as one.
+    try {
+      await enforceRateLimit(
+        "photo-upload",
+        user.id,
+        LIMITS.photoUpload,
+        "Too many photo uploads in a short time — please wait a few minutes.",
+      );
+    } catch (err) {
+      if (err instanceof RateLimitError) throw new Refusal(err.message);
+      throw err;
+    }
 
-  // Enforce the per-entry cap server-side.
-  const existing = await db.countEntryPhotos(supabase, id);
-  if (existing >= MAX_PHOTOS_PER_ENTRY) {
-    throw new Error(`Limit reached — up to ${MAX_PHOTOS_PER_ENTRY} photos per RO.`);
-  }
+    // Enforce the per-entry cap server-side.
+    const existing = await db.countEntryPhotos(supabase, id);
+    if (existing >= MAX_PHOTOS_PER_ENTRY) {
+      throw new Refusal(`Limit reached — up to ${MAX_PHOTOS_PER_ENTRY} photos per RO.`);
+    }
 
-  const storagePath = `${user.id}/${id}/${crypto.randomUUID()}.jpg`;
-  const { error: uploadErr } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, file, { contentType: "image/jpeg", upsert: false });
-  if (uploadErr) throw uploadErr;
+    const storagePath = `${user.id}/${id}/${crypto.randomUUID()}.jpg`;
+    const { error: uploadErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(storagePath, file, { contentType: "image/jpeg", upsert: false });
+    if (uploadErr) throw uploadErr;
 
-  let photo: EntryPhoto;
-  try {
-    photo = await db.insertEntryPhoto(supabase, id, storagePath, file.size);
-  } catch (err) {
-    // Row insert failed — don't leave an orphaned storage object behind.
-    await supabase.storage.from(BUCKET).remove([storagePath]);
-    throw err;
-  }
+    let photo: EntryPhoto;
+    try {
+      photo = await db.insertEntryPhoto(supabase, id, storagePath, file.size);
+    } catch (err) {
+      // Row insert failed — don't leave an orphaned storage object behind.
+      await supabase.storage.from(BUCKET).remove([storagePath]);
+      throw err;
+    }
 
-  revalidatePath("/history");
-  revalidatePath("/");
-  return photo;
+    revalidatePath("/history");
+    revalidatePath("/");
+    return photo;
+  });
 }
 
 export async function listEntryPhotosAction(entryId: string): Promise<EntryPhoto[]> {

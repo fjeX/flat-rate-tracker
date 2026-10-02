@@ -206,3 +206,82 @@ describe("v1 predates spiffs", () => {
     expect(missingCoreSectionRefusal(b)).toMatch(/daily clock records section/);
   });
 });
+
+// import-dialog-undisclosed-deletes: import_replace_account (v6) deletes
+// ro_events and active_timers whatever the file says, and nulls unpaid_time's
+// RO links whenever entries are replaced. The dialog said none of it.
+describe("what the import does beyond the listed sections", () => {
+  it("ticket timelines carried by the file: replacing N", () => {
+    const s = summarizeBackup(bundle({ version: 5, roEvents: [{}, {}, {}] }));
+    expect(section(s, "roEvents")).toEqual({
+      key: "roEvents",
+      label: "Ticket timelines",
+      state: "replacing",
+      count: 3,
+    });
+  });
+
+  it("ticket timelines carried but empty: replacing 0 (the dialog's red 'cleared')", () => {
+    const s = summarizeBackup(bundle({ version: 5, roEvents: [] }));
+    expect(section(s, "roEvents")).toMatchObject({ state: "replacing", count: 0 });
+  });
+
+  it.each([1, 2, 3, 4, 5])(
+    "a v%i file without ticket timelines says they are cleared — never 'kept'",
+    (version) => {
+      const s = summarizeBackup(bundle({ version }));
+      expect(section(s, "roEvents")).toEqual({
+        key: "roEvents",
+        label: "Ticket timelines",
+        state: "cleared",
+        detail: "this backup predates open tickets",
+      });
+      // Not a file refusal: an old backup genuinely can't carry them, and
+      // the server refuses only when the account has some to lose.
+      expect(s.refusal).toBeNull();
+    },
+  );
+
+  it("a non-list roEvents is still never 'kept'", () => {
+    const s = summarizeBackup(bundle({ version: 5, roEvents: "abc" }));
+    expect(section(s, "roEvents").state).toBe("cleared");
+  });
+
+  it("running timers stop — said on every import", () => {
+    for (const b of [bundle(), bundle({ version: 1 }), bundle({ version: 5, roEvents: [] })]) {
+      expect(summarizeBackup(b).sideEffects).toEqual([
+        {
+          label: "Running timers stop",
+          detail:
+            "any timer running now is cleared, and time on it that hasn't been saved is lost.",
+        },
+      ]);
+    }
+  });
+
+  it("unpaid time kept from an older file says its RO links are cleared", () => {
+    const s = summarizeBackup(bundle({ version: 1 }));
+    expect(section(s, "unpaidTime")).toEqual({
+      key: "unpaidTime",
+      label: "Unpaid time",
+      state: "untouched",
+      detail:
+        "kept, but its links to repair orders are cleared because the repair orders are replaced — open-work hours lose their ticket",
+    });
+  });
+
+  it("unpaid time carried by the file is a plain replace, no caveat", () => {
+    const s = summarizeBackup(bundle({ unpaidTime: [{}, {}] }));
+    expect(section(s, "unpaidTime")).toEqual({
+      key: "unpaidTime",
+      label: "Unpaid time",
+      state: "replacing",
+      count: 2,
+    });
+  });
+
+  it("other untouched sections carry no caveat", () => {
+    const s = summarizeBackup(bundle());
+    expect(section(s, "disputes")).toEqual({ key: "disputes", label: "Disputes", state: "untouched" });
+  });
+});

@@ -252,7 +252,14 @@ function PeriodOverrideBody({
     }
     startTransition(async () => {
       try {
-        await setPeriodOverrideAction(periodKey, start, end);
+        // A hole against a pinned neighbour comes back as DATA: a thrown
+        // message is masked in a production build, and this sentence names
+        // the exact days that would be orphaned.
+        const res = await setPeriodOverrideAction(periodKey, start, end);
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
         router.refresh();
         onClose();
       } catch (err) {

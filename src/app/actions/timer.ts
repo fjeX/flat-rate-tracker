@@ -7,6 +7,7 @@ import * as db from "@/lib/db";
 import type { DbClient } from "@/lib/db";
 import { hhmmInTz, isoDate, isoDateInTz } from "@/lib/periods";
 import { openWorkRows, ticketOpenWorkHours } from "@/lib/open-tickets";
+import { Refusal, refusable } from "@/lib/refusal";
 import { reportServerError } from "@/lib/report-error-server";
 import { syncObservations } from "@/lib/true-time-sync";
 import {
@@ -81,7 +82,7 @@ async function requireSlot(
   const slot = all.find((s) => s.id === timerId);
   // RLS already scopes the read to this user, so "not found" covers both a
   // deleted timer and someone else's id.
-  if (!slot) throw new Error("That timer is no longer running.");
+  if (!slot) throw new Refusal("That timer is no longer running.");
   return { slot, all };
 }
 
@@ -137,69 +138,73 @@ async function pauseOtherWorkingSlots(
 export async function attachRoToTimerAction(
   entryIdArg: string,
   lineIdArg: string | null = null,
-): Promise<void> {
-  const { entryId, lineId } = validate(attachTimerSchema, {
-    entryId: entryIdArg,
-    lineId: lineIdArg,
-  });
-  const supabase = await createClient();
+): Promise<TimerRefusal> {
+  return refusable(async () => {
+    const { entryId, lineId } = validate(attachTimerSchema, {
+      entryId: entryIdArg,
+      lineId: lineIdArg,
+    });
+    const supabase = await createClient();
 
-  const entry = await db.getEntry(supabase, entryId);
-  if (!entry) throw new Error("That RO no longer exists.");
-  if (lineId && !entry.opCodes.some((l) => l.id === lineId)) {
-    throw new Error("That op code line isn't on this RO.");
-  }
+    const entry = await db.getEntry(supabase, entryId);
+    if (!entry) throw new Refusal("That RO no longer exists.");
+    if (lineId && !entry.opCodes.some((l) => l.id === lineId)) {
+      throw new Refusal("That op code line isn't on this RO.");
+    }
 
-  const all = await db.listTimerSlots(supabase);
-  const conflict = attachConflict(all, entryId, lineId);
-  // An open, lineless ticket (Open Tickets Phase 2) has no lines to name —
-  // attachConflict still reports "needs-line" because lineId is null and the
-  // RO is already on a slot, but there is no line picker to send the tech to.
-  // Special-cased here rather than in attachConflict itself: that function is
-  // shared with the guest store and knows nothing about entry.opCodes.
-  if (conflict === "needs-line" && entry.opCodes.length === 0) {
-    throw new Error(`RO #${entry.roNumber} is already on a timer.`);
-  }
-  switch (conflict) {
-    case "needs-line":
-      throw new Error(
-        `RO #${entry.roNumber} is already on a timer. Pick which line this ` +
-          `timer is for.`,
+    const all = await db.listTimerSlots(supabase);
+    const conflict = attachConflict(all, entryId, lineId);
+    // An open, lineless ticket (Open Tickets Phase 2) has no lines to name —
+    // attachConflict still reports "needs-line" because lineId is null and the
+    // RO is already on a slot, but there is no line picker to send the tech to.
+    // Special-cased here rather than in attachConflict itself: that function is
+    // shared with the guest store and knows nothing about entry.opCodes.
+    if (conflict === "needs-line" && entry.opCodes.length === 0) {
+      throw new Refusal(`RO #${entry.roNumber} is already on a timer.`);
+    }
+    switch (conflict) {
+      case "needs-line":
+        throw new Refusal(
+          `RO #${entry.roNumber} is already on a timer. Pick which line this ` +
+            `timer is for.`,
+        );
+      case "line-taken":
+        throw new Refusal(`That line of RO #${entry.roNumber} is already on a timer.`);
+      case "sibling-unassigned":
+        throw new Refusal(
+          `RO #${entry.roNumber} is on a timer that hasn't been assigned a line ` +
+            `yet. Set that timer's line first.`,
+        );
+    }
+
+    const slot = nextFreeSlot(all);
+    if (slot === null) {
+      throw new Refusal(
+        `All ${MAX_TIMER_SLOTS} timers are in use. Save or clear one first.`,
       );
-    case "line-taken":
-      throw new Error(`That line of RO #${entry.roNumber} is already on a timer.`);
-    case "sibling-unassigned":
-      throw new Error(
-        `RO #${entry.roNumber} is on a timer that hasn't been assigned a line ` +
-          `yet. Set that timer's line first.`,
-      );
-  }
+    }
 
-  const slot = nextFreeSlot(all);
-  if (slot === null) {
-    throw new Error(
-      `All ${MAX_TIMER_SLOTS} timers are in use. Save or clear one first.`,
-    );
-  }
+    const now = Date.now();
+    const ctx = await loadCapContext(supabase);
+    await pauseOtherWorkingSlots(supabase, all, "", now, ctx);
 
-  const now = Date.now();
-  const ctx = await loadCapContext(supabase);
-  await pauseOtherWorkingSlots(supabase, all, "", now, ctx);
-
-  await db.createTimerSlot(supabase, {
-    slot,
-    entryId,
-    lineId,
-    status: "working",
-    startTime: now,
+    await db.createTimerSlot(supabase, {
+      slot,
+      entryId,
+      lineId,
+      status: "working",
+      startTime: now,
+    });
+    revalidateTimerScreens();
+    return {};
   });
-  revalidateTimerScreens();
 }
 
-/** What the no-RO timer actions answer with. They RETURN a refusal rather than
- * throw: a thrown error from a server action is masked in production, so the
- * sentence would never reach the tech (server-action-thrown-refusals-masked).
- * `{}` is success. */
+/** What every timer action except the save answers with. They RETURN a refusal
+ * rather than throw: a thrown error from a server action is masked in
+ * production, so the sentence would never reach the tech
+ * (server-action-thrown-refusals-masked). `{}` is success. The older actions
+ * get there through `refusable()`; the two no-RO actions build it by hand. */
 export type TimerRefusal = { error?: string };
 
 /**
@@ -311,129 +316,141 @@ export async function attachRoToExistingTimerAction(
 export async function setTimerStatusAction(
   timerIdArg: string,
   statusArg: string,
-): Promise<void> {
-  const { timerId, status } = validate(timerStatusSchema, {
-    timerId: timerIdArg,
-    status: statusArg,
-  });
-  const supabase = await createClient();
-  const { slot, all } = await requireSlot(supabase, timerId);
+): Promise<TimerRefusal> {
+  return refusable(async () => {
+    const { timerId, status } = validate(timerStatusSchema, {
+      timerId: timerIdArg,
+      status: statusArg,
+    });
+    const supabase = await createClient();
+    const { slot, all } = await requireSlot(supabase, timerId);
 
-  const now = Date.now();
-  const ctx = await loadCapContext(supabase);
+    const now = Date.now();
+    const ctx = await loadCapContext(supabase);
 
-  if (status === "working") {
-    await pauseOtherWorkingSlots(supabase, all, slot.id, now, ctx);
-  }
-
-  await db.updateTimerSlot(supabase, slot.id, {
-    ...flushAccumulators(slot, now, capForSlot(slot, ctx)),
-    status,
-    // Paused banks nothing, so it carries no clock. Every other status does.
-    startTime: bucketFor(status) === null ? null : now,
-  });
-
-  // Open Tickets Phase 2 (plan "Timer (Phase 2)", decision 5): a hold flip on
-  // an open ticket writes a ro_events row of the same kind — the timeline is
-  // the story, and "waiting on parts" starting is part of that story. Once per
-  // flip, not per accrual tick, so the guard is "the status actually changed
-  // TO a hold", not "the status IS a hold". Flipping back to working writes
-  // nothing; the next real event tells that part of the story.
-  //
-  // Only fetch the entry when the new status is a hold, and only when it's
-  // genuinely a change — a read on every flip (including working <-> paused,
-  // which happens far more often) would be a query this feature doesn't need.
-  //
-  // The event is TIMED, like the opened/reopened/closed transitions in
-  // open-tickets.ts (nowInUserTz). The hold starts right now, so it knows its
-  // own time; left null, sortRoEvents puts it after every timed event that day
-  // (nulls mean "sometime that day"), so a hold flipped at 8 AM rendered below
-  // a note logged at 3 PM (timeline-timer-event-untimed). Date AND time come
-  // from `now` — the same instant the slot's clock was restarted at above — not
-  // from fresh clock reads: two reads could straddle midnight across the awaits
-  // in between and stamp yesterday's hold with today's date.
-  const flippedToHold =
-    (status === "hold_parts" || status === "hold_approval") &&
-    slot.status !== status;
-  if (flippedToHold && slot.entryId) {
-    try {
-      const entry = await db.getEntry(supabase, slot.entryId);
-      if (entry?.status === "open") {
-        const at = new Date(now);
-        await db.createRoEvent(supabase, {
-          entryId: slot.entryId,
-          date: ctx.timeZone ? isoDateInTz(ctx.timeZone, at) : isoDate(at),
-          time: hhmmInTz(ctx.timeZone ?? "", at),
-          kind: status,
-        });
-      }
-    } catch (err) {
-      // Best-effort: a failed event write must not fail the status change the
-      // tech is actually waiting on.
-      await reportServerError(err, { url: "timer/setTimerStatusAction" });
+    if (status === "working") {
+      await pauseOtherWorkingSlots(supabase, all, slot.id, now, ctx);
     }
-  }
 
-  revalidateTimerScreens();
+    await db.updateTimerSlot(supabase, slot.id, {
+      ...flushAccumulators(slot, now, capForSlot(slot, ctx)),
+      status,
+      // Paused banks nothing, so it carries no clock. Every other status does.
+      startTime: bucketFor(status) === null ? null : now,
+    });
+
+    // Open Tickets Phase 2 (plan "Timer (Phase 2)", decision 5): a hold flip on
+    // an open ticket writes a ro_events row of the same kind — the timeline is
+    // the story, and "waiting on parts" starting is part of that story. Once per
+    // flip, not per accrual tick, so the guard is "the status actually changed
+    // TO a hold", not "the status IS a hold". Flipping back to working writes
+    // nothing; the next real event tells that part of the story.
+    //
+    // Only fetch the entry when the new status is a hold, and only when it's
+    // genuinely a change — a read on every flip (including working <-> paused,
+    // which happens far more often) would be a query this feature doesn't need.
+    //
+    // The event is TIMED, like the opened/reopened/closed transitions in
+    // open-tickets.ts (nowInUserTz). The hold starts right now, so it knows its
+    // own time; left null, sortRoEvents puts it after every timed event that day
+    // (nulls mean "sometime that day"), so a hold flipped at 8 AM rendered below
+    // a note logged at 3 PM (timeline-timer-event-untimed). Date AND time come
+    // from `now` — the same instant the slot's clock was restarted at above — not
+    // from fresh clock reads: two reads could straddle midnight across the awaits
+    // in between and stamp yesterday's hold with today's date.
+    const flippedToHold =
+      (status === "hold_parts" || status === "hold_approval") &&
+      slot.status !== status;
+    if (flippedToHold && slot.entryId) {
+      try {
+        const entry = await db.getEntry(supabase, slot.entryId);
+        if (entry?.status === "open") {
+          const at = new Date(now);
+          await db.createRoEvent(supabase, {
+            entryId: slot.entryId,
+            date: ctx.timeZone ? isoDateInTz(ctx.timeZone, at) : isoDate(at),
+            time: hhmmInTz(ctx.timeZone ?? "", at),
+            kind: status,
+          });
+        }
+      } catch (err) {
+        // Best-effort: a failed event write must not fail the status change the
+        // tech is actually waiting on.
+        await reportServerError(err, { url: "timer/setTimerStatusAction" });
+      }
+    }
+
+    revalidateTimerScreens();
+    return {};
+  });
 }
 
 /** Choose which op-code line a timer's work hours will land on. */
 export async function setTimerLineAction(
   timerIdArg: string,
   lineIdArg: string | null,
-): Promise<void> {
-  const { timerId, lineId } = validate(timerLineSchema, {
-    timerId: timerIdArg,
-    lineId: lineIdArg,
+): Promise<TimerRefusal> {
+  return refusable(async () => {
+    const { timerId, lineId } = validate(timerLineSchema, {
+      timerId: timerIdArg,
+      lineId: lineIdArg,
+    });
+    const supabase = await createClient();
+    const { slot } = await requireSlot(supabase, timerId);
+
+    if (lineId) {
+      if (!slot.entryId) throw new Refusal("This timer has no RO attached.");
+      const entry = await db.getEntry(supabase, slot.entryId);
+      if (!entry?.opCodes.some((l) => l.id === lineId)) {
+        throw new Refusal("That op code line isn't on this RO.");
+      }
+      // Same rule as attach, enforced on the other door into it: now that one RO
+      // may occupy several slots, re-pointing this timer at a line another slot
+      // is already running would recreate exactly the additive double-count the
+      // per-line guard exists to prevent.
+      const all = await db.listTimerSlots(supabase);
+      if (lineTakenByOtherSlot(all, slot.id, slot.entryId, lineId)) {
+        throw new Refusal(
+          `That line of RO #${entry.roNumber} is already on another timer.`,
+        );
+      }
+    }
+
+    await db.updateTimerSlot(supabase, slot.id, { lineId });
+    revalidateTimerScreens();
+    return {};
   });
-  const supabase = await createClient();
-  const { slot } = await requireSlot(supabase, timerId);
-
-  if (lineId) {
-    if (!slot.entryId) throw new Error("This timer has no RO attached.");
-    const entry = await db.getEntry(supabase, slot.entryId);
-    if (!entry?.opCodes.some((l) => l.id === lineId)) {
-      throw new Error("That op code line isn't on this RO.");
-    }
-    // Same rule as attach, enforced on the other door into it: now that one RO
-    // may occupy several slots, re-pointing this timer at a line another slot
-    // is already running would recreate exactly the additive double-count the
-    // per-line guard exists to prevent.
-    const all = await db.listTimerSlots(supabase);
-    if (lineTakenByOtherSlot(all, slot.id, slot.entryId, lineId)) {
-      throw new Error(
-        `That line of RO #${entry.roNumber} is already on another timer.`,
-      );
-    }
-  }
-
-  await db.updateTimerSlot(supabase, slot.id, { lineId });
-  revalidateTimerScreens();
 }
 
 /** Zero a timer's banked time but keep the slot and its RO. The clock restarts
  * from zero if the slot was accruing. */
-export async function resetTimerAction(timerIdArg: string): Promise<void> {
-  const timerId = validate(timerIdSchema, timerIdArg);
-  const supabase = await createClient();
-  const { slot } = await requireSlot(supabase, timerId);
-  const accruing = bucketFor(slot.status) !== null;
-  await db.updateTimerSlot(supabase, slot.id, {
-    workAccumulated: 0,
-    holdPartsAccumulated: 0,
-    holdApprovalAccumulated: 0,
-    startTime: accruing ? Date.now() : null,
+export async function resetTimerAction(timerIdArg: string): Promise<TimerRefusal> {
+  return refusable(async () => {
+    const timerId = validate(timerIdSchema, timerIdArg);
+    const supabase = await createClient();
+    const { slot } = await requireSlot(supabase, timerId);
+    const accruing = bucketFor(slot.status) !== null;
+    await db.updateTimerSlot(supabase, slot.id, {
+      workAccumulated: 0,
+      holdPartsAccumulated: 0,
+      holdApprovalAccumulated: 0,
+      startTime: accruing ? Date.now() : null,
+    });
+    revalidateTimerScreens();
+    return {};
   });
-  revalidateTimerScreens();
 }
 
 /** Drop a timer entirely, discarding its time. The slot number frees up. */
-export async function releaseTimerAction(timerIdArg: string): Promise<void> {
-  const timerId = validate(timerIdSchema, timerIdArg);
-  const supabase = await createClient();
-  const { slot } = await requireSlot(supabase, timerId);
-  await db.deleteTimerSlot(supabase, slot.id);
-  revalidateTimerScreens();
+export async function releaseTimerAction(timerIdArg: string): Promise<TimerRefusal> {
+  return refusable(async () => {
+    const timerId = validate(timerIdSchema, timerIdArg);
+    const supabase = await createClient();
+    const { slot } = await requireSlot(supabase, timerId);
+    await db.deleteTimerSlot(supabase, slot.id);
+    revalidateTimerScreens();
+    return {};
+  });
 }
 
 export type TimerSaveResult = {
@@ -493,181 +510,192 @@ export type TimerSaveResult = {
 export async function saveTimerAction(
   timerIdArg: string,
   lineIdArg: string | null,
-): Promise<TimerSaveResult> {
-  const { timerId, lineId } = validate(saveTimerSchema, {
-    timerId: timerIdArg,
-    lineId: lineIdArg,
-  });
-  const supabase = await createClient();
-  const { slot } = await requireSlot(supabase, timerId);
+): Promise<TimerSaveResult | { error: string }> {
+  return refusable(async (): Promise<TimerSaveResult> => {
+    const { timerId, lineId } = validate(saveTimerSchema, {
+      timerId: timerIdArg,
+      lineId: lineIdArg,
+    });
+    const supabase = await createClient();
+    const { slot } = await requireSlot(supabase, timerId);
 
-  if (!slot.entryId) throw new Error("This timer has no RO attached.");
-  const entry = await db.getEntry(supabase, slot.entryId);
-  if (!entry) throw new Error("That RO no longer exists.");
+    if (!slot.entryId) throw new Refusal("This timer has no RO attached.");
+    const entry = await db.getEntry(supabase, slot.entryId);
+    if (!entry) throw new Refusal("That RO no longer exists.");
 
-  // Open Tickets Phase 2 (plan "Timer (Phase 2)", decisions 4/10): an open
-  // ticket has no lines yet, so there is nothing for lineId to name — its
-  // worked hours land on the TICKET instead, as an `open_work` ledger row.
-  // Every entry that already has lines (open or closed) keeps the original
-  // line contract, unchanged.
-  const isOpenTicket = entry.status === "open" && entry.opCodes.length === 0;
+    // Open Tickets Phase 2 (plan "Timer (Phase 2)", decisions 4/10): an open
+    // ticket has no lines yet, so there is nothing for lineId to name — its
+    // worked hours land on the TICKET instead, as an `open_work` ledger row.
+    // Every entry that already has lines (open or closed) keeps the original
+    // line contract, unchanged.
+    const isOpenTicket = entry.status === "open" && entry.opCodes.length === 0;
 
-  const now = Date.now();
-  const ctx = await loadCapContext(supabase);
-  const banked = flushAccumulators(slot, now, capForSlot(slot, ctx));
+    const now = Date.now();
+    const ctx = await loadCapContext(supabase);
+    const banked = flushAccumulators(slot, now, capForSlot(slot, ctx));
 
-  const workHours = msToHours(banked.workAccumulated);
-  const waitPartsHours = msToHours(banked.holdPartsAccumulated);
-  const waitApprovalHours = msToHours(banked.holdApprovalAccumulated);
+    const workHours = msToHours(banked.workAccumulated);
+    const waitPartsHours = msToHours(banked.holdPartsAccumulated);
+    const waitApprovalHours = msToHours(banked.holdApprovalAccumulated);
 
-  // Attribute the time to the day it was earned, not the day it was saved —
-  // otherwise a timer left running overnight lands its hours on tomorrow.
-  //
-  // `today` comes from `now` — the instant the accumulators were flushed at —
-  // not a fresh clock read after the loadCapContext round-trip. Two reads could
-  // straddle midnight, and for a paused slot (startTime null) ledgerDate is
-  // `today` alone, so yesterday's banked time would land on tomorrow's date.
-  // Same fix as setTimerStatusAction's hold event.
-  const at = new Date(now);
-  const today = ctx.timeZone ? isoDateInTz(ctx.timeZone, at) : isoDate(at);
-  const startedOn =
-    slot.startTime !== null
-      ? ctx.timeZone
-        ? isoDateInTz(ctx.timeZone, new Date(slot.startTime))
-        : isoDate(new Date(slot.startTime))
-      : today;
-  const ledgerDate = startedOn < today ? startedOn : today;
+    // Attribute the time to the day it was earned, not the day it was saved —
+    // otherwise a timer left running overnight lands its hours on tomorrow.
+    //
+    // `today` comes from `now` — the instant the accumulators were flushed at —
+    // not a fresh clock read after the loadCapContext round-trip. Two reads could
+    // straddle midnight, and for a paused slot (startTime null) ledgerDate is
+    // `today` alone, so yesterday's banked time would land on tomorrow's date.
+    // Same fix as setTimerStatusAction's hold event.
+    const at = new Date(now);
+    const today = ctx.timeZone ? isoDateInTz(ctx.timeZone, at) : isoDate(at);
+    const startedOn =
+      slot.startTime !== null
+        ? ctx.timeZone
+          ? isoDateInTz(ctx.timeZone, new Date(slot.startTime))
+          : isoDate(new Date(slot.startTime))
+        : today;
+    const ledgerDate = startedOn < today ? startedOn : today;
 
-  let previousHours: number | null = null;
-  let totalHours = 0;
-  let target: "line" | "ticket";
+    let previousHours: number | null = null;
+    let totalHours = 0;
+    let target: "line" | "ticket";
 
-  if (isOpenTicket) {
-    // A lineId can only reach here if it was passed for a ticket that has no
-    // lines to check it against — the same "isn't on this RO" refusal a bad
-    // lineId gets on a lined entry, since there is no line, full stop.
-    if (lineId !== null) {
-      throw new Error("That op code line isn't on this RO.");
+    // ACCEPTED GAP (timer-slot-delete-fail-double-bank, closed 2026-10-01 as
+    // documented): the writes below are separate requests — hours onto the line
+    // (addLineActualHours) or the ticket's open_work row, then the hold ledger
+    // rows, then deleteTimerSlot. If the slot delete fails transiently AFTER the
+    // hours banked, the slot survives and a retry banks the same time again
+    // (addLineActualHours is additive). Reversing the order would be worse: a
+    // failure after the delete silently loses the hours, with no slot left to
+    // retry from. The real fix is one RPC doing all three in a transaction,
+    // deferred until the next piece of timer work. Do not reorder these writes.
+    if (isOpenTicket) {
+      // A lineId can only reach here if it was passed for a ticket that has no
+      // lines to check it against — the same "isn't on this RO" refusal a bad
+      // lineId gets on a lined entry, since there is no line, full stop.
+      if (lineId !== null) {
+        throw new Refusal("That op code line isn't on this RO.");
+      }
+      target = "ticket";
+
+      // previousHours/totalHours here are the TICKET's open_work total, not a
+      // line's — the save modal's running total and the divergence check both
+      // read these fields regardless of which target they describe.
+      const priorLedger = await db.listUnpaidTimeForEntry(supabase, slot.entryId);
+      const priorWorkRows = openWorkRows(priorLedger);
+      const priorTotal = ticketOpenWorkHours(priorLedger, slot.entryId);
+      previousHours = priorWorkRows.length > 0 ? priorTotal : null;
+
+      // The THROWING create, not createUnpaidTimeSafe: worked hours are the
+      // load-bearing half of a save (see this function's own doc comment), so a
+      // failure here must fail the save rather than silently drop real hours —
+      // and it must do so BEFORE the slot is deleted, so the tech can retry.
+      // No 30-second gate either (contrast the hold loop below): that gate
+      // exists because a hold's value depends on being long enough to be worth
+      // a dispute-pack line, but a worked minute banked here is real the moment
+      // it lands.
+      if (workHours > 0) {
+        await db.createUnpaidTime(supabase, {
+          date: ledgerDate,
+          hours: workHours,
+          kind: "open_work",
+          entryId: slot.entryId,
+          source: "timer",
+        });
+      }
+      totalHours = priorTotal + (workHours > 0 ? workHours : 0);
+    } else {
+      if (lineId === null) {
+        throw new Refusal("Pick an op code to save this time to.");
+      }
+      if (!entry.opCodes.some((l) => l.id === lineId)) {
+        throw new Refusal("That op code line isn't on this RO.");
+      }
+      target = "line";
+
+      if (workHours > 0) {
+        const res = await db.addLineActualHours(supabase, lineId, workHours);
+        previousHours = res.previous;
+        totalHours = res.total;
+      } else {
+        const line = entry.opCodes.find((l) => l.id === lineId);
+        previousHours = line?.actualHours ?? null;
+        totalHours = previousHours ?? 0;
+      }
     }
-    target = "ticket";
 
-    // previousHours/totalHours here are the TICKET's open_work total, not a
-    // line's — the save modal's running total and the divergence check both
-    // read these fields regardless of which target they describe.
-    const priorLedger = await db.listUnpaidTimeForEntry(supabase, slot.entryId);
-    const priorWorkRows = openWorkRows(priorLedger);
-    const priorTotal = ticketOpenWorkHours(priorLedger, slot.entryId);
-    previousHours = priorWorkRows.length > 0 ? priorTotal : null;
-
-    // The THROWING create, not createUnpaidTimeSafe: worked hours are the
-    // load-bearing half of a save (see this function's own doc comment), so a
-    // failure here must fail the save rather than silently drop real hours —
-    // and it must do so BEFORE the slot is deleted, so the tech can retry.
-    // No 30-second gate either (contrast the hold loop below): that gate
-    // exists because a hold's value depends on being long enough to be worth
-    // a dispute-pack line, but a worked minute banked here is real the moment
-    // it lands.
-    if (workHours > 0) {
-      await db.createUnpaidTime(supabase, {
+    // Each hold reason writes its own row so the ledger can say WHY the time was
+    // lost — a lumped row would make the dispute-pack line meaningless.
+    let ledgerWritten = true;
+    const ledgered: Record<"holdParts" | "holdApproval", boolean> = {
+      holdParts: false,
+      holdApproval: false,
+    };
+    const waits = [
+      {
+        key: "holdParts" as const,
+        hours: waitPartsHours,
+        rawMs: banked.holdPartsAccumulated,
+      },
+      {
+        key: "holdApproval" as const,
+        hours: waitApprovalHours,
+        rawMs: banked.holdApprovalAccumulated,
+      },
+    ];
+    for (const w of waits) {
+      // Gate on RAW ms, not on `hours`. `hours` is already rounded to hundredths
+      // by msToHours, so a 20-second hold arrives here as 0.01 and clears a
+      // `<= 0` test that plainly meant "no time was banked" — writing a permanent
+      // row the save modal itself renders as "0m" onto the dispute pack. Each
+      // entry carries its OWN rawMs because this loop is generic over both hold
+      // kinds; testing one shared field here would break the other reason.
+      //
+      // No separate `hours <= 0` test: rawMs is non-negative (elapsedFor clamps
+      // it) and rawMs >= 30_000 forces hours >= 0.01, so the old check is
+      // strictly implied. Two thresholds that could drift apart is the bug we
+      // just fixed, not a defence against it.
+      if (!isLedgerableHold(w.rawMs)) continue;
+      const ok = await db.createUnpaidTimeSafe(supabase, {
         date: ledgerDate,
-        hours: workHours,
-        kind: "open_work",
+        hours: w.hours,
+        kind: HOLD_KIND[w.key],
         entryId: slot.entryId,
         source: "timer",
       });
+      if (!ok) ledgerWritten = false;
+      ledgered[w.key] = ok;
     }
-    totalHours = priorTotal + (workHours > 0 ? workHours : 0);
-  } else {
-    if (lineId === null) {
-      throw new Error("Pick an op code to save this time to.");
+
+    await db.deleteTimerSlot(supabase, slot.id);
+
+    // True Time: banking work hours onto a line moves its actual hours, so the
+    // RO's observations must be recomputed from the post-save entry — the same
+    // hook every hand-entered hours path in entries.ts runs. Without it, timed
+    // hours (on a CLOSED RO especially, where nothing else re-syncs) never reach
+    // the pool: fingerprint `timer-save-skips-true-time-sync`.
+    //  - Line target only: a lineless ticket has no line to observe (its hours
+    //    live in the open_work ledger; closeTicketAction syncs on close).
+    //  - workHours > 0 only: a zero save writes nothing to the line, so the
+    //    observations it would recompute are unchanged.
+    //  - AFTER the slot delete: the save is committed by then, and the helper
+    //    swallows (and reports) its own failures, so it can never fail the save.
+    if (target === "line" && workHours > 0) {
+      await syncObservations(supabase, slot.entryId);
     }
-    if (!entry.opCodes.some((l) => l.id === lineId)) {
-      throw new Error("That op code line isn't on this RO.");
-    }
-    target = "line";
 
-    if (workHours > 0) {
-      const res = await db.addLineActualHours(supabase, lineId, workHours);
-      previousHours = res.previous;
-      totalHours = res.total;
-    } else {
-      const line = entry.opCodes.find((l) => l.id === lineId);
-      previousHours = line?.actualHours ?? null;
-      totalHours = previousHours ?? 0;
-    }
-  }
+    revalidateAfterSave();
 
-  // Each hold reason writes its own row so the ledger can say WHY the time was
-  // lost — a lumped row would make the dispute-pack line meaningless.
-  let ledgerWritten = true;
-  const ledgered: Record<"holdParts" | "holdApproval", boolean> = {
-    holdParts: false,
-    holdApproval: false,
-  };
-  const waits = [
-    {
-      key: "holdParts" as const,
-      hours: waitPartsHours,
-      rawMs: banked.holdPartsAccumulated,
-    },
-    {
-      key: "holdApproval" as const,
-      hours: waitApprovalHours,
-      rawMs: banked.holdApprovalAccumulated,
-    },
-  ];
-  for (const w of waits) {
-    // Gate on RAW ms, not on `hours`. `hours` is already rounded to hundredths
-    // by msToHours, so a 20-second hold arrives here as 0.01 and clears a
-    // `<= 0` test that plainly meant "no time was banked" — writing a permanent
-    // row the save modal itself renders as "0m" onto the dispute pack. Each
-    // entry carries its OWN rawMs because this loop is generic over both hold
-    // kinds; testing one shared field here would break the other reason.
-    //
-    // No separate `hours <= 0` test: rawMs is non-negative (elapsedFor clamps
-    // it) and rawMs >= 30_000 forces hours >= 0.01, so the old check is
-    // strictly implied. Two thresholds that could drift apart is the bug we
-    // just fixed, not a defence against it.
-    if (!isLedgerableHold(w.rawMs)) continue;
-    const ok = await db.createUnpaidTimeSafe(supabase, {
-      date: ledgerDate,
-      hours: w.hours,
-      kind: HOLD_KIND[w.key],
-      entryId: slot.entryId,
-      source: "timer",
-    });
-    if (!ok) ledgerWritten = false;
-    ledgered[w.key] = ok;
-  }
-
-  await db.deleteTimerSlot(supabase, slot.id);
-
-  // True Time: banking work hours onto a line moves its actual hours, so the
-  // RO's observations must be recomputed from the post-save entry — the same
-  // hook every hand-entered hours path in entries.ts runs. Without it, timed
-  // hours (on a CLOSED RO especially, where nothing else re-syncs) never reach
-  // the pool: fingerprint `timer-save-skips-true-time-sync`.
-  //  - Line target only: a lineless ticket has no line to observe (its hours
-  //    live in the open_work ledger; closeTicketAction syncs on close).
-  //  - workHours > 0 only: a zero save writes nothing to the line, so the
-  //    observations it would recompute are unchanged.
-  //  - AFTER the slot delete: the save is committed by then, and the helper
-  //    swallows (and reports) its own failures, so it can never fail the save.
-  if (target === "line" && workHours > 0) {
-    await syncObservations(supabase, slot.entryId);
-  }
-
-  revalidateAfterSave();
-
-  return {
-    workHours,
-    previousHours,
-    totalHours,
-    waitPartsHours,
-    waitApprovalHours,
-    waitPartsLedgered: ledgered.holdParts,
-    waitApprovalLedgered: ledgered.holdApproval,
-    ledgerWritten,
-    target,
-  };
+    return {
+      workHours,
+      previousHours,
+      totalHours,
+      waitPartsHours,
+      waitApprovalHours,
+      waitPartsLedgered: ledgered.holdParts,
+      waitApprovalLedgered: ledgered.holdApproval,
+      ledgerWritten,
+      target,
+    };
+  });
 }

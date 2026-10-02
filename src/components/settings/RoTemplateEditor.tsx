@@ -254,7 +254,11 @@ export function RoTemplateEditor({
       }
       fd.append("regions", JSON.stringify(regions));
 
-      await saveRoTemplateMetadata(fd);
+      const res = await saveRoTemplateMetadata(fd);
+      if ("error" in res) {
+        setErrorMsg(res.error);
+        return;
+      }
       onClose({ id, name, imageStoragePath: storagePath, regions });
     } catch (err) {
       setErrorMsg(actionErrorMessage(err, "Save failed."));

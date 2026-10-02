@@ -1,5 +1,6 @@
 // Data layer for repair orders (entries) and their op code lines.
 import type { Database } from "@/lib/supabase/database.types";
+import { Refusal } from "@/lib/refusal";
 import {
   isComebackKind,
   isEntryStatus,
@@ -330,7 +331,10 @@ export async function createEntry(
   input: NewEntry,
 ): Promise<Entry> {
   if (input.opCodes.length === 0) {
-    throw new Error("At least one op code is required.");
+    // A Refusal, so saveEntry (wrapped in refusable) returns it as `{ error }`.
+    // Unreachable through the UI today — newEntrySchema already requires a
+    // line — but if it ever fires, it is a sentence for the tech.
+    throw new Refusal("At least one op code is required.");
   }
 
   const userId = await getCurrentUserId(supabase);
@@ -440,7 +444,7 @@ export async function addEntryLines(
   entryId: string,
   lines: NewEntryOpCode[],
 ): Promise<void> {
-  if (lines.length === 0) throw new Error("At least one op code is required.");
+  if (lines.length === 0) throw new Refusal("At least one op code is required.");
   const { error } = await supabase
     .from("entry_op_codes")
     .insert(lines.map((line, i) => toLineInsert(entryId, line, i)));
@@ -716,7 +720,7 @@ export async function setLineUpsell(
       .maybeSingle();
     if (readErr) throw readErr;
     if (data?.is_comeback) {
-      throw new Error(
+      throw new Refusal(
         "That line is marked as a comeback — unpaid rework can't also be an upsell.",
       );
     }
