@@ -41,6 +41,9 @@ function toSettings(row: SettingsRow): UserSettings {
     tagColors: (row.tag_colors as Record<string, number> | null) ?? {},
     // `?? false` also covers a pre-migration DB. Defaulting to false is the
     // safe direction for a consent flag: an unknown answer is never consent.
+    // (The DB default for NEW rows is true since 2026-10-01 — that is a real
+    // stored answer, so it reads through here as true. This fallback is only
+    // for when there is no answer at all.)
     shareLaborTimes: row.share_labor_times ?? false,
     // Same `?? false`, same reason in a different key: an unknown answer must
     // not put a new field in front of someone who never asked for it.

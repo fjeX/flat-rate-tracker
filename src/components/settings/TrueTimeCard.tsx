@@ -8,7 +8,11 @@ import { actionErrorMessage } from "@/lib/action-error";
 import { SettingRow } from "./SettingRow";
 
 /**
- * True Time consent. Off by default, and the copy has to earn the yes.
+ * True Time consent. ON by default for accounts created on/after 2026-10-01
+ * (opt-out; it was opt-in before — see 20261001000000_true_time_default_on.sql),
+ * which raises the bar on the copy rather than lowering it: a tech who never
+ * asked for this has to be able to see at a glance what is leaving and how to
+ * stop it.
  *
  * Two things are stated plainly rather than buried, because this is the only
  * place in FRT where a tech's data leaves their own account: what is sent (a job
@@ -46,11 +50,12 @@ export function TrueTimeCard({ initialShare }: { initialShare: boolean }) {
         <>
           Book times were written for cars that didn&apos;t have scan tools. True
           Time pools what jobs <em>actually</em> take, measured by techs in the
-          bay, so you can tell which op codes really pay. If you turn this on, FRT
-          shares the op code, the vehicle, the book hours, and your actual hours —
-          nothing else. No RO numbers, no customer info, no shop name, no name of
-          yours, and no date finer than the month. Turn it off and everything
-          you&apos;ve contributed is deleted.
+          bay, so you can tell which op codes really pay. It&apos;s on for new
+          accounts. While it&apos;s on, FRT shares the op code, the vehicle, the
+          book hours, and your actual hours — nothing else. No RO numbers, no
+          customer info, no shop name, no name of yours, and no date finer than
+          the month. Turn it off any time and everything you&apos;ve contributed
+          is deleted.
         </>
       }
       fine="Pooled figures are only ever shown once at least 5 different techs have logged the same job, so nothing can be traced back to one person."

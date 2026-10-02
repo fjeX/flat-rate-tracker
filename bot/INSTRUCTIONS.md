@@ -1760,9 +1760,12 @@ Use §5 to reconcile a line to fewer hours than it flagged.
 Settings → **"Contribute to True Time"**. This is the only place a tech's data
 leaves their own account, so the checks are about the OFF state holding.
 
-- The toggle must default to **OFF** for an account that has never touched it.
-  If it is ever found ON without someone turning it on, report as **FAIL** —
-  that is a privacy defect, not a UI nit.
+- **Default changed 2026-10-01: the toggle is ON by default for NEW accounts.**
+  Finding it ON on a fresh account is correct, not a FAIL. Accounts created
+  before 2026-10-01 that never touched it still read OFF (the migration did not
+  rewrite existing rows). What IS still a FAIL: the switch not holding the state
+  a tech set, or the copy failing to say it is on by default and how to stop it.
+- Copy must state that it is on for new accounts and can be turned off any time.
 - Copy must state plainly what is shared (op code, vehicle, book hours, actual
   hours) and what is not (RO numbers, customer info, shop, name, exact dates),
   and that turning it off deletes what was contributed.
