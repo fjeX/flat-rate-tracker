@@ -165,7 +165,7 @@ describe("DataCard — disclosures in the confirm dialog", () => {
 
   it("a file without ticket timelines shows the red cleared line, in the replace list", async () => {
     await openWith(JSON.parse(BACKUP));
-    const li = screen.getByText("Ticket timelines — will be cleared (this backup predates open tickets)");
+    const li = screen.getByText("Ticket timelines — will be cleared (this backup has no ticket timelines)");
     expect(li.tagName).toBe("LI");
     expect(li.className).toContain("imp-cleared");
     const keptList = screen.getByText(/your current data is kept/).nextElementSibling!;
@@ -176,7 +176,42 @@ describe("DataCard — disclosures in the confirm dialog", () => {
     await openWith({ ...JSON.parse(BACKUP), roEvents: [{ id: "a" }, { id: "b" }] });
     const label = screen.getByText("Ticket timelines");
     expect(label.nextElementSibling?.textContent).toBe("2");
-    expect(screen.queryByText(/predates open tickets/)).toBeNull();
+    expect(screen.queryByText(/has no ticket timelines/)).toBeNull();
+  });
+
+  it.each([
+    ["v1", { ...JSON.parse(BACKUP), version: 1 }],
+    ["v5", { ...JSON.parse(BACKUP), roEvents: [], entryPhotos: [{ id: "p" }] }],
+  ])("a %s import says RO photos and True Time are deleted, next to the wipe list", async (_v, raw) => {
+    await openWith(raw);
+    const photos = screen.getByText("Your RO photos are deleted");
+    const trueTime = screen.getByText("Your True Time contributions are deleted");
+    expect(photos.parentElement!.textContent).toMatch(
+      /image files included. Photos aren't in a backup, so none come back./,
+    );
+    expect(trueTime.parentElement!.textContent).toMatch(
+      /they go with the repair orders they were measured on./,
+    );
+    // In the replace section, not under "Doesn't come across".
+    const replaceSection = screen.getByText("This will permanently replace:").closest("section")!;
+    expect(replaceSection.contains(photos)).toBe(true);
+    expect(replaceSection.contains(trueTime)).toBe(true);
+    const across = screen.getByText(/Doesn.t come across/).closest("section")!;
+    expect(across.textContent).not.toMatch(/photo|True Time|secure storage/i);
+  });
+
+  it("disputes kept from a file without them say their RO links are cleared", async () => {
+    await openWith(JSON.parse(BACKUP));
+    const keptList = screen.getByText(/your current data is kept/).nextElementSibling!;
+    expect(keptList.textContent).toMatch(
+      /Disputes — kept, but their links to repair orders are cleared because the repair orders are replaced — each claim keeps its RO number/,
+    );
+  });
+
+  it("the fine print no longer says photos stay", () => {
+    render(<DataCard />);
+    expect(screen.queryByText(/stay in secure storage/)).toBeNull();
+    expect(screen.getByText(/Importing one deletes your current RO photos/)).toBeTruthy();
   });
 
   it("unpaid time kept from an older file says its RO links are cleared", async () => {

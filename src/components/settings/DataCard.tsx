@@ -119,7 +119,7 @@ export function DataCard() {
         titleAs="h2"
         title="Backup"
         description="Export a full backup or restore from a previous one."
-        fine="RO photo image files aren't included in the JSON backup — only their metadata. Photos stay in secure storage and can't be restored from this file."
+        fine="RO photos aren't included in the JSON backup. Importing one deletes your current RO photos, image files included, and none come back."
       >
         <div className="stg-actions" style={{ marginTop: 0 }}>
           <Button variant="line" onClick={handleExport} disabled={exportPending}>
@@ -236,7 +236,8 @@ export function DataCard() {
                 ))}
               </ul>
               {/* Not a section of the file — state the import clears no
-                  matter what the file says. Told here, next to the wipe list,
+                  matter what the file says (running timers, RO photos, True
+                  Time contributions). Told here, next to the wipe list,
                   because it is part of what "Replace data" does. */}
               {summary.sideEffects.map((w) => (
                 <StatusField key={w.label} tag="Note" inset>

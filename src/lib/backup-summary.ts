@@ -91,8 +91,11 @@ const SECTIONS: { key: keyof ImportBundle; label: string }[] = [
  * ro_events: import_replace_account v6 `DELETE FROM ro_events WHERE user_id =
  * uid` with no `data ?` guard, and the rows cascade from entries regardless.
  */
+// The reason has to hold for every file that lands here: a v1–v4 backup
+// predates open tickets, but a v5 one only lacks the key when the exporting
+// database had no ro_events table — so say what's true of the FILE.
 const ALWAYS_CLEARED: Partial<Record<string, string>> = {
-  roEvents: "this backup predates open tickets",
+  roEvents: "this backup has no ticket timelines",
 };
 
 /**
@@ -107,6 +110,23 @@ const UNPAID_TIME_KEPT_DETAIL =
   "open-work hours lose their ticket";
 
 /**
+ * Same shape for disputes kept from a file without a disputes key: the RPC
+ * skips disputes (`data ? 'disputes'` guard), but dispute_lines.entry_id and
+ * line_id are ON DELETE SET NULL, so every claim loses its RO link when the
+ * entries are replaced. The claim itself survives — dispute_lines freezes the
+ * RO number and line identity for exactly this case.
+ */
+const DISPUTES_KEPT_DETAIL =
+  "kept, but their links to repair orders are cleared because the repair orders are replaced — " +
+  "each claim keeps its RO number";
+
+/** The caveat on a kept (absent) section, or undefined when keeping it costs nothing. */
+const KEPT_DETAIL: Partial<Record<string, string>> = {
+  unpaidTime: UNPAID_TIME_KEPT_DETAIL,
+  disputes: DISPUTES_KEPT_DETAIL,
+};
+
+/**
  * Always true, so always said. import_replace_account deletes active_timers
  * before anything else: a timer points at an RO that is about to stop existing.
  * The manifest has no `warnUser` for it because nothing "stays behind" — the
@@ -118,6 +138,30 @@ const SIDE_EFFECTS: BackupWarning[] = [
     detail: "any timer running now is cleared, and time on it that hasn't been saved is lost.",
   },
 ];
+
+/**
+ * Manifest `warnUser` tables the import DELETES from the account rather than
+ * leaving behind. They used to be listed under "Doesn't come across" with copy
+ * saying they stay — false on every import:
+ *
+ *   * entry_photos cascades from `DELETE FROM entries` (import_replace_account
+ *     v6), and importDataAction then purges the account's storage objects once
+ *     the RPC commits. A backup never carries photos, so nothing restores them.
+ *   * labor_time_observations.entry_id / line_id are ON DELETE CASCADE, so the
+ *     account's True Time contributions leave the shared pool with its ROs.
+ *
+ * Not "come across" facts — data that stops existing — so they are side effects.
+ */
+const DELETED_NOT_CARRIED: Partial<Record<TableName, BackupWarning>> = {
+  entry_photos: {
+    label: "Your RO photos are deleted",
+    detail: "image files included. Photos aren't in a backup, so none come back.",
+  },
+  labor_time_observations: {
+    label: "Your True Time contributions are deleted",
+    detail: "they go with the repair orders they were measured on.",
+  },
+};
 
 /**
  * The tables import_replace_account DELETES UNCONDITIONALLY (no `data ? key`
@@ -182,31 +226,18 @@ export function missingCoreSectionRefusal(bundle: unknown): string | null {
   return null;
 }
 
-/**
- * User-facing copy for the tables the manifest flags with `warnUser`.
+/*
+ * User-facing copy for the tables the manifest flags with `warnUser` lives in
+ * DELETED_NOT_CARRIED above — written HERE rather than reused from the
+ * manifest's `reason`. Those reasons are developer notes, and they open by
+ * naming the thing — labor_time_observations' starts "True Time
+ * contributions.", which once rendered as "True Time contributions — True Time
+ * contributions." One string cannot be both a code comment and product copy.
  *
- * The detail is written HERE rather than reused from the manifest's `reason`.
- * Those reasons are developer notes explaining a decision to whoever reads the
- * manifest next, and they open by naming the thing — labor_time_observations'
- * starts "True Time contributions.", which rendered as
- * "True Time contributions — True Time contributions." and threw away the
- * actual explanation. One string cannot be both a code comment and product copy.
- *
- * A table with no entry here still appears, falling back to the manifest's
- * reason — clumsy wording beats a warning that silently vanishes.
+ * A warnUser table with no copy still appears under "Doesn't come across",
+ * falling back to the manifest's reason — clumsy wording beats a warning that
+ * silently vanishes.
  */
-const WARNING_COPY: Partial<Record<TableName, { label: string; detail: string }>> = {
-  entry_photos: {
-    label: "RO photos",
-    detail: "Image files are never included in a backup — only their metadata.",
-  },
-  labor_time_observations: {
-    label: "True Time contributions",
-    detail:
-      "They stay with the account that recorded them. Copying them would count the " +
-      "same real-world jobs twice and skew the shared times everyone sees.",
-  },
-};
 
 function countOf(value: unknown): number | null {
   if (Array.isArray(value)) return value.length;
@@ -232,8 +263,9 @@ export function summarizeBackup(bundle: ImportBundle): BackupSummary {
     if (isAbsent(b, key)) {
       const alwaysCleared = ALWAYS_CLEARED[key];
       if (alwaysCleared) return { key, label, state: "cleared", detail: alwaysCleared };
-      if (key === "unpaidTime" && entriesReplaced) {
-        return { key, label, state: "untouched", detail: UNPAID_TIME_KEPT_DETAIL };
+      const keptDetail = KEPT_DETAIL[key];
+      if (keptDetail && entriesReplaced) {
+        return { key, label, state: "untouched", detail: keptDetail };
       }
       if (!CORE.has(key)) return { key, label, state: "untouched" };
       const reason = allowedAbsenceReason(b.version, key);
@@ -254,21 +286,18 @@ export function summarizeBackup(bundle: ImportBundle): BackupSummary {
     return { key, label, state: "replacing", count };
   });
 
+  const sideEffects: BackupWarning[] = SIDE_EFFECTS.map((e) => ({ ...e }));
   const warnings: BackupWarning[] = [];
   for (const { table, reason } of tablesUserShouldBeWarnedAbout()) {
-    const copy = WARNING_COPY[table];
-    let detail = copy?.detail ?? firstSentence(reason);
-
-    // Photos are the one warning worth quantifying — "3 photos stay behind" is
-    // a decision the user can act on, where the others are just facts.
-    if (table === "entry_photos") {
-      const n = countOf(b.entryPhotos) ?? 0;
-      if (n > 0) {
-        detail = `${n} photo${n === 1 ? "" : "s"} stay in secure storage — the image files aren't in this backup.`;
-      }
+    const deleted = DELETED_NOT_CARRIED[table];
+    if (deleted) {
+      // No count: what's deleted is the ACCOUNT's photos, which the dialog
+      // can't see. The file's photo refs would be a number about a different
+      // set of photos, and none of them come back either.
+      sideEffects.push({ ...deleted });
+      continue;
     }
-
-    warnings.push({ label: copy?.label ?? table, detail });
+    warnings.push({ label: table, detail: firstSentence(reason) });
   }
 
   // Not a table, so the manifest has nothing to say about it — but it is the
@@ -283,7 +312,7 @@ export function summarizeBackup(bundle: ImportBundle): BackupSummary {
     version: bundle.version,
     exportedAt: typeof bundle.exportedAt === "string" ? bundle.exportedAt : null,
     sections,
-    sideEffects: SIDE_EFFECTS.map((e) => ({ ...e })),
+    sideEffects,
     warnings,
     refusal: missingCoreSectionRefusal(bundle),
   };

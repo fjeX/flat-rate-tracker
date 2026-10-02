@@ -79,27 +79,16 @@ describe("summarizeBackup", () => {
   });
 
   describe("warnings", () => {
-    it("counts the photos that stay behind", () => {
-      const s = summarizeBackup(bundle({ entryPhotos: [{}, {}, {}] }));
-      const photos = s.warnings.find((w) => w.label === "RO photos");
-      expect(photos?.detail).toContain("3 photos");
-    });
-
-    it("singularises one photo", () => {
-      const s = summarizeBackup(bundle({ entryPhotos: [{}] }));
-      expect(s.warnings.find((w) => w.label === "RO photos")?.detail).toContain("1 photo stay");
-    });
-
-    it("still explains photos when the backup has none", () => {
-      const s = summarizeBackup(bundle());
-      const photos = s.warnings.find((w) => w.label === "RO photos");
-      expect(photos).toBeDefined();
-      expect(photos?.detail).not.toContain("0 photo");
-    });
-
-    it("warns that True Time contributions stay with the source account", () => {
-      const s = summarizeBackup(bundle());
-      expect(s.warnings.some((w) => w.label === "True Time contributions")).toBe(true);
+    // import-dialog-photos-truetime: the RPC's DELETE FROM entries cascades
+    // entry_photos and labor_time_observations, and importDataAction purges the
+    // photo files after it commits. They used to sit here saying they "stay".
+    it("never lists photos or True Time as staying behind", () => {
+      for (const b of [bundle(), bundle({ entryPhotos: [{}, {}, {}] })]) {
+        const w = summarizeBackup(b).warnings;
+        expect(w.some((x) => /photo/i.test(x.label + x.detail))).toBe(false);
+        expect(w.some((x) => /true time/i.test(x.label + x.detail))).toBe(false);
+        expect(w.some((x) => /stay in secure storage|stay with the account/.test(x.detail))).toBe(false);
+      }
     });
 
     it("never restates the label as the explanation", () => {
@@ -234,7 +223,7 @@ describe("what the import does beyond the listed sections", () => {
         key: "roEvents",
         label: "Ticket timelines",
         state: "cleared",
-        detail: "this backup predates open tickets",
+        detail: "this backup has no ticket timelines",
       });
       // Not a file refusal: an old backup genuinely can't carry them, and
       // the server refuses only when the account has some to lose.
@@ -247,16 +236,51 @@ describe("what the import does beyond the listed sections", () => {
     expect(section(s, "roEvents").state).toBe("cleared");
   });
 
-  it("running timers stop — said on every import", () => {
-    for (const b of [bundle(), bundle({ version: 1 }), bundle({ version: 5, roEvents: [] })]) {
+  it("running timers, RO photos and True Time — all said on every import", () => {
+    for (const b of [
+      bundle(),
+      bundle({ version: 1 }),
+      bundle({ version: 5, roEvents: [] }),
+      bundle({ version: 5, entryPhotos: [{}, {}] }),
+    ]) {
       expect(summarizeBackup(b).sideEffects).toEqual([
         {
           label: "Running timers stop",
           detail:
             "any timer running now is cleared, and time on it that hasn't been saved is lost.",
         },
+        {
+          label: "Your RO photos are deleted",
+          detail: "image files included. Photos aren't in a backup, so none come back.",
+        },
+        {
+          label: "Your True Time contributions are deleted",
+          detail: "they go with the repair orders they were measured on.",
+        },
       ]);
     }
+  });
+
+  it("disputes kept from a file without them say their RO links are cleared", () => {
+    for (const b of [bundle(), bundle({ disputes: null }), bundle({ version: 1 })]) {
+      expect(section(summarizeBackup(b), "disputes")).toEqual({
+        key: "disputes",
+        label: "Disputes",
+        state: "untouched",
+        detail:
+          "kept, but their links to repair orders are cleared because the repair orders are replaced — each claim keeps its RO number",
+      });
+    }
+  });
+
+  it("disputes carried by the file are a plain replace, no caveat", () => {
+    const s = summarizeBackup(bundle({ disputes: [{}] }));
+    expect(section(s, "disputes")).toEqual({
+      key: "disputes",
+      label: "Disputes",
+      state: "replacing",
+      count: 1,
+    });
   });
 
   it("unpaid time kept from an older file says its RO links are cleared", () => {
@@ -282,6 +306,8 @@ describe("what the import does beyond the listed sections", () => {
 
   it("other untouched sections carry no caveat", () => {
     const s = summarizeBackup(bundle());
-    expect(section(s, "disputes")).toEqual({ key: "disputes", label: "Disputes", state: "untouched" });
+    for (const key of ["laborRates", "workSchedules", "daysOff", "careerMilestones"]) {
+      expect(section(s, key)).not.toHaveProperty("detail");
+    }
   });
 });

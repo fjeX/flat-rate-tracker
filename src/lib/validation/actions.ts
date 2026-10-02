@@ -1003,7 +1003,9 @@ export const importBundleSchema = z.looseObject({
     .optional(),
   // Bare "YYYY-MM-DD" strings, as listConfirmedZeroDaysSafe returns them.
   confirmedZeroDays: z
-    .array(z.string(), { error: "Confirmed zero days must be a list of dates." })
+    .array(z.string({ error: "Confirmed zero days must be a list of dates." }), {
+      error: "Confirmed zero days must be a list of dates.",
+    })
     .optional(),
   portfolioSnapshots: looseRows("Snapshots"),
   careerMilestones: looseRows("Milestones"),
