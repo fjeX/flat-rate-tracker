@@ -486,8 +486,8 @@ checked against the current app on 2026-10-01 and is exact.
 - **Landing (`/`)** has its demo tiles, pace bars, RO form, op-code list,
   discrepancy field and charts built from the app's real parts, the tower mark
   with "FLAT RATE TRACKER" as text, and the content in a `<main>`. **FAQ / About
-  Us / Contact** (§8e) each show an h1 with the page name, a one-line
-  description and a card reading "Coming soon." **Admin > Bugs** (404 for the
+  Us / Contact** (§8e): FAQ and About Us are real pages (2026-10-02); Contact
+  still shows an h1, a one-line description and a card reading "Coming soon." **Admin > Bugs** (404 for the
   bot account, §8e): h1 "Bug reports", the two filters in a row
   (`#filter-status`, `#filter-severity`), a REPORTS zone with the "N reports"
   count, rows as row buttons with status / severity / category badges; "Nothing
@@ -2165,8 +2165,17 @@ not a bug).
 
 - **Footer presence:** scroll to the bottom of the dashboard — confirm the four
   links render, aren't clipped, and don't overlap the mobile bottom nav.
-- **FAQ / About / Contact:** click each — they should open a clean "Coming soon"
-  placeholder page (NOT a 404). A 404 is a bug.
+- **FAQ / About / Contact:** click each. None may 404.
+  - **FAQ** (new 2026-10-02): h1 "FAQ", five zones (Getting started, Logging
+    ROs, Timers, Pay and paychecks, Your account and your data) of questions
+    that open and close on tap (native `<details>`), then a "Still stuck?" zone.
+    Open two or three: each shows its answer, and most end in a "take me there"
+    link — follow one and confirm it lands on the page or setting it names
+    (`/settings?section=…` opens that setting). **"Ask a question"** opens the
+    Report a Bug dialog — same rule as below, never send.
+  - **About Us** (new 2026-10-02): h1 "About Us" and five zones of prose in
+    the builder's voice. Check only that it renders and reads cleanly.
+  - **Contact** is still the "Coming soon" placeholder, by design.
 - **Report a Bug modal — open, type, but DO NOT SUBMIT.** Click Report a Bug,
   then type a full sentence into the description box.
   - ⚠️ **Regression check (modal focus bug, fixed 2026-07-23):** every character
