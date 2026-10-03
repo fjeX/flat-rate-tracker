@@ -5,7 +5,7 @@
 // control, a sort control and a search well up top; the Flagged hours chart
 // in its zone; then the ROs as tags (the same object the dashboard and Pay
 // Period draw), grouped under a day heading while the list is in date order.
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadEntriesInRange, loadMoreEntries } from "@/app/actions/entries";
 import { Camera, Search, X } from "lucide-react";
@@ -22,7 +22,8 @@ import {
 import { fmtHours, type DayDenom } from "@/lib/stats";
 import type { RateMap } from "@/lib/earnings";
 import { lineCode } from "@/lib/line-code";
-import { entryMatchesSearch } from "@/lib/history-search";
+import { entryMatchesSearch, findSearchMatches, matchSnippet, type SearchField } from "@/lib/history-search";
+import { buildHistoryQuery, type HistoryRange, type HistorySort, type HistoryDir, type HistoryUrlState } from "@/lib/history-url";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { RoTag } from "@/components/dashboard/RoTag";
 import { Badge } from "@/components/ui/Badge";
@@ -34,9 +35,9 @@ import { withPt } from "@/components/ui/Figure";
 import { Zone } from "@/components/ui/Zone";
 import { HistoryBarChart, customByDay, type BarRange } from "./HistoryBarChart";
 
-type FilterKind = "today" | "week" | "period" | "month" | "all" | "custom";
-type SortKind = "date" | "hours" | "ro_number";
-type SortDir = "desc" | "asc";
+type FilterKind = HistoryRange;
+type SortKind = HistorySort;
+type SortDir = HistoryDir;
 
 const CHIPS: { kind: FilterKind; label: string }[] = [
   { kind: "today",  label: "Today" },
@@ -131,6 +132,18 @@ function monthHeading(ym: string): string {
   return `${MONTHS_LONG[m - 1]} ${y}`;
 }
 
+const MATCH_LABEL: Record<SearchField, string> = {
+  ro: "RO #",
+  vehicle: "Vehicle",
+  op: "Op code",
+  note: "Note",
+};
+
+/** "Apr 1" for one day, "Apr 1 – Apr 7" for a span: the label a bar picked from the URL wears. */
+function barLabel(start: string, end: string): string {
+  return start === end ? formatDateShort(start) : `${formatDateShort(start)} – ${formatDateShort(end)}`;
+}
+
 type Group = { key: string; heading: string; entries: Entry[]; hours: number };
 
 export function HistoryView({
@@ -147,6 +160,7 @@ export function HistoryView({
   rates = {},
   entryIdsWithPhotos,
   denomByDay,
+  initial,
 }: {
   entries: Entry[];
   hasMore?: boolean;
@@ -171,6 +185,9 @@ export function HistoryView({
   entryIdsWithPhotos?: Set<string>;
   // Per-day efficiency denominators for the chart readout. Absent in guest mode.
   denomByDay?: Record<string, DayDenom>;
+  // Filters read from the URL on the server, so the first render already shows
+  // the view the tech left. Absent in guest mode: defaults.
+  initial?: HistoryUrlState;
 }) {
   // `entries` comes from the live store. In guest mode it hydrates from
   // sessionStorage in an effect AFTER first render, so freezing it into state
@@ -180,13 +197,15 @@ export function HistoryView({
   const [extraEntries, setExtraEntries] = useState<Entry[]>([]);
   const [hasMore, setHasMore] = useState(hasMoreProp);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [filter, setFilter] = useState<FilterKind>("period");
-  const [sortBy, setSortBy] = useState<SortKind>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterKind>(initial?.range ?? "period");
+  const [sortBy, setSortBy] = useState<SortKind>(initial?.sort ?? "date");
+  const [sortDir, setSortDir] = useState<SortDir>(initial?.dir ?? "desc");
+  const [search, setSearch] = useState(initial?.q ?? "");
   // A tapped chart bar narrows the list to that bar's dates. Cleared by tapping
   // it again, by "Show all", or by switching the range (the bars change).
-  const [picked, setPicked] = useState<BarRange | null>(null);
+  const [picked, setPicked] = useState<BarRange | null>(
+    initial?.bar ? { ...initial.bar, label: barLabel(initial.bar.start, initial.bar.end) } : null,
+  );
   const [openId, setOpenId] = useState<string | null>(null);
   // Optimistically removed on delete. The 2026-07-23 fix pruned `extraEntries`
   // and called router.refresh(), which covers a row from "Load more" but NOT a
@@ -199,15 +218,18 @@ export function HistoryView({
   // Custom range: two dates the tech types, both inclusive. Starts on the
   // current pay period so the first tap shows something familiar.
   const [customFrom, setCustomFrom] = useState(
-    () => getPeriodForDate(today, settings.splitDay, settings.periodOverrides).start,
+    () => initial?.from ?? getPeriodForDate(today, settings.splitDay, settings.periodOverrides).start,
   );
-  const [customTo, setCustomTo] = useState(today);
+  const [customTo, setCustomTo] = useState(initial?.to ?? today);
   // ROs fetched for the custom range. Only the newest page is loaded up front,
   // so a range in the past is asked of the server: filtering whatever happens
   // to be loaded would quietly drop the older ROs. Kept apart from the paged
   // rows so "Load more" offsets still count pages only.
   const [rangeEntries, setRangeEntries] = useState<Entry[]>([]);
   const [rangeLoading, setRangeLoading] = useState(false);
+  // The from_to that rangeEntries fully covers. The Custom chip count is only
+  // exact once this matches the dates on screen.
+  const [rangeKey, setRangeKey] = useState<string | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
   const rangeRequest = useRef(0);
 
@@ -215,8 +237,10 @@ export function HistoryView({
     customFrom && customTo && customFrom > customTo
       ? "The From date must be on or before the To date."
       : null;
-  const customRange =
-    customFrom && customTo && !customOrderError ? { start: customFrom, end: customTo } : null;
+  const customRange = useMemo(
+    () => (customFrom && customTo && !customOrderError ? { start: customFrom, end: customTo } : null),
+    [customFrom, customTo, customOrderError],
+  );
 
   const libraryById = useMemo(() => new Map(library.map((oc) => [oc.id, oc])), [library]);
 
@@ -243,7 +267,10 @@ export function HistoryView({
       const res = await loadEntriesInRange(from, to);
       if (id !== rangeRequest.current) return; // a newer range was asked for
       if ("error" in res) setRangeError(res.error);
-      else setRangeEntries(res.entries);
+      else {
+        setRangeEntries(res.entries);
+        setRangeKey(from + "_" + to);
+      }
     } catch {
       if (id === rangeRequest.current) setRangeError("Couldn't load ROs for those dates. Try again.");
     } finally {
@@ -278,6 +305,45 @@ export function HistoryView({
     }
   }
 
+  // A link that opens on Custom: the older ROs are not in the first page, so ask
+  // for them once on mount, exactly as tapping the Custom chip does.
+  // Deferred a tick so the effect body sets no state itself; the cleanup keeps
+  // dev StrictMode's double-run to a single request.
+  useEffect(() => {
+    if (filter !== "custom") return;
+    const t = setTimeout(() => void fetchRange(customFrom, customTo), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mirror the filters into the query string. replaceState, not router.replace:
+  // the router would round-trip to the server for every keystroke, and a
+  // filter tweak should not fill the back button. Typing waits 300ms so a word
+  // is one write; any other change writes straight away.
+  const lastSearchRef = useRef(search);
+  useEffect(() => {
+    const delay = lastSearchRef.current !== search ? 300 : 0;
+    lastSearchRef.current = search;
+    const t = setTimeout(() => {
+      try {
+        const qs = buildHistoryQuery(
+          {
+            range: filter,
+            from: customFrom,
+            to: customTo,
+            q: search,
+            sort: sortBy,
+            dir: sortDir,
+            bar: picked ? { start: picked.start, end: picked.end } : null,
+          },
+          window.location.search,
+        );
+        window.history.replaceState(null, "", window.location.pathname + qs + window.location.hash);
+      } catch {}
+    }, delay);
+    return () => clearTimeout(t);
+  }, [filter, customFrom, customTo, search, sortBy, sortDir, picked]);
+
   const isCustom = filter === "custom";
   const range = picked ?? (isCustom ? customRange : getRange(filter, today, settings, weekStartDay));
   // Custom with a missing or backwards date shows nothing rather than everything.
@@ -304,6 +370,41 @@ export function HistoryView({
   }, [allEntries, noRange, range, search, libraryById, sortBy, sortDir]);
 
   const shownHours = filtered.reduce((s, e) => s + e.flagHours, 0);
+
+  // Counts on the range chips. Only the newest page of ROs is loaded, so a
+  // count is a fact only when the loaded rows cover the whole range:
+  //   - everything is loaded (no more pages), or
+  //   - the range starts on a day newer than the oldest loaded RO (the day the
+  //     page cut can still hold unloaded ROs, hence strictly newer), or
+  //   - Custom, once its own fetch for exactly these dates has landed.
+  // Otherwise the loaded rows are a floor, not the answer, so the chip says
+  // "23+" rather than a number that reads as final. "All" with more pages
+  // therefore reads "100+", never "100". A floor of zero is no information and
+  // shows nothing; so does Custom while loading, errored, or not yet fetched
+  // (a lower bound there would flicker as the fetch lands). Counts follow the
+  // range and deleted-in-session ROs, and ignore the search box.
+  const chipCounts = useMemo(() => {
+    const out: Partial<Record<FilterKind, { text: string; exact: boolean; n: number }>> = {};
+    let oldest: string | null = null;
+    for (const e of pagedEntries) if (oldest === null || e.date < oldest) oldest = e.date;
+    for (const chip of CHIPS) {
+      const r = chip.kind === "custom" ? customRange : getRange(chip.kind, today, settings, weekStartDay);
+      if (chip.kind === "custom" && !r) continue;
+      const n = r
+        ? allEntries.reduce((c, e) => (e.date >= r.start && e.date <= r.end ? c + 1 : c), 0)
+        : allEntries.length;
+      const covered = !hasMore || (r !== null && oldest !== null && r.start > oldest);
+      const fetched =
+        chip.kind === "custom" &&
+        r !== null &&
+        !rangeLoading &&
+        !rangeError &&
+        rangeKey === r.start + "_" + r.end;
+      if (covered || fetched) out[chip.kind] = { text: String(n), exact: true, n };
+      else if (chip.kind !== "custom" && n > 0) out[chip.kind] = { text: n + "+", exact: false, n };
+    }
+    return out;
+  }, [allEntries, pagedEntries, hasMore, customRange, today, settings, weekStartDay, rangeLoading, rangeError, rangeKey]);
 
   // Groups only make sense in date order. Day groups for the short ranges;
   // month groups once the range spans months. Any other sort is one flat
@@ -349,11 +450,18 @@ export function HistoryView({
 
       <div className="hist-ctl">
         <div className="seg hist-range" role="group" aria-label="Range">
-          {CHIPS.map((chip) => (
+          {CHIPS.map((chip) => {
+            const count = chipCounts[chip.kind];
+            return (
             <button
               key={chip.kind}
               type="button"
               aria-pressed={filter === chip.kind}
+              aria-label={
+                count
+                  ? chip.label + ", " + (count.exact ? "" : "at least ") + count.n + (count.n === 1 ? " RO" : " ROs")
+                  : chip.label
+              }
               onClick={() => {
                 setFilter(chip.kind);
                 setPicked(null);
@@ -361,8 +469,10 @@ export function HistoryView({
               }}
             >
               {chip.label}
+              <span className="hist-n num" aria-hidden="true">{count?.text}</span>
             </button>
-          ))}
+            );
+          })}
         </div>
         <div className="hist-ctl-row">
           <div className="seg" role="group" aria-label="Sort by">
@@ -527,6 +637,7 @@ export function HistoryView({
                           const when = grouped && !byMonth
                             ? rowTime(e, tz)
                             : `${formatDateShort(e.date)} · ${rowTime(e, tz)}`;
+                          const matches = search.trim() ? findSearchMatches(e, search, libraryById) : [];
                           return (
                             <RoTag
                               key={e.id}
@@ -572,6 +683,23 @@ export function HistoryView({
                                       </ul>
                                     )}
                                   </div>
+                                  {matches.length > 0 && (
+                                    <ul className="hist-match" aria-label="Matched in">
+                                      {matches.map((m) => {
+                                        const sn = matchSnippet(m);
+                                        return (
+                                          <li key={m.field}>
+                                            <Badge tone="neutral">{MATCH_LABEL[m.field]}</Badge>
+                                            <span className={"hist-match-text" + (m.field === "ro" ? " num" : "")}>
+                                              {sn.before}
+                                              <mark>{sn.hit}</mark>
+                                              {sn.after}
+                                            </span>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
                                   <DurationBar hours={e.flagHours} />
                                 </>
                               }

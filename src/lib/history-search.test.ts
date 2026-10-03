@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
-import { entryMatchesSearch } from "./history-search";
+import { entryMatchesSearch, findSearchMatches, matchSnippet } from "./history-search";
 
 const library: OpCode[] = [
   {
@@ -86,5 +86,74 @@ describe("entryMatchesSearch", () => {
     const orphan = entry([line({ opCodeId: "gone" })]);
     expect(entryMatchesSearch(orphan, "brk", libraryById)).toBe(false);
     expect(entryMatchesSearch(orphan, "48213", libraryById)).toBe(true);
+  });
+});
+
+describe("findSearchMatches", () => {
+  const libLine = entry([line({ opCodeId: "lib-brk" })]);
+  const customLine = entry([
+    line({ custom: true, customCode: "DIAG-EV", customDescription: "Hybrid battery diag" }),
+  ]);
+
+  it("reports nothing for a blank query", () => {
+    expect(findSearchMatches(libLine, "  ", libraryById)).toEqual([]);
+  });
+
+  it("reports the RO number hit with its range", () => {
+    expect(findSearchMatches(libLine, "821", libraryById)).toEqual([
+      { field: "ro", text: "48213", start: 1, end: 4 },
+    ]);
+  });
+
+  it("reports the vehicle hit, any case", () => {
+    const [m] = findSearchMatches(libLine, "CAMRY", libraryById);
+    expect(m.field).toBe("vehicle");
+    expect(m.text.slice(m.start, m.end)).toBe("Camry");
+  });
+
+  it("reports an op code hit in the description of a library line", () => {
+    const [m] = findSearchMatches(libLine, "pads", libraryById);
+    expect(m.field).toBe("op");
+    expect(m.text).toBe("BRK01 Front brake pads");
+    expect(m.text.slice(m.start, m.end)).toBe("pads");
+  });
+
+  it("reports a custom line hit in its code and in its description", () => {
+    expect(findSearchMatches(customLine, "diag-ev", libraryById)[0]).toMatchObject({ field: "op", start: 0, end: 7 });
+    const [d] = findSearchMatches(customLine, "battery", libraryById);
+    expect(d.text.slice(d.start, d.end)).toBe("battery");
+  });
+
+  it("reports a note hit, with whitespace collapsed", () => {
+    const e = { ...libLine, notes: "customer\n  waiting in lounge" };
+    const [m] = findSearchMatches(e, "waiting", libraryById);
+    expect(m.field).toBe("note");
+    expect(m.text).toBe("customer waiting in lounge");
+    expect(m.text.slice(m.start, m.end)).toBe("waiting");
+  });
+
+  it("reports every field that hit, once each, in a fixed order", () => {
+    const e = { ...entry([line({ opCodeId: "lib-brk" }), line({ id: "l2", opCodeId: "lib-brk" })]), notes: "brake noise" };
+    expect(findSearchMatches(e, "brake", libraryById).map((m) => m.field)).toEqual(["op", "note"]);
+  });
+
+  it("agrees with entryMatchesSearch", () => {
+    expect(findSearchMatches(libLine, "alignment", libraryById)).toEqual([]);
+    expect(entryMatchesSearch(libLine, "alignment", libraryById)).toBe(false);
+  });
+});
+
+describe("matchSnippet", () => {
+  it("windows long text and marks the cuts", () => {
+    const text = "a".repeat(40) + "NEEDLE" + "b".repeat(40);
+    const s = matchSnippet({ field: "note", text, start: 40, end: 46 }, 10);
+    expect(s.hit).toBe("NEEDLE");
+    expect(s.before).toBe("…" + "a".repeat(10));
+    expect(s.after).toBe("b".repeat(10) + "…");
+  });
+
+  it("adds no ellipsis when the text fits", () => {
+    const s = matchSnippet({ field: "ro", text: "48213", start: 1, end: 4 });
+    expect(s).toEqual({ before: "4", hit: "821", after: "3" });
   });
 });

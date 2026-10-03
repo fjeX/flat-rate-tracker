@@ -342,6 +342,22 @@ checked against the current app on 2026-10-01 and is exact.
   narrows the RO list to that bar's dates, moves the **accent** onto it (the
   current bar goes plain), and shows "Showing <dates>" + **Show all** above the
   list; tapping it again, Show all, or a range change clears it.
+  **Added 2026-10-03:**
+  - **Range chips carry an RO count** in a small mono figure under the label
+    ("Period" over "17"). When not every RO is loaded, a preset chip shows a
+    lower bound like "100+" — expected, not a bug. Custom shows no count while
+    loading. A chip claiming an EXACT count that differs from the list for that
+    range is a bug.
+  - **Filters live in the URL** (`?range=…&from=…&to=…&q=…&sort=…&dir=…&bar=…`,
+    defaults omitted). Reloading the page must restore the same range, search,
+    sort and picked bar. The back button must NOT step through filter changes.
+  - **While a search is active**, each RO shows what matched: a small label
+    (RO #, Vehicle, Op code, Note) and a snippet with the match highlighted.
+  - **"Show as table"** under the chart opens a table with one row per bar
+    (label, hours, ROs, Total). Its total must equal the chart's. Tapping a row
+    label picks that bar exactly like tapping the bar ("· picked" tag).
+  - A bad URL (e.g. /histroy) shows a "No page here" card with Log an RO and
+    Go to dashboard, not a generic Next.js page.
   **Repair orders** is a zone of compact RO tags **grouped under day headings**
   ("Yesterday", "Tue, Mar 10", each with "N ROs · X.Xh"); Month and All group by
   month; sorting by Hours or RO # drops the headings and puts the date on each
@@ -2008,6 +2024,11 @@ recovered. Sections appear only when they have something to say.
   Then **Custom** with From = To = tonight's date: same ROs, same total. Then a
   Custom range from 2+ months back: ROs older than the newest 100 must appear
   (that range is fetched from the server, not filtered from what's loaded).
+- History URL + table (2026-10-03): with Month and a search for one of tonight's
+  op codes active, reload — the same chip, search and sort must come back. Open
+  "Show as table": the Total row must equal the chart's total and the RO counts
+  must sum to it. Each matched RO must show an "Op code" label with the match
+  highlighted. Visit /history-nope: it must show "No page here".
 
 ### 8b. Gamification widgets (shipped 2026-07-14)
 The dashboard has three cards, sharing one "Streak, career, snapshot" zone;

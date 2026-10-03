@@ -3,14 +3,16 @@
 // The History page's Flagged hours zone: the same chart as the dashboard's
 // (HoursChart, the mock `.chart`), windowed by the page's range filter. The
 // bar builders below are unchanged from the SVG version this replaced.
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { Entry } from "@/lib/types";
 import { addDays, endOfMonth, getPeriodForDate } from "@/lib/periods";
 import { fmtHours, type DayDenom } from "@/lib/stats";
 import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
 import { withPt } from "@/components/ui/Figure";
 import { Zone } from "@/components/ui/Zone";
+import { Table, Th, Td } from "@/components/ui/Table";
 import { HoursChart, type ChartBar, type TabId } from "@/components/dashboard/AveragesChart";
+import "./history-chart-table.css";
 
 type FilterKind = "today" | "week" | "period" | "month" | "all" | "custom";
 
@@ -36,8 +38,9 @@ type Props = {
   denomByDay?: Record<string, DayDenom>;
   /** The picked bar's range, or null. */
   selected: BarRange | null;
-  /** Tapping a bar picks it; tapping the picked bar again clears it (null). */
-  onSelect: (range: BarRange | null) => void;
+  /** Tapping a bar picks it; tapping the picked bar again clears it (null).
+   * Without it the table twin shows plain labels. */
+  onSelect?: (range: BarRange | null) => void;
 };
 
 const MONTHS = [
@@ -78,15 +81,15 @@ type BarData = {
   start: string;       // first and last day the bar covers (the list filter)
   end: string;
   hours: number;
+  ros: number;         // ROs (entries) behind the bar, the table twin's count column
   isCurrent: boolean;  // today / current period / current month bar
 };
 
 // ── today: a single bar with the day's total flagged hours ───────────────
 function buildTodayBars(entries: Entry[], today: string): BarData[] {
-  const total = entries
-    .filter((e) => e.date === today)
-    .reduce((s, e) => s + e.flagHours, 0);
-  return [{ label: "Today", longLabel: "Today", date: today, start: today, end: today, hours: total, isCurrent: true }];
+  const todays = entries.filter((e) => e.date === today);
+  const total = todays.reduce((s, e) => s + e.flagHours, 0);
+  return [{ label: "Today", longLabel: "Today", date: today, start: today, end: today, hours: total, ros: todays.length, isCurrent: true }];
 }
 
 // ── week / short custom range: one bar per day ───────────────────────────
@@ -100,9 +103,11 @@ function buildDayBars(
   axis: "weekday" | "date" = "weekday",
 ): BarData[] {
   const byDate = new Map<string, number>();
+  const rosByDate = new Map<string, number>();
   for (const e of entries) {
     if (e.date < weekStart || e.date > weekEnd) continue;
     byDate.set(e.date, (byDate.get(e.date) ?? 0) + e.flagHours);
+    rosByDate.set(e.date, (rosByDate.get(e.date) ?? 0) + 1);
   }
   const bars: BarData[] = [];
   let d = weekStart;
@@ -115,6 +120,7 @@ function buildDayBars(
       start: d,
       end: d,
       hours: byDate.get(d) ?? 0,
+      ros: rosByDate.get(d) ?? 0,
       isCurrent: d === today,
     });
     d = addDays(d, 1);
@@ -130,21 +136,21 @@ function buildPeriodBars(
   splitDay: number,
   today: string,
 ): BarData[] {
-  const totals = new Map<string, { total: number; start: string; end: string }>();
+  const totals = new Map<string, { total: number; ros: number; start: string; end: string }>();
 
   for (const e of entries) {
     if (e.date < windowStart || e.date > windowEnd) continue;
     const p = getPeriodForDate(e.date, splitDay);
     const ex = totals.get(p.key);
-    if (ex) ex.total += e.flagHours;
-    else totals.set(p.key, { total: e.flagHours, start: p.start, end: p.end });
+    if (ex) { ex.total += e.flagHours; ex.ros += 1; }
+    else totals.set(p.key, { total: e.flagHours, ros: 1, start: p.start, end: p.end });
   }
 
   // Fill empty periods so the axis is continuous
   let cursor = windowStart;
   while (cursor <= windowEnd) {
     const p = getPeriodForDate(cursor, splitDay);
-    if (!totals.has(p.key)) totals.set(p.key, { total: 0, start: p.start, end: p.end });
+    if (!totals.has(p.key)) totals.set(p.key, { total: 0, ros: 0, start: p.start, end: p.end });
     cursor = addDays(p.end, 1);
     if (cursor <= windowStart) cursor = addDays(cursor, 1);
   }
@@ -152,13 +158,14 @@ function buildPeriodBars(
   const currentKey = getPeriodForDate(today, splitDay).key;
   return Array.from(totals.entries())
     .sort(([, a], [, b]) => a.start.localeCompare(b.start))
-    .map(([key, { total, start, end }]) => ({
+    .map(([key, { total, ros, start, end }]) => ({
       label: fmtShort(start),
       subLabel: key.endsWith("P1") ? "Wk 1" : "Wk 2",
       longLabel: `${fmtShort(start)} – ${fmtShort(end)}`,
       start,
       end,
       hours: total,
+      ros,
       isCurrent: key === currentKey,
     }));
 }
@@ -174,10 +181,12 @@ function buildMonthBars(
   clamp = false,
 ): BarData[] {
   const totals = new Map<string, number>();
+  const rosByMonth = new Map<string, number>();
   for (const e of entries) {
     if (windowStart && (e.date < windowStart || e.date > windowEnd)) continue;
     const key = e.date.slice(0, 7);
     totals.set(key, (totals.get(key) ?? 0) + e.flagHours);
+    rosByMonth.set(key, (rosByMonth.get(key) ?? 0) + 1);
   }
 
   // Windowed (month filter): fill empty months so the axis is continuous.
@@ -210,6 +219,7 @@ function buildMonthBars(
         start,
         end,
         hours: total,
+        ros: rosByMonth.get(key) ?? 0,
         isCurrent: key === currentMonth,
       };
     });
@@ -272,6 +282,8 @@ export function HistoryBarChart({
   onSelect,
 }: Props) {
   const [hover, setHover] = useState<number | null>(null);
+  const [tableOpen, setTableOpen] = useState(false);
+  const tableId = useId();
 
   const windowStart = addDays(today, -(WINDOW_DAYS - 1));
 
@@ -321,6 +333,11 @@ export function HistoryBarChart({
     isCurrent: b.isCurrent,
   }));
 
+  const pick = (i: number) => {
+    const b = bars[i];
+    onSelect?.(i === selIdx ? null : { start: b.start, end: b.end, label: b.longLabel });
+  };
+
   const ariaLabel =
     `Flagged hours, ${totalCaption(filter)}. ` +
     bars.map((b) => `${b.longLabel} ${fmtHours(b.hours)}`).join(", ") +
@@ -360,11 +377,67 @@ export function HistoryBarChart({
             mode="total"
             ariaLabel={ariaLabel}
             selected={selIdx >= 0 ? selIdx : null}
-            onSelect={(i) => {
-              const b = bars[i];
-              onSelect(i === selIdx ? null : { start: b.start, end: b.end, label: b.longLabel });
-            }}
+            onSelect={pick}
           />
+
+          {/* TABLE TWIN: the same bars, same order, as a ruled table. On
+              demand and visible (the chart's own aria-label stays). */}
+          <button
+            type="button"
+            className="btn btn-quiet btn-sm hist-twin-toggle"
+            aria-expanded={tableOpen}
+            aria-controls={tableId}
+            onClick={() => setTableOpen((o) => !o)}
+          >
+            {tableOpen ? "Hide table" : "Show as table"}
+          </button>
+          <div id={tableId} hidden={!tableOpen}>
+            {tableOpen && (
+              <Table className="hist-twin">
+                <caption className="hist-twin-cap">
+                  Flagged hours, {totalCaption(filter)}, one row per {unitName(filter, customByDay(customRange))}
+                </caption>
+                <thead>
+                  <tr>
+                    <Th scope="col">{unitName(filter, customByDay(customRange))}</Th>
+                    <Th scope="col" num>Hours</Th>
+                    <Th scope="col" num>ROs</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bars.map((b, i) => (
+                    <tr key={`${b.start}-${b.end}`} aria-current={i === selIdx ? "true" : undefined}>
+                      <th scope="row" className={b.isCurrent ? "now" : undefined}>
+                        {onSelect ? (
+                          <button
+                            type="button"
+                            className="hist-twin-pick"
+                            aria-pressed={i === selIdx}
+                            onClick={() => pick(i)}
+                          >
+                            {b.longLabel}
+                          </button>
+                        ) : (
+                          b.longLabel
+                        )}
+                        {i === selIdx && <span className="hist-twin-tag"> · picked</span>}
+                        {b.isCurrent && <span className="hist-twin-tag"> · now</span>}
+                      </th>
+                      <Td num>{withPt(fmtHours(b.hours))}</Td>
+                      <Td num>{b.ros}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="table-foot">
+                    <th scope="row">Total</th>
+                    <Td num>{withPt(fmtHours(totalHours))}</Td>
+                    <Td num>{bars.reduce((s, b) => s + b.ros, 0)}</Td>
+                  </tr>
+                </tfoot>
+              </Table>
+            )}
+          </div>
 
           <div className="chart-foot">
             <span>

@@ -106,3 +106,27 @@
 
 /* ---------- loading (the shape of the layout above) ---------- */
 .hist-skel-tags { list-style: none; display: grid; gap: var(--s2); margin: var(--s2) 0 0; padding: 0; }
+
+/* ---------- range chip counts ----------
+   The count sits UNDER the label, not beside it: six chips share a 328px bar at
+   360px wide, and "Period 23" side by side would clip or wrap. Stacked, each
+   cell is still as wide as its label ("Custom"), the figure is 12px
+   (--fs-min) Azeret, and the cell is 44px tall (--tap) with room to spare.
+   The count line is always laid out (even when empty) so a chip with no count
+   keeps its label on the same line as its neighbours. */
+.hist-range button { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+.hist-range .hist-n { display: block; min-height: 1.15em; font-size: var(--fs-min); font-weight: 600; }
+
+/* ---------- search results: why this RO matched ---------- */
+.hist-match { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: var(--s1); }
+.hist-match li { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; }
+.hist-match .badge { flex: none; }
+/* one line, clipped with an ellipsis; the snippet already carries its own */
+.hist-match-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-label); color: var(--ink-2); }
+/* accent tint behind the hit and a 2px accent rule under it: the underline and
+   the <mark> element carry the meaning, so colour is never the only signal */
+.hist-match mark {
+  background: var(--accent-tint); color: var(--ink); font-weight: 700;
+  padding: 0 1px; border-radius: 0;
+  box-shadow: inset 0 calc(-1 * var(--w-edge)) 0 var(--accent-text);
+}

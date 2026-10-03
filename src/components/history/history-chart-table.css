@@ -1,0 +1,28 @@
+/* History chart's "Show as table" twin. Table styling is the shared .table
+   (ui-surfaces.css); this file only places the toggle and the picked-row
+   cues. Tokens only, so it holds across all four themes and five accents. */
+.hist-twin-toggle { margin-top: var(--s3); }
+.hist-twin { margin-top: var(--s2); }
+.hist-twin-cap { text-align: left; padding: var(--s2) var(--s3) 0; color: var(--ink-3); font-size: var(--fs-label); }
+
+/* a row label is a button when the bars are pickable: it clears the 44px tap
+   floor and reads as underlined row text */
+.hist-twin-pick {
+  min-height: var(--tap); padding: 0; margin: 0; border: 0; background: transparent;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.hist-twin-pick:hover { color: var(--ink); }
+.hist-twin-pick[aria-pressed="true"] { text-decoration-thickness: 2.5px; }
+
+/* "now" mirrors the bar's `.now` accent; the tag carries it as words too, so
+   colour is never the only signal (same for "picked") */
+/* row labels read down the left edge like the MONTH/DAY header above them */
+.hist-twin tbody th { text-align: left; }
+.hist-twin tbody th.now { color: var(--accent-text); }
+.hist-twin-tag { font-weight: 600; font-size: var(--fs-label); color: var(--ink-2); }
+.hist-twin tr[aria-current="true"] { background: var(--quiet-hover); }
+
+/* the Total row closes the ledger like .table-foot does for its figures */
+.hist-twin .table-foot > * { border-top: var(--w-edge) solid var(--edge); border-bottom: 0; }
+.hist-twin tfoot th { font-size: var(--fs-label); font-weight: 700; color: var(--ink-2); text-align: left; }

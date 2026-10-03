@@ -12,9 +12,14 @@ import {
 } from "@/lib/periods";
 import { ratesToMap } from "@/lib/earnings";
 import { dailyDenominators } from "@/lib/stats";
+import { parseHistoryParams } from "@/lib/history-url";
 import { HistoryView } from "@/components/history/HistoryView";
 
-export default async function HistoryPage() {
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const supabase = await createClient();
   const cookieStore = await cookies();
   const weekStartDay = (Number(cookieStore.get("frt_week_start")?.value ?? "0") as 0 | 1);
@@ -40,6 +45,10 @@ export default async function HistoryPage() {
   const hasMore = entries.length === PAGE_SIZE;
 
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
+
+  // The filters the tech left in the URL. A custom range with no usable dates
+  // starts where the page always has: this pay period through today.
+  const initial = parseHistoryParams(await searchParams, { from: period.start, to: today });
 
   // Day-level efficiency for the Today/Week chart hover readouts.
   const scheduleCtx =
@@ -82,6 +91,7 @@ export default async function HistoryPage() {
       weekStartDay={weekStartDay}
       rates={ratesToMap(laborRates)}
       entryIdsWithPhotos={new Set(photoEntryIds)}
+      initial={initial}
     />
   );
 }
