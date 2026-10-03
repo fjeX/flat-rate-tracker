@@ -157,6 +157,14 @@ export const offsetSchema = z
   .min(0, { error: "Offset can't be negative." })
   .max(1_000_000, { error: "Offset is out of range." });
 
+/** The History page's custom date range — both ends inclusive. */
+export const entryRangeSchema = z
+  .object({
+    from: isoDate("From date must be in YYYY-MM-DD format."),
+    to: isoDate("To date must be in YYYY-MM-DD format."),
+  })
+  .refine((v) => v.from <= v.to, { error: "The From date must be on or before the To date." });
+
 /** The duplicate-RO lookup. Empty is a real answer — the action returns []. */
 export const roNumberQuerySchema = z
   .string({ error: "RO number must be text." })

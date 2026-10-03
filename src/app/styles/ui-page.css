@@ -206,6 +206,10 @@
 /* transparent columns over the bars: hover and touch move the readout */
 .chart-hit { position: absolute; inset: 0; display: flex; gap: 3px; }
 .chart-hit span { flex: 1 1 0; min-width: 0; }
+/* a chart that filters (History): the columns are buttons; the picked bar
+   takes the accent (.now) from the current one */
+.chart-hit button { flex: 1 1 0; min-width: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.chart-hit button:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -2px; }
 .chart-x { display: flex; gap: 3px; margin-top: 6px; }
 .chart-x span { flex: 1 1 0; min-width: 0; text-align: center; font-size: var(--fs-min); font-weight: 600; color: var(--ink-3); white-space: nowrap; min-height: 1.3em; }
 .chart-x span small { display: block; font-size: var(--fs-min); font-weight: 400; color: var(--ink-3); }

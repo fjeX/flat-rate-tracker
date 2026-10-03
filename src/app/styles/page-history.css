@@ -18,10 +18,16 @@
 .hist-ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
 .hist-ctl .seg { max-width: 100%; }
 .hist-ctl .seg button { flex: 1 1 0; min-width: 0; }
+/* six range buttons on a phone: "Custom" clipped at the default padding */
+@media (max-width: 479px) { .hist-range button { padding: 0 var(--s1); } }
 /* the sort direction sits in the pressed button's label */
 .hist-ctl .seg button .dir { margin-left: 3px; font-weight: 400; }
 
 /* the search well is the shared .search-well (ui-page.css) */
+
+/* the Custom range's two dates, side by side at every width */
+.hist-custom { grid-column: 1 / -1; }
+.hist-custom-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); max-width: 28rem; }
 
 /* ---------- the chart zone ---------- */
 .hist-chart-empty { padding: var(--s4) 0; color: var(--ink-3); font-size: var(--fs-label); }
@@ -69,6 +75,13 @@
 .hist-page .ro-link::after { content: ""; position: absolute; inset: 0; }
 .hist-page .ro-link:focus-visible { outline: 0; }
 .hist-page .tag-hrs-cell { pointer-events: none; }
+
+/* a tapped chart bar: which dates the list is narrowed to, and the way out */
+.hist-picked {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  margin: var(--s2) 0 0; font-size: var(--fs-label); color: var(--ink-2);
+}
+.hist-picked b { color: var(--ink); }
 
 .hist-more { display: flex; justify-content: center; margin-top: var(--s4); }
 .hist-empty { margin-top: var(--s2); }

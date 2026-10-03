@@ -16,6 +16,7 @@ import {
   newBonusSchema,
   newEntrySchema,
   offsetSchema,
+  entryRangeSchema,
   openTicketSchema,
   openDisputeSchema,
   periodKeySchema,
@@ -186,6 +187,23 @@ describe("entries", () => {
     expect(() => validate(offsetSchema, -1)).toThrow("Offset can't be negative.");
     expect(() => validate(offsetSchema, 2.5)).toThrow("Offset must be a whole number.");
     expect(validate(offsetSchema, 100)).toBe(100);
+  });
+
+  it("checks the History custom range", () => {
+    expect(validate(entryRangeSchema, { from: "2026-08-01", to: "2026-08-05" })).toEqual({
+      from: "2026-08-01",
+      to: "2026-08-05",
+    });
+    expect(validate(entryRangeSchema, { from: "2026-08-05", to: "2026-08-05" })).toEqual({
+      from: "2026-08-05",
+      to: "2026-08-05",
+    });
+    expect(() => validate(entryRangeSchema, { from: "2026-08-05", to: "2026-08-01" })).toThrow(
+      "The From date must be on or before the To date.",
+    );
+    expect(() => validate(entryRangeSchema, { from: "2026-02-30", to: "2026-03-01" })).toThrow(
+      "From date must be in YYYY-MM-DD format.",
+    );
   });
 });
 

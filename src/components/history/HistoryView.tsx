@@ -5,9 +5,9 @@
 // control, a sort control and a search well up top; the Flagged hours chart
 // in its zone; then the ROs as tags (the same object the dashboard and Pay
 // Period draw), grouped under a day heading while the list is in date order.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadMoreEntries } from "@/app/actions/entries";
+import { loadEntriesInRange, loadMoreEntries } from "@/app/actions/entries";
 import { Camera, Search, X } from "lucide-react";
 import type { Entry, OpCode, UserSettings } from "@/lib/types";
 import {
@@ -22,6 +22,7 @@ import {
 import { fmtHours, type DayDenom } from "@/lib/stats";
 import type { RateMap } from "@/lib/earnings";
 import { lineCode } from "@/lib/line-code";
+import { entryMatchesSearch } from "@/lib/history-search";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
 import { RoTag } from "@/components/dashboard/RoTag";
 import { Badge } from "@/components/ui/Badge";
@@ -31,9 +32,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { withPt } from "@/components/ui/Figure";
 import { Zone } from "@/components/ui/Zone";
-import { HistoryBarChart } from "./HistoryBarChart";
+import { HistoryBarChart, customByDay, type BarRange } from "./HistoryBarChart";
 
-type FilterKind = "today" | "week" | "period" | "month" | "all";
+type FilterKind = "today" | "week" | "period" | "month" | "all" | "custom";
 type SortKind = "date" | "hours" | "ro_number";
 type SortDir = "desc" | "asc";
 
@@ -43,6 +44,7 @@ const CHIPS: { kind: FilterKind; label: string }[] = [
   { kind: "period", label: "Period" },
   { kind: "month",  label: "Month" },
   { kind: "all",    label: "All" },
+  { kind: "custom", label: "Custom" },
 ];
 
 const SORT_CHIPS: { kind: SortKind; label: string }[] = [
@@ -74,6 +76,7 @@ function getRange(
     case "month":
       return { start: startOfMonth(today), end: endOfMonth(today) };
     case "all":
+    case "custom": // the page owns the custom dates
       return null;
   }
 }
@@ -181,6 +184,9 @@ export function HistoryView({
   const [sortBy, setSortBy] = useState<SortKind>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search, setSearch] = useState("");
+  // A tapped chart bar narrows the list to that bar's dates. Cleared by tapping
+  // it again, by "Show all", or by switching the range (the bars change).
+  const [picked, setPicked] = useState<BarRange | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   // Optimistically removed on delete. The 2026-07-23 fix pruned `extraEntries`
   // and called router.refresh(), which covers a row from "Load more" but NOT a
@@ -190,17 +196,72 @@ export function HistoryView({
   // is always on the first page: the common case was the uncovered one.
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set());
 
+  // Custom range: two dates the tech types, both inclusive. Starts on the
+  // current pay period so the first tap shows something familiar.
+  const [customFrom, setCustomFrom] = useState(
+    () => getPeriodForDate(today, settings.splitDay, settings.periodOverrides).start,
+  );
+  const [customTo, setCustomTo] = useState(today);
+  // ROs fetched for the custom range. Only the newest page is loaded up front,
+  // so a range in the past is asked of the server: filtering whatever happens
+  // to be loaded would quietly drop the older ROs. Kept apart from the paged
+  // rows so "Load more" offsets still count pages only.
+  const [rangeEntries, setRangeEntries] = useState<Entry[]>([]);
+  const [rangeLoading, setRangeLoading] = useState(false);
+  const [rangeError, setRangeError] = useState<string | null>(null);
+  const rangeRequest = useRef(0);
+
+  const customOrderError =
+    customFrom && customTo && customFrom > customTo
+      ? "The From date must be on or before the To date."
+      : null;
+  const customRange =
+    customFrom && customTo && !customOrderError ? { start: customFrom, end: customTo } : null;
+
   const libraryById = useMemo(() => new Map(library.map((oc) => [oc.id, oc])), [library]);
 
-  const allEntries = useMemo(
+  const pagedEntries = useMemo(
     () => [...entries, ...extraEntries].filter((e) => !deletedIds.has(e.id)),
     [entries, extraEntries, deletedIds],
   );
 
+  // One copy per RO: a range fetch overlaps the paged rows, and the paged
+  // copy wins (the first page is the one a refresh keeps current).
+  const allEntries = useMemo(() => {
+    const seen = new Set(pagedEntries.map((e) => e.id));
+    const fromRange = rangeEntries.filter((e) => !seen.has(e.id) && !deletedIds.has(e.id));
+    return [...pagedEntries, ...fromRange];
+  }, [pagedEntries, rangeEntries, deletedIds]);
+
+  /** Ask the server for every RO in from..to, unless everything is loaded. */
+  async function fetchRange(from: string, to: string) {
+    setRangeError(null);
+    if (!hasMore || !from || !to || from > to) return;
+    const id = ++rangeRequest.current;
+    setRangeLoading(true);
+    try {
+      const res = await loadEntriesInRange(from, to);
+      if (id !== rangeRequest.current) return; // a newer range was asked for
+      if ("error" in res) setRangeError(res.error);
+      else setRangeEntries(res.entries);
+    } catch {
+      if (id === rangeRequest.current) setRangeError("Couldn't load ROs for those dates. Try again.");
+    } finally {
+      if (id === rangeRequest.current) setRangeLoading(false);
+    }
+  }
+
+  function setCustom(from: string, to: string) {
+    setCustomFrom(from);
+    setCustomTo(to);
+    setPicked(null);
+    void fetchRange(from, to);
+  }
+
   async function handleLoadMore() {
     setLoadingMore(true);
     try {
-      const next = await loadMoreEntries(allEntries.length);
+      const next = await loadMoreEntries(pagedEntries.length);
       setExtraEntries((prev) => [...prev, ...next]);
       setHasMore(next.length === 100);
     } finally {
@@ -217,21 +278,17 @@ export function HistoryView({
     }
   }
 
-  const range = getRange(filter, today, settings, weekStartDay);
+  const isCustom = filter === "custom";
+  const range = picked ?? (isCustom ? customRange : getRange(filter, today, settings, weekStartDay));
+  // Custom with a missing or backwards date shows nothing rather than everything.
+  const noRange = isCustom && !range;
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return allEntries
       .filter((e) => {
+        if (noRange) return false;
         if (range && (e.date < range.start || e.date > range.end)) return false;
-        if (q) {
-          const vehicle = [e.vehicle.year, e.vehicle.make, e.vehicle.model]
-            .join(" ")
-            .toLowerCase();
-          const haystack = `${e.roNumber} ${vehicle} ${e.notes}`.toLowerCase();
-          if (!haystack.includes(q)) return false;
-        }
-        return true;
+        return entryMatchesSearch(e, search, libraryById);
       })
       .sort((a, b) => {
         let cmp = 0;
@@ -244,7 +301,7 @@ export function HistoryView({
         }
         return sortDir === "desc" ? -cmp : cmp;
       });
-  }, [allEntries, range, search, sortBy, sortDir]);
+  }, [allEntries, noRange, range, search, libraryById, sortBy, sortDir]);
 
   const shownHours = filtered.reduce((s, e) => s + e.flagHours, 0);
 
@@ -252,7 +309,9 @@ export function HistoryView({
   // month groups once the range spans months. Any other sort is one flat
   // list, and each tag carries its full date instead.
   const grouped = sortBy === "date";
-  const byMonth = filter === "month" || filter === "all";
+  // A picked bar is at most one month, so it always reads by day.
+  const byMonth =
+    !picked && (filter === "month" || filter === "all" || (isCustom && !customByDay(customRange)));
   const groups: Group[] = useMemo(() => {
     if (!grouped) return [{ key: "all", heading: "", entries: filtered, hours: shownHours }];
     const out: Group[] = [];
@@ -289,13 +348,17 @@ export function HistoryView({
       </div>
 
       <div className="hist-ctl">
-        <div className="seg" role="group" aria-label="Range">
+        <div className="seg hist-range" role="group" aria-label="Range">
           {CHIPS.map((chip) => (
             <button
               key={chip.kind}
               type="button"
               aria-pressed={filter === chip.kind}
-              onClick={() => setFilter(chip.kind)}
+              onClick={() => {
+                setFilter(chip.kind);
+                setPicked(null);
+                if (chip.kind === "custom") void fetchRange(customFrom, customTo);
+              }}
             >
               {chip.label}
             </button>
@@ -320,14 +383,14 @@ export function HistoryView({
             })}
           </div>
           <label className="search-well">
-            <span className="sr-only">Search RO#, vehicle, or notes</span>
+            <span className="sr-only">Search RO#, vehicle, op code, or notes</span>
             <Search aria-hidden="true" />
             <Input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search RO#, vehicle, or notes"
-              aria-label="Search RO#, vehicle, or notes"
+              placeholder="Search RO#, vehicle, op code, or notes"
+              aria-label="Search RO#, vehicle, op code, or notes"
             />
             {search && (
               <button
@@ -341,6 +404,43 @@ export function HistoryView({
             )}
           </label>
         </div>
+        {isCustom && (
+          <div className="hist-custom">
+            <div className="hist-custom-pair">
+              <label className="field" htmlFor="hist-from">
+                <span className="field-label">From</span>
+                <input
+                  id="hist-from"
+                  type="date"
+                  value={customFrom}
+                  max={customTo || undefined}
+                  onChange={(e) => setCustom(e.target.value, customTo)}
+                  aria-invalid={Boolean(customOrderError)}
+                  aria-describedby={customOrderError ? "hist-custom-msg" : undefined}
+                  className="input mono"
+                />
+              </label>
+              <label className="field" htmlFor="hist-to">
+                <span className="field-label">To</span>
+                <input
+                  id="hist-to"
+                  type="date"
+                  value={customTo}
+                  min={customFrom || undefined}
+                  onChange={(e) => setCustom(customFrom, e.target.value)}
+                  aria-invalid={Boolean(customOrderError)}
+                  aria-describedby={customOrderError ? "hist-custom-msg" : undefined}
+                  className="input mono"
+                />
+              </label>
+            </div>
+            {(customOrderError || rangeError) && (
+              <p id="hist-custom-msg" className="field-msg field-msg-error" role="alert">
+                {customOrderError ?? rangeError}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="hist-grid">
@@ -352,7 +452,10 @@ export function HistoryView({
             weekStart={weekStartProp}
             weekEnd={weekEndProp}
             splitDay={settings.splitDay}
+            customRange={customRange}
             denomByDay={denomByDay}
+            selected={picked}
+            onSelect={setPicked}
           />
         </div>
 
@@ -369,15 +472,29 @@ export function HistoryView({
               ) : undefined
             }
           >
+            {picked && (
+              <p className="hist-picked" aria-live="polite">
+                <span>
+                  Showing <b>{picked.label}</b>
+                </span>
+                <Button variant="quiet" size="sm" onClick={() => setPicked(null)}>
+                  Show all
+                </Button>
+              </p>
+            )}
             {filtered.length === 0 ? (
               <div className="hist-empty">
                 <EmptyState
                   icon={<Search size={22} />}
-                  title="No ROs in this range"
+                  title={rangeLoading ? "Loading ROs…" : "No ROs in this range"}
                   description={
-                    search.trim()
-                      ? "No matches — try a different search."
-                      : "Pick another range above, or log an RO to fill this in."
+                    rangeLoading
+                      ? "Fetching the ROs between those dates."
+                      : noRange
+                        ? "Pick a From and a To date above."
+                        : search.trim()
+                          ? "No matches — try a different search."
+                          : "Pick another range above, or log an RO to fill this in."
                   }
                 />
               </div>
@@ -468,7 +585,8 @@ export function HistoryView({
               </>
             )}
 
-            {hasMore && (
+            {/* a custom range is fetched whole; paging only serves the presets */}
+            {hasMore && !isCustom && (
               <div className="hist-more">
                 <Button variant="line" onClick={handleLoadMore} disabled={loadingMore}>
                   {loadingMore ? "Loading…" : "Load more"}
@@ -494,6 +612,7 @@ export function HistoryView({
               onDeleted={(id) => {
                 setDeletedIds((prev) => new Set(prev).add(id));
                 setExtraEntries((prev) => prev.filter((e) => e.id !== id));
+                setRangeEntries((prev) => prev.filter((e) => e.id !== id));
                 setOpenId(null);
                 router.refresh();
               }}

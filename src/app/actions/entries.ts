@@ -9,6 +9,7 @@ import { check, validate } from "@/lib/validation/core";
 import {
   addLineSchema,
   entryIdSchema,
+  entryRangeSchema,
   lineIdSchema,
   newEntrySchema,
   offsetSchema,
@@ -31,6 +32,20 @@ export async function loadMoreEntries(offset: number): Promise<Entry[]> {
   const safeOffset = validate(offsetSchema, offset);
   const supabase = await createClient();
   return db.listEntries(supabase, { limit: 100, offset: safeOffset });
+}
+
+// Every RO dated from..to (inclusive) for the History custom range. History
+// only holds the newest page up front, so a range in the past has to be asked
+// for — filtering what happens to be loaded would quietly drop older ROs.
+export async function loadEntriesInRange(
+  from: string,
+  to: string,
+): Promise<{ entries: Entry[] } | { error: string }> {
+  return refusable(async () => {
+    const range = validate(entryRangeSchema, { from, to });
+    const supabase = await createClient();
+    return { entries: await db.listEntries(supabase, range) };
+  });
 }
 
 // Find existing entries that already use this RO number. RO numbers are not

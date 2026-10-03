@@ -330,11 +330,18 @@ checked against the current app on 2026-10-01 and is exact.
 ### History, Timer, Op Codes, Insights, Schedule, Snapshots
 
 - **History.** The H1 is "History" with "N ROs · X.Xh in this range" under it.
-  The **range** (Today / Week / Period / Month / All) and the **sort** (Date /
+  The **range** (Today / Week / Period / Month / All / Custom) and the **sort** (Date /
   Hours / RO #) are **button groups with `aria-pressed`** (`role="group"` named
   "Range" and "Sort by"); the pressed sort button carries the ↓/↑ arrow. Search
-  is a full-size field (placeholder "Search RO#, vehicle, or notes") with an ✕
-  clear button. **Flagged hours** is a zone with the dashboard-style HTML chart.
+  is a full-size field (placeholder "Search RO#, vehicle, op code, or notes")
+  with an ✕ clear button; it matches op codes by code **and** description.
+  **Custom** reveals From / To date fields (default: the current pay period →
+  today); From after To shows "The From date must be on or before the To date."
+  and an empty list — expected, not a bug. **Flagged hours** is a zone with the
+  dashboard-style HTML chart. **Its bars are buttons** (2026-10-02): tapping one
+  narrows the RO list to that bar's dates, moves the **accent** onto it (the
+  current bar goes plain), and shows "Showing <dates>" + **Show all** above the
+  list; tapping it again, Show all, or a range change clears it.
   **Repair orders** is a zone of compact RO tags **grouped under day headings**
   ("Yesterday", "Tue, Mar 10", each with "N ROs · X.Xh"); Month and All group by
   month; sorting by Hours or RO # drops the headings and puts the date on each
@@ -1994,7 +2001,13 @@ recovered. Sections appear only when they have something to say.
   "Pay Period Pace" zone) reports the REAL percent (e.g. "… 277 percent of
   goal …"). A capped "100 percent" while true pace is higher is a bug.
 - Pay period stats reflect tonight's new ROs.
-- History filters/search: find one of tonight's ROs by RO number.
+- History filters/search: find one of tonight's ROs by RO number, then by one of
+  its op codes (e.g. "LOF") — it must still be in the results.
+- History chart → list (2026-10-02): tap tonight's bar on Week; the list must
+  show exactly tonight's ROs and its "N ROs · X.Xh" must equal the bar's value.
+  Then **Custom** with From = To = tonight's date: same ROs, same total. Then a
+  Custom range from 2+ months back: ROs older than the newest 100 must appear
+  (that range is fetched from the server, not filtered from what's loaded).
 
 ### 8b. Gamification widgets (shipped 2026-07-14)
 The dashboard has three cards, sharing one "Streak, career, snapshot" zone;

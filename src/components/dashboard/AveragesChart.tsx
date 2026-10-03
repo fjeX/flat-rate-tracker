@@ -363,6 +363,8 @@ export function HoursChart({
   tab,
   mode,
   ariaLabel,
+  selected = null,
+  onSelect,
 }: {
   bars: ChartBar[];
   hover: number | null;
@@ -370,6 +372,10 @@ export function HoursChart({
   tab: TabId;
   mode: Mode;
   ariaLabel: string;
+  /** The picked bar, when the chart is a filter (History). */
+  selected?: number | null;
+  /** Present = the bars are buttons; tapping one picks it. Absent = a picture. */
+  onSelect?: (i: number) => void;
 }) {
   const n = bars.length;
   if (n === 0) return null;
@@ -386,8 +392,15 @@ export function HoursChart({
   const labelEvery = Math.max(1, Math.ceil(n / 5));
   const lastRegularIdx = Math.floor((n - 1) / labelEvery) * labelEvery;
 
+  // A role=img hides its children from assistive tech, so a chart whose bars
+  // are buttons is a labelled group instead.
+  const interactive = onSelect !== undefined;
+  // The accent marks one bar: the picked one, else the current one.
+  const isMarked = (bar: ChartBar, i: number) =>
+    selected !== null ? i === selected : bar.isCurrent;
+
   return (
-    <div className="chart" role="img" aria-label={ariaLabel}>
+    <div className="chart" role={interactive ? "group" : "img"} aria-label={ariaLabel}>
       <div
         className="chart-plot"
         onMouseLeave={() => setHover(null)}
@@ -403,8 +416,8 @@ export function HoursChart({
             const showValue = (few || bar.isBest) && bar.value > 0;
             const cls = [
               bar.value === 0 ? "zero" : "",
-              bar.isCurrent ? "now" : "",
-              hover === i && !bar.isCurrent && bar.value > 0 ? "hot" : "",
+              isMarked(bar, i) ? "now" : "",
+              hover === i && !isMarked(bar, i) && bar.value > 0 ? "hot" : "",
             ]
               .filter(Boolean)
               .join(" ");
@@ -415,11 +428,29 @@ export function HoursChart({
             );
           })}
         </div>
-        <div className="chart-hit" aria-hidden="true">
-          {bars.map((_, i) => (
-            <span key={i} onMouseEnter={() => setHover(i)} onTouchStart={() => setHover(i)} />
-          ))}
-        </div>
+        {interactive ? (
+          <div className="chart-hit">
+            {bars.map((bar, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-pressed={selected === i}
+                aria-label={`${bar.longLabel}, ${fmtHours(bar.value)} hours`}
+                onMouseEnter={() => setHover(i)}
+                onTouchStart={() => setHover(i)}
+                onFocus={() => setHover(i)}
+                onBlur={() => setHover(null)}
+                onClick={() => onSelect(i)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="chart-hit" aria-hidden="true">
+            {bars.map((_, i) => (
+              <span key={i} onMouseEnter={() => setHover(i)} onTouchStart={() => setHover(i)} />
+            ))}
+          </div>
+        )}
       </div>
       <div className="chart-x" aria-hidden="true">
         {bars.map((bar, i) => {
@@ -436,7 +467,10 @@ export function HoursChart({
             if (show) primary = bar.label;
           }
           return (
-            <span key={i} className={bar.isCurrent ? "now" : undefined}>
+            <span
+              key={i}
+              className={isMarked(bar, i) ? "now" : undefined}
+            >
               {primary}
               {secondary && <small>{secondary}</small>}
             </span>

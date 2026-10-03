@@ -5,14 +5,22 @@
 // bar builders below are unchanged from the SVG version this replaced.
 import { useState } from "react";
 import type { Entry } from "@/lib/types";
-import { addDays, getPeriodForDate } from "@/lib/periods";
+import { addDays, endOfMonth, getPeriodForDate } from "@/lib/periods";
 import { fmtHours, type DayDenom } from "@/lib/stats";
 import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
 import { withPt } from "@/components/ui/Figure";
 import { Zone } from "@/components/ui/Zone";
 import { HoursChart, type ChartBar, type TabId } from "@/components/dashboard/AveragesChart";
 
-type FilterKind = "today" | "week" | "period" | "month" | "all";
+type FilterKind = "today" | "week" | "period" | "month" | "all" | "custom";
+
+/** A custom range up to this many days is drawn a bar per day; longer, a bar
+ * per month. */
+const CUSTOM_DAY_BARS_MAX = 31;
+
+/** The dates one bar covers. Tapping a bar hands this to the page, which
+ * narrows the RO list to it. */
+export type BarRange = { start: string; end: string; label: string };
 
 type Props = {
   entries: Entry[];        // all loaded entries — the chart windows them per filter
@@ -21,9 +29,15 @@ type Props = {
   weekStart: string;
   weekEnd: string;
   splitDay: number;
+  /** The custom range's dates; required when `filter` is "custom". */
+  customRange?: { start: string; end: string } | null;
   /** Per-day efficiency denominators (clocked > scheduled) — day-bar hover
    * shows that day's efficiency when present. Absent in guest mode. */
   denomByDay?: Record<string, DayDenom>;
+  /** The picked bar's range, or null. */
+  selected: BarRange | null;
+  /** Tapping a bar picks it; tapping the picked bar again clears it (null). */
+  onSelect: (range: BarRange | null) => void;
 };
 
 const MONTHS = [
@@ -61,6 +75,8 @@ type BarData = {
   subLabel?: string;   // secondary axis row (Wk 1 / Wk 2 for periods)
   longLabel: string;   // readout label (2 PM / Mon, Apr 3 / Apr 1 – 15 / April 2026)
   date?: string;       // ISO date for day-level bars — enables the efficiency readout
+  start: string;       // first and last day the bar covers (the list filter)
+  end: string;
   hours: number;
   isCurrent: boolean;  // today / current period / current month bar
 };
@@ -70,15 +86,18 @@ function buildTodayBars(entries: Entry[], today: string): BarData[] {
   const total = entries
     .filter((e) => e.date === today)
     .reduce((s, e) => s + e.flagHours, 0);
-  return [{ label: "Today", longLabel: "Today", date: today, hours: total, isCurrent: true }];
+  return [{ label: "Today", longLabel: "Today", date: today, start: today, end: today, hours: total, isCurrent: true }];
 }
 
-// ── week: one bar per day of the current week ────────────────────────────
-function buildWeekBars(
+// ── week / short custom range: one bar per day ───────────────────────────
+// A week labels its bars by weekday; a custom range by date, since a weekday
+// alone is ambiguous once the range is not this week.
+function buildDayBars(
   entries: Entry[],
   today: string,
   weekStart: string,
   weekEnd: string,
+  axis: "weekday" | "date" = "weekday",
 ): BarData[] {
   const byDate = new Map<string, number>();
   for (const e of entries) {
@@ -90,9 +109,11 @@ function buildWeekBars(
   while (d <= weekEnd) {
     const wd = new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" });
     bars.push({
-      label: wd,
+      label: axis === "weekday" ? wd : fmtShort(d),
       longLabel: fmtLongDay(d),
       date: d,
+      start: d,
+      end: d,
       hours: byDate.get(d) ?? 0,
       isCurrent: d === today,
     });
@@ -135,17 +156,22 @@ function buildPeriodBars(
       label: fmtShort(start),
       subLabel: key.endsWith("P1") ? "Wk 1" : "Wk 2",
       longLabel: `${fmtShort(start)} – ${fmtShort(end)}`,
+      start,
+      end,
       hours: total,
       isCurrent: key === currentKey,
     }));
 }
 
-// ── month / all: one bar per month, value = hours flagged that month ──────
+// ── month / all / long custom range: one bar per month ───────────────────
+// `clamp` trims each bar's dates to the window, so tapping the first or last
+// month of a custom range never reaches outside it.
 function buildMonthBars(
   entries: Entry[],
   windowStart: string | null,
   windowEnd: string,
   today: string,
+  clamp = false,
 ): BarData[] {
   const totals = new Map<string, number>();
   for (const e of entries) {
@@ -172,9 +198,17 @@ function buildMonthBars(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, total]) => {
       const m = Number(key.split("-")[1]);
+      let start = `${key}-01`;
+      let end = endOfMonth(start);
+      if (clamp && windowStart) {
+        if (start < windowStart) start = windowStart;
+        if (end > windowEnd) end = windowEnd;
+      }
       return {
         label: MONTHS[m - 1],
         longLabel: fmtMonthLong(key),
+        start,
+        end,
         hours: total,
         isCurrent: key === currentMonth,
       };
@@ -188,16 +222,28 @@ function totalCaption(filter: FilterKind): string {
     case "period": return "last 90d";
     case "month":  return "last 90d";
     case "all":    return "all time";
+    case "custom": return "in range";
   }
 }
 
-function unitName(filter: FilterKind): string {
+/** Days from start to end, both inclusive. */
+function spanDays(start: string, end: string): number {
+  const ms = new Date(end + "T12:00:00").getTime() - new Date(start + "T12:00:00").getTime();
+  return Math.round(ms / 86_400_000) + 1;
+}
+
+export function customByDay(range: { start: string; end: string } | null | undefined): boolean {
+  return !!range && spanDays(range.start, range.end) <= CUSTOM_DAY_BARS_MAX;
+}
+
+function unitName(filter: FilterKind, byDay: boolean): string {
   switch (filter) {
     case "today":  return "day";
     case "week":   return "day";
     case "period": return "period";
     case "month":  return "month";
     case "all":    return "month";
+    case "custom": return byDay ? "day" : "month";
   }
 }
 
@@ -208,7 +254,8 @@ function chartTab(filter: FilterKind): TabId {
     case "week":   return "week";
     case "period": return "period";
     case "month":
-    case "all":    return "month";
+    case "all":
+    case "custom": return "month";
   }
 }
 
@@ -219,7 +266,10 @@ export function HistoryBarChart({
   weekStart,
   weekEnd,
   splitDay,
+  customRange,
   denomByDay,
+  selected,
+  onSelect,
 }: Props) {
   const [hover, setHover] = useState<number | null>(null);
 
@@ -228,10 +278,15 @@ export function HistoryBarChart({
   const bars: BarData[] = (() => {
     switch (filter) {
       case "today":  return buildTodayBars(entries, today);
-      case "week":   return buildWeekBars(entries, today, weekStart, weekEnd);
+      case "week":   return buildDayBars(entries, today, weekStart, weekEnd);
       case "period": return buildPeriodBars(entries, windowStart, today, splitDay, today);
       case "month":  return buildMonthBars(entries, windowStart, today, today);
       case "all":    return buildMonthBars(entries, null, today, today);
+      case "custom":
+        if (!customRange) return [];
+        return customByDay(customRange)
+          ? buildDayBars(entries, today, customRange.start, customRange.end, "date")
+          : buildMonthBars(entries, customRange.start, customRange.end, today, true);
     }
   })();
 
@@ -245,9 +300,15 @@ export function HistoryBarChart({
     if (b.hours > bestVal) { bestVal = b.hours; bestIdx = i; }
   });
 
-  // Readout follows the hovered bar, else the current bar, else the best one
+  const selIdx = selected
+    ? bars.findIndex((b) => b.start === selected.start && b.end === selected.end)
+    : -1;
+
+  // Readout follows the hovered bar, else the picked one, else the current
+  // bar, else the best one
   const currIdx = bars.findIndex((b) => b.isCurrent);
-  const activeIdx = hover ?? (currIdx >= 0 ? currIdx : bestIdx >= 0 ? bestIdx : 0);
+  const activeIdx =
+    hover ?? (selIdx >= 0 ? selIdx : currIdx >= 0 ? currIdx : bestIdx >= 0 ? bestIdx : 0);
   const activeBar = bars[activeIdx];
 
   const chartBars: ChartBar[] = bars.map((b, i) => ({
@@ -298,6 +359,11 @@ export function HistoryBarChart({
             tab={chartTab(filter)}
             mode="total"
             ariaLabel={ariaLabel}
+            selected={selIdx >= 0 ? selIdx : null}
+            onSelect={(i) => {
+              const b = bars[i];
+              onSelect(i === selIdx ? null : { start: b.start, end: b.end, label: b.longLabel });
+            }}
           />
 
           <div className="chart-foot">
@@ -305,7 +371,7 @@ export function HistoryBarChart({
               <b className="num">{withPt(fmtHours(totalHours))}h</b> {totalCaption(filter)}
             </span>
             <span>
-              <b>{bestIdx >= 0 ? bars[bestIdx].longLabel : "—"}</b> best {unitName(filter)}
+              <b>{bestIdx >= 0 ? bars[bestIdx].longLabel : "—"}</b> best {unitName(filter, customByDay(customRange))}
             </span>
           </div>
         </>
