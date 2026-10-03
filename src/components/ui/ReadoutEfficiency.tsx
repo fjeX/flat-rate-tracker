@@ -1,7 +1,14 @@
-// Small "· 96% efficiency" suffix for chart readout rows. Renders only for
-// day-level bars where a denominator is known (clocked hours, or scheduled
-// hours on completed days) — same rules the dashboard stat tiles follow.
-import { efficiencyTier, fmtPct, type DayDenom } from "@/lib/stats";
+// Small "· 96% efficiency" suffix for chart readout rows. Renders for any bar
+// (day, week, pay period, month) where a denominator is known (clocked hours,
+// or scheduled hours on completed days) — same rules the dashboard stat tiles
+// follow; a multi-day bar's inputs come from spanEfficiency.
+import { efficiencyTier, fmtPct, type SpanDenom } from "@/lib/stats";
+
+const SOURCE_TITLE = {
+  clocked: "Efficiency measured against clocked hours",
+  scheduled: "Efficiency measured against scheduled hours",
+  mixed: "Efficiency measured against clocked hours, and scheduled hours on days with no clock",
+} as const;
 
 const TIER_COLOR = {
   good: "var(--good)",
@@ -14,7 +21,7 @@ export function ReadoutEfficiency({
   denom,
 }: {
   flagHours: number;
-  denom: DayDenom | undefined;
+  denom: SpanDenom | undefined;
 }) {
   if (!denom || flagHours <= 0) return null;
   const eff = (flagHours / denom.hours) * 100;
@@ -23,11 +30,7 @@ export function ReadoutEfficiency({
     <span
       className="r-readout-eff"
       style={{ color: tier ? TIER_COLOR[tier] : "var(--ink-3)" }}
-      title={
-        denom.source === "scheduled"
-          ? "Efficiency measured against scheduled hours"
-          : "Efficiency measured against clocked hours"
-      }
+      title={SOURCE_TITLE[denom.source]}
     >
       {fmtPct(eff)} efficiency
     </span>

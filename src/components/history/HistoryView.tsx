@@ -33,7 +33,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { withPt } from "@/components/ui/Figure";
 import { Zone } from "@/components/ui/Zone";
-import { HistoryBarChart, customByDay, type BarRange } from "./HistoryBarChart";
+import { HistoryBarChart, customByDay, type BarRange, type ChartRow } from "./HistoryBarChart";
 
 type FilterKind = HistoryRange;
 type SortKind = HistorySort;
@@ -160,6 +160,7 @@ export function HistoryView({
   rates = {},
   entryIdsWithPhotos,
   denomByDay,
+  chartRows,
   initial,
 }: {
   entries: Entry[];
@@ -185,6 +186,10 @@ export function HistoryView({
   entryIdsWithPhotos?: Set<string>;
   // Per-day efficiency denominators for the chart readout. Absent in guest mode.
   denomByDay?: Record<string, DayDenom>;
+  // Every RO on the account as (date, flag hours), for the chart. The list
+  // pages 100 at a time, so drawing bars from the loaded rows left older
+  // periods and months short. Absent in guest mode: local entries are all of them.
+  chartRows?: ChartRow[];
   // Filters read from the URL on the server, so the first render already shows
   // the view the tech left. Absent in guest mode: defaults.
   initial?: HistoryUrlState;
@@ -556,7 +561,7 @@ export function HistoryView({
       <div className="hist-grid">
         <div className="hist-chart-col">
           <HistoryBarChart
-            entries={allEntries}
+            entries={chartRows ?? allEntries}
             filter={filter}
             today={today}
             weekStart={weekStartProp}

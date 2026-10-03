@@ -9,6 +9,7 @@ import { useGuestStore } from "@/lib/guest/context";
 import { formatDateLong } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
+import { formatLoggedStamp } from "@/lib/ro-stamps";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 
 export function GuestRoDetailModal({
@@ -72,11 +73,7 @@ export function GuestRoDetailModal({
         <div className="rod-meta">
           <div className="rod-date">{formatDateLong(entry.date)}</div>
           <div className="rod-logged">
-            Logged{" "}
-            {new Date(entry.createdAt).toLocaleString(undefined, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
+            {formatLoggedStamp(entry.createdAt, entry.updatedAt)}
           </div>
           <GuestVehicleLine vehicle={entry.vehicle} />
         </div>

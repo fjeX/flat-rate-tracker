@@ -7,6 +7,7 @@ import { OpCodeFormModal, type OpCodeFormValues } from "@/components/op-codes/Op
 import { OpCodeBrowseBar } from "@/components/op-codes/OpCodeBrowseBar";
 import { useOpCodeBrowsing } from "@/components/op-codes/useOpCodeBrowsing";
 import { OpCodeRowContent } from "@/components/op-codes/OpCodeRow";
+import { useOpCodeLabelMode } from "@/components/op-codes/useOpCodeLabelMode";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { withPt } from "@/components/ui/Figure";
@@ -32,6 +33,8 @@ export function GuestOpCodesView() {
     allTags,
     visible,
   } = useOpCodeBrowsing(opCodes);
+
+  const [labelMode, setLabelMode] = useOpCodeLabelMode();
 
   async function handleAdd(values: OpCodeFormValues): Promise<void> {
     setSaving(true);
@@ -103,6 +106,8 @@ export function GuestOpCodesView() {
         selectedTags={selectedTags}
         onToggleTag={toggleTag}
         onClearTags={clearTags}
+        labelMode={labelMode}
+        onLabelMode={setLabelMode}
       />
 
       <Zone
@@ -132,7 +137,7 @@ export function GuestOpCodesView() {
           <ul className="opl-sheet">
             <li className="opl-row opl-head-row" aria-hidden="true">
               <span />
-              <span>Code · description</span>
+              <span>{labelMode === "description" ? "Description · code" : "Code · description"}</span>
               <span>Flag</span>
               <span />
             </li>
@@ -157,6 +162,7 @@ export function GuestOpCodesView() {
                   opCode={op}
                   onEdit={() => setEditTarget(op)}
                   onDelete={() => handleDelete(op.id, op.code)}
+                  labelMode={labelMode}
                 />
               </li>
             ))}

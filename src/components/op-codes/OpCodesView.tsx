@@ -34,6 +34,7 @@ import {
 import { OpCodeRow } from "./OpCodeRow";
 import { OpCodeBrowseBar } from "./OpCodeBrowseBar";
 import { useOpCodeBrowsing } from "./useOpCodeBrowsing";
+import { useOpCodeLabelMode } from "./useOpCodeLabelMode";
 import { actionErrorMessage } from "@/lib/action-error";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -76,6 +77,8 @@ export function OpCodesView({
     visible,
     canReorder,
   } = useOpCodeBrowsing(items);
+
+  const [labelMode, setLabelMode] = useOpCodeLabelMode();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -256,6 +259,8 @@ export function OpCodesView({
         onToggleTag={toggleTag}
         onClearTags={clearTags}
         tagColors={tagColors}
+        labelMode={labelMode}
+        onLabelMode={setLabelMode}
       />
 
       {reorderError && (
@@ -289,6 +294,9 @@ export function OpCodesView({
           <p className="opl-empty">No op codes match.</p>
         ) : (
           <DndContext
+            // a stable id: without it dnd-kit numbers its aria-describedby
+            // per render pass and SSR/client hydration disagree
+            id="opl-dnd"
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={onDragEnd}
@@ -300,7 +308,7 @@ export function OpCodesView({
               <ul className="opl-sheet">
                 <li className="opl-row opl-head-row" aria-hidden="true">
                   <span />
-                  <span>Code · description</span>
+                  <span>{labelMode === "description" ? "Description · code" : "Code · description"}</span>
                   <span>Flag</span>
                   <span />
                 </li>
@@ -310,6 +318,7 @@ export function OpCodesView({
                     opCode={op}
                     tagColors={tagColors}
                     reorderable={canReorder}
+                    labelMode={labelMode}
                     onEdit={(target) =>
                       setModal({ kind: "edit", opCode: target })
                     }

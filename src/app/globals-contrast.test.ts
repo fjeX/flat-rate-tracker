@@ -108,6 +108,9 @@ const PAIRS: Pair[] = [
   ["--good", "--zone-fill", TEXT],
   ["--bad", "--zone-fill", TEXT],
   ["--good-ink", "--good", TEXT],
+  // tinted status badges (.badge-good/-bad/-warn/-brand, 12px text on their own field)
+  ["--ink-2", "--note-bg", TEXT],
+  ["--accent-text", "--accent-tint", TEXT],
   // inverse blocks and the shell
   ["--zone-ink", "--zone-line", TEXT],
   ["--block-ink", "--block", TEXT],

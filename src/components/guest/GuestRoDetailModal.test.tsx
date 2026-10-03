@@ -80,3 +80,19 @@ describe("GuestRoDetailModal delete confirm", () => {
     expect(msg).toBe("Delete this RO? This can't be undone.");
   });
 });
+
+describe("GuestRoDetailModal logged / last-edited stamp", () => {
+  afterEach(() => sessionStorage.clear());
+  const stamp = () => document.querySelector(".rod-logged")?.textContent ?? "";
+
+  it("shows Last edited when the entry was changed after it was logged", () => {
+    renderModal(makeEntry({ updatedAt: "2026-08-19T12:30:00.000Z" }));
+    expect(stamp()).toMatch(/^Logged .* · Last edited /);
+  });
+
+  it("copes with an older stored entry that has no updatedAt", () => {
+    renderModal(makeEntry({ updatedAt: undefined as unknown as string }));
+    expect(stamp()).toMatch(/^Logged /);
+    expect(stamp()).not.toContain("Last edited");
+  });
+});

@@ -61,7 +61,7 @@
   .ins-grid > *:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 .ins-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin-top: var(--s3); }
-.ins-ctl .seg button { flex: 1 1 0; min-width: 0; }
+.ins-ctl .seg button { flex: 1 1 0; min-width: var(--tap); } /* not 0: a short label ("All") flexed down to 39px, under the 44px target */
 @media (min-width: 700px) { .ins-ctl .seg button { flex: none; } }
 .ins-ctl .seg button .dir { margin-left: 3px; font-weight: 400; }
 

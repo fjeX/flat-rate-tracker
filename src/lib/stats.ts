@@ -759,6 +759,43 @@ export function dailyDenominators(
   return out;
 }
 
+/** A span's denominator: where its hours came from. "mixed" when some counted
+ * days were clocked and others scheduled. */
+export type SpanDenom = { hours: number; source: DayDenom["source"] | "mixed" };
+
+/**
+ * Efficiency inputs for any span of days (a day, week, pay period, month):
+ * the flag hours on the span's COUNTED days over those days' denominators.
+ * Counted = the days dailyDenominators returned, so this is the same pairing
+ * rule aggregateStatsWithSchedule uses for the Pay Period figure: a day that
+ * doesn't pair (no clock, unscheduled, not over yet) adds neither flag nor
+ * hours. Null when no day in the span counted.
+ */
+export function spanEfficiency(
+  rows: ReadonlyArray<{ date: string; flagHours: number }>,
+  denomByDay: Record<string, DayDenom>,
+  start: string,
+  end: string,
+): { flagHours: number; denom: SpanDenom } | null {
+  let hours = 0;
+  let clocked = 0;
+  let scheduled = 0;
+  for (const [d, denom] of Object.entries(denomByDay)) {
+    if (d < start || d > end) continue;
+    hours += denom.hours;
+    if (denom.source === "clocked") clocked += 1;
+    else scheduled += 1;
+  }
+  if (hours <= 0) return null;
+  let flagHours = 0;
+  for (const r of rows) {
+    if (r.date >= start && r.date <= end && denomByDay[r.date]) flagHours += r.flagHours;
+  }
+  const source: SpanDenom["source"] =
+    clocked > 0 && scheduled > 0 ? "mixed" : clocked > 0 ? "clocked" : "scheduled";
+  return { flagHours, denom: { hours, source } };
+}
+
 // ---------------------------------------------------------------------------
 // One rule for "which aggregator applies"
 // ---------------------------------------------------------------------------

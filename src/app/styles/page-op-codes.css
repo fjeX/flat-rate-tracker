@@ -25,6 +25,9 @@
 .opl-ctl .seg button { flex: 1 1 0; min-width: 0; padding: 0 var(--s2); white-space: nowrap; }
 .opl-ctl .seg button .dir { margin-left: 3px; font-weight: 400; }
 @media (min-width: 700px) { .opl-ctl .seg button { flex: none; } }
+/* Show (Code | Description): two words of unequal length, so each sizes to
+   its own label; equal halves clipped "Description" at 390px */
+.opl-ctl .seg.opl-lead button { flex: none; min-width: var(--tap); }
 
 /* ---------- the library: a ruled ledger inside the zone ---------- */
 .opl-sheet { list-style: none; margin: 0; padding: 0; }
@@ -37,6 +40,15 @@
 .opl-row:hover { background: var(--quiet-hover); }
 .opl-row:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
 .opl-row.is-dragging { opacity: 0.6; }
+/* a clickable row lifts 2px like an RO tag (ui-page.css .tag): desktop pointers,
+   no reduced motion, never the header row. A drag's inline transform wins over
+   this, so a row mid-drag moves only with the pointer. The ::after keeps the
+   2px strip the lift vacates hovered, or the row flickers at its bottom edge. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .opl-row:not(.opl-head-row) { position: relative; transition: background-color var(--fast) var(--ease), transform 130ms var(--ease); }
+  .opl-row:not(.opl-head-row):hover { transform: translateY(-2px); }
+  .opl-row:not(.opl-head-row):hover::after { content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; }
+}
 .opl-head-row { min-height: 0; padding: 0 0 var(--s1); cursor: default; }
 .opl-head-row:hover { background: transparent; }
 .opl-head-row > :nth-child(3) { text-align: right; padding-right: var(--s1); }
@@ -57,6 +69,11 @@
 .opl-code b { font-weight: 700; letter-spacing: 0.02em; font-size: var(--fs-control); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opl-desc { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; font-size: var(--fs-label); color: var(--ink-2); }
 .opl-desc > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* description-first: the description gets the flexible column, the code a fixed one */
+@media (min-width: 700px) {
+  .opl-main.is-desc-first .opl-code { flex: 1 1 auto; }
+  .opl-main.is-desc-first .opl-desc { flex: 0 0 132px; }
+}
 .opl-desc i { color: var(--ink-3); }
 .opl-desc .badge { flex: none; }
 @media (min-width: 700px) {

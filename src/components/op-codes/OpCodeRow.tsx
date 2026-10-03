@@ -8,6 +8,7 @@ import { fmtHours } from "@/lib/stats";
 import { Badge } from "@/components/ui/Badge";
 import { withPt } from "@/components/ui/Figure";
 import { tagHueVar } from "./tagHue";
+import type { OpCodeLabelMode } from "./useOpCodeLabelMode";
 
 /**
  * The cells of one library row (phase 5 sketch): code with its category tick,
@@ -21,16 +22,26 @@ export function OpCodeRowContent({
   onEdit,
   onDelete,
   deleting,
+  labelMode,
 }: {
   opCode: OpCode;
   tagColors?: Record<string, number>;
+  labelMode: OpCodeLabelMode;
   onEdit: () => void;
   onDelete: () => void;
   deleting?: boolean;
 }) {
+  // Description-first swaps which field is the big label. An op code with no
+  // description falls back to its code so the row never has a blank lead.
+  const descFirst = labelMode === "description" && opCode.description !== "";
+  const primary = descFirst ? opCode.description : opCode.code;
+  const secondary = descFirst ? opCode.code : opCode.description;
+
   return (
     <>
-      <div className="opl-main">
+      {/* the column layout follows the mode, not the row, so a code with no
+          description still lines up with its neighbours */}
+      <div className={`opl-main${labelMode === "description" ? " is-desc-first" : ""}`}>
         <div
           className="opl-code"
           title={opCode.tags.length > 0 ? opCode.tags.join(", ") : undefined}
@@ -40,14 +51,14 @@ export function OpCodeRowContent({
             style={{ "--tagc": tagHueVar(opCode.tags[0], tagColors) } as React.CSSProperties}
             aria-hidden="true"
           />
-          <b>{opCode.code}</b>
+          <b>{primary}</b>
         </div>
         <div className="opl-desc">
           <span>
-            {opCode.description}
+            {secondary}
             {opCode.notes && (
               <i>
-                {opCode.description ? " · " : ""}
+                {secondary ? " · " : ""}
                 {opCode.notes}
               </i>
             )}
@@ -95,8 +106,10 @@ export function OpCodeRow({
   onEdit,
   onDelete,
   deleting,
+  labelMode,
 }: {
   opCode: OpCode;
+  labelMode: OpCodeLabelMode;
   /** Per-tag colour overrides (settings.tagColors). */
   tagColors?: Record<string, number>;
   reorderable: boolean;
@@ -159,6 +172,7 @@ export function OpCodeRow({
         onEdit={() => onEdit(opCode)}
         onDelete={() => onDelete(opCode)}
         deleting={deleting}
+        labelMode={labelMode}
       />
     </li>
   );

@@ -8,6 +8,7 @@ import {
   type SortDir,
 } from "./useOpCodeBrowsing";
 import { tagHueVar } from "./tagHue";
+import type { OpCodeLabelMode } from "./useOpCodeLabelMode";
 
 /**
  * The library's controls (phase 5 sketch): the search well, the sort as a
@@ -26,6 +27,8 @@ export function OpCodeBrowseBar({
   onClearTags,
   tagColors,
   showManualSort = true,
+  labelMode,
+  onLabelMode,
 }: {
   search: string;
   onSearch: (value: string) => void;
@@ -40,6 +43,9 @@ export function OpCodeBrowseBar({
   tagColors?: Record<string, number>;
   // Guest demo has no drag order, so it can hide the "My order" option.
   showManualSort?: boolean;
+  /** Which field leads each row; the toggle only renders when both are passed. */
+  labelMode: OpCodeLabelMode;
+  onLabelMode: (mode: OpCodeLabelMode) => void;
 }) {
   const sortChips = SORT_CHIPS.filter(
     (c) => showManualSort || c.kind !== "manual",
@@ -90,6 +96,22 @@ export function OpCodeBrowseBar({
               </button>
             );
           })}
+        </div>
+      </div>
+
+      <div className="opl-ctl-row">
+        <span className="opl-ctl-k">Show</span>
+        <div className="seg opl-lead" role="group" aria-label="Lead with">
+          {(["code", "description"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={labelMode === m}
+              onClick={() => onLabelMode(m)}
+            >
+              {m === "code" ? "Code" : "Description"}
+            </button>
+          ))}
         </div>
       </div>
 

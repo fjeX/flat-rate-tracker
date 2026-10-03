@@ -237,6 +237,8 @@ function reducer(state: GuestState, action: GuestAction): GuestState {
         if (entry.id !== slot.entryId) return entry;
         return {
           ...entry,
+          // banking hours is an edit (signed-in: the entry_op_codes trigger)
+          updatedAt: new Date(action.now).toISOString(),
           opCodes: entry.opCodes.map((line) => {
             if (line.id !== action.lineId) return line;
             // Additive, same as the signed-in path — a job picked back up the
@@ -262,6 +264,8 @@ function reducer(state: GuestState, action: GuestAction): GuestState {
         if (entry.id !== action.entryId) return entry;
         return {
           ...entry,
+          // Older stored entries may predate updatedAt; this sets it either way.
+          updatedAt: new Date().toISOString(),
           opCodes: entry.opCodes.map((line) =>
             line.id === action.lineId
               ? { ...line, actualHours: action.actualHours }

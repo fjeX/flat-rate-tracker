@@ -176,6 +176,29 @@
 .tag-body { grid-column: 2 / 4; grid-row: 2; min-width: 0; }
 .tag-body.has-act { grid-column: 2; }
 .tag-act { grid-column: 3; grid-row: 2; align-self: end; }
+/* Every RO tag opens its RO from anywhere on the tag, not only the number:
+   the number's ::after stretches over the whole tag. Anything else you can
+   tap on a tag (the Upsell shortcut, ticket buttons) sits above that layer. */
+.tag { transition: background-color var(--fast) var(--ease); }
+.tag:hover { background: var(--quiet-hover); }
+.tag .ro-link::after { content: ""; position: absolute; inset: 0; }
+.tag .ro-link:focus-visible { outline: 0; }
+.tag:has(.ro-link:focus-visible) { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
+.tag-hrs-cell { pointer-events: none; }
+.tag :is(button, a, input, select, label):not(.ro-link) { position: relative; z-index: 1; }
+/* a clickable card lifts 2px: transform only, no shadow, desktop pointers only */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tag { transition: background-color var(--fast) var(--ease), transform 130ms var(--ease); }
+  .tag:hover { transform: translateY(-2px); }
+  /* keep owning the 2px strip the lift vacates, or a cursor resting in it
+     un-hovers, drops, re-hovers: a flicker loop. The clip grows 2px down and
+     the stretched link follows (background never paints there, so no change
+     you can see). */
+  .tag:hover {
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% + 2px), 14px calc(100% + 2px), 0 calc(100% - 14px), 0 14px);
+  }
+  .tag:hover .ro-link::after { bottom: -2px; }
+}
 .tag-veh { font-weight: 700; font-size: var(--fs-control); margin-top: -6px; line-height: 1.25; }
 .tag-veh.is-unset { color: var(--ink-3); font-weight: 600; }
 .tag-meta { color: var(--ink-2); font-size: var(--fs-label); margin: 2px 0 var(--s2); }

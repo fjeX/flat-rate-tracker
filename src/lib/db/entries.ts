@@ -510,6 +510,10 @@ export async function updateEntry(
   }
 
   if (Object.keys(update).length > 0) {
+    // entries has no updated_at trigger (only line changes bump it, via
+    // entry_op_codes_recompute_aiud), so a notes/vehicle/RO#-only edit stamps
+    // it here; RO detail's "Last edited" reads it.
+    update.updated_at = new Date().toISOString();
     const { error } = await supabase.from("entries").update(update).eq("id", id);
     if (error) throw error;
   }

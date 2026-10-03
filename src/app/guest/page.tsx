@@ -25,6 +25,7 @@ import { lineCode } from "@/lib/line-code";
 import type { DailyClock, Entry } from "@/lib/types";
 import { GuestRateCard } from "@/components/guest/GuestRateCard";
 import { GuestRoDetailModal } from "@/components/guest/GuestRoDetailModal";
+import { GuestSyncedNote } from "@/components/dashboard/SyncedNote";
 import { RoTag } from "@/components/dashboard/RoTag";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
@@ -80,6 +81,7 @@ export default function GuestDashboard() {
           <div className="grow">
             <h1>Dashboard</h1>
             <p>{formatPeriodLabel(period)}</p>
+            <GuestSyncedNote />
           </div>
         </div>
 

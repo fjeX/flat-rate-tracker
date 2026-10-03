@@ -66,15 +66,7 @@
 .hist-page .dur { height: 6px; }
 .hist-page .scale-note i { height: 6px; }
 
-/* the whole tag opens the RO, not only the number (the Pay Period rows work
-   the same way); the Upsell shortcut is dashboard-only, so nothing else here
-   needs its own hit area */
-.hist-page .tag { transition: background-color var(--fast) var(--ease); }
-.hist-page .tag:hover { background: var(--quiet-hover); }
-.hist-page .tag:has(.ro-link:focus-visible) { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
-.hist-page .ro-link::after { content: ""; position: absolute; inset: 0; }
-.hist-page .ro-link:focus-visible { outline: 0; }
-.hist-page .tag-hrs-cell { pointer-events: none; }
+/* the whole-tag hit area, hover and lift live with .tag in ui-page.css */
 
 /* a tapped chart bar: which dates the list is narrowed to, and the way out */
 .hist-picked {

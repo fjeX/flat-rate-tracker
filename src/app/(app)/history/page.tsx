@@ -29,19 +29,30 @@ export default async function HistoryPage({
   const weekStart = startOfWeek(today, weekStartDay);
 
   const PAGE_SIZE = 100;
-  const [entries, library, settings, laborRates, photoEntryIds, clocks, schedules, daysOff, shiftOverrides, confirmedZeroDays] = await Promise.all([
+  const [entries, allEntries, library, settings, laborRates, photoEntryIds, clocks, schedules, daysOff, shiftOverrides, confirmedZeroDays, unpaid] = await Promise.all([
     db.listEntries(supabase, { limit: PAGE_SIZE }),
+    // Every RO, for the chart only (the list still pages). Insights reads the
+    // same whole set for its all-time figures.
+    db.listEntries(supabase),
     db.listOpCodes(supabase),
     db.getSettings(supabase),
     db.listLaborRates(supabase),
     db.listEntryIdsWithPhotos(supabase),
-    db.listDailyClocks(supabase, { from: weekStart, to: today }),
+    // Every clock through today: the chart's span starts at the first RO.
+    db.listDailyClocks(supabase, { to: today }),
     // Null pre-migration — the chart just skips the efficiency readout.
     db.listWorkSchedulesSafe(supabase),
     db.listDaysOffSafe(supabase),
     db.listShiftOverridesSafe(supabase),
     db.listConfirmedZeroDaysSafe(supabase),
+    // Open-ticket work pairs a day the same way it does on Dashboard and Pay
+    // Period (withOpenWorkDays), so a bar's efficiency matches theirs.
+    db.listUnpaidTimeSafe(supabase),
   ]);
+
+  // The chart's whole span: the first RO ever logged through today. Every bar
+  // (day, week, pay period, month) reads its efficiency from these days.
+  const firstDate = allEntries.reduce((min, e) => (e.date < min ? e.date : min), today);
   const hasMore = entries.length === PAGE_SIZE;
 
   const period = getPeriodForDate(today, settings.splitDay, settings.periodOverrides);
@@ -50,7 +61,7 @@ export default async function HistoryPage({
   // starts where the page always has: this pay period through today.
   const initial = parseHistoryParams(await searchParams, { from: period.start, to: today });
 
-  // Day-level efficiency for the Today/Week chart hover readouts.
+  // Per-day efficiency denominators over the chart's whole span.
   const scheduleCtx =
     schedules !== null && schedules.length > 0
       ? {
@@ -66,12 +77,14 @@ export default async function HistoryPage({
         }
       : null;
   const denomByDay = dailyDenominators(
-    entries,
+    allEntries,
     clocks,
-    { start: weekStart, end: today },
+    { start: firstDate, end: today },
     today,
     scheduleCtx,
+    unpaid ?? [],
   );
+  const chartRows = allEntries.map((e) => ({ date: e.date, flagHours: e.flagHours }));
 
   return (
     <HistoryView
@@ -86,6 +99,7 @@ export default async function HistoryPage({
       weekStart={weekStart}
       weekEnd={endOfWeek(today, weekStartDay)}
       denomByDay={denomByDay}
+      chartRows={chartRows}
       monthStart={startOfMonth(today)}
       monthEnd={endOfMonth(today)}
       weekStartDay={weekStartDay}

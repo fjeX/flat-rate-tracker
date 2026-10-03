@@ -148,8 +148,9 @@
 
 /* =====================================================================
    BADGE = the tagged status word (mock .stat-tag) and the op-code chip
-   (mock .ops li). Outlined, never filled, except `selected`.
-   Colour = the outline and the word together (currentColor).
+   (mock .ops li). Status tones are TINTED: a soft same-hue field plus a
+   same-hue outline and word (currentColor). Neutral stays an outlined word.
+   `selected` is the one accent FILL. Square-cut: --r-tag, never a pill.
    ===================================================================== */
 .badge {
   display: inline-flex; align-items: center; gap: var(--s1);
@@ -160,12 +161,12 @@
   white-space: nowrap;
 }
 .badge-neutral { color: var(--ink); }
-.badge-good { color: var(--good); }
-.badge-bad { color: var(--bad); }
+.badge-good { color: var(--good); background: var(--good-bg); }
+.badge-bad { color: var(--bad); background: var(--bad-bg); }
 /* warn: NOTE-style neutral by the phase-1 decision (amber retired, --ink-2); each
    page retags its own warnings later. */
-.badge-warn { color: var(--ink-2); }
-.badge-brand, .badge-info { color: var(--accent-text); }
+.badge-warn { color: var(--ink-2); background: var(--note-bg); }
+.badge-brand, .badge-info { color: var(--accent-text); background: var(--accent-tint); }
 
 /* Machine identifiers (op codes) are not figures, so `mono` does NOT switch to
    --font-num: it stays on --font-ui, bold, 0.02em tracking (mock `.ops li b`),
@@ -183,7 +184,7 @@
 }
 .badge-chip.mono { font-weight: 700; letter-spacing: 0.02em; color: var(--ink); }
 .ops li b { color: var(--ink); font-weight: 700; margin-right: 5px; letter-spacing: 0.02em; }
-/* selected = accent fill */
+/* selected = accent fill (two-class selector outranks the tone tints above) */
 .badge.is-selected, .badge-chip.is-selected, .badge[data-selected="true"] {
   background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
 }

@@ -213,3 +213,23 @@ describe("RoDetailModal names for lines sharing one op code", () => {
     expect(names("button").some((n) => /on line \d/.test(n))).toBe(false);
   });
 });
+
+// Zone-independent on purpose: the exact strings are pinned in ro-stamps.test.ts
+// with an explicit zone; here we only prove the modal wires both timestamps in.
+describe("RoDetailModal logged / last-edited stamp", () => {
+  function stamp() {
+    return document.querySelector(".rod-logged")?.textContent ?? "";
+  }
+
+  it("shows only Logged when the row was never touched after saving", () => {
+    render(<RoDetailModal entry={makeEntry([makeLine()])} onClose={() => {}} />);
+    expect(stamp()).toMatch(/^Logged \w{3} \d{1,2}, /);
+    expect(stamp()).not.toContain("Last edited");
+  });
+
+  it("adds Last edited when updatedAt is well after createdAt", () => {
+    const entry = { ...makeEntry([makeLine()]), updatedAt: "2026-08-19T12:30:00.000Z" };
+    render(<RoDetailModal entry={entry} onClose={() => {}} />);
+    expect(stamp()).toContain(" · Last edited ");
+  });
+});

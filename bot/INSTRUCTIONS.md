@@ -158,8 +158,8 @@ as its background, controls too small to tap, horizontal scrolling.
 **Vocabulary in the rest of this file.** Older sections say "card", "tile" and
 "pill". Read them like this: a *card* is whatever block of the page that
 section names (a **zone**, a **fold**, or a settings **row**, described below);
-a *tile* is a cell in a row of figures; a *pill* is an **outlined word tag with
-no fill**. Where a section names a button, label or id, that wording was
+a *tile* is a cell in a row of figures; a *pill* is a **square-cornered word
+tag** (tinted or plain outlined, see The look). Where a section names a button, label or id, that wording was
 checked against the current app on 2026-10-01 and is exact.
 
 ### The look
@@ -184,8 +184,16 @@ checked against the current app on 2026-10-01 and is exact.
   a solid accent fill. **A disabled button has a dashed outline** instead of
   looking faded. A disabled Save that is correct is not a bug (see the
   RO-number and timer rules below).
-- **Pills are outlined word tags with no fill** (period status, dispute
-  status, `unpaid rework`, Open, Opened, …).
+- **Pills are square-cornered word tags** (period status, dispute status,
+  `unpaid rework`, Open, Opened, …). Since 2026-10-02 a status tag has a soft
+  field of its own colour behind the word plus a same-colour outline: green on
+  pale green, red on pale red, grey on grey, accent on pale accent. A plain
+  (neutral) tag and the op-code chips stay outline-only. Corners stay square;
+  a rounded pill shape would be a bug. On desktop, every RO tag (Dashboard, Open
+  tickets, Pay Period, History, guest) and every Op Codes row lifts 2px and
+  shades under the mouse (no shadow) — that is intended. **Since 2026-10-02
+  tapping anywhere on an RO tag opens that RO**, not only the number; the
+  Upsell chip and any other button on a tag still do their own thing.
 - **Date and Time** on Log RO and Quick Add are full-size input fields; the
   whole field opens the picker on tap.
 - **Zones.** What this file calls a card on a page is a **zone**: a panel one
@@ -261,7 +269,10 @@ checked against the current app on 2026-10-01 and is exact.
 
 - **Dashboard.** Greeting → page head (avatar, date, "N ROs logged…"; the pace
   status is a tag at the right: **On track / Near goal / Behind / Getting
-  started**). **Today** = headline panel (TODAY · FLAG and pace/efficiency) +
+  started**). Under that status line sits a small grey mono line **"synced
+  just now" / "synced N min ago" / "synced N hr ago"**, counting from when the
+  page loaded its data; it changes on its own and after a reload goes back to
+  "just now". Its number is not a figure to check against anything. **Today** = headline panel (TODAY · FLAG and pace/efficiency) +
   the **Clocked** field (accessible name "Clocked hours today") + a separate
   **Quick Add RO** button; tapping the flag figure does not open Quick Add.
   **Pay Period Pace** = a zone with a track (the "Today" label above it, the
@@ -354,7 +365,11 @@ checked against the current app on 2026-10-01 and is exact.
   - **While a search is active**, each RO shows what matched: a small label
     (RO #, Vehicle, Op code, Note) and a snippet with the match highlighted.
   - **"Show as table"** under the chart opens a table with one row per bar
-    (label, hours, ROs, Total). Its total must equal the chart's. Tapping a row
+    (label, hours, ROs, Efficiency, Total; "—" where no day counted). Its
+    total must equal the chart's. Older bars now include every RO on the
+    account, not just the loaded page of the list, so an old period's bar
+    can show more hours than the list does until you tap Load more —
+    correct, not a bug. Tapping a row
     label picks that bar exactly like tapping the bar ("· picked" tag).
   - A bad URL (e.g. /histroy) shows a "No page here" card with Log an RO and
     Go to dashboard, not a generic Next.js page.
@@ -399,6 +414,14 @@ checked against the current app on 2026-10-01 and is exact.
   while its visible text is the field + arrow). **Tags** are outlined chips that
   toggle (`aria-pressed`), each with a 3px colour tick at its left; a pressed
   chip is the accent fill; a quiet **Clear** button appears once any is pressed.
+  Between Sort and Tags is a **Show** row: a button group named "Lead with"
+  with **Code** and **Description** (`aria-pressed`; Code is the default). It
+  only swaps which of the two is the big label on each row (the column header
+  flips to "DESCRIPTION · CODE"); it never re-sorts, and the choice is
+  remembered on this device. A code with no description keeps its code as the
+  lead in either mode. If you switch it, **switch it back to Code** before
+  leaving the page (same rule as the §8k switch: leave the account as you
+  found the defaults). `/guest/op-codes` has the same control.
   The list is a **Library** zone: a header line "CODE · DESCRIPTION" / "FLAG",
   then one ruled row per code — grip, the colour tick, the code in bold, the
   description (notes in italics after " · ", a "N subs" tag), the flag hours as
@@ -490,7 +513,9 @@ checked against the current app on 2026-10-01 and is exact.
   outlined button with Google's mark; Try as Guest sits under a hairline at the
   foot of Sign in.
 - **Guests (§8f).** `/guest` is a guest edition of the dashboard: a visible h1
-  "Dashboard", a PAY PERIOD zone with the flag-hours headline and an "Earned
+  "Dashboard" with a small grey line **"on this phone only"** under the
+  period label (guests never sync, so there is no "synced …" line), a PAY
+  PERIOD zone with the flag-hours headline and an "Earned
   this period" cell that reads "—" until a rate is typed, Today / This Week /
   This Month as a figures strip, the rate as the shared field (label "Your
   rate", `$` and `/hr` inside; `aria-label` "Your hourly flat-rate pay"), and
@@ -519,7 +544,14 @@ left). Every id, aria-label, button text and sentence named elsewhere in this
 file is exact unless listed here.
 
 - **RO detail** (title "RO #N"). The date line and the "Logged …" line are two
-  separate lines (§8k), vehicle under them. The op-code lines are a **ruled
+  separate lines (§8k), vehicle under them. Since 2026-10-02 the Logged line
+  reads **"Logged Oct 2, 9:14 PM"** (no year unless the date is in another
+  year) and, once the RO has been changed more than a minute after it was
+  logged, **" · Last edited 9:40 PM"** (the date is added when the edit was on
+  a different day). After §2's "Edit stuck" check, re-open that RO: it **must**
+  now show "· Last edited …" with a time near the edit. No "Last edited" on an
+  RO you just logged and never touched is correct. Guest RO detail works the
+  same way. The op-code lines are a **ruled
   table** with Op code / Flag / Actual headers on desktop; on a phone each line
   is a stacked row (code chip + Upsell chip, description, then "FLAG 1.0 ·
   ACTUAL [field] · trash"). The Actual field is `opc-hours-input` with the same
@@ -2121,9 +2153,13 @@ efficiency denominator falls back to the scheduled hours.
   the middle tier, < 80% red. The middle tier is **neutral grey, not amber**. Not-green tiles are not a bug; check the tier
   matches the number (≥ 95% green, 80–94% grey, < 80% red).
 - **Chart hover efficiency (2026-07-16):** on the dashboard Flagged Hours
-  chart (Week tab, Total mode) and the History chart (Today/Week filters),
-  hovering a day bar with flagged hours shows "N% efficiency" in the readout
-  row. Expected absences (NOT bugs): days with 0 flagged hours, and today
+  chart (Week tab, Total mode), hovering a day bar with flagged hours shows
+  "N% efficiency" in the readout row. **On History (since 2026-10-02) EVERY bar
+  carries it** — a day, a pay period, a month — at the right of the readout
+  above the chart. A pay-period bar's figure **must equal the Pay Period
+  page's efficiency** for that same period (one rule: flag hours on the days
+  that count over those days' clocked or scheduled hours); check the current
+  period against /pay-period every run and report any difference as a bug. Expected absences (NOT bugs): days with 0 flagged hours, and today
   before clocked hours are entered. Past days show it even from before the
   schedule existed (retro pattern fallback).
 - **Today clocked placeholder (2026-07-16):** the Today zone's Clocked field

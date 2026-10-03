@@ -33,6 +33,7 @@ import { RecentRos } from "@/components/dashboard/RecentRos";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
 import { Badge } from "@/components/ui/Badge";
+import { SyncedNote } from "@/components/dashboard/SyncedNote";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,6 +77,8 @@ function timeAgo(iso: string): string {
 // ---------------------------------------------------------------------------
 
 export default async function DashboardPage() {
+  // When this render's data was read; SyncedNote counts "synced N min ago" from it.
+  const fetchedAt = new Date().toISOString();
   const supabase = await createClient();
 
   // Auth — we need the email for the greeting avatar
@@ -323,6 +326,7 @@ export default async function DashboardPage() {
         <div className="grow">
           <h1>{formatTodayHeading(today)}</h1>
           <p>{todayStatusLine}</p>
+          <SyncedNote fetchedAt={fetchedAt} />
         </div>
         <Badge tone={pillTone}>{pillLabel}</Badge>
       </div>

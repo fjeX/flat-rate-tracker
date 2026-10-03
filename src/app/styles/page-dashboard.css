@@ -144,3 +144,6 @@
 @media (prefers-reduced-motion: reduce) {
   .dash-page .track i.fill { animation: none; }
 }
+
+/* ---------- synced footnote (under the page head's status line) ---------- */
+.pagehead p.dash-synced { margin: 2px 0 0; font-family: var(--font-num); font-size: var(--fs-min); color: var(--ink-3); }

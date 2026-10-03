@@ -13,6 +13,7 @@ import {
   unpairedNotes,
   type ScheduleContext,
   type UnpairedByReason,
+  spanEfficiency,
 } from "./stats";
 // Read-only here, and deliberately: the in-progress wording this fix reuses is
 // driven by effectiveHourly's `ongoingDays` on WorkCostCard, so the two
@@ -774,5 +775,33 @@ describe("unpairedNotes / unpairedNoteClause", () => {
     expect(
       unpairedNotes(emptyUnpairedByReason(), { flagHours: 0, days: 0 }),
     ).toEqual([]);
+  });
+});
+
+describe("spanEfficiency", () => {
+  const rows = [
+    { date: "2026-03-09", flagHours: 3 },
+    { date: "2026-03-10", flagHours: 2 }, // not counted (no denominator)
+    { date: "2026-03-12", flagHours: 4 },
+  ];
+  const denom = {
+    "2026-03-09": { hours: 5, source: "clocked" as const },
+    "2026-03-12": { hours: 4, source: "scheduled" as const },
+  };
+
+  it("sums only counted days' flag over their denominators", () => {
+    expect(spanEfficiency(rows, denom, "2026-03-01", "2026-03-15")).toEqual({
+      flagHours: 7,
+      denom: { hours: 9, source: "mixed" },
+    });
+  });
+  it("keeps a single source when every counted day shares it", () => {
+    expect(spanEfficiency(rows, denom, "2026-03-09", "2026-03-10")).toEqual({
+      flagHours: 3,
+      denom: { hours: 5, source: "clocked" },
+    });
+  });
+  it("is null when no day in the span counted", () => {
+    expect(spanEfficiency(rows, denom, "2026-03-10", "2026-03-11")).toBeNull();
   });
 });

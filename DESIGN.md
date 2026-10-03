@@ -511,7 +511,7 @@ Square-cut and ruled, like stamped signage. Three radii, all tokens:
   tapers it to a sliver, so the rule corner stays square.
 - **`--r-sign` (4px):** every button, input, select, switch, segment, chip,
   filter chip, icon button, `.card-inset` and `.dlg-close`.
-- **`--r-tag` (2px):** `.badge`, `.badge-chip`, `.swatch`.
+- **`--r-tag` (2px):** `.badge` (tinted or not), `.badge-chip`, `.swatch`. Tinting never rounds it.
 - **Round:** `border-radius: 50%` only for true circles (the running dot, the
   tag's punched hole, skeleton circles). There is no pill shape.
 
@@ -560,13 +560,17 @@ OFF with `--plate` and a heavy ink underline. Disabled is dashed. Use for any
 on/off setting.
 
 ### Tags and pills (`.badge`, `ui-surfaces.css`)
-An **outlined word**: 1.5px `currentColor` outline, `--r-tag`, never filled
-(except `.is-selected` / `[data-selected="true"]`, which fill `--accent`). Tones:
-`.badge-neutral`, `.badge-good`, `.badge-bad`, `.badge-warn` (neutral `--ink-2`,
-not a warning colour), `.badge-brand` / `.badge-info` (`--accent-text`). The
-outline and the word carry the colour together. Op-code chip: `.badge-chip`
-(and `.ops li`), a quiet `--line` outline, not uppercase; `.badge.mono` for
-machine identifiers.
+A **tinted word**: soft same-hue field + 1.5px `currentColor` outline, `--r-tag`
+(square-cut, never a pill). The outline stays because the pale tints are barely
+a step off `--panel` in light, and on a tinted surface (`--accent-tint`) it keeps
+the badge's shape. Only `.is-selected` / `[data-selected="true"]` fills `--accent`.
+Tones: `.badge-neutral` (`--ink`, outlined only, no field: it is the default, not
+a status), `.badge-good` (`--good` on `--good-bg`), `.badge-bad` (`--bad` on
+`--bad-bg`), `.badge-warn` (`--ink-2` on `--note-bg`, not a warning colour),
+`.badge-brand` / `.badge-info` (`--accent-text` on `--accent-tint`). Each pair is
+held to 4.5:1 in `globals-contrast.test.ts`. The word still carries the meaning.
+Op-code chip: `.badge-chip` (and `.ops li`), a quiet `--line` outline, not
+uppercase, never tinted; `.badge.mono` for machine identifiers.
 
 ### Zones (`.zone`, `Zone.tsx`)
 A bounded, named region: filled `--zone-fill`, name in `.zone-name` (small-caps
@@ -689,6 +693,7 @@ corners; from 1024px it floats `--s3` above the bottom edge.
 - **Do** use the shared class for the shared thing: `.btn-go`, `.badge`, `.sfield`, `.spec`, `.zone`, `.head`, `.tag`, `.rowbtn`, `.seg`, `.fchip`. A new pattern justifies itself in the commit message.
 - **Do** check the change in all four themes and at least the blue and orange accents; read `.accent-text` on `--wall`, `--panel`, `--plate` and `--zone-fill`.
 - **Do** keep transitions to `--fast` (150ms) with `--ease`, and let motion die under `prefers-reduced-motion`.
+- **Do** lift only a card that is itself the click target (every RO `.tag`, whose `.ro-link` is stretched over it, and the Op Codes `.opl-row`; other controls on a tag sit above the stretched link): `translateY(-2px)`, transform only, ~130ms, no shadow, inside `@media (hover: hover) and (prefers-reduced-motion: no-preference)`. A static card never moves; focus keeps its outline.
 - **Do** write microcopy like a person: short, concrete, shop-floor plain. Errors say what happened and what to do.
 
 ### Don't:

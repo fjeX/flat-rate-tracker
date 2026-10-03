@@ -116,3 +116,48 @@ describe("History chart table twin", () => {
     expect(within(body).queryAllByRole("button")).toHaveLength(0);
   });
 });
+
+// Efficiency is a measurement on every bar, not only a day: a pay period, a
+// week or a month reads its counted days' flag over their denominators.
+describe("History chart efficiency on every bar", () => {
+  const denom = {
+    "2026-03-09": { hours: 5, source: "clocked" as const },
+    "2026-03-12": { hours: 4, source: "scheduled" as const },
+  };
+
+  it("shows a pay period bar's efficiency in the readout", () => {
+    render(chart({ filter: "period", denomByDay: denom }));
+    // Mar 1–15 is current: (2.5 + 1 + 4) / (5 + 4) = 83%
+    const headline = document.querySelector(".chart-headline")!;
+    expect(headline.textContent).toContain("83% efficiency");
+    expect(headline.querySelector(".r-readout-eff")!.getAttribute("title")).toMatch(
+      /clocked hours, and scheduled hours/,
+    );
+  });
+
+  it("shows a month bar's efficiency in the readout", () => {
+    render(chart({ filter: "month", denomByDay: denom }));
+    expect(document.querySelector(".chart-headline")!.textContent).toContain("83% efficiency");
+  });
+
+  it("adds an Efficiency column to the table twin, with a total", () => {
+    render(chart({ filter: "week", denomByDay: denom }));
+    fireEvent.click(screen.getByRole("button", { name: "Show as table" }));
+    const table = screen.getByRole("table");
+    expect(within(table).getByRole("columnheader", { name: "Efficiency" })).toBeTruthy();
+    const rows = within(table).getAllByRole("row");
+    const mon = rows.find((r) => r.textContent?.includes("Mar 9"))!;
+    expect(mon.textContent).toContain("70%"); // 3.5 / 5
+    const tue = rows.find((r) => r.textContent?.includes("Mar 10"))!;
+    expect(tue.textContent).toContain("—"); // nothing counted that day
+    const total = rows[rows.length - 1];
+    expect(total.textContent).toContain("83%");
+  });
+
+  it("guest (no denominators): no efficiency anywhere", () => {
+    render(chart({ filter: "period" }));
+    expect(document.querySelector(".r-readout-eff")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show as table" }));
+    expect(screen.queryByRole("columnheader", { name: "Efficiency" })).toBeNull();
+  });
+});

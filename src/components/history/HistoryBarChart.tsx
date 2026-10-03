@@ -6,7 +6,7 @@
 import { useId, useState } from "react";
 import type { Entry } from "@/lib/types";
 import { addDays, endOfMonth, getPeriodForDate } from "@/lib/periods";
-import { fmtHours, type DayDenom } from "@/lib/stats";
+import { fmtHours, fmtPct, spanEfficiency, type DayDenom } from "@/lib/stats";
 import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
 import { withPt } from "@/components/ui/Figure";
 import { Zone } from "@/components/ui/Zone";
@@ -24,8 +24,13 @@ const CUSTOM_DAY_BARS_MAX = 31;
  * narrows the RO list to it. */
 export type BarRange = { start: string; end: string; label: string };
 
+/** What a bar needs from an RO: its day and its flag hours. Signed in, the page
+ * sends one per RO on the account (not just the loaded page of the list), so
+ * older bars are never short; a guest's entries are all local already. */
+export type ChartRow = Pick<Entry, "date" | "flagHours">;
+
 type Props = {
-  entries: Entry[];        // all loaded entries — the chart windows them per filter
+  entries: ChartRow[];     // every RO the chart may draw — it windows them per filter
   filter: FilterKind;
   today: string;
   weekStart: string;
@@ -33,8 +38,9 @@ type Props = {
   splitDay: number;
   /** The custom range's dates; required when `filter` is "custom". */
   customRange?: { start: string; end: string } | null;
-  /** Per-day efficiency denominators (clocked > scheduled) — day-bar hover
-   * shows that day's efficiency when present. Absent in guest mode. */
+  /** Per-day efficiency denominators (clocked > scheduled) over the chart's
+   * whole span. Every bar's efficiency is its counted days' flag over these
+   * (spanEfficiency). Absent in guest mode. */
   denomByDay?: Record<string, DayDenom>;
   /** The picked bar's range, or null. */
   selected: BarRange | null;
@@ -86,7 +92,7 @@ type BarData = {
 };
 
 // ── today: a single bar with the day's total flagged hours ───────────────
-function buildTodayBars(entries: Entry[], today: string): BarData[] {
+function buildTodayBars(entries: ChartRow[], today: string): BarData[] {
   const todays = entries.filter((e) => e.date === today);
   const total = todays.reduce((s, e) => s + e.flagHours, 0);
   return [{ label: "Today", longLabel: "Today", date: today, start: today, end: today, hours: total, ros: todays.length, isCurrent: true }];
@@ -96,7 +102,7 @@ function buildTodayBars(entries: Entry[], today: string): BarData[] {
 // A week labels its bars by weekday; a custom range by date, since a weekday
 // alone is ambiguous once the range is not this week.
 function buildDayBars(
-  entries: Entry[],
+  entries: ChartRow[],
   today: string,
   weekStart: string,
   weekEnd: string,
@@ -130,7 +136,7 @@ function buildDayBars(
 
 // ── period: one bar per pay period over the window ───────────────────────
 function buildPeriodBars(
-  entries: Entry[],
+  entries: ChartRow[],
   windowStart: string,
   windowEnd: string,
   splitDay: number,
@@ -174,7 +180,7 @@ function buildPeriodBars(
 // `clamp` trims each bar's dates to the window, so tapping the first or last
 // month of a custom range never reaches outside it.
 function buildMonthBars(
-  entries: Entry[],
+  entries: ChartRow[],
   windowStart: string | null,
   windowEnd: string,
   today: string,
@@ -223,6 +229,13 @@ function buildMonthBars(
         isCurrent: key === currentMonth,
       };
     });
+}
+
+/** The table twin's efficiency cell: the same figure as the readout, "—" when
+ * no day in the row counted (same rule: no flag on counted days shows none). */
+function effCell(eff: ReturnType<typeof spanEfficiency>): string {
+  if (!eff || eff.flagHours <= 0) return "—";
+  return fmtPct((eff.flagHours / eff.denom.hours) * 100);
 }
 
 function totalCaption(filter: FilterKind): string {
@@ -323,6 +336,12 @@ export function HistoryBarChart({
     hover ?? (selIdx >= 0 ? selIdx : currIdx >= 0 ? currIdx : bestIdx >= 0 ? bestIdx : 0);
   const activeBar = bars[activeIdx];
 
+  // Efficiency for any bar, not only a day: its counted days' flag over their
+  // denominators — the Pay Period figure's rule, per bar.
+  const effOf = (start: string, end: string) =>
+    denomByDay ? spanEfficiency(entries, denomByDay, start, end) : null;
+  const activeEff = activeBar ? effOf(activeBar.start, activeBar.end) : null;
+
   const chartBars: ChartBar[] = bars.map((b, i) => ({
     label: b.label,
     longLabel: b.longLabel,
@@ -357,11 +376,8 @@ export function HistoryBarChart({
               {activeBar && <span className="unit">h</span>}
             </b>
             <span className="what">flagged</span>
-            {activeBar?.date && (
-              <ReadoutEfficiency
-                flagHours={activeBar.hours}
-                denom={denomByDay?.[activeBar.date]}
-              />
+            {activeEff && (
+              <ReadoutEfficiency flagHours={activeEff.flagHours} denom={activeEff.denom} />
             )}
           </div>
 
@@ -402,6 +418,7 @@ export function HistoryBarChart({
                     <Th scope="col">{unitName(filter, customByDay(customRange))}</Th>
                     <Th scope="col" num>Hours</Th>
                     <Th scope="col" num>ROs</Th>
+                    {denomByDay && <Th scope="col" num>Efficiency</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -425,6 +442,7 @@ export function HistoryBarChart({
                       </th>
                       <Td num>{withPt(fmtHours(b.hours))}</Td>
                       <Td num>{b.ros}</Td>
+                      {denomByDay && <Td num>{effCell(effOf(b.start, b.end))}</Td>}
                     </tr>
                   ))}
                 </tbody>
@@ -433,6 +451,9 @@ export function HistoryBarChart({
                     <th scope="row">Total</th>
                     <Td num>{withPt(fmtHours(totalHours))}</Td>
                     <Td num>{bars.reduce((s, b) => s + b.ros, 0)}</Td>
+                    {denomByDay && (
+                      <Td num>{effCell(n > 0 ? effOf(bars[0].start, bars[n - 1].end) : null)}</Td>
+                    )}
                   </tr>
                 </tfoot>
               </Table>

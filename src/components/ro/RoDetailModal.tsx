@@ -11,6 +11,7 @@ import { StatusField } from "@/components/ui/StatusField";
 import { EntryPhotos } from "@/components/ro/EntryPhotos";
 import { TicketTimeline } from "@/components/ro/TicketTimeline";
 import { LinkedSpiffs } from "@/components/bonuses/LinkedSpiffs";
+import { formatLoggedStamp } from "@/lib/ro-stamps";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 import { formatDateLong, formatLoggedTime } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
@@ -121,11 +122,7 @@ export function RoDetailModal({
               ` · ${formatLoggedTime(entry.loggedTime)}`}
           </div>
           <div className="rod-logged">
-            Logged{" "}
-            {new Date(entry.createdAt).toLocaleString(undefined, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
+            {formatLoggedStamp(entry.createdAt, entry.updatedAt)}
           </div>
           <VehicleLine
             year={entry.vehicle.year}
