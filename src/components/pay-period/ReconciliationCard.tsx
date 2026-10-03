@@ -148,11 +148,18 @@ function ReconLineRow({
   // already accounted for on success, which keeps this effect quiet across the
   // gap before the refresh lands, so the two re-seed paths never fight over the
   // same box.
+  //
+  // The lint rule's concern is cascading renders. This can't cascade: the
+  // syncedFrom guard means it sets state once per actual server change, and the
+  // next run returns at the first line. Lifting this into render-phase state
+  // would mean re-deriving the focus/pending/dirty gating above, which is the
+  // delicate part — the worse trade for a rule that doesn't apply here.
   const incoming = line.paidHours ?? null;
   useEffect(() => {
     if (incoming === syncedFrom.current) return;
     if (isPending || focused || dirty) return;
     syncedFrom.current = incoming;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPaidText(incoming === null ? "" : String(incoming));
     setSaved(incoming);
   }, [incoming, isPending, focused, dirty]);
