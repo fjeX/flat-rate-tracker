@@ -4,7 +4,8 @@
 import type { Database } from "@/lib/supabase/database.types";
 import type { ReplyNotice, SubmissionReply, Submitter } from "@/lib/types";
 import type { ReplyKind } from "@/lib/feature-requests";
-import { getCurrentUserId, type DbClient, retryOnce } from "./_client";
+import { reportServerError } from "@/lib/report-error-server";
+import { getCurrentUserId, type DbClient, retryOnce, isMissingTable } from "./_client";
 
 type ReplyRow = Database["public"]["Tables"]["submission_replies"]["Row"];
 
@@ -102,7 +103,12 @@ export async function listUnseenRepliesSafe(supabase: DbClient): Promise<ReplyNo
       ...r,
       originalText: text.get(r.bugReportId ?? r.featureRequestId ?? "") ?? null,
     }));
-  } catch {
+  } catch (err) {
+    // Swallowed for the page's sake, but never silently: a policy or schema
+    // regression here would otherwise look exactly like "nobody got a reply".
+    if (!isMissingTable(err)) {
+      await reportServerError(err, { url: "db:listUnseenRepliesSafe" });
+    }
     return [];
   }
 }
@@ -146,7 +152,9 @@ export async function getSubmittersSafe(
       };
     }
     return out;
-  } catch {
+  } catch (err) {
+    // Same rule: an inbox with no names must leave a trace of why.
+    await reportServerError(err, { url: "db:getSubmittersSafe" });
     return {};
   }
 }
