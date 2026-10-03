@@ -10,6 +10,7 @@ import { RefreshFlusher } from "@/components/layout/RefreshFlusher";
 import { RefreshOnFocus } from "@/components/layout/RefreshOnFocus";
 import { CrossTabRefresh } from "@/components/layout/CrossTabRefresh";
 import { TimerPip } from "@/components/timer/TimerPip";
+import { ReplyNoticeModal } from "@/components/layout/ReplyNoticeModal";
 import { AppearanceSync } from "@/components/layout/AppearanceSync";
 import { anyAccruing } from "@/lib/timer";
 import { capsForSlots } from "@/lib/timer-schedule";
@@ -32,13 +33,15 @@ export default async function AppLayout({
   const hasTz = cookieStore.has("frt_timezone");
   const timeZone = cookieStore.get("frt_timezone")?.value;
 
-  const [isAdmin, slotsOrNull, settings] = await Promise.all([
+  const [isAdmin, slotsOrNull, settings, replyNotices] = await Promise.all([
     db.isCurrentUserAdmin(supabase),
     // Null pre-migration — the nav dot and pip simply don't render.
     db.listTimerSlotsSafe(supabase),
     // Only for AppearanceSync: the account's look, copied into this browser on
     // its first signed-in visit (the head script only ever reads localStorage).
     db.getSettings(supabase),
+    // Admin replies to this user's bug reports / feature requests. Never throws.
+    db.listUnseenRepliesSafe(supabase),
   ]);
   const slots = slotsOrNull ?? [];
 
@@ -82,6 +85,7 @@ export default async function AppLayout({
       <div style={{ flex: 1 }}>{children}</div>
       <Footer isAdmin={isAdmin} />
       <TimerPip slots={slots} entries={pipEntries} caps={caps} />
+      <ReplyNoticeModal notices={replyNotices} />
     </div>
   );
 }

@@ -487,6 +487,16 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
     reason: "Attachments on support tickets; binaries live in storage. See bug_reports.",
   },
 
+  feature_requests: {
+    carried: false,
+    reason: "Suggestions sent to the builder, not account data. Same rule as bug_reports.",
+  },
+
+  submission_replies: {
+    carried: false,
+    reason: "Replies to bug reports / feature requests; they follow those, which aren't carried.",
+  },
+
   client_errors: {
     carried: false,
     reason: "Telemetry written by the app for debugging; carries no user-authored data.",

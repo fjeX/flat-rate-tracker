@@ -29,6 +29,8 @@ const MUST_BE_LIMITED: Array<{ file: string; action: string; because: string }> 
   // Money — every call hands work to a headless Claude run.
   { file: "bug-reports.ts", action: "submitBugReport", because: "fires the Claude triage webhook" },
   { file: "bug-reports.ts", action: "setBugTriage", because: "Verify fires the Claude investigate webhook" },
+  // Row writes any signed-in user can repeat.
+  { file: "feature-requests.ts", action: "submitFeatureRequest", because: "unbounded inbox rows" },
   // Email sends.
   { file: "account.ts", action: "updateEmail", because: "GoTrue mails old AND new address" },
   // Storage growth.

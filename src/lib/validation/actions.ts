@@ -27,6 +27,11 @@ import {
   MAX_BUG_DESCRIPTION_CHARS,
 } from "@/lib/bug-reports";
 import {
+  FEATURE_STATUSES,
+  MAX_FEATURE_DESCRIPTION_CHARS,
+  MAX_REPLY_CHARS,
+} from "@/lib/feature-requests";
+import {
   COMEBACK_KINDS,
   DISPUTE_STATUSES,
   RO_EVENT_PICKABLE_KINDS,
@@ -522,6 +527,48 @@ export const bugTriageSchema = z.object({
     triageNotes: freeText(TEXT_LIMITS.notes).optional(),
   }),
 });
+
+// ---------------------------------------------------------------------------
+// feature-requests.ts
+// ---------------------------------------------------------------------------
+
+export const submitFeatureSchema = z.object({
+  description: z
+    .string({ error: "Tell us what you'd like before sending." })
+    .trim()
+    .min(1, { error: "Tell us what you'd like before sending." })
+    .max(MAX_FEATURE_DESCRIPTION_CHARS, {
+      error: `That's too long — keep it under ${MAX_FEATURE_DESCRIPTION_CHARS} characters.`,
+    }),
+  // Silently captured context: truncated, never rejected (same as bug reports).
+  pageUrl: truncated(TEXT_LIMITS.url),
+});
+
+export const featureReviewSchema = z.object({
+  requestId: uuidField("Request id"),
+  patch: z.object({
+    status: oneOf(FEATURE_STATUSES, "Invalid status.").optional(),
+    adminNotes: freeText(TEXT_LIMITS.notes).optional(),
+  }),
+});
+
+// ---------------------------------------------------------------------------
+// submission-replies.ts
+// ---------------------------------------------------------------------------
+
+export const sendReplySchema = z.object({
+  source: oneOf(["bug", "feature"] as const, "Invalid submission type."),
+  submissionId: uuidField("Submission id"),
+  message: z
+    .string({ error: "Write a message before sending." })
+    .trim()
+    .min(1, { error: "Write a message before sending." })
+    .max(MAX_REPLY_CHARS, {
+      error: `That's too long — keep it under ${MAX_REPLY_CHARS} characters.`,
+    }),
+});
+
+export const replyIdSchema = uuidField("Reply id");
 
 // ---------------------------------------------------------------------------
 // daily-clock.ts

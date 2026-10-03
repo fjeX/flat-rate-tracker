@@ -43,6 +43,7 @@ const PATHS = {
   x: <path d="M6.3 4.5L12 10.2l5.7-5.7 1.8 1.8L13.8 12l5.7 5.7-1.8 1.8L12 13.8l-5.7 5.7-1.8-1.8L10.2 12 4.5 6.3z" />,
   menu: <path d="M3 5h18v2.5H3zM3 10.75h18v2.5H3zM3 16.5h18V19H3z" />,
   report: <path d="M3 3h18v14H9.5L5 21v-4H3zM10.75 5.5v6h2.5v-6zm0 7.25V15h2.5v-2.25z" />,
+  idea: <path d="M12 2a7 7 0 0 0-4 12.74V17h8v-2.26A7 7 0 0 0 12 2zM9 18.5h6V21H9z" />,
   here: <circle cx="12" cy="12" r="10" />,
   theme: <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2.5v15a7.5 7.5 0 0 1 0-15z" />,
 } satisfies Record<string, ReactNode>;

@@ -97,8 +97,9 @@ export default function AboutPage() {
           </p>
           <p>
             If something&apos;s broken, or there&apos;s something you wish it
-            did, tell me. <b>Report a Bug</b> at the bottom of every page comes
-            straight to me.
+            did, tell me. <b>Report a Bug</b> and <b>Request a Feature</b> at
+            the bottom of every page both come straight to me, and every one
+            gets read.
           </p>
           <p className="inf-sign">Liem</p>
         </div>

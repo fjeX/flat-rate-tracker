@@ -3,6 +3,9 @@
    line of Badges + date. BugDetail / ScreenshotZoom live in dlg-bug-inbox.css.
    Tokens only. */
 .adm-inbox { display: grid; gap: var(--s5); }
+/* AdminNav: Bugs ↔ Requests switcher under the pagehead. /admin/requests
+   (FeatureInbox) reuses every adm-/inb- class in this file and dlg-bug-inbox.css. */
+.adm-nav { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s5); }
 .adm-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); }
 .adm-filter { min-width: 160px; }
 .adm-list { display: grid; gap: var(--s1); }

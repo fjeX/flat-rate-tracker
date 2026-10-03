@@ -6,7 +6,7 @@
 // statuses, so the history stays intact.
 import { useMemo, useRef, useState, useEffect, useTransition } from "react";
 import { Loader2, ImageIcon, X } from "lucide-react";
-import type { BugReport } from "@/lib/types";
+import type { BugReport, SubmissionReply, Submitter } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
 import { Field } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BUG_SEVERITIES, BUG_CATEGORIES, BUG_STATUSES } from "@/lib/bug-reports";
 import { listBugPhotosWithUrls, setBugTriage } from "@/app/actions/bug-reports";
 import { actionErrorMessage } from "@/lib/action-error";
+import { ReplyPanel, submitterName } from "./ReplyPanel";
 
 const CLOSED_STATUSES = ["Resolved", "Won't Fix"];
 
@@ -54,8 +55,17 @@ function formatDate(iso: string): string {
   )}`;
 }
 
-export function BugInbox({ initialReports }: { initialReports: BugReport[] }) {
+export function BugInbox({
+  initialReports,
+  submitters,
+  initialReplies,
+}: {
+  initialReports: BugReport[];
+  submitters: Record<string, Submitter>;
+  initialReplies: SubmissionReply[];
+}) {
   const [reports, setReports] = useState<BugReport[]>(initialReports);
+  const [replies, setReplies] = useState<SubmissionReply[]>(initialReplies);
   const [statusFilter, setStatusFilter] = useState<string>("open");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -135,6 +145,7 @@ export function BugInbox({ initialReports }: { initialReports: BugReport[] }) {
                     {r.severity && <Badge tone={severityTone(r.severity)}>{r.severity}</Badge>}
                     {r.category && <Badge tone="neutral">{r.category}</Badge>}
                     <span className="adm-date">{formatDate(r.createdAt)}</span>
+                    <span className="adm-from">from {submitterName(submitters[r.userId])}</span>
                   </span>
                 </span>
                 <svg className="ic ic-sm" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -149,6 +160,9 @@ export function BugInbox({ initialReports }: { initialReports: BugReport[] }) {
       {selected && (
         <BugDetail
           report={selected}
+          submitter={submitters[selected.userId]}
+          replies={replies.filter((r) => r.bugReportId === selected.id)}
+          onReplySent={(reply) => setReplies((prev) => [...prev, reply])}
           onClose={() => setSelectedId(null)}
           onSaved={handleSaved}
         />
@@ -161,10 +175,16 @@ export function BugInbox({ initialReports }: { initialReports: BugReport[] }) {
 
 function BugDetail({
   report,
+  submitter,
+  replies,
+  onReplySent,
   onClose,
   onSaved,
 }: {
   report: BugReport;
+  submitter: Submitter | undefined;
+  replies: SubmissionReply[];
+  onReplySent: (reply: SubmissionReply) => void;
   onClose: () => void;
   onSaved: (updated: BugReport) => void;
 }) {
@@ -299,6 +319,8 @@ function BugDetail({
         <section>
           <div className="field-label">Context</div>
           <dl className="rows inb-ctx">
+            <ContextRow label="From" value={submitterName(submitter)} />
+            <ContextRow label="Email" value={submitter?.email ?? null} mono />
             <ContextRow label="Reported" value={formatDate(report.createdAt)} />
             <ContextRow label="Page" value={report.pageUrl} mono />
             <ContextRow label="Viewport" value={report.viewport} mono />
@@ -365,6 +387,15 @@ function BugDetail({
             {error}
           </StatusField>
         )}
+
+        <ReplyPanel
+          source="bug"
+          submissionId={report.id}
+          savedStatus={report.status}
+          submitter={submitter}
+          replies={replies}
+          onSent={onReplySent}
+        />
       </div>
 
       {zoom && <ScreenshotZoom url={zoom} onClose={() => setZoom(null)} />}

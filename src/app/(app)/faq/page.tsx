@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { Zone } from "@/components/ui/Zone";
 import { ReportBugButton } from "@/components/bug-report/ReportBugButton";
+import { RequestFeatureButton } from "@/components/feature-request/RequestFeatureButton";
 
 type Faq = {
   q: string;
@@ -53,6 +54,35 @@ const GROUPS: Group[] = [
             <p>
               Do a 3.0 job in 2 hours and you flagged 3.0 on 2.0 clocked. The
               app needs both numbers to work out your efficiency.
+            </p>
+          </>
+        ),
+      },
+      {
+        q: "Why are hours written like 1.3 instead of 1:20?",
+        a: (
+          <>
+            <p>
+              Flat rate counts time in <b>tenths of an hour</b>. That&apos;s how
+              labor guides write book time and how the shop pays you, so the
+              app works the same way. Type hours as a decimal: <b>1.3</b>, not
+              1:20.
+            </p>
+            <p>One tenth (0.1) is 6 minutes:</p>
+            <ul>
+              <li>
+                <b>0.1</b> = 6 min · <b>0.2</b> = 12 min · <b>0.3</b> = 18 min
+              </li>
+              <li>
+                <b>0.5</b> = 30 min · <b>1.0</b> = 1 hour · <b>1.3</b> = 1 hour
+                18 min
+              </li>
+            </ul>
+            <p>
+              Two exceptions. Timers save your real time more exactly than a
+              tenth. And if your pay stub prints hundredths (like 74.25), type
+              it exactly as printed. The paycheck check needs your stub&apos;s
+              number, not a rounded one.
             </p>
           </>
         ),
@@ -493,6 +523,17 @@ const GROUPS: Group[] = [
           </p>
         ),
       },
+      {
+        q: "I wish the app did something it doesn't. Can I ask for it?",
+        a: (
+          <p>
+            Yes. Tap <b>Request a Feature</b> at the bottom of any page and say
+            what you want and what it would save you on a real day. Almost
+            everything in the app started as something a tech needed at work.
+            Every request gets read.
+          </p>
+        ),
+      },
     ],
   },
 ];
@@ -551,6 +592,7 @@ export default function FaqPage() {
         </p>
         <div className="inf-actions">
           <ReportBugButton label="Ask a question" />
+          <RequestFeatureButton />
         </div>
       </Zone>
     </main>

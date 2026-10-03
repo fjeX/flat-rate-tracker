@@ -63,6 +63,7 @@ export function Modal({
   children,
   size = "md",
   footer,
+  placement = "sheet",
 }: {
   open: boolean;
   onClose: () => void;
@@ -88,6 +89,12 @@ export function Modal({
    * dialog's actions. Omit it and the dialog is header + body, as before.
    */
   footer?: React.ReactNode;
+  /**
+   * "sheet" (default): bottom sheet on mobile, centred from 640px.
+   * "center": centred at every width. For a moment, not a form: the reply
+   * notice ("your bug got fixed") is the only one.
+   */
+  placement?: "sheet" | "center";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -164,7 +171,11 @@ export function Modal({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="modal-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      className={
+        placement === "center"
+          ? "modal-backdrop modal-center fixed inset-0 z-50 flex items-center justify-center"
+          : "modal-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      }
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

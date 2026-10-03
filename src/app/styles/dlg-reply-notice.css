@@ -1,0 +1,34 @@
+/* dlg-reply-notice (prefix rn-): the centred notice a tech sees when the admin
+   replies to their bug report or feature request (ReplyNoticeModal), plus the
+   admin-side reply panel in both inboxes (ReplyPanel). Tokens only.
+
+   .modal-center is Modal's placement="center": centred at every width instead
+   of a bottom sheet, so it needs a gutter and all four corners rounded. */
+.modal-center { padding: var(--s4); }
+.modal-center .modal-panel { border-radius: var(--r-panel); }
+
+.rn-body { display: flex; flex-direction: column; gap: var(--s4); text-align: center; align-items: center; }
+.rn-mark {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
+  background: color-mix(in oklab, var(--accent) 16%, transparent); color: var(--accent);
+}
+.rn-mark .ic { width: 28px; height: 28px; }
+.rn-lead { margin: 0; font-size: var(--fs-h3, 1.125rem); font-weight: 700; color: var(--ink); }
+.rn-msg { margin: 0; color: var(--ink); line-height: 1.55; white-space: pre-wrap; text-align: left; }
+.rn-sign { margin: 0; align-self: flex-end; font-weight: 600; color: var(--ink-2); }
+.rn-orig { width: 100%; text-align: left; }
+.rn-orig .field-label { margin-bottom: var(--s1); }
+.rn-orig .card-inset { color: var(--ink-2); font-size: var(--fs-label); line-height: 1.5; }
+.rn-count { font-size: var(--fs-label); color: var(--ink-3); }
+.rn-go { margin-left: auto; }
+
+/* Admin ReplyPanel */
+.rn-panel { display: flex; flex-direction: column; gap: var(--s3); }
+.rn-hist { display: grid; gap: var(--s2); }
+.rn-sent { padding: var(--s3); display: grid; gap: var(--s1); }
+.rn-sent p { margin: 0; white-space: pre-wrap; }
+.rn-sent-meta { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; font-size: var(--fs-label); color: var(--ink-3); }
+.rn-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.rn-actions .rn-send { margin-left: auto; }
+.rn-hint { margin: 0; font-size: var(--fs-label); color: var(--ink-3); }
+.adm-from { font-size: var(--fs-label); color: var(--ink-2); }

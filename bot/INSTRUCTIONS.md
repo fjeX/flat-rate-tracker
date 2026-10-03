@@ -223,7 +223,7 @@ checked against the current app on 2026-10-01 and is exact.
 - **Guests** get the same Directory with a compact Appearance section at the
   bottom (saved to that browser only).
 - **Footer** on every signed-in page: FAQ · About Us · Contact · Report a Bug
-  (§8e).
+  · Request a Feature (§8e).
 
 ### Theme lives in Settings > Appearance
 
@@ -2220,7 +2220,7 @@ Authenticated pages now have a footer: **FAQ · About Us · Contact · Report a 
 it should NOT see Admin, and `/admin/bugs` should 404 for it; that is correct,
 not a bug).
 
-- **Footer presence:** scroll to the bottom of the dashboard — confirm the four
+- **Footer presence:** scroll to the bottom of the dashboard — confirm the five
   links render, aren't clipped, and don't overlap the mobile bottom nav.
 - **FAQ / About / Contact:** click each. None may 404.
   - **FAQ** (new 2026-10-02): h1 "FAQ", five zones (Getting started, Logging
@@ -2243,6 +2243,26 @@ not a bug).
     writes a real row to the live inbox AND triggers the auto-triage automation —
     the bot must not do that. Testing that it *opens and accepts text* is enough.
 - If the Report a Bug button or modal is missing entirely, note `SKIPPED — not present`.
+- **Request a Feature (new 2026-10-02) — open, type, DO NOT SUBMIT.** A fifth
+  footer link, **Request a Feature** (lightbulb icon), right after Report a Bug.
+  Its dialog is titled "Request a feature": a short paragraph that opens
+  "Almost everything in here started as something I needed…", then one box,
+  "What would make the app better?" (`#feature-description`). Type a full
+  sentence (same focus regression check as above), then **Cancel. Never click
+  "Send request"** — it writes a real row into Liem's live inbox. The same
+  dialog also opens from the FAQ's "Still stuck?" zone (**Request a Feature**
+  button, beside "Ask a question"). About Us names both footer buttons in its
+  last paragraph but has no button of its own.
+  - **FAQ additions:** "Why are hours written like 1.3 instead of 1:20?"
+    (Getting started; 0.1 = 6 min list) and "I wish the app did something it
+    doesn't. Can I ask for it?" (last zone). Open both; check they read cleanly.
+  - `/admin/requests` must 404 for the bot account, same as `/admin/bugs`.
+- **Reply notice (new 2026-10-02).** When Liem replies to a bug report or
+  request, the sender sees a dialog **centred on screen** (not a bottom sheet,
+  even on a phone) on their next visit: "Your bug report got fixed", "Your idea
+  made it in", or "A reply to your …". The bot account never files reports, so
+  it should never see one. **If it ever appears for the bot, that is a bug —
+  flag it** (it means a reply was addressed to the wrong account).
 
 ### 8g. Backup export (rewritten 2026-08-05 — read-only check; load-bearing since 2026-10-01)
 

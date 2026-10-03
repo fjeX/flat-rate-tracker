@@ -30,6 +30,7 @@
 @import "./styles/dlg-template.css";
 @import "./styles/dlg-bug-report.css";
 @import "./styles/dlg-bug-inbox.css";
+@import "./styles/dlg-reply-notice.css";
 @import "./styles/page-guest.css";
 @import "./styles/page-landing.css";
 @import "./styles/page-info.css";

@@ -641,6 +641,46 @@ export type BugReportPhoto = {
   createdAt: string;
 };
 
+// ── Feature requests (Request a Feature) ───────────────────────────────────────
+// A user-submitted idea. status/adminNotes are admin-set; pageUrl/appBuild are
+// silently captured at submit time.
+export type FeatureRequest = {
+  id: string;
+  userId: string;
+  description: string;
+  pageUrl: string | null;
+  appBuild: string | null;
+  status: string;
+  adminNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// A reply from the admin to whoever sent a bug report or feature request.
+// Exactly one of bugReportId / featureRequestId is set.
+export type SubmissionReply = {
+  id: string;
+  userId: string;
+  bugReportId: string | null;
+  featureRequestId: string | null;
+  kind: "fixed" | "shipped" | "note";
+  message: string;
+  createdAt: string;
+  seenAt: string | null;
+};
+
+// An unseen reply as the recipient sees it: the reply plus a snippet of what
+// they originally sent, so the notice can say what it's about.
+export type ReplyNotice = SubmissionReply & { originalText: string | null };
+
+// Who sent a submission, for the admin inboxes (from admin_submitter_profiles).
+export type Submitter = {
+  userId: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
 // ── Dispute Outcome Ledger ────────────────────────────────────────────────────
 // What happened after a dispute pack went out. A Dispute is a FROZEN historical
 // claim: every hours/dollars/label field is copied in at generation time and

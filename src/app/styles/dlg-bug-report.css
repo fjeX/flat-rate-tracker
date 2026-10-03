@@ -11,5 +11,7 @@
 .bug-thumb { width: 100%; height: 72px; object-fit: cover; display: block; }
 .bug-remove { width: var(--tap); padding-left: 0; padding-right: 0; align-self: flex-end; }
 .bug-thanks { font-weight: 600; color: var(--ink); }
+/* Request a Feature (RequestFeatureModal) reuses this body; its lead-in paragraph. */
+.bug-intro { margin: 0; color: var(--ink-2); line-height: 1.5; }
 .bug-body .sfield-body p { margin: 0; }
 .bug-go { margin-left: auto; }

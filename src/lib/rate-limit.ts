@@ -314,6 +314,10 @@ export const LIMITS = {
   bugInvestigateReport: { limit: 2, windowSec: 600 },
   bugInvestigateUser: { limit: 10, windowSec: 3600 },
 
+  // --- Feature requests: a row each, no money spent. Generous for a tech with a
+  // list of ideas; a script is stopped quickly. ---
+  featureSubmit: { limit: 20, windowSec: 3600 },
+
   // --- Email sends ---
   emailChange: { limit: 5, windowSec: 3600 },
 

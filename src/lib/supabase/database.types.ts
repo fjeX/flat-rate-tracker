@@ -146,6 +146,75 @@ export type Database = {
           },
         ]
       }
+      feature_requests: {
+        Row: {
+          admin_notes: string | null
+          app_build: string | null
+          created_at: string
+          description: string
+          id: string
+          page_url: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          app_build?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          page_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          app_build?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          page_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      submission_replies: {
+        Row: {
+          bug_report_id: string | null
+          created_at: string
+          feature_request_id: string | null
+          id: string
+          kind: string
+          message: string
+          seen_at: string | null
+          user_id: string
+        }
+        Insert: {
+          bug_report_id?: string | null
+          created_at?: string
+          feature_request_id?: string | null
+          id?: string
+          kind: string
+          message: string
+          seen_at?: string | null
+          user_id: string
+        }
+        Update: {
+          bug_report_id?: string | null
+          created_at?: string
+          feature_request_id?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          seen_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       bonuses: {
         Row: {
           amount: number
@@ -1068,6 +1137,17 @@ export type Database = {
       refresh_labor_time_aggregates: {
         Args: Record<string, never>
         Returns: number
+      }
+      admin_submitter_profiles: {
+        Args: {
+          p_user_ids: string[]
+        }
+        Returns: {
+          user_id: string
+          email: string | null
+          first_name: string | null
+          last_name: string | null
+        }[]
       }
       import_replace_account: {
         Args: {
