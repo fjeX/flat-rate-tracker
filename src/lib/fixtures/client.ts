@@ -35,6 +35,7 @@ const eq = (a: unknown, b: unknown) => String(a) === String(b);
 
 class Query implements PromiseLike<Result<Row[]>> {
   private rows: Row[];
+  private orderKeys: Array<{ column: string; dir: 1 | -1 }> = [];
   /** Populated by the write verbs so insert().select().single() echoes back. */
   private written: Row[] | null = null;
 
@@ -51,15 +52,22 @@ class Query implements PromiseLike<Result<Row[]>> {
   }
 
   order(column: string, opts?: { ascending?: boolean }) {
-    const dir = opts?.ascending === false ? -1 : 1;
-    // Stable sort — chained .order() calls compose the way PostgREST's do.
+    // PostgREST composes chained .order() calls FIRST-primary
+    // (order=date.desc,created_at.desc,id.asc). Re-sorting on each call made
+    // the LAST key primary instead, which only went unnoticed while every
+    // later key tied — a trailing `id` tiebreaker turned History into
+    // oldest-first in the fixture while production sorted correctly.
+    this.orderKeys.push({ column, dir: opts?.ascending === false ? -1 : 1 });
     this.rows = [...this.rows].sort((a, b) => {
-      const x = a[column];
-      const y = b[column];
-      if (x === y) return 0;
-      if (x === null || x === undefined) return 1;
-      if (y === null || y === undefined) return -1;
-      return (x < y ? -1 : 1) * dir;
+      for (const { column: c, dir } of this.orderKeys) {
+        const x = a[c];
+        const y = b[c];
+        if (x === y) continue;
+        if (x === null || x === undefined) return 1;
+        if (y === null || y === undefined) return -1;
+        return (x < y ? -1 : 1) * dir;
+      }
+      return 0;
     });
     return this;
   }
