@@ -127,3 +127,32 @@ export function efficiencyDisplay(stats: {
   if (stats.efficiency === null) return { kind: "none" };
   return { kind: "shown", pct: stats.efficiency };
 }
+
+/**
+ * History's chart bars: the same withhold decision /pay-period makes, for any
+ * span. `eff` is spanEfficiency's result — counted flag over counted
+ * denominator plus the flag hours and days the pairing left out — so this
+ * feeds efficiencyDisplay the very fields aggregateStatsWithSchedule would
+ * (total flag = counted + unpaired). One gate, no second threshold.
+ *
+ * `none` when the bar has nothing to print: no counted day at all, or a bar
+ * whose counted days carried no flag and nothing was excluded (the chart has
+ * always left those blank rather than print an empty 0%).
+ */
+export function spanEfficiencyDisplay(
+  eff: {
+    flagHours: number;
+    denom: { hours: number };
+    unpairedFlagHours: number;
+    unpairedDays: number;
+  } | null,
+): EfficiencyDisplay {
+  if (!eff) return { kind: "none" };
+  if (eff.flagHours <= 0 && eff.unpairedFlagHours <= 0) return { kind: "none" };
+  return efficiencyDisplay({
+    flagHours: eff.flagHours + eff.unpairedFlagHours,
+    efficiency: (eff.flagHours / eff.denom.hours) * 100,
+    unpairedFlagHours: eff.unpairedFlagHours,
+    unpairedDays: eff.unpairedDays,
+  });
+}

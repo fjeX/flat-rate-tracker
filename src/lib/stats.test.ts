@@ -793,12 +793,16 @@ describe("spanEfficiency", () => {
     expect(spanEfficiency(rows, denom, "2026-03-01", "2026-03-15")).toEqual({
       flagHours: 7,
       denom: { hours: 9, source: "mixed" },
+      unpairedFlagHours: 2,
+      unpairedDays: 1,
     });
   });
   it("keeps a single source when every counted day shares it", () => {
     expect(spanEfficiency(rows, denom, "2026-03-09", "2026-03-10")).toEqual({
       flagHours: 3,
       denom: { hours: 5, source: "clocked" },
+      unpairedFlagHours: 2,
+      unpairedDays: 1,
     });
   });
   it("is null when no day in the span counted", () => {

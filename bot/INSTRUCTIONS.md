@@ -2213,9 +2213,10 @@ efficiency denominator falls back to the scheduled hours.
   "N% efficiency" in the readout row. **On History (since 2026-10-02) EVERY bar
   carries it** — a day, a pay period, a month — at the right of the readout
   above the chart. A pay-period bar's figure **must equal the Pay Period
-  page's efficiency** for that same period (one rule: flag hours on the days
-  that count over those days' clocked or scheduled hours); check the current
-  period against /pay-period every run and report any difference as a bug. Expected absences (NOT bugs): days with 0 flagged hours, and today
+  page's efficiency** for that same period, **including withholding it** (one
+  rule: flag hours on the days that count over those days' clocked or scheduled
+  hours; one gate: `efficiencyDisplay`); check the current period against
+  /pay-period every run and report any difference as a bug. Expected absences (NOT bugs): days with 0 flagged hours, and today
   before clocked hours are entered. Past days show it even from before the
   schedule existed (retro pattern fallback).
 - **Today clocked placeholder (2026-07-16):** the Today zone's Clocked field
@@ -2644,6 +2645,14 @@ now refuses to print it and says why instead. You will see, all of them correct:
   file this.
 - **Insights trend bars** — a withheld period's bar is a short stub labelled
   `—`, and it is excluded from the chart's axis scale.
+- **History chart (2026-10-04)** — a withheld bar's readout shows NO percentage,
+  just `Not counted: 68.9h on 2 days with no hours to measure`; its "Show as
+  table" row AND the TOTAL row show `—`; and it gets no rank sentence and is
+  left out of every other bar's pool ("Highest efficiency of N pay periods" —
+  N counts only bars that print a figure). The current pay period withholds on
+  History exactly when /pay-period shows its "Efficiency isn't shown" note.
+  A percentage on History next to a withheld Pay Period (e.g. `288%` against
+  the note) is a bug, MEDIUM. Fully measured periods print the same % on both.
 
 Rules for this section:
 - A withheld figure is **only** a bug if the period's flagged hours are in fact

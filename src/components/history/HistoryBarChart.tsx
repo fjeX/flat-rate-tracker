@@ -8,6 +8,7 @@ import type { Entry } from "@/lib/types";
 import { addDays, endOfMonth, getPeriodForDate } from "@/lib/periods";
 import { fmtHours, fmtPct, spanEfficiency, type DayDenom } from "@/lib/stats";
 import { barRankSentence } from "@/lib/rankings";
+import { spanEfficiencyDisplay } from "@/lib/efficiency-display";
 import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
 import { withPt } from "@/components/ui/Figure";
 import { Zone } from "@/components/ui/Zone";
@@ -233,10 +234,11 @@ function buildMonthBars(
 }
 
 /** The table twin's efficiency cell: the same figure as the readout, "—" when
- * no day in the row counted (same rule: no flag on counted days shows none). */
+ * no day in the row counted, or when the figure is withheld (the same gate
+ * /pay-period uses, via efficiencyDisplay). */
 function effCell(eff: ReturnType<typeof spanEfficiency>): string {
-  if (!eff || eff.flagHours <= 0) return "—";
-  return fmtPct((eff.flagHours / eff.denom.hours) * 100);
+  const d = spanEfficiencyDisplay(eff);
+  return d.kind === "shown" ? fmtPct(d.pct) : "—";
 }
 
 function totalCaption(filter: FilterKind): string {
@@ -345,8 +347,9 @@ export function HistoryBarChart({
 
   // "4th highest efficiency of 31 weeks". Efficiency comes ONLY from effOf (spanEfficiency), the
   // readout's own call, so the rank and the figure beside it cannot disagree.
-  // Pool = bars of this tab that HAVE an efficiency (null, or no flag on the
-  // counted days = the readout shows none, so it is not ranked). The in-progress
+  // Pool = bars of this tab that PRINT an efficiency (null, no flag on the
+  // counted days, or withheld by efficiencyDisplay = the readout shows no
+  // percentage, so it is not ranked and N counts only bars with a figure). The in-progress
   // bar (isCurrent: today / this period / this month) is neither ranked nor in
   // the pool — it is still being earned, and ranking half a period against whole
   // ones would make a good morning look like a bad month. `bars` is built from
@@ -355,12 +358,13 @@ export function HistoryBarChart({
   // that both read "96%" are tied, not 3rd and 4th.
   const shownPct = (flag: number, denom: number) => Math.round((flag / denom) * 100);
   const rankSentence = (() => {
-    if (!activeBar || activeBar.isCurrent || !activeEff || activeEff.flagHours <= 0) return null;
+    if (!activeBar || activeBar.isCurrent || !activeEff) return null;
+    if (spanEfficiencyDisplay(activeEff).kind !== "shown") return null;
     const pool: number[] = [];
     for (const b of bars) {
       if (b.isCurrent) continue;
       const e = effOf(b.start, b.end);
-      if (e && e.flagHours > 0) pool.push(shownPct(e.flagHours, e.denom.hours));
+      if (e && spanEfficiencyDisplay(e).kind === "shown") pool.push(shownPct(e.flagHours, e.denom.hours));
     }
     const unit = unitName(filter, customByDay(customRange));
     return barRankSentence(
@@ -406,7 +410,12 @@ export function HistoryBarChart({
             </b>
             <span className="what">flagged</span>
             {activeEff && (
-              <ReadoutEfficiency flagHours={activeEff.flagHours} denom={activeEff.denom} />
+              <ReadoutEfficiency
+                flagHours={activeEff.flagHours}
+                denom={activeEff.denom}
+                unpairedFlagHours={activeEff.unpairedFlagHours}
+                unpairedDays={activeEff.unpairedDays}
+              />
             )}
           </div>
           {rankSentence && <p className="chart-spread">{rankSentence}</p>}

@@ -763,6 +763,16 @@ export function dailyDenominators(
  * days were clocked and others scheduled. */
 export type SpanDenom = { hours: number; source: DayDenom["source"] | "mixed" };
 
+export type SpanEfficiency = {
+  /** Flag hours on the span's counted days (the numerator). */
+  flagHours: number;
+  denom: SpanDenom;
+  /** Flag hours on days the pairing rule left out. */
+  unpairedFlagHours: number;
+  /** How many distinct days those came from. */
+  unpairedDays: number;
+};
+
 /**
  * Efficiency inputs for any span of days (a day, week, pay period, month):
  * the flag hours on the span's COUNTED days over those days' denominators.
@@ -770,13 +780,20 @@ export type SpanDenom = { hours: number; source: DayDenom["source"] | "mixed" };
  * rule aggregateStatsWithSchedule uses for the Pay Period figure: a day that
  * doesn't pair (no clock, unscheduled, not over yet) adds neither flag nor
  * hours. Null when no day in the span counted.
+ *
+ * Also totals what the pairing LEFT OUT — the flag hours (and the number of
+ * days) in the span that sit on days with no denominator. These are the same
+ * two figures aggregateStatsWithSchedule reports as unpairedFlagHours /
+ * unpairedDays, so a caller can hand them to efficiencyDisplay and withhold
+ * the percentage exactly when /pay-period does. This is not a second rule: a
+ * day is excluded here iff pairDay didn't count it (no entry in denomByDay).
  */
 export function spanEfficiency(
   rows: ReadonlyArray<{ date: string; flagHours: number }>,
   denomByDay: Record<string, DayDenom>,
   start: string,
   end: string,
-): { flagHours: number; denom: SpanDenom } | null {
+): SpanEfficiency | null {
   let hours = 0;
   let clocked = 0;
   let scheduled = 0;
@@ -788,12 +805,24 @@ export function spanEfficiency(
   }
   if (hours <= 0) return null;
   let flagHours = 0;
+  let unpairedFlagHours = 0;
+  const unpairedDates = new Set<string>();
   for (const r of rows) {
-    if (r.date >= start && r.date <= end && denomByDay[r.date]) flagHours += r.flagHours;
+    if (r.date < start || r.date > end) continue;
+    if (denomByDay[r.date]) flagHours += r.flagHours;
+    else if (r.flagHours > 0) {
+      unpairedFlagHours += r.flagHours;
+      unpairedDates.add(r.date);
+    }
   }
   const source: SpanDenom["source"] =
     clocked > 0 && scheduled > 0 ? "mixed" : clocked > 0 ? "clocked" : "scheduled";
-  return { flagHours, denom: { hours, source } };
+  return {
+    flagHours,
+    denom: { hours, source },
+    unpairedFlagHours,
+    unpairedDays: unpairedDates.size,
+  };
 }
 
 // ---------------------------------------------------------------------------

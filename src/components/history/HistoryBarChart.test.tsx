@@ -231,3 +231,104 @@ describe("History chart bar rank sentence", () => {
     expect(sentence()).toBe("2nd highest efficiency of 4 pay periods, last 90d");
   });
 });
+
+// Escalation `history-bar-efficiency-ungated` (2026-10-04): a bar whose flag
+// hours mostly sit on days with no hours to measure them against must not print
+// a percentage — the same refusal /pay-period makes — and must not be ranked.
+describe("History chart withholds efficiency like Pay Period", () => {
+  const clocked = (h: number) => ({ hours: h, source: "clocked" as const });
+  // Pay periods: Jan 1-15 (fully measured 8/8 = 100%), Jan 16-31 (fully
+  // measured 4/8 = 50%), Feb 1-15 (fully measured 2/8 = 25%), Feb 16-28 (1 of
+  // 11 measured: 10h more sits on a day with no denominator -> withheld),
+  // and Mar 1-15 is current.
+  const rows = [
+    entry("p1", "2026-01-05", 8),
+    entry("p2", "2026-01-20", 4),
+    entry("p3", "2026-02-05", 2),
+    entry("p4", "2026-02-17", 1),
+    entry("p5", "2026-02-18", 10), // no denominator that day
+  ];
+  const denom = {
+    "2026-01-05": clocked(8),
+    "2026-01-20": clocked(8),
+    "2026-02-05": clocked(8),
+    "2026-02-17": clocked(8),
+  };
+  const pickWithheld = { start: "2026-02-16", end: "2026-02-28", label: "Feb 16 – 28" };
+  const props = {
+    entries: rows,
+    filter: "period" as const,
+    today: "2026-03-12",
+    denomByDay: denom,
+  };
+  const headline = () => document.querySelector(".chart-headline")!.textContent ?? "";
+  const sentence = () => document.querySelector(".chart-spread")?.textContent ?? null;
+
+  it("readout: no percentage, a short not-counted note naming hours and days", () => {
+    render(chart({ ...props, selected: pickWithheld }));
+    expect(headline()).not.toMatch(/\d+% efficiency/);
+    expect(headline()).toContain("Not counted: 10.0h on a day with no hours to measure");
+  });
+
+  it("table: the row and the TOTAL both read an em dash, not a percentage", () => {
+    // Window the table to the withheld period alone via a custom day range.
+    render(
+      chart({
+        entries: rows,
+        filter: "custom",
+        today: "2026-03-12",
+        customRange: { start: "2026-02-16", end: "2026-02-22" },
+        denomByDay: denom,
+        selected: null,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Show as table" }));
+    const table = screen.getByRole("table");
+    const rowsEls = within(table).getAllByRole("row");
+    const total = rowsEls[rowsEls.length - 1];
+    // 1h counted of 11h flagged -> withheld; ungated this printed 13%.
+    expect(total.textContent).toContain("11.0");
+    expect(total.textContent).not.toMatch(/%/);
+    expect(total.textContent?.trim().endsWith("—")).toBe(true);
+    const d17 = rowsEls.find((r) => r.textContent?.includes("Feb 17"))!;
+    expect(d17.textContent).toContain("13%"); // that single day is fully measured
+  });
+
+  it("period table row is an em dash while measured periods keep their percentage", () => {
+    render(chart({ ...props, selected: null }));
+    fireEvent.click(screen.getByRole("button", { name: "Show as table" }));
+    const trs = within(screen.getByRole("table")).getAllByRole("row");
+    const jan1 = trs.find((r) => r.textContent?.includes("Jan 1 – Jan 15"))!;
+    expect(jan1.textContent).toContain("100%");
+    const feb16 = trs.find((r) => r.textContent?.includes("Feb 16 – Feb 28"))!;
+    expect(feb16.textContent).not.toMatch(/%/);
+    expect(feb16.textContent?.trim().endsWith("—")).toBe(true);
+  });
+
+  it("a fully measured period prints the same percentage as before", () => {
+    render(
+      chart({
+        ...props,
+        selected: { start: "2026-01-01", end: "2026-01-15", label: "Jan 1 – 15" },
+      }),
+    );
+    expect(headline()).toContain("100% efficiency");
+    expect(headline()).not.toContain("Not counted");
+  });
+
+  it("ranking leaves withheld bars out of the pool, so N shrinks", () => {
+    // Four finished periods, one withheld -> pool of 3, not 4.
+    render(
+      chart({
+        ...props,
+        selected: { start: "2026-01-16", end: "2026-01-31", label: "Jan 16 – 31" },
+      }),
+    );
+    expect(sentence()).toBe("2nd highest efficiency of 3 pay periods, last 90d");
+  });
+
+  it("a withheld bar itself gets no rank sentence", () => {
+    render(chart({ ...props, selected: pickWithheld }));
+    expect(sentence()).toBeNull();
+  });
+});
