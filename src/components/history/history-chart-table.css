@@ -26,3 +26,8 @@
 /* the Total row closes the ledger like .table-foot does for its figures */
 .hist-twin .table-foot > * { border-top: var(--w-edge) solid var(--edge); border-bottom: 0; }
 .hist-twin tfoot th { font-size: var(--fs-label); font-weight: 700; color: var(--ink-2); text-align: left; }
+
+/* "Download CSV" sits at the head of the RO list, right-aligned so it reads as a
+   list control and not a page action; its error wraps in beside it */
+.hist-export { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s2) var(--s3); margin-bottom: var(--s3); }
+.hist-export .field-msg { margin: 0; }

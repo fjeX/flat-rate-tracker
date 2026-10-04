@@ -10,6 +10,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { RoDetailModal } from "./RoDetailModal";
+import { toJobTimings } from "@/lib/rankings";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 
 vi.mock("next/navigation", () => ({
@@ -231,5 +232,58 @@ describe("RoDetailModal logged / last-edited stamp", () => {
     const entry = { ...makeEntry([makeLine()]), updatedAt: "2026-08-19T12:30:00.000Z" };
     render(<RoDetailModal entry={entry} onClose={() => {}} />);
     expect(stamp()).toContain(" · Last edited ");
+  });
+});
+
+// Ranking sentences ("3rd fastest of 9 BRK-F jobs you've timed"). These render
+// the real modal with the same JobTiming pool the dashboard builds, so a
+// disconnected prop shows up here as a missing sentence.
+describe("RoDetailModal ranking sentence", () => {
+  const brk = (id: string, flag: number, actual: number | null) =>
+    makeLine({ id, customCode: "BRK-F", flagHours: flag, actualHours: actual });
+  const past = (n: number, actual: number): Entry => ({
+    ...makeEntry([brk(`p${n}`, 2, actual)]),
+    id: `past-${n}`,
+  });
+
+  it("shows where a timed line sits among the other jobs on that code", () => {
+    const pool = toJobTimings([past(1, 1.0), past(2, 1.4), past(3, 2.0), past(4, 3.0)]);
+    // This RO: 1.2h on a 2.0h flag = 0.6; others 0.5, 0.7, 1.0, 1.5 -> 2nd fastest of 5
+    render(
+      <RoDetailModal entry={makeEntry([brk("mine", 2, 1.2)])} jobTimings={pool} onClose={() => {}} />,
+    );
+    expect(screen.getByText("2nd fastest of 5 BRK-F jobs you've timed")).toBeTruthy();
+  });
+
+  it("carries the pool's scope", () => {
+    const pool = toJobTimings([past(1, 1.0), past(2, 1.4), past(3, 2.0)]);
+    render(
+      <RoDetailModal
+        entry={makeEntry([brk("mine", 2, 1.2)])}
+        jobTimings={pool}
+        jobTimingsScope="in the last 90 days"
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText(/of 4 BRK-F jobs you've timed in the last 90 days/)).toBeTruthy();
+  });
+
+  it("says nothing with fewer than 3 timed jobs on the code", () => {
+    const pool = toJobTimings([past(1, 1.0)]);
+    render(
+      <RoDetailModal entry={makeEntry([brk("mine", 2, 1.2)])} jobTimings={pool} onClose={() => {}} />,
+    );
+    expect(screen.queryByText(/jobs you've timed/)).toBeNull();
+  });
+
+  it("says nothing on an untimed line, or when no pool is passed", () => {
+    const pool = toJobTimings([past(1, 1.0), past(2, 1.4), past(3, 2.0)]);
+    const { unmount } = render(
+      <RoDetailModal entry={makeEntry([brk("mine", 2, null)])} jobTimings={pool} onClose={() => {}} />,
+    );
+    expect(screen.queryByText(/jobs you've timed/)).toBeNull();
+    unmount();
+    render(<RoDetailModal entry={makeEntry([brk("mine", 2, 1.2)])} onClose={() => {}} />);
+    expect(screen.queryByText(/jobs you've timed/)).toBeNull();
   });
 });

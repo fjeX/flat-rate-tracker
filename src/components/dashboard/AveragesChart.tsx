@@ -28,7 +28,42 @@ export type ChartBar = {
   value: number;
   isBest: boolean;
   isCurrent: boolean;
+  /** Avg mode only: the worked days behind this bar's average. Same worked-day
+   * set the average divides by — it is built in the same loop, never re-derived. */
+  spread?: Spread;
 };
+
+/** The worked days an average was taken over: how many, and the day totals'
+ * range. `noun` is what one of them is called ("Monday" / "worked day"). */
+export type Spread = { n: number; min: number; max: number; noun: string };
+
+function spreadOf(dayHours: number[], noun: string): Spread {
+  return {
+    n: dayHours.length,
+    min: dayHours.length > 0 ? Math.min(...dayHours) : 0,
+    max: dayHours.length > 0 ? Math.max(...dayHours) : 0,
+    noun,
+  };
+}
+
+/** Below this many days an average is a rough guess, and the readout says so. */
+const SMALL_SAMPLE = 4;
+
+const DAY_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** "n=12 Mondays · range 3.1–11.2h", plus a plain small-sample note. The
+ * average itself is the readout figure right above, so it is not repeated. */
+export function spreadLine(s: Spread): string {
+  const plural = s.n === 1 ? s.noun : `${s.noun}s`;
+  const range =
+    s.n === 0
+      ? "no days yet"
+      : s.n === 1
+        ? `${fmtHours(s.min)}h`
+        : `range ${fmtHours(s.min)}–${fmtHours(s.max)}h`;
+  const small = s.n < SMALL_SAMPLE ? " · small sample, take it loosely" : "";
+  return `n=${s.n} ${plural} · ${range}${small}`;
+}
 
 type Props = {
   entries: Entry[];
@@ -96,11 +131,13 @@ function computeWeek(
   // could disagree about the same week. One shared source, one definition.
   const totalByDow: number[] = new Array(7).fill(0);
   const workedByDow: number[] = new Array(7).fill(0);
+  const hoursByDow: number[][] = Array.from({ length: 7 }, () => []);
 
   for (const [date, hours] of flagHoursByDate(entries, windowStart, windowEnd, unpaid)) {
     const jsDay = new Date(date + "T00:00:00").getDay();
     totalByDow[jsDay] += hours;
     workedByDow[jsDay]++;
+    hoursByDow[jsDay].push(hours);
   }
   const avgByDow = totalByDow.map((total, dow) =>
     workedByDow[dow] > 0 ? total / workedByDow[dow] : 0
@@ -127,6 +164,7 @@ function computeWeek(
       value,
       isBest: false,
       isCurrent: d === today,
+      spread: mode === "avg" ? spreadOf(hoursByDow[jsDay], DAY_LONG[jsDay]) : undefined,
     });
     d = addDays(d, 1);
   }
@@ -152,6 +190,7 @@ function computePeriod(
 ): ChartBar[] {
   const periodTotals = new Map<string, { total: number; start: string; end: string }>();
   const periodWorkedDates = new Map<string, Set<string>>();
+  const periodDayHours = new Map<string, number[]>();
 
   // Through flagHoursByDate — the app-wide worked-day rule — so a day on an
   // open ticket counts as worked here exactly as it does in the forecast.
@@ -165,6 +204,9 @@ function computePeriod(
     }
     if (!periodWorkedDates.has(period.key)) periodWorkedDates.set(period.key, new Set());
     periodWorkedDates.get(period.key)!.add(date);
+    const dh = periodDayHours.get(period.key);
+    if (dh) dh.push(hours);
+    else periodDayHours.set(period.key, [hours]);
   }
 
   let cursor = windowStart;
@@ -200,7 +242,13 @@ function computePeriod(
 
     const startDay = parseInt(start.split("-")[2], 10);
     const subLabel = startDay <= splitDay ? "Wk 1" : "Wk 2";
-    return { label: dateLabel, longLabel: dateLabel, subLabel, value, isBest: false, isCurrent: key === currentPeriod.key };
+    return {
+      label: dateLabel, longLabel: dateLabel, subLabel, value, isBest: false, isCurrent: key === currentPeriod.key,
+      // n/range describe worked days, so they only stand beside a worked-day
+      // average — a calendar-day average below the range's minimum would read
+      // as a contradiction.
+      spread: mode === "avg" && subMode === "worked" ? spreadOf(periodDayHours.get(key) ?? [], "worked day") : undefined,
+    };
   });
 
   const maxVal = Math.max(...bars.map((b) => b.value), 0);
@@ -223,6 +271,7 @@ function computeMonth(
 ): ChartBar[] {
   const monthTotals = new Map<string, number>();
   const workedDaysByMonth = new Map<string, Set<string>>();
+  const monthDayHours = new Map<string, number[]>();
 
   const [startYear, startMonth] = windowStart.split("-").map(Number);
   const [endYear, endMonth] = windowEnd.split("-").map(Number);
@@ -242,6 +291,9 @@ function computeMonth(
     monthTotals.set(key, (monthTotals.get(key) ?? 0) + hours);
     if (!workedDaysByMonth.has(key)) workedDaysByMonth.set(key, new Set());
     workedDaysByMonth.get(key)!.add(date);
+    const dh = monthDayHours.get(key);
+    if (dh) dh.push(hours);
+    else monthDayHours.set(key, [hours]);
   }
 
   const currentMonth = today.substring(0, 7);
@@ -264,6 +316,7 @@ function computeMonth(
       value,
       isBest: false,
       isCurrent: key === currentMonth,
+      spread: mode === "avg" && subMode === "worked" ? spreadOf(monthDayHours.get(key) ?? [], "worked day") : undefined,
     };
   });
 
@@ -586,6 +639,11 @@ export function AveragesChart({
           <ReadoutEfficiency flagHours={activeBar.value} denom={denomByDay?.[activeBar.date]} />
         )}
       </div>
+      {/* Avg mode: the honesty an average lacks — how many days it rests on and
+          how far they ran. Quiet, under the figure, never coloured. */}
+      {mode === "avg" && activeBar?.spread && (
+        <p className="chart-spread">{spreadLine(activeBar.spread)}</p>
+      )}
 
       {/* Keyed by tab+mode so the bars rise again on a user-initiated switch
           (new data by intent) but NOT when an unrelated parent re-render (a

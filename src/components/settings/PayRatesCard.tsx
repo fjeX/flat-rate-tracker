@@ -157,7 +157,10 @@ export function PayRatesCard({
             disabled={defaultPending}
             className="input"
           >
-            <option value="">None (untyped)</option>
+            {/* Not "untyped": a null type displays and prices as Customer Pay
+                (decision 2026-07-16). "Untyped" is reserved for an explicit
+                pick, which is its own option below. */}
+            <option value="">No default (lines start as Customer Pay)</option>
             {LABOR_TYPES.map((t) => (
               <option key={t} value={t}>
                 {LABOR_TYPE_LABELS[t]}

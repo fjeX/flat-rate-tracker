@@ -200,3 +200,23 @@
 @media (prefers-reduced-motion: no-preference) {
   .ins-trend-col .trend-bar, .ins-track i, .ins-band-bar i { transform-origin: bottom left; }
 }
+
+/* ---------- compare bars: you vs the book (Big jobs) ----------
+   Accent vs ink, never good/bad. Square, flat, one shared scale per row. */
+.ins-cmp { display: grid; gap: 3px; max-width: 28rem; }
+/* Big jobs: figures row + full-width bars row read as one job — the rule sits
+   under the pair, not between them. */
+.ins-page .table tr.ins-cmp-head > td { border-bottom: 0; }
+.ins-page .table tr.ins-cmp-body > td { height: auto; padding-top: 0; padding-bottom: var(--s3); }
+.ins-stat-range { white-space: nowrap; }
+.ins-cmp-row { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr) 3.4rem; align-items: center; gap: var(--s2); }
+.ins-cmp-k { font-size: var(--fs-min); font-weight: 700; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-3); }
+.ins-cmp-track { height: 8px; background: var(--bar-track); }
+.ins-cmp-track i { display: block; height: 100%; }
+.ins-cmp-track i.is-accent { background: var(--accent); }
+.ins-cmp-track i.is-ink { background: var(--ink); }
+.ins-cmp.is-dim .ins-cmp-track i { opacity: 0.4; }
+.ins-cmp-v { text-align: right; font-size: var(--fs-label); color: var(--ink-2); }
+/* the plain-language line under the bars, and the n= / range stamp in the cell */
+.ins-reason { display: block; margin-top: var(--s1); font-size: var(--fs-label); color: var(--ink-2); font-family: var(--font-ui); font-weight: 400; letter-spacing: 0; }
+.ins-stat { font-family: var(--font-num); font-size: var(--fs-label); letter-spacing: var(--track-num); font-variant-numeric: tabular-nums; }

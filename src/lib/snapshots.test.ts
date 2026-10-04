@@ -90,6 +90,8 @@ describe("buildSnapshotStats", () => {
     expect(stats.topOps[0]).toMatchObject({ code: "BRK-F", count: 3 });
     // 5 lines with actuals: sum(actual)/sum(flag) = 5.4 / 5.6
     expect(stats.avgVsBook).toBeCloseTo(0.96, 2);
+    // ...and the sheet is told how many lines that average is over.
+    expect(stats.avgVsBookLines).toBe(5);
   });
 
   it("hides avg-vs-book when too few lines carry actual hours", () => {

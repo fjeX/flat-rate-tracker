@@ -185,7 +185,7 @@ describe("dashboard flag hours agree with fmtHours", () => {
       <div>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <TodayCard date="2026-08-20" stats={stats(5.35) as any} initialHours={8} library={[]} />
-        <RecentRos entries={[entry(5.35)]} />
+        <RecentRos entries={[entry(5.35)]} jobTimings={[]} />
       </div>,
     );
     const tag = document.querySelector(".tag-hrs");

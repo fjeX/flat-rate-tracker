@@ -161,3 +161,73 @@ describe("History chart efficiency on every bar", () => {
     expect(screen.queryByRole("columnheader", { name: "Efficiency" })).toBeNull();
   });
 });
+
+// "4th best week of 31": rank by the readout's own spanEfficiency figure, among
+// finished bars that have one.
+describe("History chart bar rank sentence", () => {
+  // Days Mar 9-11 are over (100%, 75%, 50%); Mar 12 is today (current, in progress).
+  const rows = [
+    entry("a", "2026-03-09", 8),
+    entry("b", "2026-03-10", 6),
+    entry("c", "2026-03-11", 4),
+    entry("d", "2026-03-12", 8),
+  ];
+  const denom = (days: string[]) =>
+    Object.fromEntries(days.map((d) => [d, { hours: 8, source: "clocked" as const }]));
+  const pick = (d: string) => ({ start: d, end: d, label: d });
+  const sentence = () => document.querySelector(".chart-spread")?.textContent ?? null;
+
+  it("ranks the picked bar among finished bars that have an efficiency", () => {
+    render(
+      chart({
+        entries: rows,
+        denomByDay: denom(["2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12"]),
+        selected: pick("2026-03-10"),
+      }),
+    );
+    // Pool: Mar 9 100%, Mar 10 75%, Mar 11 50% (today is excluded).
+    expect(sentence()).toBe("2nd highest efficiency of 3 days");
+  });
+
+  it("does not rank the in-progress bar", () => {
+    render(
+      chart({
+        entries: rows,
+        denomByDay: denom(["2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12"]),
+        selected: pick("2026-03-12"),
+      }),
+    );
+    expect(sentence()).toBeNull();
+  });
+
+  it("says nothing with fewer than 3 rankable bars (null efficiency is not ranked)", () => {
+    render(
+      chart({
+        entries: rows,
+        denomByDay: denom(["2026-03-09", "2026-03-10"]),
+        selected: pick("2026-03-10"),
+      }),
+    );
+    expect(sentence()).toBeNull();
+  });
+
+  it("names the window on a pay-period tab", () => {
+    // Three finished pay periods inside the 90-day window, each 8 flag / 8 denom.. 4 / 8.. 2 / 8.
+    const periods = [
+      entry("p1", "2026-01-05", 8),
+      entry("p2", "2026-01-20", 4),
+      entry("p3", "2026-02-05", 2),
+      entry("p4", "2026-02-20", 1),
+    ];
+    render(
+      chart({
+        entries: periods,
+        filter: "period",
+        today: "2026-03-12",
+        denomByDay: denom(["2026-01-05", "2026-01-20", "2026-02-05", "2026-02-20"]),
+        selected: { start: "2026-01-16", end: "2026-01-31", label: "Jan 16 – 31" },
+      }),
+    );
+    expect(sentence()).toBe("2nd highest efficiency of 4 pay periods, last 90d");
+  });
+});

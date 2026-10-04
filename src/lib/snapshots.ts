@@ -226,6 +226,11 @@ export function buildSnapshotStats(
       bookActualSum >= MIN_BOOK_ACTUAL_HOURS
         ? Math.round((bookActualSum / bookFlagSum) * 100) / 100
         : null,
+    // Stored beside the average it describes, so the sheet can say "n=24".
+    // No range: this average takes every timed line (the plausibility floor is
+    // applied to the AGGREGATE at display), so a per-line min/max would print
+    // the very mis-tapped timers that floor exists to hide.
+    avgVsBookLines: bookLines,
     comebackHours: Math.round(comebackHours * 100) / 100,
     photoCount,
     topOps,

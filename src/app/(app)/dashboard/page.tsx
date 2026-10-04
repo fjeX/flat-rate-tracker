@@ -31,6 +31,7 @@ import { SnapshotsCard } from "@/components/dashboard/SnapshotsCard";
 import { RecoveredCard } from "@/components/dashboard/RecoveredCard";
 import { RecentRos } from "@/components/dashboard/RecentRos";
 import { AveragesChart } from "@/components/dashboard/AveragesChart";
+import { toJobTimings } from "@/lib/rankings";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
 import { Badge } from "@/components/ui/Badge";
 import { SyncedNote } from "@/components/dashboard/SyncedNote";
@@ -414,7 +415,7 @@ export default async function DashboardPage() {
 
         <div>
           {/* ── Recent ROs ──────────────────────────────────────── */}
-          <RecentRos entries={recentEntries} library={library} rates={rateMap} />
+          <RecentRos entries={recentEntries} library={library} rates={rateMap} jobTimings={toJobTimings(entries)} />
 
           {/* ── Flagged hours chart ─────────────────────────────── */}
           <AveragesChart

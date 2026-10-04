@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadEntriesInRange, loadMoreEntries } from "@/app/actions/entries";
-import { Camera, Search, X } from "lucide-react";
+import { Camera, Download, Search, X } from "lucide-react";
 import type { Entry, OpCode, UserSettings } from "@/lib/types";
 import {
   endOfMonth,
@@ -23,8 +23,10 @@ import { fmtHours, type DayDenom } from "@/lib/stats";
 import type { RateMap } from "@/lib/earnings";
 import { lineCode } from "@/lib/line-code";
 import { entryMatchesSearch, findSearchMatches, matchSnippet, type SearchField } from "@/lib/history-search";
+import { buildHistoryCsv, csvFilename } from "@/lib/csv-export";
 import { buildHistoryQuery, type HistoryRange, type HistorySort, type HistoryDir, type HistoryUrlState } from "@/lib/history-url";
 import { RoDetailModal } from "@/components/ro/RoDetailModal";
+import type { JobTiming } from "@/lib/rankings";
 import { RoTag } from "@/components/dashboard/RoTag";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -144,6 +146,41 @@ function barLabel(start: string, end: string): string {
   return start === end ? formatDateShort(start) : `${formatDateShort(start)} – ${formatDateShort(end)}`;
 }
 
+/**
+ * The rows History shows for a set of loaded ROs: the active date span, the
+ * search box, then the chosen sort. One copy, used by the list AND by the CSV
+ * export, so the file can never disagree with the screen about what "matches".
+ */
+function selectRows(
+  list: Entry[],
+  f: {
+    noRange: boolean;
+    range: { start: string; end: string } | null;
+    search: string;
+    libraryById: Map<string, OpCode>;
+    sortBy: SortKind;
+    sortDir: SortDir;
+  },
+): Entry[] {
+  return list
+    .filter((e) => {
+      if (f.noRange) return false;
+      if (f.range && (e.date < f.range.start || e.date > f.range.end)) return false;
+      return entryMatchesSearch(e, f.search, f.libraryById);
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (f.sortBy === "date") {
+        cmp = a.createdAt.localeCompare(b.createdAt);
+      } else if (f.sortBy === "hours") {
+        cmp = a.flagHours - b.flagHours;
+      } else if (f.sortBy === "ro_number") {
+        cmp = a.roNumber.localeCompare(b.roNumber, undefined, { numeric: true });
+      }
+      return f.sortDir === "desc" ? -cmp : cmp;
+    });
+}
+
 type Group = { key: string; heading: string; entries: Entry[]; hours: number };
 
 export function HistoryView({
@@ -161,6 +198,7 @@ export function HistoryView({
   entryIdsWithPhotos,
   denomByDay,
   chartRows,
+  jobTimings,
   initial,
 }: {
   entries: Entry[];
@@ -190,6 +228,10 @@ export function HistoryView({
   // pages 100 at a time, so drawing bars from the loaded rows left older
   // periods and months short. Absent in guest mode: local entries are all of them.
   chartRows?: ChartRow[];
+  // Every timed line on the account, slimmed, for the RO detail's "3rd fastest
+  // of 9" sentence. All-time, from the same full read as chartRows. Absent in
+  // guest mode: GuestRoDetailModal reads the guest store itself.
+  jobTimings?: JobTiming[];
   // Filters read from the URL on the server, so the first render already shows
   // the view the tech left. Absent in guest mode: defaults.
   initial?: HistoryUrlState;
@@ -354,25 +396,10 @@ export function HistoryView({
   // Custom with a missing or backwards date shows nothing rather than everything.
   const noRange = isCustom && !range;
 
-  const filtered = useMemo(() => {
-    return allEntries
-      .filter((e) => {
-        if (noRange) return false;
-        if (range && (e.date < range.start || e.date > range.end)) return false;
-        return entryMatchesSearch(e, search, libraryById);
-      })
-      .sort((a, b) => {
-        let cmp = 0;
-        if (sortBy === "date") {
-          cmp = a.createdAt.localeCompare(b.createdAt);
-        } else if (sortBy === "hours") {
-          cmp = a.flagHours - b.flagHours;
-        } else if (sortBy === "ro_number") {
-          cmp = a.roNumber.localeCompare(b.roNumber, undefined, { numeric: true });
-        }
-        return sortDir === "desc" ? -cmp : cmp;
-      });
-  }, [allEntries, noRange, range, search, libraryById, sortBy, sortDir]);
+  const filtered = useMemo(
+    () => selectRows(allEntries, { noRange, range, search, libraryById, sortBy, sortDir }),
+    [allEntries, noRange, range, search, libraryById, sortBy, sortDir],
+  );
 
   const shownHours = filtered.reduce((s, e) => s + e.flagHours, 0);
 
@@ -438,6 +465,67 @@ export function HistoryView({
     }
     return out;
   }, [grouped, byMonth, filtered, shownHours, today]);
+
+  // CSV of exactly the rows on screen. The list pages 100 ROs at a time, so
+  // when more exist the loaded rows are only a floor of what the filters match;
+  // an export from them would be a quietly short file. In that case ask the
+  // server for the whole span first (the same call Custom uses) and run the
+  // SAME filter and sort over the result. A custom range whose own fetch has
+  // already landed, and any view with nothing left to page, export as loaded.
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  async function handleExport() {
+    setExportError(null);
+    const covered =
+      !hasMore ||
+      (isCustom &&
+        !picked &&
+        range !== null &&
+        !rangeLoading &&
+        !rangeError &&
+        rangeKey === range.start + "_" + range.end);
+    let rows = filtered;
+    if (!covered) {
+      setExporting(true);
+      try {
+        // "All" has no span; the widest valid one is the whole account.
+        const res = await loadEntriesInRange(range?.start ?? "1970-01-01", range?.end ?? "9999-12-31");
+        if ("error" in res) {
+          setExportError(res.error);
+          return;
+        }
+        const seen = new Set(allEntries.map((e) => e.id));
+        const fetched = res.entries.filter((e) => !seen.has(e.id) && !deletedIds.has(e.id));
+        rows = selectRows([...allEntries, ...fetched], { noRange, range, search, libraryById, sortBy, sortDir });
+      } catch {
+        setExportError("Couldn't load every RO for the export. Try again.");
+        return;
+      } finally {
+        setExporting(false);
+      }
+    }
+    const csv = buildHistoryCsv({
+      entries: rows,
+      library,
+      filters: {
+        range: filter,
+        from: customFrom,
+        to: customTo,
+        q: search,
+        sort: sortBy,
+        dir: sortDir,
+        bar: picked ? { start: picked.start, end: picked.end } : null,
+      },
+      span: range,
+      exportedAt: new Date(),
+    });
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = csvFilename(today);
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const openEntry = openId ? allEntries.find((e) => e.id === openId) ?? null : null;
 
@@ -587,6 +675,22 @@ export function HistoryView({
               ) : undefined
             }
           >
+            <div className="hist-export">
+              <Button
+                variant="line"
+                size="sm"
+                onClick={() => void handleExport()}
+                disabled={filtered.length === 0 || exporting}
+                busy={exporting}
+              >
+                <Download size={16} aria-hidden="true" /> {exporting ? "Preparing…" : "Download CSV"}
+              </Button>
+              {exportError && (
+                <p className="field-msg field-msg-error" role="alert">
+                  {exportError}
+                </p>
+              )}
+            </div>
             {picked && (
               <p className="hist-picked" aria-live="polite">
                 <span>
@@ -737,6 +841,9 @@ export function HistoryView({
               entry={openEntry}
               library={library}
               rates={rates}
+              // jobTimings is server-built; a deleted RO stays in it until the
+              // refresh lands, so drop its timings here or "of N" runs one high.
+              jobTimings={jobTimings?.filter((t) => !deletedIds.has(t.entryId))}
               onClose={() => setOpenId(null)}
               // A deleted RO can live in the paginated "Load more" state, which a
               // server refresh alone never prunes (that only refreshes the first

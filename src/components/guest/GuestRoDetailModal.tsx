@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { formatDateLong } from "@/lib/periods";
 import { fmtHours } from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
 import { formatLoggedStamp } from "@/lib/ro-stamps";
+import { jobRankSentences, toJobTimings } from "@/lib/rankings";
 import type { Entry, EntryOpCode, OpCode } from "@/lib/types";
 
 export function GuestRoDetailModal({
@@ -19,8 +20,28 @@ export function GuestRoDetailModal({
   entry: Entry;
   onClose: () => void;
 }) {
-  const { opCodes, deleteGuestEntry, hourlyRate } = useGuestStore();
+  const { entries, opCodes, deleteGuestEntry, hourlyRate } = useGuestStore();
   const opCodesById = new Map(opCodes.map((oc) => [oc.id, oc]));
+  // The guest store holds every guest RO in memory, so the ranking pool is the
+  // whole session (the signed-in twin is handed its pool by the page instead).
+  const rankByLine = useMemo(
+    () =>
+      jobRankSentences(
+        entry,
+        toJobTimings(entries),
+        (line) => {
+          const code = line.custom
+            ? line.customCode?.trim()
+            : line.opCodeId
+              ? opCodesById.get(line.opCodeId)?.code
+              : undefined;
+          return code || null;
+        },
+      ),
+    // opCodesById is rebuilt every render; its source array is the real input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entry, entries, opCodes],
+  );
   const showMoney = hourlyRate !== null && hourlyRate > 0;
   const roEarnings = showMoney ? entry.flagHours * hourlyRate : 0;
   const comebackLines = entry.opCodes.filter((l) => l.isComeback);
@@ -90,7 +111,7 @@ export function GuestRoDetailModal({
             </thead>
             <tbody>
               {entry.opCodes.map((line) => (
-                <GuestLineRow key={line.id} line={line} entryId={entry.id} opCodesMap={opCodesById} />
+                <GuestLineRow key={line.id} line={line} entryId={entry.id} opCodesMap={opCodesById} rank={rankByLine.get(line.id) ?? null} />
               ))}
             </tbody>
             <tfoot>
@@ -163,10 +184,12 @@ function GuestLineRow({
   line,
   entryId,
   opCodesMap,
+  rank,
 }: {
   line: EntryOpCode;
   entryId: string;
   opCodesMap: Map<string, OpCode>;
+  rank: string | null;
 }) {
   const { updateEntryHours } = useGuestStore();
 
@@ -199,6 +222,7 @@ function GuestLineRow({
           {line.isComeback && <Badge tone="warn">Comeback</Badge>}
         </div>
         {description && <div className="rod-desc">{description}</div>}
+        {rank && <div className="rod-rank">{rank}</div>}
         {/* Mirrors RoDetailModal: a 0.0h line with no explanation reads as a
             mistake. Keep the two in step — they are separate forks. */}
         {line.isComeback && (

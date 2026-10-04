@@ -87,6 +87,11 @@ export function SnapshotSheet({
               <>
                 {withPt(s.avgVsBook.toFixed(2))}
                 <small>×</small>
+                {/* Mono n=, only where the snapshot recorded it (older frozen
+                    sheets did not — say nothing rather than guess). */}
+                {s.avgVsBookLines !== undefined && (
+                  <small className="ins-stat" style={{ fontFamily: "var(--font-num)" }}> n={s.avgVsBookLines}</small>
+                )}
               </>
             ) : (
               "—"

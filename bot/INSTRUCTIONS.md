@@ -373,6 +373,18 @@ checked against the current app on 2026-10-01 and is exact.
     label picks that bar exactly like tapping the bar ("· picked" tag).
   - A bad URL (e.g. /histroy) shows a "No page here" card with Log an RO and
     Go to dashboard, not a generic Next.js page.
+  **Added 2026-10-04 (rarecactus Session 3):**
+  - Under the readout's efficiency, a finished bar carries a rank line:
+    **"2nd highest efficiency of 4 pay periods, last 90d"** / "Highest
+    efficiency of 12 weeks" / "Tied 3rd highest …". It ranks by the SAME
+    efficiency % the readout shows (bars showing the same rounded % are
+    "Tied"). No rank line on the current, still-running bar, on a bar with no
+    efficiency, or when fewer than 3 finished bars have one — all correct.
+    "Highest efficiency" and the footer's "best period" (most hours) are
+    different facts and can name different bars — not a bug.
+  - **Download CSV** (button at the top of the Repair orders zone) downloads
+    `frt-history-YYYY-MM-DD.csv` of exactly what the list shows. See §8's
+    History CSV check.
   **Repair orders** is a zone of compact RO tags **grouped under day headings**
   ("Yesterday", "Tue, Mar 10", each with "N ROs · X.Xh"); Month and All group by
   month; sorting by Hours or RO # drops the headings and puts the date on each
@@ -432,7 +444,10 @@ checked against the current app on 2026-10-01 and is exact.
 - **Insights.** The page opens on a **headline panel** (the accent-coloured
   block, like the dashboard's Today): four figures — UNPAID THIS WINDOW (red
   when non-zero, "0h" with "every timed job came in at book" when clean),
-  STRONGEST DAY, LAST PERIOD (the last *finished* period's efficiency, "up from
+  STRONGEST DAY (its caption names the full weekday since 2026-10-04:
+  "Thursdays, over 3 days" / "Thursday, over 1 day" — the Best days zone keeps
+  its short "Thu"; that difference is deliberate), LAST PERIOD (the last
+  *finished* period's efficiency, "up from
   / down from" the one before) and SOLD (share of flagged hours upsold) — with
   the opening sentence ("Nothing unpaid in this window." / "Xh you weren't paid
   for.") as the note under them. Those four figures are derived from the same
@@ -551,7 +566,13 @@ file is exact unless listed here.
   a different day). After §2's "Edit stuck" check, re-open that RO: it **must**
   now show "· Last edited …" with a time near the edit. No "Last edited" on an
   RO you just logged and never touched is correct. Guest RO detail works the
-  same way. The op-code lines are a **ruled
+  same way. **Since 2026-10-04**, a line with a measured actual time can carry
+  a quiet rank line under its description, e.g. **"3rd fastest of 9 BRK-F
+  jobs you've timed"** ("Your fastest …", "Slowest …", "Tied 2nd fastest …",
+  "Same pace on all 3 …"). It appears only when that code has 3+ timed jobs;
+  from the dashboard's Recent ROs it adds "in the last 90 days" (that page
+  only loads 90 days); from History it is all-time, so the two counts can
+  differ — correct. Pay Period's RO list deliberately shows no rank line. The op-code lines are a **ruled
   table** with Op code / Flag / Actual headers on desktop; on a phone each line
   is a stacked row (code chip + Upsell chip, description, then "FLAG 1.0 ·
   ACTUAL [field] · trash"). The Actual field is `opc-hours-input` with the same
@@ -693,6 +714,11 @@ night, not just when something else sends you there.
   correctly show the customer-pay dollar amount — that is intended, not a bug.
   Only a line whose selector actually reads "Untyped" that STILL shows a dollar
   figure is a bug. A "Customer Pay" line showing $ is correct.
+  The starting type comes from Settings → Pay Rates → **"Default type for new
+  lines"** (a sub-control of the Pay Rates row, so it has no row of its own in
+  the ALL SETTINGS list — by design). Its first option reads **"No default
+  (lines start as Customer Pay)"** and stores `defaultLaborType: null`; pick a
+  real type there and new lines start on it. Leave it on "No default".
 - After each save, verify the RO actually appears in history with the right
   hours, **on the right date (today, your local date)**, and with the full
   vehicle (year + make + model) displayed — a missing field you typed is a bug.
@@ -1985,7 +2011,18 @@ recovered. Sections appear only when they have something to say.
 - **"Big jobs" / "The quick stuff"** (undocumented until now — two cards, below
   the divider, all-time only, `JobTimeSections.tsx`).
   - **Big jobs** — every code flagging 2h+, with a coverage bar ("N/M timed")
-    and a table of measured jobs (flag / actual / vs book). Check the coverage
+    and a table of measured jobs (flag / actual / vs book). **Since
+    2026-10-04** each job's cell reads **"n=5 · range 0.80–1.40×"** (n = timed
+    jobs; no range with one reading or when every reading rounds the same),
+    and under the row a full-width pair of bars: **YOU** (accent blue) vs
+    **BOOK** (ink), each with its hours — these are the AVERAGE PER TIMED JOB,
+    while the Flag / Actual columns are TOTALS, so 2.1h vs 48.4h is correct.
+    Then one reason line ("You beat the book by 7 min a job over 22 timed." /
+    "Running 20 min over the book a job across 3 timed — mostly one long
+    one."). The bars are never green or red; only the vs-book cell keeps its
+    colour. A row with too few readings has dimmed bars and says how many more
+    are needed. This is job time vs the book, NOT efficiency — never compare it
+    to an efficiency %. Check the coverage
     fraction matches the table, and that a code with zero timed jobs shows the
     "next time you log one" message instead of an empty table. This table also
     carries the `library`/`custom` origin tag — apply the same collision rule
@@ -2061,6 +2098,25 @@ recovered. Sections appear only when they have something to say.
   "Show as table": the Total row must equal the chart's total and the RO counts
   must sum to it. Each matched RO must show an "Op code" label with the match
   highlighted. Visit /history-nope: it must show "No page here".
+- History CSV (2026-10-04): with tonight's bar picked on Week, stub
+  `URL.createObjectURL` (as in the backup check) and tap **Download CSV**. The
+  file must: start with a BOM; have 8 lines starting `# ` (title, `# schema:
+  frt-csv/1`, exported_at, `# filters: range=…` including `bar=…`, `# rows: N
+  data rows from M ROs`, and three legend lines) before the header row; have
+  M equal to the list's "N ROs"; have one row per op-code line (an open
+  ticket = one row with blank line columns); and carry no dollar figure and
+  no efficiency column. A null labor type reads "Customer Pay", an explicit
+  Untyped reads "Untyped". A note starting with "=" or "-" gains a leading
+  apostrophe — deliberate (spreadsheet formula guard), not a bug.
+- Ranks (2026-10-04): on History, pick a finished pay-period bar and confirm
+  its rank line ("Nth highest efficiency of M pay periods") agrees with the
+  table twin's Efficiency column order. Open one of tonight's ROs with a timed
+  line on a code with 3+ timed jobs: a "… fastest of N … jobs you've timed"
+  line must show.
+- Dashboard Averages (2026-10-04): switch the Flagged hours chart to **Avg**;
+  under the readout a mono line reads "n=9 Thursdays · range 1.0–9.0h" (plus
+  "· small sample, take it loosely" under 4 days). The range must bracket the
+  average shown above it.
 
 ### 8b. Gamification widgets (shipped 2026-07-14)
 The dashboard has three cards, sharing one "Streak, career, snapshot" zone;
@@ -2728,9 +2784,14 @@ NO closed RO that day:
 - The dashboard **Today** panel shows "2.5h on 1 open ticket" under the 0.0h
   flag; the **This Week** / **Pay Period** rows of the "Flagged to date" table
   show "10.5h on 1 open ticket" as a sub-row.
-  The FLAG figures above those lines must NOT move. Efficiency must NOT move
-  (record the % before and after). A "pending efficiency" does not exist and
-  must not be reported as missing.
+  The FLAG figures above those lines must NOT move. On a day that already had
+  flag hours logged, efficiency must not move either (record the % before and
+  after). On a previously-empty scheduled day, settling it with open-ticket
+  hours correctly brings that day's scheduled hours into the denominator for
+  the first time, so efficiency will drop: verify the move is
+  denominator-only by checking the numerator is unchanged (same rule as §7b:
+  "the numerator must not move — the denominator sometimes correctly does").
+  A "pending efficiency" does not exist and must not be reported as missing.
 - **/pay-period** → "What did the work cost me?" → the unpaid list, and
   **/insights** → the leak board: open-ticket hours must appear on NEITHER.
   They are not unpaid; they are paid late. Waiting-on-parts hours logged on the

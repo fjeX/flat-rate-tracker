@@ -26,15 +26,21 @@ import { withPt } from "@/components/ui/Figure";
 import { DashIcon } from "./DashIcon";
 import { Zone } from "@/components/ui/Zone";
 import { RoTag } from "./RoTag";
+import type { JobTiming } from "@/lib/rankings";
 
 export function RecentRos({
   entries,
   library = [],
   rates = {},
+  jobTimings,
 }: {
   entries: Entry[];
   library?: OpCode[];
   rates?: RateMap;
+  /** Every measured job in the dashboard's 90-day fetch — the pool the RO
+   * detail ranks a line against ("3rd fastest of 9 BRK-F jobs … in the last 90
+   * days"). Required: the data is right there, so omitting it is a wiring bug. */
+  jobTimings: JobTiming[];
 }) {
   // `addLine` carries WHY the dialog opened: tapping the RO number is "show me
   // this RO", tapping Upsell is "I need to add a line to it". Same dialog,
@@ -136,6 +142,8 @@ export function RecentRos({
           entry={openEntry}
           library={library}
           rates={rates}
+          jobTimings={jobTimings}
+          jobTimingsScope="in the last 90 days"
           autoOpenAddLine={open?.addLine}
           onClose={() => setOpen(null)}
         />

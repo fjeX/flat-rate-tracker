@@ -7,6 +7,7 @@ import { useId, useState } from "react";
 import type { Entry } from "@/lib/types";
 import { addDays, endOfMonth, getPeriodForDate } from "@/lib/periods";
 import { fmtHours, fmtPct, spanEfficiency, type DayDenom } from "@/lib/stats";
+import { barRankSentence } from "@/lib/rankings";
 import { ReadoutEfficiency } from "@/components/ui/ReadoutEfficiency";
 import { withPt } from "@/components/ui/Figure";
 import { Zone } from "@/components/ui/Zone";
@@ -342,6 +343,34 @@ export function HistoryBarChart({
     denomByDay ? spanEfficiency(entries, denomByDay, start, end) : null;
   const activeEff = activeBar ? effOf(activeBar.start, activeBar.end) : null;
 
+  // "4th highest efficiency of 31 weeks". Efficiency comes ONLY from effOf (spanEfficiency), the
+  // readout's own call, so the rank and the figure beside it cannot disagree.
+  // Pool = bars of this tab that HAVE an efficiency (null, or no flag on the
+  // counted days = the readout shows none, so it is not ranked). The in-progress
+  // bar (isCurrent: today / this period / this month) is neither ranked nor in
+  // the pool — it is still being earned, and ranking half a period against whole
+  // ones would make a good morning look like a bad month. `bars` is built from
+  // every RO on the account (chartRows), not the paged list.
+  // Ranked on the percent as SHOWN (ReadoutEfficiency's rounding): two bars
+  // that both read "96%" are tied, not 3rd and 4th.
+  const shownPct = (flag: number, denom: number) => Math.round((flag / denom) * 100);
+  const rankSentence = (() => {
+    if (!activeBar || activeBar.isCurrent || !activeEff || activeEff.flagHours <= 0) return null;
+    const pool: number[] = [];
+    for (const b of bars) {
+      if (b.isCurrent) continue;
+      const e = effOf(b.start, b.end);
+      if (e && e.flagHours > 0) pool.push(shownPct(e.flagHours, e.denom.hours));
+    }
+    const unit = unitName(filter, customByDay(customRange));
+    return barRankSentence(
+      shownPct(activeEff.flagHours, activeEff.denom.hours),
+      pool,
+      unit === "period" ? "pay period" : unit,
+      filter === "week" || filter === "today" ? undefined : totalCaption(filter),
+    );
+  })();
+
   const chartBars: ChartBar[] = bars.map((b, i) => ({
     label: b.label,
     longLabel: b.longLabel,
@@ -380,6 +409,7 @@ export function HistoryBarChart({
               <ReadoutEfficiency flagHours={activeEff.flagHours} denom={activeEff.denom} />
             )}
           </div>
+          {rankSentence && <p className="chart-spread">{rankSentence}</p>}
 
           {/* Keyed by filter so bar-rise replays on a user-initiated range
               switch (new data by intent) but not on an unrelated parent

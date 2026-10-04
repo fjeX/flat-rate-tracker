@@ -5,6 +5,8 @@ import {
   displayedUses,
   bigJobCoverage,
   bigJobPerformance,
+  bigJobReason,
+  ratioRangeLabel,
   formatRatio,
   gainBoard,
   isMeasuredLine,
@@ -1457,5 +1459,73 @@ describe("OP_CODE_ORIGIN_LABEL", () => {
     for (const label of Object.values(OP_CODE_ORIGIN_LABEL)) {
       expect(label).not.toMatch(/one-time|once|single/i);
     }
+  });
+});
+
+describe("per-job spread on a row", () => {
+  const big = (id: string, flag: number, actual: number | null) =>
+    entry([line({ id, opCodeId: "oc1", flagHours: flag, actualHours: actual })], { id });
+
+  it("carries min/max over measured lines only", () => {
+    const rows = bigJobPerformance(
+      [
+        big("a", 4, 3.2), // 0.8
+        big("b", 4, 5.6), // 1.4
+        big("c", 4, 4), // 1.0
+        big("d", 4, null), // untimed: out
+        big("e", 5, 0.2), // implausible (<15% of book): out
+      ],
+      library,
+    );
+    expect(rows[0].timedUses).toBe(3);
+    expect(rows[0].minRatio).toBeCloseTo(0.8, 5);
+    expect(rows[0].maxRatio).toBeCloseTo(1.4, 5);
+    expect(ratioRangeLabel(rows[0])).toBe("range 0.80–1.40×");
+  });
+
+  it("shows no range for a single reading", () => {
+    const rows = bigJobPerformance([big("a", 4, 3)], library);
+    expect(rows[0].minRatio).toBe(rows[0].maxRatio);
+    expect(ratioRangeLabel(rows[0])).toBeNull();
+  });
+});
+
+describe("bigJobReason", () => {
+  const rowOf = (jobs: Array<[number, number]>) =>
+    bigJobPerformance(
+      jobs.map(([f, a], i) =>
+        entry([line({ id: `r${i}`, opCodeId: "oc1", flagHours: f, actualHours: a })], {
+          id: `r${i}`,
+        }),
+      ),
+      library,
+    )[0];
+
+  it("says how many minutes a job beats the book by", () => {
+    // 5 jobs, each 0.3h under a 3h book
+    const r = rowOf(Array(5).fill([3, 2.7]));
+    expect(bigJobReason(r)).toBe("You beat the book by 18 min a job over 5 timed.");
+  });
+
+  it("names a single long job only when the rest are at or under book", () => {
+    const r = rowOf([[2, 1.8], [2, 2], [2, 3.5]]);
+    expect(bigJobReason(r)).toMatch(/over the book a job across 3 timed — mostly one long one\.$/);
+  });
+
+  it("does not blame one job when the others are over too", () => {
+    const r = rowOf([[2, 2.6], [2, 2.5], [2, 3.5]]);
+    expect(bigJobReason(r)).not.toMatch(/mostly one long one/);
+  });
+
+  it("asks for more readings on a provisional row", () => {
+    const r = rowOf([[3, 2.4]]);
+    expect(r.confident).toBe(false);
+    expect(bigJobReason(r)).toBe(
+      "One timed job, 36 min under the book — 2 more readings before it counts as a pattern.",
+    );
+  });
+
+  it("never calls it efficiency", () => {
+    expect(bigJobReason(rowOf(Array(4).fill([2, 2.9])))).not.toMatch(/efficien|%/i);
   });
 });

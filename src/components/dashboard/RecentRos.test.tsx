@@ -47,19 +47,19 @@ function entry(over: Record<string, unknown> = {}): Entry {
 
 describe("RecentRos", () => {
   it("shows the empty state with a way to log an RO", () => {
-    render(<RecentRos entries={[]} />);
+    render(<RecentRos jobTimings={[]} entries={[]} />);
     expect(screen.getByText("No ROs yet")).toBeTruthy();
     const link = screen.getByText(/Log an RO/);
     expect(link.closest("a")?.getAttribute("href")).toBe("/log");
   });
 
   it("links the zone to History", () => {
-    render(<RecentRos entries={[entry()]} library={LIBRARY} />);
+    render(<RecentRos jobTimings={[]} entries={[entry()]} library={LIBRARY} />);
     expect(screen.getByText("View all").closest("a")?.getAttribute("href")).toBe("/history");
   });
 
   it("prints the RO number, vehicle, hours and each op code as flag/actual", () => {
-    render(<RecentRos entries={[entry()]} library={LIBRARY} />);
+    render(<RecentRos jobTimings={[]} entries={[entry()]} library={LIBRARY} />);
     expect(screen.getByRole("button", { name: "RO 909910086" }).textContent).toBe("#909910086");
     expect(document.querySelector(".tag-veh")?.textContent).toBe("2017 Ford F-150");
     expect(document.querySelector(".tag-hrs")?.textContent).toBe("2.4h");
@@ -69,34 +69,34 @@ describe("RecentRos", () => {
   });
 
   it("draws one duration bar per RO, hidden from assistive tech", () => {
-    render(<RecentRos entries={[entry(), entry({ id: "e2", roNumber: "2" })]} library={LIBRARY} />);
+    render(<RecentRos jobTimings={[]} entries={[entry(), entry({ id: "e2", roNumber: "2" })]} library={LIBRARY} />);
     const bars = document.querySelectorAll(".dur");
     expect(bars.length).toBe(2);
     expect(bars[0].getAttribute("aria-hidden")).toBe("true");
   });
 
   it("puts the date and the logged time together when there is a time", () => {
-    render(<RecentRos entries={[entry({ loggedTime: "14:02" })]} library={LIBRARY} />);
+    render(<RecentRos jobTimings={[]} entries={[entry({ loggedTime: "14:02" })]} library={LIBRARY} />);
     expect(document.querySelector(".tag-when")?.textContent).toMatch(/·\s*2:02\s*PM/);
   });
 
   it("shows the date alone when no time was recorded", () => {
-    render(<RecentRos entries={[entry()]} library={LIBRARY} />);
+    render(<RecentRos jobTimings={[]} entries={[entry()]} library={LIBRARY} />);
     expect(document.querySelector(".tag-when")?.textContent).not.toContain("·");
   });
 
   it("marks an open ticket with an Open tag", () => {
-    render(<RecentRos entries={[entry({ status: "open" })]} library={LIBRARY} />);
+    render(<RecentRos jobTimings={[]} entries={[entry({ status: "open" })]} library={LIBRARY} />);
     expect(document.querySelector(".tag-head .badge")?.textContent).toBe("Open");
   });
 
   it("offers Upsell on every tag when there is a library", () => {
-    render(<RecentRos entries={[entry()]} library={LIBRARY} />);
+    render(<RecentRos jobTimings={[]} entries={[entry()]} library={LIBRARY} />);
     expect(screen.getByRole("button", { name: "Add an upsell to RO 909910086" })).toBeTruthy();
   });
 
   it("offers no Upsell without a library: the picker would open empty", () => {
-    render(<RecentRos entries={[entry()]} library={[]} />);
+    render(<RecentRos jobTimings={[]} entries={[entry()]} library={[]} />);
     expect(screen.queryByRole("button", { name: /upsell/i })).toBeNull();
   });
 });

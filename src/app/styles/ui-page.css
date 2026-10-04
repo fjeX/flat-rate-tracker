@@ -215,6 +215,8 @@
 .chart-headline b { font-size: var(--fs-fig); font-weight: 600; letter-spacing: var(--track-fig); line-height: 1.1; }
 .chart-headline b .unit { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0; margin-left: 2px; }
 .chart-headline .what { color: var(--ink-3); font-size: var(--fs-label); }
+/* Avg readout's sample size and range — same mono/label sizing as the readout efficiency */
+.chart-spread { margin: var(--s1) 0 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--fs-label); font-weight: 600; letter-spacing: var(--track-num); color: var(--ink-2); }
 .chart { position: relative; padding-left: 30px; margin-top: var(--s5); }
 .chart-plot { position: relative; height: 152px; border-bottom: var(--w-edge) solid var(--ink); }
 .chart-grid { position: absolute; left: 0; right: 0; border-top: var(--w-hair) solid var(--line-soft); }

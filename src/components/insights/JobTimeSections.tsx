@@ -10,16 +10,20 @@
 //
 // They are deliberately adjacent so the page reads as one idea with two methods,
 // rather than as a feature and an apology for a missing feature.
+import { Fragment } from "react";
 import { Zone } from "@/components/ui/Zone";
 import { Table, Td, Th } from "@/components/ui/Table";
 import { withPt } from "@/components/ui/Figure";
 import { fmtHours } from "@/lib/format";
 import {
+  bigJobReason,
   formatRatio,
+  ratioRangeSpan,
   ratioTier,
   type BigJobCoverage,
   type BigJobRow,
 } from "@/lib/insights";
+import { CompareBars } from "@/components/insights/CompareBars";
 import { OriginTag } from "@/components/insights/OriginTag";
 import { HEAVY_FLAG_HOURS } from "@/lib/mix";
 import type { Inference } from "@/lib/time-inference";
@@ -74,6 +78,8 @@ export function BigJobsSection({
             <tbody>
               {measured.map((row) => {
                 const tier = ratioTier(row.ratio);
+                const yourAvg = row.actualTotal / row.timedUses;
+                const bookAvg = row.flagTotal / row.timedUses;
                 // A provisional row is stated in muted ink rather than a
                 // verdict colour. Green on one reading is a claim the data
                 // cannot support. A "warn" tier is ink too: colour is state,
@@ -85,23 +91,56 @@ export function BigJobsSection({
                     : tier === "bad"
                       ? "ins-bad"
                       : "";
+                // Two rows per job: the figures, then the bars + reason across
+                // the full width. Inside the Job cell the bars had no room on a
+                // phone — the three figure columns squeezed the track to zero.
                 return (
-                  <tr key={row.key}>
-                    <Td>
-                      <span className="ins-row-code">{row.code}</span>
-                      <OriginTag row={row} />
-                      <span className="ins-cell-sub">
-                        {row.timedUses} timed
-                        {row.hasEstimate && " · includes an estimate"}
-                        {!row.confident && ` · ${row.needsMore} more to call it`}
-                      </span>
-                    </Td>
-                    <Td num dim>{fmtHours(row.flagTotal)}h</Td>
-                    <Td num dim>{fmtHours(row.actualTotal)}h</Td>
-                    <Td num className={tone || undefined}>
-                      {row.ratio === null ? "—" : `${formatRatio(row.ratio)}×`}
-                    </Td>
-                  </tr>
+                  <Fragment key={row.key}>
+                    <tr className="ins-cmp-head">
+                      <Td>
+                        <span className="ins-row-code">{row.code}</span>
+                        <OriginTag row={row} />
+                        {/* n= IS the timed count (it replaced the old "N timed"
+                            line — one count, not two). The range is over the same
+                            lines, and a single reading has no spread to show. */}
+                        <span className="ins-cell-sub">
+                          <span className="ins-stat">
+                            n={row.timedUses}
+                            {/* The range may drop to its own line on a phone, but
+                                never split mid-number ("0.73–" / "1.32×"). */}
+                            {ratioRangeSpan(row) && (
+                              <> · range <span className="ins-stat-range">{ratioRangeSpan(row)}</span></>
+                            )}
+                          </span>
+                          {row.hasEstimate && " · includes an estimate"}
+                        </span>
+                      </Td>
+                      <Td num dim>{fmtHours(row.flagTotal)}h</Td>
+                      <Td num dim>{fmtHours(row.actualTotal)}h</Td>
+                      <Td num className={tone || undefined}>
+                        {row.ratio === null ? "—" : `${formatRatio(row.ratio)}×`}
+                      </Td>
+                    </tr>
+                    <tr className="ins-cmp-body">
+                      <td colSpan={4}>
+                        {/* Per-job averages on one shared scale. Job TIME against
+                            the book, not efficiency — hence "per job", never a %. */}
+                        <CompareBars
+                          dim={!row.confident}
+                          fmt={fmtHours}
+                          series={[
+                            { key: "you", label: "You", hours: yourAvg, tone: "accent" },
+                            { key: "book", label: "Book", hours: bookAvg, tone: "ink" },
+                          ]}
+                        />
+                        <span className="sr-only">
+                          Average per timed job: you {fmtHours(yourAvg)} hours, book{" "}
+                          {fmtHours(bookAvg)} hours.
+                        </span>
+                        <span className="ins-reason">{bigJobReason(row)}</span>
+                      </td>
+                    </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

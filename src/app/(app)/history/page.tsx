@@ -14,6 +14,7 @@ import { ratesToMap } from "@/lib/earnings";
 import { dailyDenominators } from "@/lib/stats";
 import { parseHistoryParams } from "@/lib/history-url";
 import { HistoryView } from "@/components/history/HistoryView";
+import { toJobTimings } from "@/lib/rankings";
 
 export default async function HistoryPage({
   searchParams,
@@ -100,6 +101,7 @@ export default async function HistoryPage({
       weekEnd={endOfWeek(today, weekStartDay)}
       denomByDay={denomByDay}
       chartRows={chartRows}
+      jobTimings={toJobTimings(allEntries)}
       monthStart={startOfMonth(today)}
       monthEnd={endOfMonth(today)}
       weekStartDay={weekStartDay}

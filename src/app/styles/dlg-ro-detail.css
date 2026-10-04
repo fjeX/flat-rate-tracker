@@ -40,6 +40,9 @@
 }
 .rod-more:focus-visible { outline: var(--w-heavy) solid var(--focus); outline-offset: -3px; }
 .rod-earn { margin-top: var(--s1); font-family: var(--font-num); font-size: var(--fs-label); font-weight: 600; color: var(--good); }
+/* A sentence, so the UI face: mono at body size read heavier than the line's
+   own description above it. */
+.rod-rank { margin-top: var(--s1); font-family: var(--font-ui); font-size: var(--fs-label); color: var(--ink-2); }
 .rod-rework { margin-top: var(--s1); font-size: var(--fs-label); font-weight: 600; color: var(--ink-2); }
 .rod-line-note { margin-top: var(--s1); font-size: var(--fs-label); font-style: italic; color: var(--ink-2); }
 .rod-table .sfield.is-inset { margin-left: 0; margin-right: 0; }

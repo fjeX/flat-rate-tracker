@@ -15,6 +15,7 @@
 // to "how efficient was I", which is exactly how the last round of drift
 // started: a weekday with one unclocked heavy day would read 300%.
 import { HEAVY_FLAG_HOURS } from "./mix";
+import { fmtHours } from "./format";
 import {
   computeEfficiency,
   emptyUnpairedByReason,
@@ -91,6 +92,21 @@ export type OpCodePerformance = {
    * fourth thing, and the only one the tech can repair by editing the RO.
    */
   implausibleUses: number;
+  /**
+   * The spread behind `ratio`: the lowest and highest PER-JOB actual÷flag among
+   * the same lines isMeasuredLine let into flagTotal/actualTotal — the same
+   * population, so "n=4, range 0.8–1.4×" describes exactly what the ratio
+   * averaged. null when nothing was measured. (`ratio` itself is a weighted
+   * average — total actual ÷ total flag — so it always sits inside this range.)
+   */
+  minRatio: number | null;
+  maxRatio: number | null;
+  /**
+   * The measured line with the highest per-job ratio, kept whole (not just its
+   * ratio) so a caller can ask "what would the average be without it?" — the
+   * only honest basis for saying one long job is what's dragging a code over.
+   */
+  peak: { flag: number; actual: number } | null;
 };
 
 /**
@@ -336,6 +352,16 @@ function groupKey(
 }
 
 /**
+ * A line's grouping key alone — the identity every per-code figure groups by,
+ * exported so rankings.ts compares like with like without a second definition.
+ * The key never depends on the library (a deleted library code keeps its id),
+ * only the display code and description do, so an empty map is exact here.
+ */
+export function opCodeGroupId(line: Entry["opCodes"][number]): string | null {
+  return groupKey(line, new Map())?.key ?? null;
+}
+
+/**
  * Per-op-code performance across every entry passed in, worst first.
  *
  * Order is unpaid rework → worst ratio → best ratio → never timed. Rework leads
@@ -373,6 +399,9 @@ export function opCodePerformance(
           unpaidHours: 0,
           unpaidUses: 0,
           implausibleUses: 0,
+          minRatio: null,
+          maxRatio: null,
+          peak: null,
         };
         byKey.set(id.key, row);
       }
@@ -389,6 +418,12 @@ export function opCodePerformance(
         row.timedUses += 1;
         row.flagTotal += line.flagHours;
         row.actualTotal += line.actualHours as number;
+        const lineRatio = (line.actualHours as number) / line.flagHours;
+        if (row.minRatio === null || lineRatio < row.minRatio) row.minRatio = lineRatio;
+        if (row.maxRatio === null || lineRatio > row.maxRatio) {
+          row.maxRatio = lineRatio;
+          row.peak = { flag: line.flagHours, actual: line.actualHours as number };
+        }
       } else if (
         line.actualHours !== null &&
         line.actualHours > 0 &&
@@ -451,6 +486,31 @@ export function opCodePerformance(
  */
 export function formatRatio(ratio: number): string {
   return ratio > 0 && ratio < 0.01 ? "<0.01" : ratio.toFixed(2);
+}
+
+/**
+ * "range 0.80–1.40×" — the spread of per-job ratios behind a row's average, or
+ * null when there is no spread to show (nothing measured, or a single reading,
+ * where min and max are the same number and "range" would be decoration).
+ */
+export function ratioRangeLabel(
+  row: Pick<OpCodePerformance, "timedUses" | "minRatio" | "maxRatio">,
+): string | null {
+  const span = ratioRangeSpan(row);
+  return span && `range ${span}`;
+}
+
+/** Just the "0.73–1.32×" part of ratioRangeLabel, for a layout that must keep
+ * the two numbers together while letting the word wrap away from them. */
+export function ratioRangeSpan(
+  row: Pick<OpCodePerformance, "timedUses" | "minRatio" | "maxRatio">,
+): string | null {
+  if (row.timedUses < 2 || row.minRatio === null || row.maxRatio === null) return null;
+  const lo = formatRatio(row.minRatio);
+  const hi = formatRatio(row.maxRatio);
+  // "range 1.00–1.00×" is no spread at all, said twice.
+  if (lo === hi) return null;
+  return `${lo}–${hi}×`;
 }
 
 export type RatioTier = "good" | "warn" | "bad";
@@ -1082,6 +1142,49 @@ export function bigJobPerformance(
     needsMore: Math.max(0, MIN_USES_TO_JUDGE - row.timedUses),
     hasEstimate: estimatedKeys.has(row.key),
   }));
+}
+
+/** Minutes under an hour, tenths of an hour above — the unit a tech says it in. */
+function fmtGap(hours: number): string {
+  const abs = Math.abs(hours);
+  return abs < 1 ? `${Math.round(abs * 60)} min` : `${fmtHours(abs)}h`;
+}
+
+/**
+ * One plain sentence for a Big jobs row, built only from what the row holds.
+ * Deterministic: no model, and no claim the numbers don't carry.
+ *
+ * Per-job gap = (actualTotal − flagTotal) ÷ timedUses, i.e. how far the average
+ * timed job lands from its own book time. This is a JOB-TIME comparison, not
+ * efficiency — the word and the percentage stay off it.
+ *
+ * "mostly one long one" is only said when it is arithmetic: 3+ timed jobs, the
+ * code runs over, and the REMAINING jobs — everything but the single
+ * highest-ratio one — come in at or under book. Anything looser and the row just
+ * states the gap.
+ */
+export function bigJobReason(row: BigJobRow): string {
+  const n = row.timedUses;
+  const gap = (row.actualTotal - row.flagTotal) / n;
+  const side = gap < 0 ? "under" : "over";
+  if (!row.confident) {
+    const lead =
+      n === 1
+        ? "One timed job"
+        : `${n} timed jobs`;
+    const where =
+      Math.abs(gap) < 0.05 ? "right on the book" : `${fmtGap(gap)} ${side} the book`;
+    return `${lead}, ${where} — ${row.needsMore} more reading${row.needsMore === 1 ? "" : "s"} before it counts as a pattern.`;
+  }
+  if (Math.abs(gap) < 0.05) return `Right on the book across ${n} timed.`;
+  if (gap < 0) return `You beat the book by ${fmtGap(gap)} a job over ${n} timed.`;
+  let tail = "";
+  if (n >= 3 && row.peak) {
+    const restFlag = row.flagTotal - row.peak.flag;
+    const restActual = row.actualTotal - row.peak.actual;
+    if (restFlag > 0 && restActual <= restFlag) tail = " — mostly one long one";
+  }
+  return `Running ${fmtGap(gap)} over the book a job across ${n} timed${tail}.`;
 }
 
 /**

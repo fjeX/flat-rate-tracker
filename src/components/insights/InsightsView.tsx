@@ -53,6 +53,7 @@ import {
   leakBoard,
   opCodePerformance,
   opCodeState,
+  ratioRangeLabel,
   periodTrend,
   ratioOrder,
   ratioTier,
@@ -91,6 +92,26 @@ import type {
 const COLLAPSED_ROWS = 15;
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+/**
+ * The Strongest day caption. Spelled out in full because the old code bolted an
+ * "s" onto the 3-letter label ("Thus", "Tues"). One day is "Thursday, over 1
+ * day" — "Thursdays" would claim a pattern a single sample can't show.
+ */
+export function strongestDaySub(weekday: number, days: number): string {
+  const name = WEEKDAY_NAMES[weekday];
+  return `${days === 1 ? name : `${name}s`}, over ${days} ${days === 1 ? "day" : "days"}`;
+}
 
 /**
  * The tallest trend bar, as a percentage of the plot's height (phase 5: the
@@ -326,7 +347,7 @@ function FindingLede({
         <HeadCell
           label="Strongest day"
           value={bestDay ? withPt(fmtPct(bestDay.efficiency)) : "—"}
-          sub={bestDay ? `${WEEKDAY_LABELS[bestDay.weekday]}s, over ${bestDay.days} ${bestDay.days === 1 ? "day" : "days"}` : "no measured days yet"}
+          sub={bestDay ? strongestDaySub(bestDay.weekday, bestDay.days) : "no measured days yet"}
         />
         <HeadCell
           label="Last period"
@@ -554,6 +575,10 @@ export function TimeGoesSection({
                   {displayedUses(row)} {displayedUses(row) === 1 ? "use" : "uses"}
                   {shownHours !== null &&
                     ` · ${fmtHours(shownHours.flag)}h flag → ${fmtHours(shownHours.actual)}h actual`}
+                  {/* Same lines as the ratio, so the spread belongs to it. */}
+                  {state === "measured" && ratioRangeLabel(row) && (
+                    <span className="ins-stat"> · {ratioRangeLabel(row)}</span>
+                  )}
                 </p>
               </div>
             );
@@ -597,7 +622,12 @@ export function TimeGoesSection({
                   </Td>
                   <Td num>
                     {state === "measured" ? (
-                      <RatioTag ratio={row.ratio as number} tier={tier} />
+                      <>
+                        <RatioTag ratio={row.ratio as number} tier={tier} />
+                        {ratioRangeLabel(row) && (
+                          <span className="ins-cell-sub ins-stat">{ratioRangeLabel(row)}</span>
+                        )}
+                      </>
                     ) : state === "unpaid" ? (
                       // No ratio, and deliberately no fabricated one — the flag
                       // is zero, so there is nothing to divide by. What the row

@@ -572,6 +572,9 @@ export type SnapshotStats = {
   // sum(actual) / sum(flag) over lines that have actual hours; null when
   // fewer than MIN_BOOK_LINES lines carry actuals (timer not used enough).
   avgVsBook: number | null;
+  // How many timed lines avgVsBook averaged (the bookLines count behind it).
+  // Absent on snapshots frozen before this field — render nothing then, never 0.
+  avgVsBookLines?: number;
   // Unpaid rework hours inside this snapshot's range. Reported separately
   // rather than folded into avgVsBook: a comeback has no book time to be
   // measured against, so mixing it in would answer a different question than

@@ -24,11 +24,14 @@ import {
   setLineUpsellAction,
 } from "@/app/actions/entries";
 import { actionErrorMessage } from "@/lib/action-error";
+import { jobRankSentences, type JobTiming } from "@/lib/rankings";
 
 export function RoDetailModal({
   entry,
   library = [],
   rates = {},
+  jobTimings,
+  jobTimingsScope,
   onClose,
   onDeleted,
   autoOpenAddLine = false,
@@ -36,6 +39,16 @@ export function RoDetailModal({
   entry: Entry;
   library?: OpCode[];
   rates?: RateMap;
+  /**
+   * Every measured job the parent has loaded (toJobTimings), so each timed line
+   * can say where it sits among the tech's other jobs on the same op code.
+   * Optional BY ABSENCE: the pages that only hold one RO or one pay period
+   * (Timer, Log, Open Tickets, Pay Period) don't pass it and the lines stay
+   * quiet — a rank over a one-period slice would be a claim about nothing.
+   */
+  jobTimings?: JobTiming[];
+  /** Names a pool that is not all-time, e.g. "in the last 90 days". */
+  jobTimingsScope?: string;
   onClose: () => void;
   /**
    * Open with the op-code picker already up and the new line pre-marked as an
@@ -64,6 +77,19 @@ export function RoDetailModal({
       [...counts.entries()].filter(([, n]) => n > 1).map(([c]) => c),
     );
   }, [entry.opCodes, libraryById]);
+  // Deterministic ranking sentences, keyed by line id (see lib/rankings.ts).
+  const rankByLine = useMemo(() => {
+    if (!jobTimings) return new Map<string, string>();
+    return jobRankSentences(
+      entry,
+      jobTimings,
+      (line) => {
+        const c = displayCode(line, libraryById);
+        return c === NO_CODE ? null : c;
+      },
+      jobTimingsScope,
+    );
+  }, [entry, jobTimings, jobTimingsScope, libraryById]);
   const totalActual = entry.opCodes.reduce(
     (s, oc) => s + (oc.actualHours ?? 0),
     0,
@@ -160,6 +186,7 @@ export function RoDetailModal({
                     isOnly={entry.opCodes.length === 1}
                     onDeleted={() => router.refresh()}
                     earnings={showMoney ? lineEarnings(line, rates) : null}
+                    rank={rankByLine.get(line.id) ?? null}
                   />
                 ))}
               </tbody>
@@ -318,6 +345,7 @@ function LineRow({
   isOnly,
   onDeleted,
   earnings,
+  rank,
 }: {
   line: EntryOpCode;
   libraryById: Map<string, OpCode>;
@@ -328,6 +356,8 @@ function LineRow({
   isOnly: boolean;
   onDeleted: () => void;
   earnings: number | null; // null when rates are off or this line's type is unpriced
+  /** "3rd fastest of 9 BRK-F jobs you've timed", or null when there's nothing to say. */
+  rank: string | null;
 }) {
   const router = useRouter();
   const [text, setText] = useState<string>(
@@ -507,6 +537,7 @@ function LineRow({
           )}
         </div>
         {description && <ExpandableDescription text={description} />}
+        {rank && <div className="rod-rank">{rank}</div>}
         {/* A comeback line reads 0.0h and, with rates on, "$0.00" in the
             same green used for real money — which looks like a mistake or a
             bug rather than the point. Say what it is instead: the zero is

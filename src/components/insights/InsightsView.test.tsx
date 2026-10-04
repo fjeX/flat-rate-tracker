@@ -22,6 +22,9 @@ function row(over: Partial<OpCodePerformance> & { key: string }): OpCodePerforma
     unpaidHours: 0,
     unpaidUses: 0,
     implausibleUses: 0,
+    minRatio: null,
+    maxRatio: null,
+    peak: null,
     ...over,
   };
 }

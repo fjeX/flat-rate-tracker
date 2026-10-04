@@ -103,26 +103,46 @@ export async function listEntries(
   // Built inside retryOnce so the second attempt issues a genuinely new
   // request rather than re-awaiting a spent builder. See retryOnce for why a
   // freshly-minted token can be refused as "issued at future".
-  const data = await retryOnce(async () => {
-    let q = supabase
-      .from("entries")
-      .select("*, entry_op_codes(*)")
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false });
+  const page = (start: number, count: number) =>
+    retryOnce(async () => {
+      let q = supabase
+        .from("entries")
+        .select("*, entry_op_codes(*)")
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false })
+        // Tiebreaker so pages never overlap or skip: an import writes many
+        // rows with one created_at, and range() over a non-unique order is
+        // free to return them in a different order on each request.
+        .order("id", { ascending: true });
 
-    if (filter.from) q = q.gte("date", filter.from);
-    if (filter.to) q = q.lte("date", filter.to);
-    if (filter.limit !== undefined) {
-      const start = filter.offset ?? 0;
-      q = q.range(start, start + filter.limit - 1);
-    }
+      if (filter.from) q = q.gte("date", filter.from);
+      if (filter.to) q = q.lte("date", filter.to);
+      q = q.range(start, start + count - 1);
 
-    const { data, error } = await q;
-    if (error) throw error;
-    return data;
-  });
-  return (data ?? []).map(toEntry);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    });
+
+  if (filter.limit !== undefined) {
+    return (await page(filter.offset ?? 0, filter.limit)).map(toEntry);
+  }
+
+  // No limit means EVERY matching row. PostgREST silently caps a response at
+  // max_rows (1000 on the VM), so an unpaged read of an account past 1000 ROs
+  // came back short with no error: History's bars and efficiency, the CSV
+  // export and the ranking pools all undercounted. Page until a short page.
+  const out: Entry[] = [];
+  for (let start = 0; ; start += LIST_PAGE) {
+    const rows = await page(start, LIST_PAGE);
+    out.push(...rows.map(toEntry));
+    if (rows.length < LIST_PAGE) break;
+  }
+  return out;
 }
+
+/** Page size for unlimited reads. At or under PostgREST's max_rows (1000). */
+const LIST_PAGE = 1000;
 
 // retryOnce: the (app) layout fans this out per running timer slot, so it is
 // on the same pre-page path as listTimerSlots.
