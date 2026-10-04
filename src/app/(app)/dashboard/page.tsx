@@ -35,6 +35,8 @@ import { toJobTimings } from "@/lib/rankings";
 import { GuestSyncEffect } from "@/components/guest/GuestSyncEffect";
 import { Badge } from "@/components/ui/Badge";
 import { SyncedNote } from "@/components/dashboard/SyncedNote";
+import { DashboardLightAsk } from "@/components/dashboard/DashboardLightAsk";
+import { resolveLightAsk } from "@/lib/light-ask";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -77,7 +79,13 @@ function timeAgo(iso: string): string {
 // Page
 // ---------------------------------------------------------------------------
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  // `?ask=<lineId>`: the one-shot pointer a plain Save RO leaves behind.
+  searchParams: Promise<{ ask?: string | string[] }>;
+}) {
+  const { ask: askParam } = await searchParams;
   // When this render's data was read; SyncedNote counts "synced N min ago" from it.
   const fetchedAt = new Date().toISOString();
   const supabase = await createClient();
@@ -99,6 +107,15 @@ export default async function DashboardPage() {
   const monthEnd = endOfMonth(today);
   const weekStart = startOfWeek(today, weekStartDay);
   const weekEnd = endOfWeek(today, weekStartDay);
+
+  // The one-shot "how long did that take?" pointer from a plain Save RO.
+  // Resolved here against the signed-in user's own rows, never trusted from the
+  // URL: an unknown id, someone else's line, an already-timed line, or a tech who
+  // has not opted in all resolve to null and render nothing.
+  const lightAsk = await resolveLightAsk(supabase, askParam, {
+    optedIn: settings.shareLaborTimes,
+    library: askParam ? await db.listOpCodes(supabase) : [],
+  });
 
   // Derived from `today` (already timezone-corrected) rather than by subtracting
   // 90 × 86_400_000 ms from now. Those differ: a fixed 90×24h span crosses a DST
@@ -331,6 +348,11 @@ export default async function DashboardPage() {
         </div>
         <Badge tone={pillTone}>{pillLabel}</Badge>
       </div>
+
+      {/* Always rendered: it latches the first candidate, because the write's own
+          revalidation re-resolves this to null and must not unmount the
+          confirmation. */}
+      <DashboardLightAsk candidate={lightAsk} />
 
       <div className="dash">
         <div>

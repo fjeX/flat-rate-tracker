@@ -22,7 +22,10 @@ vi.mock("@/app/actions/entries", () => ({
 }));
 vi.mock("@/app/actions/op-codes", () => ({ createLibraryOpCode: vi.fn() }));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));
-vi.mock("@/lib/retro-capture", () => ({ retroCandidates: () => [] }));
+vi.mock("@/lib/retro-capture", () => ({
+  retroCandidates: () => [],
+  lightRetroCandidate: () => null,
+}));
 vi.mock("@/lib/haptics", () => ({ tap: vi.fn() }));
 
 function baseEntry(overrides: Partial<Entry> = {}): Entry {
@@ -44,7 +47,7 @@ function baseEntry(overrides: Partial<Entry> = {}): Entry {
 
 function setup(existingEntry: Entry) {
   return renderHook(() =>
-    useLogRoForm({
+    useLogRoForm({ shareLaborTimes: false,
       initialOpCodes: [],
       existingEntry,
       trackRoTime: true,

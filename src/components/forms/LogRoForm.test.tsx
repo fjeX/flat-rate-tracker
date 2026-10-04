@@ -55,7 +55,10 @@ vi.mock("./closeDefaultsStall", async (importOriginal) => ({
   reloadPage: () => reloadPage(),
 }));
 vi.mock("@/app/actions/entry-photos", () => ({ uploadEntryPhoto: vi.fn() }));
-vi.mock("@/lib/retro-capture", () => ({ retroCandidates: () => [] }));
+vi.mock("@/lib/retro-capture", () => ({
+  retroCandidates: () => [],
+  lightRetroCandidate: () => null,
+}));
 vi.mock("@/lib/haptics", () => ({ tap: vi.fn() }));
 
 beforeEach(() => {
@@ -92,7 +95,7 @@ describe("LogRoForm — backing out of the duplicate prompt", () => {
       { id: "existing-1", date: "2026-07-26", vehicleSummary: "2021 Toyota Camry" },
     ]);
 
-    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} checkDuplicates />);
+    render(<LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} checkDuplicates />);
 
     typeRo("55102");
 
@@ -123,7 +126,7 @@ describe("LogRoForm — backing out of the duplicate prompt", () => {
       { id: "existing-1", date: "2026-07-26", vehicleSummary: "2021 Toyota Camry" },
     ]);
 
-    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} checkDuplicates />);
+    render(<LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} checkDuplicates />);
     typeRo("55102");
     await act(async () => {
       clickButton("Save RO").click();
@@ -150,7 +153,7 @@ function stepNumbers() {
 
 /** Renders a NEW RO with the open-ticket toggle flipped on. */
 function renderOpenTicketForm() {
-  render(<LogRoForm initialOpCodes={[]} roTemplates={[]} openTicketEnabled />);
+  render(<LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} openTicketEnabled />);
   act(() => {
     screen
       .getByRole("switch", { name: "Open ticket — no op codes yet" })
@@ -305,7 +308,7 @@ describe("LogRoForm — the 'already open' warning is retracted, not just defang
 
 describe("LogRoForm — step numbers count the steps that actually render", () => {
   it("numbers an ordinary RO 1, 2, 3, 4", () => {
-    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    render(<LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} />);
     expect(stepNumbers()).toEqual(["1", "2", "3", "4"]);
   });
 
@@ -372,7 +375,7 @@ async function renderClose(trackRoTime = true) {
   let rerender!: (ui: React.ReactElement) => void;
   await act(async () => {
     ({ rerender } = render(
-      <LogRoForm
+      <LogRoForm shareLaborTimes={false}
         initialOpCodes={[]}
         roTemplates={[]}
         existingEntry={openTicket()}
@@ -389,7 +392,7 @@ async function renderClose(trackRoTime = true) {
   return (nextTrackRoTime: boolean) =>
     act(async () => {
       rerender(
-        <LogRoForm
+        <LogRoForm shareLaborTimes={false}
           initialOpCodes={[]}
           roTemplates={[]}
           existingEntry={openTicket()}
@@ -622,7 +625,7 @@ describe("LogRoForm — a server re-render doesn't reseed the close", () => {
     let rerender!: (ui: React.ReactElement) => void;
     await act(async () => {
       ({ rerender } = render(
-        <LogRoForm {...props} existingEntry={openTicket()} defaultLoggedTime={NOW} />,
+        <LogRoForm shareLaborTimes={false} {...props} existingEntry={openTicket()} defaultLoggedTime={NOW} />,
       ));
     });
 
@@ -632,7 +635,7 @@ describe("LogRoForm — a server re-render doesn't reseed the close", () => {
     // What the /log revalidate after createLibraryOpCode hands the form: the
     // same ticket as a brand-new object, and a fresh now.
     await act(async () => {
-      rerender(<LogRoForm {...props} existingEntry={openTicket()} defaultLoggedTime="03:40" />);
+      rerender(<LogRoForm shareLaborTimes={false} {...props} existingEntry={openTicket()} defaultLoggedTime="03:40" />);
     });
 
     expect(getCloseDefaultsAction).toHaveBeenCalledTimes(1);
@@ -758,14 +761,14 @@ describe("LogRoForm — date and time are locked until the close defaults land",
 
   it("never locks a new RO or an ordinary edit", () => {
     const { unmount } = render(
-      <LogRoForm initialOpCodes={[]} roTemplates={[]} trackRoTime defaultLoggedTime={NOW} />,
+      <LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} trackRoTime defaultLoggedTime={NOW} />,
     );
     expect(datePill().disabled).toBe(false);
     expect(timePill()!.disabled).toBe(false);
     unmount();
 
     render(
-      <LogRoForm
+      <LogRoForm shareLaborTimes={false}
         initialOpCodes={[]}
         roTemplates={[]}
         existingEntry={{ ...openTicket(), status: "closed" } as Entry}
@@ -880,7 +883,7 @@ describe("LogRoForm — each /log target gets a fresh form", () => {
   const editEntry = (id: string, roNumber: string): Entry =>
     ({ ...openTicket(), id, roNumber, status: "closed" }) as Entry;
   const page = (entry: Entry | undefined, closeMode = false) => (
-    <LogRoForm
+    <LogRoForm shareLaborTimes={false}
       key={logRoFormKey(entry?.id, closeMode)}
       initialOpCodes={[]}
       roTemplates={[]}
@@ -937,7 +940,7 @@ describe("LogRoForm — each /log target gets a fresh form", () => {
 
   it("control: WITHOUT the key the typed RO survives the soft nav (the bug)", async () => {
     const unkeyed = (entry: Entry | undefined) => (
-      <LogRoForm initialOpCodes={[]} roTemplates={[]} existingEntry={entry} openTicketEnabled />
+      <LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} existingEntry={entry} openTicketEnabled />
     );
     const { rerender } = render(unkeyed(undefined));
     typeRo("99999");
@@ -1134,14 +1137,14 @@ const logStatus = () => document.querySelector(".save-bar .summary")!.textConten
 
 describe("LogRoForm — RO numbers are digits only", () => {
   it("empty RO: Save and Save & New are disabled and the bar says to fill it in", () => {
-    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    render(<LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} />);
     expect(logSaveBtn().disabled).toBe(true);
     expect((clickButton("Save & New") as HTMLButtonElement).disabled).toBe(true);
     expect(logStatus()).toBe("Fill in RO # to save");
   });
 
   it("'48x' shows the FIX field under the RO, marks it invalid and blocks both saves", () => {
-    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    render(<LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} />);
     typeRo("48x");
 
     const fix = document.getElementById("ro-digits-error")!;
@@ -1157,7 +1160,7 @@ describe("LogRoForm — RO numbers are digits only", () => {
   });
 
   it("digits only clears the FIX field, enables Save and shows the summary", () => {
-    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    render(<LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} />);
     typeRo("48x");
     typeRo("48");
     expect(document.getElementById("ro-digits-error")).toBeNull();
@@ -1171,7 +1174,7 @@ describe("LogRoForm — op-code chips are toggles", () => {
     screen.getByRole("button", { name: new RegExp(`^${code}`) });
 
   it("a tapped chip stays, renders pressed, and adds one line; tapping again removes it", () => {
-    render(<LogRoForm initialOpCodes={CHIP_LIBRARY} roTemplates={[]} />);
+    render(<LogRoForm shareLaborTimes={false} initialOpCodes={CHIP_LIBRARY} roTemplates={[]} />);
     typeRo("123");
     expect(chip("LOF").getAttribute("aria-pressed")).toBe("false");
 
@@ -1186,7 +1189,7 @@ describe("LogRoForm — op-code chips are toggles", () => {
   });
 
   it("shows the Flagged total as 0.0h before any line exists", () => {
-    render(<LogRoForm initialOpCodes={[]} roTemplates={[]} />);
+    render(<LogRoForm shareLaborTimes={false} initialOpCodes={[]} roTemplates={[]} />);
     expect(document.querySelector("[data-total]")!.textContent).toBe("0.0h");
   });
 });

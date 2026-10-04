@@ -45,6 +45,9 @@ function toSettings(row: SettingsRow): UserSettings {
     // stored answer, so it reads through here as true. This fallback is only
     // for when there is no answer at all.)
     shareLaborTimes: row.share_labor_times ?? false,
+    // null on a pre-migration DB too, which reads as backfill-due; the claim
+    // itself is a no-op until the column exists.
+    trueTimeBackfilledAt: row.true_time_backfilled_at ?? null,
     // Same `?? false`, same reason in a different key: an unknown answer must
     // not put a new field in front of someone who never asked for it.
     trackRoTime: row.track_ro_time ?? false,
@@ -78,6 +81,7 @@ export async function getSettings(supabase: DbClient): Promise<UserSettings> {
       referenceHourlyRate: null,
       tagColors: {},
       shareLaborTimes: false,
+      trueTimeBackfilledAt: null,
       trackRoTime: false,
       theme: DEFAULT_THEME,
       accent: DEFAULT_ACCENT,

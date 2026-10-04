@@ -94,6 +94,16 @@ export const BACKUP_MANIFEST: { [T in TableName]: TableManifest<T> } = {
       ro_template: "carry",
       default_labor_type: "carry",
       share_labor_times: "carry",
+      // Bookkeeping about the observations table, which is not carried (see
+      // labor_time_observations below). Restoring a stamp would claim a backfill
+      // that never happened on the new account; leaving it unset makes the next
+      // page load rebuild the pool from the imported ROs.
+      true_time_backfilled_at: {
+        exclude: "Tracks this account's own observation rows, which never travel.",
+      },
+      true_time_backfill_started_at: {
+        exclude: "In-flight lease for the same backfill; meaningless on another account.",
+      },
       // A preference about what the forms capture. Carried so a restored account
       // keeps recording times instead of silently stopping — the loss would be
       // invisible until someone noticed weeks of blank times later.

@@ -62,6 +62,7 @@ const defaultSettings: UserSettings = {
   // observation to, and no consent conversation has happened. Hard false, not a
   // setting a guest can flip.
   shareLaborTimes: false,
+  trueTimeBackfilledAt: null,
   tagColors: {},
   // Guest mode is the try-it-out demo, and there is no Settings screen in it to
   // turn this on — so the log form stays as it is. A guest who signs up gets the

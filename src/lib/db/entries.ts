@@ -657,8 +657,13 @@ export async function setLineActualHours(
   lineId: string,
   actualHours: number | null,
   actualSource: ActualSource | null = null,
-): Promise<void> {
-  const { error } = await supabase
+  // The light asks write a GUESS, so they must never overwrite a measurement
+  // that landed after the ask was issued (a timer save on the same line). The
+  // emptiness check rides in the UPDATE's own WHERE, so check-and-write is one
+  // atomic statement rather than a read followed by a race.
+  options: { onlyIfEmpty?: boolean } = {},
+): Promise<{ wrote: boolean }> {
+  let q = supabase
     .from("entry_op_codes")
     // Written together, always. Clearing the hours must clear the source, or
     // the row violates entry_op_codes_actual_source_needs_hours and the tech's
@@ -668,7 +673,10 @@ export async function setLineActualHours(
       actual_source: actualHours === null ? null : actualSource,
     })
     .eq("id", lineId);
+  if (options.onlyIfEmpty) q = q.is("actual_hours", null);
+  const { data, error } = await q.select("id");
   if (error) throw error;
+  return { wrote: (data?.length ?? 0) > 0 };
 }
 
 // ADD time to a line rather than replacing it — the timer's "save to job" path.

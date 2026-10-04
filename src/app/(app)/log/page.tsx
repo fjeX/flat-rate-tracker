@@ -77,6 +77,9 @@ export default async function LogPage({
       // Signed-in only (decision 12). The guest log page never passes this.
       openTicketEnabled
       closeMode={closeMode}
+      // Gates the light 1-2h "how long did that take?" row. Required prop on
+      // LogRoForm so a missing wire here is a compile error, not a dead feature.
+      shareLaborTimes={settings.shareLaborTimes}
     />
   );
 }

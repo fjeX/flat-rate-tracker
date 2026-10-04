@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
+import { backfillLaborTimeObservations } from "@/lib/true-time-sync";
 import { addDays, formatDateLong, getNeighborPeriodKeys } from "@/lib/periods";
 import {
   buildImportPayload,
@@ -179,7 +180,13 @@ export async function setShareLaborTimesAction(
   await db.updateSettings(supabase, { shareLaborTimes: clean });
   if (!clean) {
     // Tolerates a pre-migration DB — revoking consent must never error out.
+    // Also nulls the backfill stamp, so opting back in rebuilds from scratch.
     await db.clearAllLaborTimeObservations(supabase);
+  } else {
+    // Opting in: contribute what the tech has already timed, not just ROs they
+    // happen to save from now on. The OFF path nulled the stamp, so the normal
+    // claim applies. Best-effort: it never throws, so the toggle can't fail on it.
+    await backfillLaborTimeObservations(supabase);
   }
   revalidatePath("/settings");
   revalidatePath("/dashboard");
@@ -496,6 +503,16 @@ export async function importDataAction(
       };
     }
     throw error;
+  }
+
+  // The RPC deleted the entries and cascaded the observations away, but left
+  // the backfill stamp alone, so it would now claim a pool that is empty. Null
+  // it and the next page load rebuilds from the imported ROs. Best-effort, and
+  // BEFORE the photo purge so a thrown storage error can't skip it.
+  try {
+    await db.resetLaborTimeBackfill(supabase);
+  } catch (err) {
+    await reportServerError(err, { url: "importDataAction:reset-backfill" });
   }
 
   // Past the point of no return: the account has been replaced. These binaries

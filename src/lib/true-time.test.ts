@@ -4,6 +4,7 @@ import {
   isPoolableLine,
   normalizeCode,
   normalizeVehiclePart,
+  observationSource,
   observationsFromEntry,
   observedMonthFor,
   parseVehicleYear,
@@ -178,6 +179,7 @@ describe("observationsFromEntry", () => {
       flagHours: 1.5,
       actualHours: 2.25,
       observedMonth: "2026-07-01",
+      source: "measured",
     });
   });
 
@@ -356,5 +358,60 @@ describe("isPoolableLine — the shared pool holds a higher bar", () => {
     // Beating the book is the job. A 5h water pump in 1.5h must reach the pool —
     // it is the single most useful observation the dataset can hold.
     expect(isPoolableLine(line({ flagHours: 5, actualHours: 1.5 }))).toBe(true);
+  });
+});
+
+describe("observationSource - estimates are a separate tier, not a discard", () => {
+  it("labels a timer or hand entry measured", () => {
+    expect(observationSource(line({ flagHours: 5, actualHours: 4, actualSource: "timer" }))).toBe("measured");
+  });
+
+  it("grandfathers a null source as measured", () => {
+    expect(observationSource(line({ flagHours: 5, actualHours: 4, actualSource: null }))).toBe("measured");
+  });
+
+  it("keeps a plausible estimate as 'estimate'", () => {
+    expect(observationSource(line({ flagHours: 5, actualHours: 4, actualSource: "estimate" }))).toBe("estimate");
+  });
+
+  it("drops an implausible estimate like any implausible reading", () => {
+    expect(observationSource(line({ flagHours: 25, actualHours: 0.12, actualSource: "estimate" }))).toBeNull();
+  });
+
+  it("drops an estimate on a zero-flag line (comeback)", () => {
+    expect(observationSource(line({ flagHours: 0, actualHours: 2, actualSource: "estimate" }))).toBeNull();
+  });
+
+  it("drops an untimed line", () => {
+    expect(observationSource(line({ actualHours: null }))).toBeNull();
+  });
+
+  it("observationsFromEntry carries the source through and keeps both tiers", () => {
+    const out = observationsFromEntry(
+      entry([
+        line({ id: "a", customCode: "BRK", custom: true, flagHours: 2, actualHours: 2, actualSource: "timer" }),
+        line({ id: "b", customCode: "LOF", custom: true, flagHours: 1, actualHours: 1, actualSource: "estimate" }),
+        line({ id: "c", customCode: "ENG", custom: true, flagHours: 25, actualHours: 0.12, actualSource: "estimate" }),
+      ]),
+      [],
+    );
+    expect(out.map((o) => [o.lineId, o.source])).toEqual([
+      ["a", "measured"],
+      ["b", "estimate"],
+    ]);
+  });
+});
+
+describe("observationsFromEntry - column range", () => {
+  it("drops (does not clamp) lines that numeric(5,2) would reject", () => {
+    const out = observationsFromEntry(
+      entry([
+        line({ id: "ok", customCode: "A", custom: true, flagHours: 999.99, actualHours: 900 }),
+        line({ id: "bigflag", customCode: "B", custom: true, flagHours: 1000, actualHours: 900 }),
+        line({ id: "bigact", customCode: "C", custom: true, flagHours: 1200, actualHours: 1100 }),
+      ]),
+      [],
+    );
+    expect(out.map((o) => o.lineId)).toEqual(["ok"]);
   });
 });

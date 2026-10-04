@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { retroBuckets, retroCandidates, retroStep } from "./retro-capture";
+import {
+  lightAskHref,
+  lightRetroForLine,
+  lightRetroCandidate,
+  lightRetroChips,
+  retroBuckets,
+  retroCandidates,
+  retroStep,
+} from "./retro-capture";
 import { HEAVY_FLAG_HOURS } from "./mix";
 import type { Entry, EntryOpCode, OpCode } from "./types";
 
@@ -181,5 +189,133 @@ describe("retroBuckets", () => {
         expect(b.label.toLowerCase()).not.toContain("flag");
       }
     }
+  });
+});
+
+describe("lightRetroCandidate", () => {
+  const on = { optedIn: true };
+
+  it("asks about a 1.5h line for an opted-in tech", () => {
+    const out = lightRetroCandidate(entry([line({ flagHours: 1.5, customCode: "ALIGN" })]), [], on);
+    expect(out?.code).toBe("ALIGN");
+    expect(out?.lineId).toBe("l1");
+  });
+
+  it("never asks a tech who has not opted in", () => {
+    expect(
+      lightRetroCandidate(entry([line({ flagHours: 1.5 })]), [], { optedIn: false }),
+    ).toBeNull();
+  });
+
+  it("band edges: 0.99 no, 1.0 yes, 1.99 yes, 2.0 no (that one is the modal's)", () => {
+    const at = (h: number) => lightRetroCandidate(entry([line({ flagHours: h })]), [], on);
+    expect(at(0.99)).toBeNull();
+    expect(at(1.0)).not.toBeNull();
+    expect(at(1.99)).not.toBeNull();
+    expect(at(2.0)).toBeNull();
+  });
+
+  it("excludes comebacks and lines the timer already measured", () => {
+    expect(
+      lightRetroCandidate(entry([line({ flagHours: 1.5, isComeback: true })]), [], on),
+    ).toBeNull();
+    expect(
+      lightRetroCandidate(entry([line({ flagHours: 1.5, actualHours: 1.2 })]), [], on),
+    ).toBeNull();
+  });
+
+  it("returns null when any 2h+ candidate exists: one ask per save", () => {
+    expect(
+      lightRetroCandidate(
+        entry([line({ id: "a", flagHours: 1.5 }), line({ id: "b", flagHours: 2.5 })]),
+        [],
+        on,
+      ),
+    ).toBeNull();
+  });
+
+  it("an already-timed 2h+ line does not block the light ask", () => {
+    // retroCandidates skips it (nothing to ask), so the modal will not fire.
+    const out = lightRetroCandidate(
+      entry([line({ id: "a", flagHours: 1.5 }), line({ id: "b", flagHours: 4, actualHours: 3.5 })]),
+      [],
+      on,
+    );
+    expect(out?.lineId).toBe("a");
+  });
+
+  it("picks the biggest flag, ties to the earlier line", () => {
+    const out = lightRetroCandidate(
+      entry([
+        line({ id: "a", flagHours: 1.2 }),
+        line({ id: "b", flagHours: 1.8 }),
+        line({ id: "c", flagHours: 1.8 }),
+      ]),
+      [],
+      on,
+    );
+    expect(out?.lineId).toBe("b");
+  });
+});
+
+describe("lightRetroChips", () => {
+  it("never offers more than 6 chips, across the whole band", () => {
+    for (let h = 1; h < 2; h = Math.round((h + 0.01) * 100) / 100) {
+      const chips = lightRetroChips(h);
+      expect(chips.length).toBeGreaterThanOrEqual(3);
+      expect(chips.length).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it("uses 15-minute steps for a 1h job and spans about 0.5x to 1.5x", () => {
+    const chips = lightRetroChips(1);
+    expect(chips.map((c) => c.hours)).toEqual([0.5, 0.75, 1, 1.25, 1.5]);
+    expect(chips.map((c) => c.label)).toEqual(["0.5h", "0.75h", "1h", "1.25h", "1.5h+"]);
+  });
+
+  it("falls back to 30-minute steps near 2h instead of dropping an end", () => {
+    const chips = lightRetroChips(1.99);
+    expect(chips.map((c) => c.hours)).toEqual([1, 1.5, 2, 2.5, 3]);
+  });
+
+  it("is plain clock hours: ascending, positive, book not marked, top is the lower bound", () => {
+    for (const book of [1, 1.25, 1.5, 1.75, 1.99]) {
+      const chips = lightRetroChips(book);
+      const hours = chips.map((c) => c.hours);
+      expect(hours.every((h) => h > 0 && h < 4)).toBe(true);
+      expect([...hours].sort((a, b) => a - b)).toEqual(hours);
+      expect(new Set(hours).size).toBe(hours.length);
+      expect(chips.some((c) => /book/i.test(c.label))).toBe(false);
+      expect(chips.slice(0, -1).every((c) => !c.label.endsWith("+"))).toBe(true);
+      expect(chips[chips.length - 1].label.endsWith("h+")).toBe(true);
+    }
+  });
+});
+
+describe("lightAskHref / lightRetroForLine (dashboard variant)", () => {
+  const on = { optedIn: true };
+
+  it("builds /dashboard?ask=<lineId> and leaves other targets alone", () => {
+    expect(lightAskHref("/dashboard", "abc")).toBe("/dashboard?ask=abc");
+    expect(lightAskHref("/timer", "abc")).toBe("/timer");
+    expect(lightAskHref("/guest", "abc")).toBe("/guest");
+  });
+
+  it("resolves a named eligible line, with the same eligibility as the save-time rule", () => {
+    const e = entry([line({ id: "a", flagHours: 1.5 }), line({ id: "b", flagHours: 1.2 })]);
+    expect(lightRetroForLine(e, "b", [], on)?.lineId).toBe("b");
+    expect(lightRetroForLine(e, "zzz", [], on)).toBeNull();
+    expect(lightRetroForLine(e, "a", [], { optedIn: false })).toBeNull();
+  });
+
+  it("band edges, timed and comeback lines all resolve to null", () => {
+    const at = (over: Partial<EntryOpCode>) =>
+      lightRetroForLine(entry([line({ id: "a", ...over })]), "a", [], on);
+    expect(at({ flagHours: 0.99 })).toBeNull();
+    expect(at({ flagHours: 1 })).not.toBeNull();
+    expect(at({ flagHours: 1.99 })).not.toBeNull();
+    expect(at({ flagHours: 2 })).toBeNull();
+    expect(at({ flagHours: 1.5, actualHours: 1 })).toBeNull();
+    expect(at({ flagHours: 1.5, isComeback: true })).toBeNull();
   });
 });

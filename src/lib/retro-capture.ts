@@ -165,3 +165,148 @@ function dedupeTop(buckets: RetroBucket[]): RetroBucket[] {
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+// ---------------------------------------------------------------------------
+// The LIGHT ask — jobs that flag 1h up to (not including) HEAVY_FLAG_HOURS.
+//
+// Why a second, separate path: the 2h+ modal never sees this band, and the
+// 1-2h band is the biggest one with zero True Time capture (a timer on a
+// 90-minute job is the same nag as one on a 20-minute job). The ask is lighter
+// to match: ONE line per save, an inline chip row (no modal, no focus trap),
+// and only for techs who opted in to sharing labor times.
+//
+// retroStep/retroBuckets are deliberately NOT reused: changing them would
+// reshape the 2h+ modal's ladder. This ladder is finer (15 minutes) because a
+// 90-minute job's error budget is smaller.
+
+/** Lowest flag that earns the light ask. Below this is the grind: never asked. */
+export const LIGHT_FLAG_MIN_HOURS = 1;
+
+export type LightRetroCandidate = {
+  lineId: string;
+  code: string;
+  description: string;
+  flagHours: number;
+  chips: RetroBucket[];
+};
+
+/**
+ * At most ONE line on a just-saved RO worth a light "how long did that take?".
+ *
+ * Returns null when:
+ *  - the tech has not opted in (`optedIn` false) — no opt-in, no ask, ever;
+ *  - the RO has ANY 2h+ candidate — the modal already asks, and it is one ask
+ *    per save, never two;
+ *  - no line is in [1, HEAVY_FLAG_HOURS) with actualHours null and not a
+ *    comeback.
+ *
+ * The biggest flag wins; ties go to the earlier position (stable).
+ */
+export function lightRetroCandidate(
+  entry: Entry,
+  library: OpCode[] = [],
+  opts: { optedIn: boolean },
+): LightRetroCandidate | null {
+  if (!opts.optedIn) return null;
+  if (retroCandidates(entry, library).length > 0) return null;
+
+  let best: Entry["opCodes"][number] | null = null;
+  for (const line of entry.opCodes) {
+    if (
+      line.flagHours >= LIGHT_FLAG_MIN_HOURS &&
+      line.flagHours < HEAVY_FLAG_HOURS &&
+      line.actualHours === null &&
+      !line.isComeback &&
+      (best === null || line.flagHours > best.flagHours)
+    ) {
+      best = line;
+    }
+  }
+  if (!best) return null;
+
+  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+  return {
+    lineId: best.id,
+    code: lineCode(best, libraryById),
+    description: lineDescription(best, libraryById),
+    flagHours: best.flagHours,
+    chips: lightRetroChips(best.flagHours),
+  };
+}
+
+/**
+ * Chips for one light ask: 15-minute steps from about 0.5x to 1.5x book, at
+ * most 6. If 15-minute steps would need more than 6 chips (books near 2h), it
+ * falls back to 30-minute steps rather than dropping either end of the range.
+ *
+ * Same philosophy as retroBuckets: plain clock hours, book time NOT marked,
+ * and the top chip is open-ended ("2h+") storing its LOWER bound so an overrun
+ * is under-stated, never invented.
+ */
+export function lightRetroChips(flagHours: number): RetroBucket[] {
+  for (const step of [0.25, 0.5]) {
+    const lo = roundToStep(flagHours * 0.5, step);
+    const hi = Math.max(lo + step, roundToStep(flagHours * 1.5, step));
+    const values: number[] = [];
+    for (let h = lo; h <= hi + 1e-9; h += step) values.push(round2(h));
+    if (values.length <= 6 || step === 0.5) {
+      const capped = values.slice(0, 6);
+      return capped.map((h, i) => ({
+        label: i === capped.length - 1 ? `${trim2(h)}h+` : `${trim2(h)}h`,
+        hours: h,
+      }));
+    }
+  }
+  return [];
+}
+
+/** Query param carrying the line id: `/dashboard?ask=<lineId>`. */
+export const LIGHT_ASK_PARAM = "ask";
+
+/**
+ * Where a plain Save goes when a light ask is owed. Only the dashboard knows how
+ * to render it, so any other target is returned untouched. The dashboard
+ * re-checks everything server-side: the URL is untrusted input.
+ */
+export function lightAskHref(redirectTo: string, lineId: string): string {
+  return redirectTo === "/dashboard"
+    ? `${redirectTo}?${LIGHT_ASK_PARAM}=${encodeURIComponent(lineId)}`
+    : redirectTo;
+}
+
+/**
+ * The same eligibility as lightRetroCandidate, for ONE named line on an
+ * already-persisted entry. Null for an unknown line, a timed line, a comeback,
+ * anything outside [1, HEAVY_FLAG_HOURS), or a tech who has not opted in.
+ */
+export function lightRetroForLine(
+  entry: Entry,
+  lineId: string,
+  library: OpCode[] = [],
+  opts: { optedIn: boolean },
+): LightRetroCandidate | null {
+  if (!opts.optedIn) return null;
+  const target = entry.opCodes.find((l) => l.id === lineId);
+  if (
+    !target ||
+    target.flagHours < LIGHT_FLAG_MIN_HOURS ||
+    target.flagHours >= HEAVY_FLAG_HOURS ||
+    target.actualHours !== null ||
+    target.isComeback
+  ) {
+    return null;
+  }
+  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+  return {
+    lineId: target.id,
+    code: lineCode(target, libraryById),
+    description: lineDescription(target, libraryById),
+    flagHours: target.flagHours,
+    chips: lightRetroChips(target.flagHours),
+  };
+}
+
+/** "1" not "1.00"; "1.25" and "0.75" keep their quarter. */
+function trim2(h: number): string {
+  return String(round2(h));
+}

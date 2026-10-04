@@ -374,3 +374,7 @@ button.log-step-head:focus-visible { outline: var(--w-heavy) solid var(--focus);
   .log-grid > .log-before { grid-column: 2; grid-row: 1; }
   .log-grid > .log-steps { grid-column: 1; grid-row: 1; }
 }
+
+/* ---------- light 1-2h retro ask (inside the "RO saved" strip) ---------- */
+.log-light > p, .log-light-done { margin: 0; }
+.log-light .log-chips { align-items: center; }

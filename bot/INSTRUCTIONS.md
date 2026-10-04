@@ -953,6 +953,15 @@ regardless of which button.
   hours range for why.
 - Tapping "Skip" (or closing the modal) must not block navigation or leave the
   form stuck — you should land wherever the save was headed.
+- **Do NOT expect a lighter 1-2h chip row.** After "Save & New" on a fresh RO
+  whose biggest line flags 1-2h, an inline "How long did the X take?" chip row
+  (with a quiet "Skip") appears in the "RO #… saved" strip — but ONLY for
+  accounts opted in to True Time (`shareLaborTimes`). The bot account is NOT
+  opted in, so it must not expect this row and must not report its absence.
+  The same ask also appears at the top of the Dashboard after a plain
+  "Save RO" (URL `/dashboard?ask=<lineId>`, removed once answered or
+  skipped) — likewise only for opted-in accounts. The bot never sees it, and a
+  plain Save should land on a bare `/dashboard`; do not report the missing ask.
 
 ### 3. Timers (up to 3 concurrent — reworked 2026-07-24)
 The Timer page runs **up to 3 job timers at once**. The header reads

@@ -15,6 +15,7 @@ const enforceRateLimit = vi.fn();
 const reportServerError = vi.fn();
 const listAllUserPhotoPaths = vi.fn();
 const revalidatePath = vi.fn();
+const resetLaborTimeBackfill = vi.fn();
 // The read-only ro_events head count importDataAction makes for a file with no
 // `roEvents` key. Records the table and filter so a test can prove it is scoped.
 const roEventsCount = vi.fn();
@@ -42,6 +43,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   getCurrentUserId: async () => "user-1",
+  resetLaborTimeBackfill: (...a: unknown[]) => resetLaborTimeBackfill(...a),
   listAllUserPhotoPaths: (...a: unknown[]) => listAllUserPhotoPaths(...a),
   isMissingTable: (e: { code?: string }) => e?.code === "PGRST205" || e?.code === "42P01",
 }));
@@ -96,6 +98,7 @@ beforeEach(() => {
   enforceRateLimit.mockResolvedValue(undefined);
   listAllUserPhotoPaths.mockResolvedValue([]);
   roEventsCount.mockResolvedValue({ count: 0, error: null });
+  resetLaborTimeBackfill.mockResolvedValue(undefined);
   fromCalls.length = 0;
 });
 
@@ -435,5 +438,36 @@ describe("importDataAction — a backup without ticket timelines can't erase the
     await expect(importDataAction(bundle({ roEvents: [] }))).resolves.toEqual({});
     expect(fromCalls).toEqual([]);
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("importDataAction resets the True Time backfill stamp", () => {
+  it("nulls the stamp after a successful RPC, even if the photo purge throws", async () => {
+    listAllUserPhotoPaths.mockResolvedValue(["a.jpg"]);
+    storageRemove.mockRejectedValue(new Error("storage down"));
+    await expect(importDataAction(bundle())).rejects.toThrow("storage down");
+    expect(resetLaborTimeBackfill).toHaveBeenCalledTimes(1);
+  });
+
+  it("nulls the stamp on a plain successful import", async () => {
+    expect(await importDataAction(bundle())).toEqual({});
+    expect(resetLaborTimeBackfill).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not touch the stamp when the database refuses the file", async () => {
+    rpc.mockResolvedValue({ error: { code: "23514", message: "check" } });
+    await importDataAction(bundle());
+    expect(resetLaborTimeBackfill).not.toHaveBeenCalled();
+  });
+
+  it("does not touch the stamp when the RPC faults", async () => {
+    rpc.mockResolvedValue({ error: { code: "08006", message: "conn" } });
+    await expect(importDataAction(bundle())).rejects.toBeTruthy();
+    expect(resetLaborTimeBackfill).not.toHaveBeenCalled();
+  });
+
+  it("does not touch the stamp when the file is refused up front", async () => {
+    await importDataAction(bundle({ version: 99 }));
+    expect(resetLaborTimeBackfill).not.toHaveBeenCalled();
   });
 });

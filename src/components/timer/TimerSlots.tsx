@@ -550,6 +550,8 @@ export function TimerSlots({
               onSave={handleLogRoSave}
               redirectTo="/timer"
               checkDuplicates
+              // Custom onSave (no persisted row to ask about): never asks.
+              shareLaborTimes={false}
             />
           </div>
         </Modal>

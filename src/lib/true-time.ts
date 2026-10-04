@@ -29,7 +29,11 @@ export type NewLaborTimeObservation = {
   flagHours: number;
   actualHours: number;
   observedMonth: string; // "YYYY-MM-01"
+  /** measured pools into the shared medians; estimate is stored, labelled, never pooled. */
+  source: ObservationSource;
 };
+
+export type ObservationSource = "measured" | "estimate";
 
 /**
  * Fold a code to its pooling key: uppercase, strip everything that isn't a
@@ -107,12 +111,32 @@ export function observedMonthFor(date: string): string | null {
  *    measured: those rows predate the column and were timer- or hand-entered.
  */
 export function isPoolableLine(line: EntryOpCode): boolean {
-  if (line.actualSource === "estimate") return false;
-  return isMeasuredLine({
+  return observationSource(line) === "measured";
+}
+
+/**
+ * Which tier does this line belong to, if any?
+ *
+ * "measured" — a physically possible reading from a timer or hand entry (null
+ *   source is grandfathered as measured). Pools into the shared medians.
+ * "estimate" — passes every OTHER guard (plausible, flag > 0) but the tech
+ *   tapped a from-memory guess. Stored and labelled so 3b can decide how to
+ *   surface it; the aggregate function filters to 'measured', so it never
+ *   reaches a median.
+ * null — nothing worth storing: untimed, zero flag, or implausible. An
+ *   implausible estimate is dropped like an implausible measurement.
+ */
+export function observationSource(line: EntryOpCode): ObservationSource | null {
+  const plausible = isMeasuredLine({
     flagHours: line.flagHours,
     actualHours: line.actualHours ?? null,
   });
+  if (!plausible) return null;
+  return line.actualSource === "estimate" ? "estimate" : "measured";
 }
+
+// Upper bound of the flag_hours / actual_hours columns (numeric(5,2) => < 1000).
+const MAX_COLUMN_HOURS = 1000;
 
 // A code that carries no information — lineCode()'s fallbacks for a line whose
 // library op code was deleted, or an unnamed custom line. Pooling these would
@@ -139,7 +163,12 @@ export function observationsFromEntry(
 
   const out: NewLaborTimeObservation[] = [];
   for (const line of entry.opCodes) {
-    if (!isPoolableLine(line)) continue;
+    const source = observationSource(line);
+    if (source === null) continue;
+    // The columns are numeric(5,2): >= 1000 is rejected by Postgres, and one
+    // rejected row fails its whole insert chunk. Drop, never clamp - a clamped
+    // number is invented data.
+    if (line.flagHours >= MAX_COLUMN_HOURS || (line.actualHours as number) >= MAX_COLUMN_HOURS) continue;
     const codeNorm = normalizeCode(lineCode(line, libraryById));
     // lineCode() returns an em-dash for a dangling library reference, which
     // normalizes to "" — caught here along with unnamed custom lines.
@@ -154,6 +183,7 @@ export function observationsFromEntry(
       flagHours: line.flagHours,
       actualHours: line.actualHours as number,
       observedMonth,
+      source,
     });
   }
   return out;

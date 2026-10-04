@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import * as db from "@/lib/db";
 import { Header } from "@/components/layout/Header";
@@ -12,6 +13,7 @@ import { CrossTabRefresh } from "@/components/layout/CrossTabRefresh";
 import { TimerPip } from "@/components/timer/TimerPip";
 import { ReplyNoticeModal } from "@/components/layout/ReplyNoticeModal";
 import { AppearanceSync } from "@/components/layout/AppearanceSync";
+import { backfillLaborTimeObservations } from "@/lib/true-time-sync";
 import { anyAccruing } from "@/lib/timer";
 import { capsForSlots } from "@/lib/timer-schedule";
 import type { Entry } from "@/lib/types";
@@ -44,6 +46,15 @@ export default async function AppLayout({
     db.listUnseenRepliesSafe(supabase),
   ]);
   const slots = slotsOrNull ?? [];
+
+  // True Time: an account that opted in before the backfill existed has timed
+  // lines that never reached the pool. `settings` is already loaded above, so
+  // the steady state (stamp set, or sharing off) costs no extra query. after()
+  // runs once the response has streamed, so rendering never waits on it; the
+  // function claims the stamp atomically, so concurrent tabs do not double-run.
+  if (settings.shareLaborTimes && settings.trueTimeBackfilledAt === null) {
+    after(() => backfillLaborTimeObservations(supabase));
+  }
 
   // The dot means "something is banking time right now" — which includes a job
   // sitting on hold, since waiting time is still being recorded.

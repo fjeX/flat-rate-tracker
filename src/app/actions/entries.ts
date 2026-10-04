@@ -246,7 +246,12 @@ export async function setLineActualHoursAction(
   // here — saveTimerAction adds via db.addLineActualHours, which stamps
   // "timer" itself when the line has no source yet.)
   actualSource: ActualSource | null = "timer",
-): Promise<{ error?: string }> {
+  // `onlyIfEmpty`: write only if the line has no actual hours yet. The light
+  // "how long did that take?" asks pass it so a stale ask can never overwrite
+  // (and relabel as an estimate) hours a timer added in the meantime. When the
+  // line was already filled it returns { skipped: true } and writes nothing.
+  options?: { onlyIfEmpty?: boolean },
+): Promise<{ error?: string; skipped?: boolean }> {
   const parsed = check(setLineActualHoursSchema, {
     lineId,
     actualHours,
@@ -255,12 +260,14 @@ export async function setLineActualHoursAction(
   if (!parsed.ok) return { error: parsed.error };
   const clean = parsed.data;
   const supabase = await createClient();
-  await db.setLineActualHours(
+  const written = await db.setLineActualHours(
     supabase,
     clean.lineId,
     clean.actualHours,
     clean.actualSource,
+    { onlyIfEmpty: options?.onlyIfEmpty === true },
   );
+  if (options?.onlyIfEmpty && !written?.wrote) return { skipped: true };
   // True Time hook for hand-entered actual hours (the RO modal's blur-to-save and
   // retro capture) — and where clearing the hours must retract an observation.
   // The timer does NOT save through here (saveTimerAction →

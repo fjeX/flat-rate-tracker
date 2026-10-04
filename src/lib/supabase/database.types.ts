@@ -659,6 +659,8 @@ export type Database = {
       user_settings: {
         Row: {
           share_labor_times: boolean
+          true_time_backfilled_at: string | null
+          true_time_backfill_started_at: string | null
           default_labor_type: string | null
           goal_hours: number
           is_admin: boolean
@@ -675,6 +677,8 @@ export type Database = {
         }
         Insert: {
           share_labor_times?: boolean
+          true_time_backfilled_at?: string | null
+          true_time_backfill_started_at?: string | null
           default_labor_type?: string | null
           goal_hours?: number
           is_admin?: boolean
@@ -691,6 +695,8 @@ export type Database = {
         }
         Update: {
           share_labor_times?: boolean
+          true_time_backfilled_at?: string | null
+          true_time_backfill_started_at?: string | null
           default_labor_type?: string | null
           goal_hours?: number
           is_admin?: boolean
@@ -1045,6 +1051,7 @@ export type Database = {
           make_norm: string
           model_norm: string
           observed_month: string
+          source: string
           updated_at: string
           user_id: string
           vehicle_year: number | null
@@ -1060,6 +1067,7 @@ export type Database = {
           make_norm?: string
           model_norm?: string
           observed_month: string
+          source?: string
           updated_at?: string
           user_id: string
           vehicle_year?: number | null
@@ -1075,6 +1083,7 @@ export type Database = {
           make_norm?: string
           model_norm?: string
           observed_month?: string
+          source?: string
           updated_at?: string
           user_id?: string
           vehicle_year?: number | null

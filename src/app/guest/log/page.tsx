@@ -21,6 +21,8 @@ export default function GuestLogPage() {
       onSave={handleSave}
       onCreateOpCode={addGuestOpCode}
       redirectTo="/guest"
+      // Guest has no True Time: the light ask must never show here.
+      shareLaborTimes={false}
     />
   );
 }

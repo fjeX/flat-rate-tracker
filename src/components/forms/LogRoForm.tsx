@@ -26,6 +26,7 @@
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RetroTimePrompt } from "@/components/forms/RetroTimePrompt";
+import { LightRetroRow } from "@/components/forms/LightRetroRow";
 import type { Entry, LaborType, NewEntry, OpCode, RoTemplate } from "@/lib/types";
 import type { OpCodeDraft } from "./OpCodeModals";
 import { Button } from "@/components/ui/Button";
@@ -80,6 +81,7 @@ export function LogRoForm({
   today = "",
   openTicketEnabled = false,
   closeMode = false,
+  shareLaborTimes,
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -99,6 +101,13 @@ export function LogRoForm({
   openTicketEnabled?: boolean;
   /** /log?edit=<open ticket>&close=1 — the close flow. */
   closeMode?: boolean;
+  /**
+   * The tech opted in to True Time (settings.shareLaborTimes). REQUIRED — the
+   * light 1-2h "how long did that take?" row is gated on it, and an optional
+   * prop is how that gate once never got wired to the page. Guest and any
+   * embedder without the setting pass false.
+   */
+  shareLaborTimes: boolean;
 }) {
   const editingOpen = Boolean(existingEntry && existingEntry.status === "open");
   const closing = editingOpen && closeMode;
@@ -318,6 +327,7 @@ export function LogRoForm({
     model, setModel, vin, setVin, mileage, setMileage, autoFill, handleAutoFillToggle,
     notesOpen, setNotesOpen, notes, setNotes, isDeleting, isSubmitting, isChecking,
     dupMatches, retroCandidates, submitRetro, skipRetro,
+    lightRetro, answerLightRetro, skipLightRetro,
     handleDeleteRo, handleSaveAndNew, handleSave, handleDupEdit,
     handleDupLogNew, handleDupClose, laborTypeEnabled: laborTypeShown,
     photosEnabled, photoAttached, handlePhotoCaptured, clearCapturedPhoto,
@@ -335,7 +345,7 @@ export function LogRoForm({
     // The close form re-defaults the time from the setting like a fresh RO
     // (seeded through the existingEntry override above — plan risk #3). A
     // REOPENED close then swaps in the stored time once the defaults land.
-    trackRoTime, defaultLoggedTime, timeZone,
+    trackRoTime, defaultLoggedTime, timeZone, shareLaborTimes,
   });
   // A cleared date pill leaves dateChoice where it was (the date onChange
   // returns early on ""), so retyping the same day doesn't restamp the time.
@@ -547,6 +557,15 @@ export function LogRoForm({
       {savedRoNumber && (
         <StatusField tag="Saved" className="log-flow is-top">
           <p>RO #{savedRoNumber} saved ✓</p>
+          {lightRetro && (
+            <LightRetroRow
+              candidate={lightRetro.candidate}
+              status={lightRetro.status}
+              savedHours={lightRetro.savedHours}
+              onAnswer={answerLightRetro}
+              onSkip={skipLightRetro}
+            />
+          )}
         </StatusField>
       )}
 

@@ -466,6 +466,10 @@ export type UserSettings = {
   // pooled real-world labor-time dataset. Default false, and false is also what
   // a pre-migration DB reads as — an unknown answer is never treated as consent.
   shareLaborTimes: boolean;
+  // When the one-time True Time backfill of existing timed lines completed (or
+  // is in flight). null = due. Reset when sharing is turned off or an import
+  // replaces the account.
+  trueTimeBackfilledAt: string | null;
   // Per-tag colour overrides for the op code library: lowercased tag → hue
   // slot index (0-7, the --tag-hue-N theme tokens). Tags not listed keep
   // their deterministic hash colour.

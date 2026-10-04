@@ -31,7 +31,13 @@ import {
   getRoMatchById,
   setLineActualHoursAction,
 } from "@/app/actions/entries";
-import { retroCandidates, type RetroCandidate } from "@/lib/retro-capture";
+import {
+  lightAskHref,
+  lightRetroCandidate,
+  retroCandidates,
+  type LightRetroCandidate,
+  type RetroCandidate,
+} from "@/lib/retro-capture";
 import { createLibraryOpCode } from "@/app/actions/op-codes";
 import { uploadEntryPhoto } from "@/app/actions/entry-photos";
 import { downscaleImage } from "@/lib/image";
@@ -101,6 +107,7 @@ export function useLogRoForm({
   trackRoTime = false,
   defaultLoggedTime = "",
   timeZone = "",
+  shareLaborTimes,
 }: {
   initialOpCodes: OpCode[];
   existingEntry?: Entry;
@@ -142,6 +149,12 @@ export function useLogRoForm({
    * `defaultLoggedTime` server-side applies to render, not to this.
    */
   timeZone?: string;
+  /**
+   * The tech opted in to True Time. REQUIRED on purpose: the light 1-2h ask is
+   * gated on it, and an optional flag whose wiring never reached the page is
+   * exactly how a feature ships dead. Guest and every non-DB embedder pass false.
+   */
+  shareLaborTimes: boolean;
 }) {
   const router = useRouter();
   const isEdit = Boolean(existingEntry);
@@ -354,6 +367,12 @@ export function useLogRoForm({
   //   3. the stale-check abort is retracted, by identity — it says "tap Save
   //      again", and editing the number is the tech doing exactly that.
   function setRoNumber(value: string) {
+    // Typing into the next RO is "starting the next RO": the light ask goes.
+    // (resetForm calls this with "" — that must NOT close a row just opened.)
+    if (value !== "" && lightOpenRef.current) {
+      dismissLightRetro();
+      setSavedRoNumber(null);
+    }
     roNumberRef.current = value;
     setRoNumberState(value);
     setAbandonedRoNumber(null);
@@ -381,6 +400,22 @@ export function useLogRoForm({
   // falls through to router.push(redirectTo) — a fresh form yanked to /dashboard
   // a beat later. The latch makes the second call a no-op.
   const retroFinishedRef = useRef(true);
+
+  // The LIGHT 1-2h ask (lib/retro-capture lightRetroCandidate). It lives in the
+  // "RO saved" strip after Save & New, so it needs no modal and no latch — it
+  // owes the page no navigation. `lightGen` is a per-save generation: the
+  // strip's timers close over the generation they were armed for, so a timer
+  // from RO #1 can never close RO #2's row. LogRoForm does not remount between
+  // saves, so without this the previous save's state would leak forward.
+  type LightRetro = {
+    candidate: LightRetroCandidate;
+    status: "ask" | "saving" | "done";
+    savedHours: number | null;
+  };
+  const [lightRetro, setLightRetro] = useState<LightRetro | null>(null);
+  const lightGen = useRef(0);
+  // Mirrors "the row is still asking" for timers, which close over old renders.
+  const lightOpenRef = useRef(false);
   const [isChecking, setIsChecking] = useState(false);
   const pendingAfterSave = useRef<(() => void) | undefined>(undefined);
   // Synchronous guard against overlapping persists (see performSave).
@@ -734,6 +769,8 @@ export function useLogRoForm({
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     setError(null);
+    // A new save answers the old row: starting the next RO removes it.
+    dismissLightRetro();
     startTransition(async () => {
       try {
         const input: NewEntry = {
@@ -789,6 +826,9 @@ export function useLogRoForm({
             isUpsell: line.isUpsell ?? false, // pass-through, same reason
           })),
         };
+        // Where a plain Save lands. Normally `redirectTo`; the light ask swaps in
+        // a one-shot pointer to the dashboard (below). Never delays the push.
+        let pushTarget = redirectTo;
         if (onSave) {
           await onSave(input);
         } else {
@@ -811,6 +851,22 @@ export function useLogRoForm({
           // the persisted entry can be asked — the candidates carry real line
           // ids, which the pre-save form lines do not have.
           const candidates = retroCandidates(saved, library);
+          // One ask per save: the light row only exists when the modal does not,
+          // only for a fresh save (an edit is not "just finished a job"), and
+          // Save & New puts it in the "saved" strip; a plain Save carries a
+          // one-shot pointer to the dashboard, which re-checks it server-side.
+          if (candidates.length === 0 && !isEdit) {
+            const light = lightRetroCandidate(saved, library, {
+              optedIn: shareLaborTimes,
+            });
+            if (light && afterSave) {
+              lightGen.current += 1;
+              lightOpenRef.current = true;
+              setLightRetro({ candidate: light, status: "ask", savedHours: null });
+            } else if (light) {
+              pushTarget = lightAskHref(redirectTo, light.lineId);
+            }
+          }
           if (candidates.length > 0) {
             tap();
             retroAfterSave.current = afterSave;
@@ -828,7 +884,7 @@ export function useLogRoForm({
         if (afterSave) {
           afterSave();
         } else {
-          router.push(redirectTo);
+          router.push(pushTarget);
         }
       } catch (err) {
         setError(actionErrorMessage(err, "Failed to save."));
@@ -922,7 +978,14 @@ export function useLogRoForm({
     handleSave(() => {
       setSavedRoNumber(savedRo);
       resetForm();
-      setTimeout(() => setSavedRoNumber(null), 3500);
+      // While the light ask is open the strip must outlive the usual 3.5s —
+      // the tech answers after the next car rolls in. Skip, answering, or
+      // starting the next RO closes it instead.
+      const gen = lightGen.current;
+      setTimeout(() => {
+        if (lightGen.current === gen && lightOpenRef.current) return;
+        setSavedRoNumber(null);
+      }, 3500);
     });
   }
 
@@ -944,6 +1007,60 @@ export function useLogRoForm({
 
   function skipRetro() {
     finishRetro();
+  }
+
+  // --- light 1-2h ask ------------------------------------------------------
+
+  /** Remove the row (Skip, next RO, or the confirmation timing out). */
+  function dismissLightRetro() {
+    lightGen.current += 1;
+    lightOpenRef.current = false;
+    setLightRetro(null);
+  }
+
+  /** Skip: the row goes now, the "saved" strip follows a moment later. */
+  function skipLightRetro() {
+    dismissLightRetro();
+    const gen = lightGen.current;
+    setTimeout(() => {
+      if (lightGen.current === gen) setSavedRoNumber(null);
+    }, 1500);
+  }
+
+  /** Chip tap: same estimate write as the 2h+ modal; any failure just closes. */
+  async function answerLightRetro(hours: number) {
+    const current = lightRetro;
+    if (!current || current.status !== "ask") return;
+    const gen = lightGen.current;
+    lightOpenRef.current = false;
+    setLightRetro({ ...current, status: "saving", savedHours: hours });
+    let ok = true;
+    try {
+      const res = await setLineActualHoursAction(
+        current.candidate.lineId,
+        hours,
+        "estimate",
+        { onlyIfEmpty: true },
+      );
+      if (res?.error || res?.skipped) ok = false;
+    } catch {
+      // Swallowed, same stance as submitRetro: the RO is saved and a failed
+      // estimate is the least important thing here. The row just closes.
+      ok = false;
+    }
+    // The tech started another RO while the write was in flight: this save's
+    // row is already gone, nothing left to update.
+    if (lightGen.current !== gen) return;
+    if (!ok) {
+      skipLightRetro();
+      return;
+    }
+    setLightRetro({ candidate: current.candidate, status: "done", savedHours: hours });
+    setTimeout(() => {
+      if (lightGen.current !== gen) return;
+      dismissLightRetro();
+      setSavedRoNumber(null);
+    }, 3500);
   }
 
   async function submitRetro(answers: Record<string, number>) {
@@ -1001,6 +1118,9 @@ export function useLogRoForm({
     retroCandidates: retroCandidatesList,
     submitRetro,
     skipRetro,
+    lightRetro,
+    answerLightRetro,
+    skipLightRetro,
     roInputRef,
     vehicleSummary,
     // vehicle

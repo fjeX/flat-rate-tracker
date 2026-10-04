@@ -73,6 +73,7 @@ const setLineActualHoursAction = vi.fn(
 const retroStub: { candidates: RetroCandidate[] } = { candidates: [] };
 vi.mock("@/lib/retro-capture", () => ({
   retroCandidates: () => retroStub.candidates,
+  lightRetroCandidate: () => null,
   retroBuckets: (flagHours: number) => [
     { label: fmtBucket(flagHours), hours: flagHours },
     { label: fmtBucket(flagHours + 1), hours: flagHours + 1 },
@@ -85,7 +86,7 @@ const TZ = "UTC";
 
 function setup(overrides: Record<string, unknown> = {}) {
   return renderHook(() =>
-    useLogRoForm({
+    useLogRoForm({ shareLaborTimes: false,
       initialOpCodes: [],
       trackRoTime: true,
       timeZone: TZ,
@@ -850,7 +851,7 @@ describe("retro prompt — finishRetro is one-shot per cycle", () => {
     // wires them — so Escape reaches Modal's keydown handler -> onClose ->
     // onSkip -> skipRetro, and no link in that chain is assumed.
     function Harness() {
-      const form = useLogRoForm({
+      const form = useLogRoForm({ shareLaborTimes: false,
         initialOpCodes: [],
         trackRoTime: true,
         timeZone: TZ,
