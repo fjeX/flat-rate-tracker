@@ -442,7 +442,16 @@ checked against the current app on 2026-10-01 and is exact.
   under the code. The footing reads "N codes shown" and "X.Xh flagged"; the
   zone's top right says "N of M shown" only while a search or tag filter is on.
 - **Insights.** The page opens on a **headline panel** (the accent-coloured
-  block, like the dashboard's Today): four figures — UNPAID THIS WINDOW (red
+  block, like the dashboard's Today). **Since 2026-10-04 it leads with OVERALL
+  EFFICIENCY** on a row of its own (big figure, sub-line "all time · graph
+  below"): the lifetime figure, ALL TIME, so **the window chips never change
+  it** — that is deliberate, not a stuck number. It must equal the figure at
+  the right of the Efficiency zone's head and the Efficiency zone's "N%
+  overall." sentence, exactly. "—" with "not enough measured days yet" is
+  correct when the zone withholds it. When a Week/Period/Month window has no
+  work in it, the WHOLE headline panel (overall cell included) is hidden and
+  "No work recorded in this…" shows instead, while the Efficiency zone below
+  still carries the overall figure — that is correct, not a missing number. Under it, four figures — UNPAID THIS WINDOW (red
   when non-zero, "0h" with "every timed job came in at book" when clean),
   STRONGEST DAY (its caption names the full weekday since 2026-10-04:
   "Thursdays, over 3 days" / "Thursday, over 1 day" — the Best days zone keeps
@@ -457,12 +466,14 @@ checked against the current app on 2026-10-01 and is exact.
   costing you → Where your time goes → Best days beside Where you're winning**
   (the last two sit side by side from 1024px); then the "All time — Ignores the
   window above" divider (a heavy rule with the heading on it); then the
-  all-time half, a two-column grid from 1024px whose reading order is What makes
-  a big day → What a big day actually tracks with → Big jobs → The quick stuff →
-  Trend → What you sold → Claims and recovery. Every section is a **zone** with
-  its name in small capitals and, at its right, a small figure (What's costing
-  you: the total; Best days: the best day; Trend: the last finished period with
-  ↑/↓; What you sold: hours; Claims: recovered). §7e's sentences apply word for
+  all-time half: the full-width **Efficiency** zone first (it replaced Trend on
+  2026-10-04 — a missing "Trend" zone is correct), then a two-column grid from
+  1024px whose reading order is What makes a big day → What a big day actually
+  tracks with → Big jobs → The quick stuff → What you sold → Claims and
+  recovery. Every section is a **zone** with its name in small capitals and, at
+  its right, a small figure (What's costing you: the total; Best days: the best
+  day; Efficiency: "N% overall"; What you sold: hours; Claims: recovered).
+  §7e's sentences apply word for
   word. **What's costing you**: numbered rows with the hours as a figure and an
   ink bar (red when the row is rework or unpaid clock); an overrun draws in ink.
   **Where your time goes**: the desktop table has sortable headers (`↕ ↑ ↓`);
@@ -470,9 +481,19 @@ checked against the current app on 2026-10-01 and is exact.
   between), `unpaid rework` is a **red** tag, "never timed" is plain dim text;
   on phones the sort is a three-button group (Worst first / Most used / Code).
   **Best days**: a By day / By efficiency button group and seven plate cells,
-  the best day outlined green. **Trend**: the bars fill in ink with the current
-  period in the accent, the in-progress bar dimmed, par as a dashed line
-  labelled 100%, labels under the plot with "In progress" on its own line.
+  the best day outlined green. **Efficiency**: one bar per pay period over the
+  WHOLE history (not six), filled in ink with the current period in the accent,
+  the in-progress bar dimmed, par as a dashed line labelled 100%, plus an
+  accent **line** for the overall figure as it stood after each period; a
+  legend "Each pay period / Overall, as it stood" under the axis. With more
+  than 12 periods only the current bar prints its % and the axis labels about
+  six periods — the rest are in a screen-reader table; that is deliberate.
+  Under the chart a **WHAT MAKES N%** block: three plates "Xh flagged ÷ Yh at
+  the shop = N%", an "At the shop:" line (clocked hours/days, scheduled
+  hours/days), then **WHERE THE POINTS COME FROM**: the top 5 codes with
+  "+N pts" and their hours, plus an "Everything else" row (see §7e Efficiency
+  for the checks). Big jobs shows 5 jobs and a quiet **Show all N** button
+  (→ "Show fewer") when there are more.
   **What you sold**: per-period rows with green bars, then a MOST UPSOLD list.
   **Claims and recovery**: four labelled figures in a spec row.
 - **Schedule.** The H1 is "Schedule" with the two-sentence lede; the month
@@ -506,8 +527,12 @@ checked against the current app on 2026-10-01 and is exact.
   first. **The sheet** (here and in the dashboard's snapshot row) is a plain
   panel with a heavy top rule, the eyebrow "FLAT RATE TRACKER · WORK RECORD",
   the title "Snapshot #N", a green **ON RECORD** tag, the four figures as a spec
-  row (ROs documented / Hours flagged / Avg vs book / Photos on file), the Top
-  operations / Overall efficiency / Range lines, and a label-style footer
+  row (ROs documented / Hours flagged / Avg vs book / **Overall efficiency** —
+  it replaced Photos on file on 2026-10-04, applied to old sheets too since the
+  number was already frozen; the cell reads "53%" with "vs clocked hours" /
+  "vs scheduled hours" / "vs clocked + scheduled" under it, or "—"), the Top
+  operations / Range lines (an "Overall efficiency: not measurable / not
+  shown" sentence only when the figure is withheld), and a label-style footer
   "GENERATED <date> · RO #<threshold> LINE". §8b's checks apply word for word.
 
 ### Signed-out pages
@@ -1883,14 +1908,14 @@ recovered. Sections appear only when they have something to say.
     ABOVE it obeys the chips ("What's costing you", "Where you're winning",
     "Where your time goes", "Best days"); everything BELOW it ignores them
     ("What makes a big day", "What a big day actually tracks with", "Big
-    jobs", "The quick stuff", Trend, **"What you sold"**, Claims and recovery).
+    jobs", "The quick stuff", Efficiency (was Trend), **"What you sold"**, Claims and recovery).
     The old per-section "ignores the window" caption is GONE — it is said once,
     structurally. Its absence is the fix, not a regression. If a section sits on
     the wrong side of that divider, that IS a bug. The heading itself is gated
-    on Trend, Claims or "What makes a big day" having something to show, while
+    on Efficiency, Claims or "What makes a big day" having something to show, while
     Big jobs, The quick stuff and What you sold render outside that gate — so on
     a sparse account those three can legitimately appear with no "All time"
-    heading above them. Report a missing heading only when Trend or Claims
+    heading above them. Report a missing heading only when Efficiency or Claims
     render without it.
 - **What's costing you (NEW 2026-08-04)** — the leak leaderboard, and the first
   thing on the page. Ranked rows (1, 2, 3…) of time you were on the clock for
@@ -1954,7 +1979,9 @@ recovered. Sections appear only when they have something to say.
     3. **never timed** — em-dashes in both hour columns. This now means ONLY
        "nothing was recorded."
   - **NEW ELEMENT 2026-09-06 (`opcode-name-collision-indistinguishable`): each
-    op-code row now carries a small `library` or `custom` origin tag.** It
+    op-code row typed in as a one-time line carries a small `custom` origin tag.**
+    **Since 2026-10-04 library rows carry NO tag** (the `library` word was
+    dropped as noise) — a bare code IS a library code; that is correct. It
     appears in "Where your time goes", "Big jobs", "The quick stuff" and —
     since 2026-09-13 — "What's costing you". It
     exists because `op_codes.code` has no unique constraint, so a library op
@@ -1967,7 +1994,7 @@ recovered. Sections appear only when they have something to say.
       Ledger rows (Waiting on parts, Waiting on approval, Shop time, unticketed
       comebacks — the ones whose sub-line reads "N entries, no flag hours" — or "1 entry, no flag hours" when there is one)
       have no op code at all, so they carry **no** tag by design. A ledger row
-      without a `library`/`custom` tag is correct output; do not report it as a
+      without a `custom` tag is correct output; do not report it as a
       missing tag.
     - **The bug this replaced:** a comeback-only code used to read
       `— — never timed` while holding real hours. If you ever see a row with
@@ -1989,9 +2016,11 @@ recovered. Sections appear only when they have something to say.
     vs `STRUT-FR` as collisions. Those are three pairs of **different** op
     codes, not a collision — a shared prefix or one extra letter is not the
     same string. Only report a collision when two rows display **identical**
-    code text, character for character. When that happens, each of the
-    identical-text rows must carry the `library`/`custom` origin tag above —
-    that pairing is the tag doing its job, not a bug. Merely similar text is
+    code text, character for character. When that happens, the typed-in row
+    must carry the `custom` tag and the library row stays bare — that pairing
+    is the tag doing its job, not a bug. Two identical bare rows (two library
+    codes with the same text) are also legitimate: they are two library
+    entries. Merely similar text is
     never reportable under this check, tag or no tag.
     - **This rule covers four surfaces: "Where your time goes", "Big jobs",
       "The quick stuff" and "What's costing you".** On the leak board the
@@ -2034,7 +2063,7 @@ recovered. Sections appear only when they have something to say.
     to an efficiency %. Check the coverage
     fraction matches the table, and that a code with zero timed jobs shows the
     "next time you log one" message instead of an empty table. This table also
-    carries the `library`/`custom` origin tag — apply the same collision rule
+    carries the `custom` origin tag (library rows bare) — apply the same collision rule
     as "Where your time goes": a collision is byte-for-byte identical code
     text, never merely similar text.
   - **The quick stuff** — the app's own worked-out times for everything under
@@ -2050,7 +2079,28 @@ recovered. Sections appear only when they have something to say.
     open question for several nights. It drops timer readings too short to be
     real measurements against a flagged multi-hour job, so a mis-tapped timer
     can't corrupt the vs-book ratio. A nonzero count is the filter working.
-- **Trend** — last six pay periods. The current period must be dimmed and
+- **Efficiency (replaced Trend 2026-10-04)** — every rule below that says
+  "Trend" applies to the Efficiency zone's bars unchanged. New checks:
+  - **One figure, three places**: the headline panel's OVERALL EFFICIENCY, the
+    Efficiency zone's head ("N% overall") and its "N% overall." sentence must
+    be identical, and the overall line's LAST point is that figure. The
+    sentence's "paid X.XXh of flag" is that figure ÷ 100.
+  - **The equation must hold**: flagged ÷ at the shop = the overall % (to the
+    rounding). The "At the shop:" clocked + scheduled hours add up to the
+    "at the shop" plate.
+  - **The points add up**: the "+N pts" rows (top 5 + Everything else) sum to
+    the overall % within a point or two (each row is rounded — the footnote
+    says so; a 1–2 point gap is NOT a bug). Each row's points = its hours ÷
+    the at-the-shop hours × 100. The upsell sentence ("Xh of that is work you
+    sold, worth N points") follows the same arithmetic.
+  - The overall figure is ALL TIME and may sit well apart from any single
+    bar — it is a career average, not the latest period. Withheld ("No
+    overall figure yet" / "Overall figure withheld") means no WHAT MAKES block
+    and "—" in the headline; that is correct.
+  - It is NOT the same number as /pay-period or the dashboard (those are one
+    period); do not compare them. It should be close to History's "All" range
+    total efficiency when History shows one.
+- **Trend** — (now the Efficiency zone's bars, every period, not six). The current period must be dimmed and
   labelled **"in progress"**, and the sentence underneath must compare the last
   two FINISHED periods, never the running one. A caption claiming a huge drop
   the day after a period rolls over is exactly the bug this fixed.
@@ -2146,7 +2196,10 @@ sanity-check each:
     2026-08-23, `snapshot-efficiency-frozen-ungated`). It now routes through the
     same excluded-days gating as every other efficiency surface, so where the
     flagged hours fell on days with nothing to measure them against, the sheet
-    prints a sentence explaining that instead of a percentage. **A withheld
+    prints a sentence explaining that instead of a percentage (and, since
+    2026-10-04, "—" in the Overall efficiency cell). An account with no work
+    schedule also gets "—" there: snapshots only freeze efficiency when a
+    schedule exists. Neither is a bug. **A withheld
     figure here is CORRECT and must not be filed as a missing number.** What
     WOULD be a bug: a bare percentage printed on a sheet whose hours were mostly
     or wholly unmeasurable, or wording implying the period is still running

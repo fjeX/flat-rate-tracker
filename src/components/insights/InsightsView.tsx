@@ -14,14 +14,8 @@ import {
 import { EmptyState } from "@/components/ui/EmptyState";
 import { OriginTag } from "@/components/insights/OriginTag";
 import { Table, Td, Th } from "@/components/ui/Table";
-import {
-  fmtHours,
-  fmtPct,
-  unpairedNoteClause,
-  unpairedNotes,
-  type DayDenom,
-  type UnpairedNote,
-} from "@/lib/stats";
+import { EfficiencySection } from "@/components/insights/EfficiencySection";
+import { fmtHours, fmtPct, type DayDenom } from "@/lib/stats";
 import { fmtMoney } from "@/lib/earnings";
 import {
   endOfMonth,
@@ -48,6 +42,7 @@ import {
   bigJobPerformance,
   displayedHours,
   displayedUses,
+  efficiencyBreakdown,
   formatRatio,
   gainBoard,
   leakBoard,
@@ -57,6 +52,7 @@ import {
   periodTrend,
   ratioOrder,
   ratioTier,
+  runningEfficiency,
   trendEfficiencyDisplay,
   weekdayEfficiency,
   type Gain,
@@ -112,14 +108,6 @@ export function strongestDaySub(weekday: number, days: number): string {
   const name = WEEKDAY_NAMES[weekday];
   return `${days === 1 ? name : `${name}s`}, over ${days} ${days === 1 ? "day" : "days"}`;
 }
-
-/**
- * The tallest trend bar, as a percentage of the plot's height (phase 5: the
- * plot grows on wider screens, so bars are no longer sized in pixels). The
- * ceiling bar reaches this; the value labels sit in the remaining headroom.
- * Exported for TrendSection's test, which asserts bar heights against it.
- */
-export const TREND_BAR_MAX = 86;
 
 type FilterKind = "week" | "period" | "month" | "all";
 
@@ -319,11 +307,14 @@ function leakWhy(leak: Leak): string {
  */
 function FindingLede({
   board,
+  overallPct,
   bestDay,
   trend,
   soldShare,
 }: {
   board: LeakBoard;
+  /** All-time, from the Efficiency zone's own series — never the window. */
+  overallPct: number | null;
   bestDay: WeekdayEfficiency | null;
   trend: { to: PeriodTrendPoint; toPct: number; fromPct: number | null } | null;
   soldShare: number | null;
@@ -333,6 +324,15 @@ function FindingLede({
   return (
     <Head className="ins-verdict">
       <HeadCells className="ins-verdict-cells">
+        {/* Leads the panel (Liem, 2026-10-04: efficiency was only shown in
+            passing). All time on purpose, "overall" means the career, so the
+            window chips below never move it; the sub-line says so. */}
+        <HeadCell
+          label="Overall efficiency"
+          className="ins-verdict-lead"
+          value={overallPct === null ? "—" : withPt(fmtPct(overallPct))}
+          sub={overallPct === null ? "not enough measured days yet" : "all time · graph below"}
+        />
         <HeadCell
           label="Unpaid this window"
           className={clean ? undefined : "is-bad"}
@@ -761,206 +761,9 @@ function BestDaysSection({
 }
 
 /**
- * Exported for its co-located test, the same way PeriodOverrideModal exports
- * `snapshot`. Driving the whole InsightsView through RTL to reach this chart
- * would exercise a dozen sibling sections and go red whenever any of them was
- * mid-edit — a regression test that fails for other people's reasons gets
- * muted, and then it isn't a gate.
- */
-export function TrendSection({
-  points,
-  today,
-}: {
-  points: PeriodTrendPoint[];
-  today: string;
-}) {
-  const last = points[points.length - 1];
-
-  // FINISHED periods only. A period two days old has two days of hours in it,
-  // and reading that against a complete period announced "efficiency is down
-  // 108 points" the morning after a period rolled over — a collapse that exists
-  // entirely in the arithmetic. The in-progress bar still draws, labelled,
-  // because the hours in it are real.
-  const complete = points.filter((p) => p.end < today);
-
-  // The printable percentage per bar, or null when there isn't one.
-  //
-  // Routed through the trend-shape adapter, NOT efficiencyDisplay directly: a
-  // PeriodTrendPoint keeps its unpaired hours OUTSIDE `flagHours` while
-  // ScheduleStats keeps them inside, and the classifier is written against the
-  // ScheduleStats convention. See trendEfficiencyDisplay in lib/insights.
-  //
-  // Keyed by period key rather than recomputed at each use, so the label, the
-  // bar height, the axis and the caption below cannot answer differently.
-  const shownPct = new Map<string, number | null>(
-    points.map((p) => {
-      const d = trendEfficiencyDisplay(p);
-      return [p.key, d.kind === "shown" ? d.pct : null];
-    }),
-  );
-  const measured = (p: PeriodTrendPoint) => shownPct.get(p.key) != null;
-
-  // THE SAME RULE NOW SETS THE AXIS, which is what was wrong with this chart.
-  // Scaling to the tallest bar of ANY period let an unfinished one define the
-  // ceiling: a period one day in, with one day of denominator, read 1565% and
-  // squashed five real periods into 4px stubs. An incomplete period is not
-  // comparable to the ones beside it, so it does not get to set the scale
-  // either — it just clips, marked, with its true figure printed above it.
-  //
-  // A WITHHELD percentage is excluded from the scale for the same reason and
-  // one more: it is not merely incomparable, it is not a measurement. A
-  // fortnight whose flagged work all landed on unscheduled Saturdays produces a
-  // number built from a hollowed-out numerator, and letting it set the ceiling
-  // would rescale five honest bars against a figure the chart is refusing to
-  // print. If nothing is measured the floor stands alone at 100.
-  //
-  // Floored at 100 so the chart always contains par. Without the floor a tech
-  // having a bad run sees every bar near the top, which reads as a good month.
-  const completeMeasured = complete.filter(measured);
-  const scaleSource =
-    completeMeasured.length > 0 ? completeMeasured : points.filter(measured);
-  const ceiling = Math.max(100, ...scaleSource.map((p) => shownPct.get(p.key)!));
-  const BAR_MAX = TREND_BAR_MAX;
-  const parOffset = (100 / ceiling) * BAR_MAX;
-  // Hours that are in no percentage on this page, because the app never learned
-  // how long those days were. Stated rather than dropped: the pairing rule is
-  // right, but "we quietly removed 40 hours of your work from the math" is not
-  // something a page gets to do silently, and the fix is one the tech can act
-  // on (clock the day, or put it on the schedule).
-  const unpaired = points.filter((p) => p.unpairedFlagHours > 0);
-  // Split by REASON before totalling. The caption below used to be one hardcoded
-  // sentence — byte-for-byte the pay-period one — telling the tech to clock the
-  // day or put it on the schedule, which is the wrong instruction for a shift
-  // that is simply still running. Both surfaces now branch on the same notes and
-  // print the same clause from lib/stats.
-  const notes: (UnpairedNote & { labels: string[] })[] = [];
-  for (const point of unpaired) {
-    for (const note of unpairedNotes(point.unpairedByReason, {
-      flagHours: point.unpairedFlagHours,
-      days: point.unpairedDays,
-    })) {
-      const found = notes.find((n) => n.kind === note.kind);
-      if (found) {
-        found.flagHours += note.flagHours;
-        found.days += note.days;
-        if (!found.labels.includes(point.label)) found.labels.push(point.label);
-      } else {
-        notes.push({ ...note, labels: [point.label] });
-      }
-    }
-  }
-
-  const deltaFrom = complete.length >= 2 ? complete[complete.length - 2] : null;
-  const deltaTo = complete.length >= 2 ? complete[complete.length - 1] : null;
-  // Both endpoints have to be printable. "came in at 0%, down from 138%" is the
-  // same hollowed-numerator claim as the bar label, stated in a full sentence —
-  // worse, not better, because a sentence sounds deliberate.
-  const fromPct = deltaFrom ? (shownPct.get(deltaFrom.key) ?? null) : null;
-  const toPct = deltaTo ? (shownPct.get(deltaTo.key) ?? null) : null;
-  const delta = toPct != null && fromPct != null ? toPct - fromPct : null;
-
-  return (
-    <Zone
-      name="Trend"
-      aside={
-        toPct != null ? (
-          <span className="ins-aside">
-            <span className="num">{withPt(fmtPct(toPct))}</span>
-            {delta !== null && Math.abs(delta) >= 1 && (
-              <span className={delta > 0 ? "ins-good" : "ins-bad"} aria-hidden="true">
-                {" "}{delta > 0 ? "↑" : "↓"}
-              </span>
-            )}
-          </span>
-        ) : undefined
-      }
-    >
-      <div className="ins-trend">
-        <div className="ins-trend-plot">
-          <div
-            className="ins-par"
-            style={{ bottom: `${parOffset}%` }}
-            aria-hidden="true"
-          >
-            <span>100%</span>
-          </div>
-          {points.map((point) => {
-            const pct = shownPct.get(point.key) ?? null;
-            // A withheld bar still DRAWS — the flagged hours in it are real and
-            // a missing column would read as a period that never happened. What
-            // it does not do is claim a height: this bar's height IS its
-            // percentage, so a withheld figure has no height to draw, and it
-            // falls to the same minimum stub an all-zero period gets. The dash
-            // above it, and the "not counted" caption below the chart, say why.
-            const value = pct ?? 0;
-            const clipped = pct !== null && value > ceiling;
-            // Every bar keeps a visible stub so an all-zero period still reads
-            // as a period rather than as missing data.
-            const height = Math.max(4, (Math.min(value, ceiling) / ceiling) * BAR_MAX);
-            const running = point.end >= today;
-            return (
-              <div key={point.key} className="ins-trend-col">
-                <span className="trend-val">{fmtPct(pct)}</span>
-                <div
-                  className={[
-                    "trend-bar",
-                    point === last && "is-current",
-                    running && "is-running",
-                    clipped && "is-clipped",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  style={{ height: `${height}%` }}
-                />
-              </div>
-            );
-          })}
-        </div>
-        {/* Outside the plot so every bar shares one baseline — the in-progress
-            column's extra line used to lift its bar and understate it. */}
-        <div className="ins-trend-x">
-          {points.map((point) => (
-            <span key={point.key} className={point === last ? "is-current" : undefined}>
-              {point.label}
-              {point.end >= today && <b>In progress</b>}
-            </span>
-          ))}
-        </div>
-      </div>
-      {/* Both figures, stated plainly, instead of the difference between them.
-          The caption used to read "up 42 points" — correct (percentage points,
-          i.e. subtract don't divide) and useless: the first tech to read it
-          asked what a point was. A stat nobody can parse is a stat nobody
-          trusts, and the two percentages say it without the vocabulary. */}
-      {delta !== null && Math.abs(delta) >= 1 && (
-        <p className="ins-fine">
-          {deltaTo!.label} came in at <b>{fmtPct(toPct)}</b>,{" "}
-          {delta > 0 ? "up from" : "down from"} <b>{fmtPct(fromPct)}</b> in{" "}
-          {deltaFrom!.label}.
-        </p>
-      )}
-      {notes.map((note) => (
-        <p key={note.kind} className="ins-fine">
-          Not counted above: <b>{fmtHours(note.flagHours)}h</b> flagged across{" "}
-          {note.days} {note.days === 1 ? "day" : "days"}{" "}
-          {note.labels.length === 1 ? `in ${note.labels[0]}` : "in these periods"}{" "}
-          {unpairedNoteClause(note, "trend")}
-        </p>
-      ))}
-      {/* The "ignores the window above" half of this caption moved up into the
-          All time heading, which now says it once for the whole half of the
-          page rather than once per section. */}
-      <p className="ins-fine">
-        Always the last six pay periods — one period on its own is not a trend.
-      </p>
-    </Zone>
-  );
-}
-
-/**
  * What you sold — upsold hours per pay period, plus the codes you sell most.
  *
- * ALL TIME, ignoring the window chips, for the same reason Trend does: six
+ * ALL TIME, ignoring the window chips, for the same reason Efficiency does: six
  * periods is a trend and one week is a single bar.
  *
  * Rendered even when nothing has ever been marked, unlike every self-hiding
@@ -1274,8 +1077,8 @@ export function InsightsView({
     () => weekdayEfficiency(scopedEntries, scopedDenom),
     [scopedEntries, scopedDenom],
   );
-  // Deliberately built from the FULL history, not the window — see the caption
-  // on TrendSection.
+  // Deliberately built from the FULL history, not the window — see the
+  // Efficiency zone (EfficiencySection).
   // Mix runs over EVERY day, not the windowed slice — see MixSection's header.
   // Quartiles cut from a one-week window are three days apiece.
   const mix = useMemo(() => {
@@ -1314,8 +1117,19 @@ export function InsightsView({
         // "still in progress" here while /pay-period calls the same day
         // unmeasurable. See isInProgressDay's fourth argument.
         hasSchedule,
+        // Every period, not the old six: the Efficiency graph is the whole
+        // career, and the running line needs the first period to start right.
+        limit: Infinity,
       }),
     [entries, denomByDay, splitDay, periodOverrides, today, hasSchedule],
+  );
+  // Overall efficiency after each period; the last point is the lifetime
+  // figure the headline cell and the zone aside print.
+  const running = useMemo(() => runningEfficiency(trend), [trend]);
+  const overallPct = running[running.length - 1]?.pct ?? null;
+  const breakdown = useMemo(
+    () => efficiencyBreakdown(entries, denomByDay, library),
+    [entries, denomByDay, library],
   );
 
   // Deliberately NOT built from `trend`, which carries PAIRED flag hours (its
@@ -1395,7 +1209,7 @@ export function InsightsView({
   );
   const verdictTrend = (() => {
     // Finished periods with a printable figure only — the same rule as the
-    // Trend caption (see TrendSection).
+    // Efficiency zone's change caption (see EfficiencySection).
     const complete = trend
       .filter((p) => p.end < today)
       .map((p) => ({ p, d: trendEfficiencyDisplay(p) }))
@@ -1419,6 +1233,7 @@ export function InsightsView({
       {hasWindowContent && (
         <FindingLede
           board={leaks}
+          overallPct={overallPct}
           bestDay={bestDay}
           trend={verdictTrend}
           soldShare={soldShare}
@@ -1467,9 +1282,18 @@ export function InsightsView({
           <span>Ignores the window above</span>
         </div>
       )}
-      {/* Same order as before, read left-to-right then down on desktop: the
-          mix pair, the job-time pair, then Trend beside What you sold, then
-          Claims. Each pair is two zones the old page stacked. */}
+      {/* Efficiency leads the all-time half at full width: it is the figure
+          the rest of the page explains. It replaced the six-bar Trend zone. */}
+      {trend.length > 0 && (
+        <EfficiencySection
+          points={trend}
+          running={running}
+          breakdown={breakdown}
+          today={today}
+        />
+      )}
+      {/* Read left-to-right then down on desktop: the mix pair, the job-time
+          pair, then What you sold beside Claims. */}
       <div className="ins-grid">
         {mix.days.length > 0 && (
           <MixSection
@@ -1481,7 +1305,6 @@ export function InsightsView({
         )}
         <BigJobsSection rows={bigJobs.rows} coverage={bigJobs.coverage} />
         <MaintenanceTimesSection inference={inference} />
-        {trend.length > 0 && <TrendSection points={trend} today={today} />}
         <UpsellSection points={upsells} codes={upsoldCodes} today={today} />
         {/* Gated only on the migration having landed — the section handles
             "nothing recovered yet" itself. */}

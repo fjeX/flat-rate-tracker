@@ -59,6 +59,26 @@ function hoursCell(): string {
   return cell.querySelector(".v")?.textContent ?? "";
 }
 
+/** The "Overall efficiency" cell (it replaced Photos on file), as rendered. */
+function effCell(): string {
+  const cell = Array.from(document.querySelectorAll(".gami-sheet-cell")).find(
+    (c) => c.querySelector(".k")?.textContent === "Overall efficiency",
+  );
+  if (!cell) throw new Error("no Overall efficiency cell rendered");
+  return cell.querySelector(".v")?.textContent ?? "";
+}
+
+describe("SnapshotSheet four figures", () => {
+  it("shows Overall efficiency where Photos on file used to be", () => {
+    render(<SnapshotSheet snapshot={snapshot(40, { photoCount: 7 })} />);
+    const labels = Array.from(document.querySelectorAll(".gami-sheet-cell .k")).map(
+      (k) => k.textContent,
+    );
+    expect(labels).toEqual(["ROs documented", "Hours flagged", "Avg vs book", "Overall efficiency"]);
+    expect(document.body.textContent).not.toMatch(/Photos on file/);
+  });
+});
+
 describe("SnapshotSheet renders hours through the shared formatter", () => {
   it("keeps the trailing zero on a whole number, like every other surface", () => {
     render(<SnapshotSheet snapshot={snapshot(2)} />);
@@ -114,7 +134,9 @@ describe("SnapshotSheet gates the frozen efficiency figure", () => {
         })}
       />,
     );
-    expect(specs()).toContain("Overall efficiency: 112% (vs scheduled hours)");
+    expect(effCell()).toBe("112%vs scheduled hours");
+    // In the cell now, not repeated in the specs.
+    expect(specs()).not.toContain("Overall efficiency");
   });
 
   it("withholds the figure when every flagged hour was unmeasurable", () => {
@@ -133,6 +155,7 @@ describe("SnapshotSheet gates the frozen efficiency figure", () => {
     expect(text).toContain("42.0h, all of the flagged hours in this range");
     expect(text).toContain("fell on 2 days with no hours to measure them against");
     expect(text).not.toContain("0%");
+    expect(effCell()).toBe("—");
     // Frozen record, not a period still running: nothing here resolves later,
     // so the live surfaces' "yet"/"so far" wording would be a lie.
     expect(text).not.toMatch(/yet|so far/);
@@ -154,6 +177,7 @@ describe("SnapshotSheet gates the frozen efficiency figure", () => {
     expect(text).toContain("32.0h of the 40.0h flagged in this range fell on a day");
     expect(text).toContain("would leave out most of the work");
     expect(text).not.toContain("30%");
+    expect(effCell()).toBe("—");
     expect(text).not.toMatch(/yet|so far/);
   });
 
@@ -168,7 +192,7 @@ describe("SnapshotSheet gates the frozen efficiency figure", () => {
         })}
       />,
     );
-    expect(specs()).toContain("Overall efficiency: 90% (vs clocked hours)");
+    expect(effCell()).toBe("90%vs clocked hours");
   });
 
   it("says nothing at all when the snapshot has no efficiency", () => {
@@ -183,6 +207,7 @@ describe("SnapshotSheet gates the frozen efficiency figure", () => {
       />,
     );
     expect(specs()).not.toContain("Overall efficiency");
+    expect(effCell()).toBe("—");
   });
 
   it("renders a blob from an older build that carries NEITHER unpaired key", () => {
@@ -198,6 +223,6 @@ describe("SnapshotSheet gates the frozen efficiency figure", () => {
     expect("unpairedFlagHours" in snap.stats).toBe(false);
     expect("unpairedDays" in snap.stats).toBe(false);
     render(<SnapshotSheet snapshot={snap} />);
-    expect(specs()).toContain("Overall efficiency: 88% (vs clocked hours)");
+    expect(effCell()).toBe("88%vs clocked hours");
   });
 });

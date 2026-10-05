@@ -116,8 +116,9 @@ describe("two rows, one code", () => {
   it("labels each row with where its code came from", () => {
     section([LIBRARY, ONE_TIME]);
 
-    // Once in the phone list and once in the table, for each row.
-    expect(screen.getAllByText("library")).toHaveLength(2);
+    // Only the exception is tagged (2026-10-04): the library row goes bare,
+    // the custom one says so — once in the phone list, once in the table.
+    expect(screen.queryAllByText("library")).toHaveLength(0);
     // "custom", not "one-time". The tag says PROVENANCE and renders beside a
     // use count — "ALIGN ONE-TIME · 40 logged" contradicted itself, and in
     // JobTimeSections MIN_DAYS_PER_CODE guarantees at least five distinct days
@@ -133,7 +134,7 @@ describe("two rows, one code", () => {
     expect(ONE_TIME.description).toBe("");
     // Two rows carrying one code text are still two distinguishable rows.
     expect(screen.getAllByText("ALIGN").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("library").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("library")).toHaveLength(0);
     expect(screen.getAllByText("custom").length).toBeGreaterThan(0);
   });
 });

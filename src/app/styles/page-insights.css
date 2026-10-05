@@ -28,15 +28,19 @@
 
 /* ---------- the verdict: the page's headline panel, then the window control ---------- */
 .ins-verdict { margin-top: var(--s3); }
+/* Overall efficiency leads on a row of its own at every width; the four
+   windowed cells sit under it (2×2 on phones, one row from 700px). */
 .ins-verdict-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.ins-verdict-cells .head-cell:nth-child(n+3) { border-top: var(--w-hair) solid var(--head-rule); }
-.ins-verdict-cells .head-cell:nth-child(3) { border-left: 0; }
+.ins-verdict-cells .ins-verdict-lead { grid-column: 1 / -1; }
+.ins-verdict-cells .head-cell:nth-child(n+2) { border-top: var(--w-hair) solid var(--head-rule); }
+.ins-verdict-cells .head-cell:nth-child(2),
+.ins-verdict-cells .head-cell:nth-child(4) { border-left: 0; }
 @media (min-width: 700px) {
   .ins-verdict-cells { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .ins-verdict-cells .head-cell:nth-child(n+3) { border-top: 0; }
-  .ins-verdict-cells .head-cell:nth-child(3) { border-left: var(--w-hair) solid var(--head-rule); }
+  .ins-verdict-cells .head-cell:nth-child(4) { border-left: var(--w-hair) solid var(--head-rule); }
 }
 .ins-verdict .head-v { font-size: var(--fs-fig); }
+.ins-verdict .ins-verdict-lead .head-v { font-size: var(--fs-sign); }
 @media (min-width: 1024px) { .ins-verdict .head-v { font-size: var(--fs-sign); } }
 .ins-verdict .head-cell.is-bad .head-v { color: var(--bad); }
 .ins-verdict .head-note b { font-weight: 700; }
@@ -129,7 +133,7 @@
 .ins-day .num { display: block; margin-top: 4px; font-size: var(--fs-num); }
 .ins-day small { display: block; margin-top: 2px; font-size: var(--fs-min); color: var(--ink-3); }
 
-/* ---------- trend: six bars against par ---------- */
+/* ---------- trend chart: bars against par (drawn by the Efficiency zone) ---------- */
 .ins-trend { position: relative; margin-top: var(--s4); }
 .ins-trend-plot { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 152px; border-bottom: var(--w-edge) solid var(--ink); }
 @media (min-width: 1024px) { .ins-trend-plot { height: 200px; } }
@@ -154,6 +158,43 @@
 .ins-trend-x span { flex: 1 1 0; min-width: 0; text-align: center; font-size: var(--fs-min); font-weight: 600; color: var(--ink-3); line-height: 1.3; }
 .ins-trend-x span.is-current { color: var(--ink); font-weight: 700; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .ins-trend-x span b { display: block; font-weight: 400; color: var(--ink-3); }
+
+/* ---------- efficiency: every period, the overall line, the breakdown ----------
+   Reuses the trend chart above. Columns have NO gap (the bar is inset by
+   padding instead) so column i's centre is exactly (i + .5) / n of the plot,
+   which is what the line's x coordinates assume. */
+.ins-eff-plot { gap: 0; }
+.ins-eff-plot .ins-trend-col { padding: 0 3px; }
+.ins-eff-plot.is-dense .ins-trend-col { padding: 0 1px; }
+/* thirty labels side by side is noise: keep them in the DOM, draw the current */
+.ins-eff-plot.is-dense .trend-val { visibility: hidden; }
+.ins-eff-plot.is-dense .ins-trend-col.is-current .trend-val { visibility: visible; }
+.ins-eff .ins-trend-x { gap: 0; }
+/* sparse labels may spill into their empty neighbours; full sets wrap */
+.ins-eff-plot.is-dense + .ins-trend-x span { overflow: visible; white-space: nowrap; }
+.ins-eff-line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.ins-eff-line polyline { fill: none; stroke: var(--accent-text); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.ins-legend i.is-line { height: 3px; background: var(--accent-text); }
+.ins-eff .ins-legend { margin-top: var(--s2); }
+
+/* the equation: flagged ÷ at the shop = overall */
+.ins-eff-why .ins-k { color: var(--ink); }
+/* one row at every width: three plates and two operators */
+.ins-eff-eq { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--s2); margin-top: var(--s3); max-width: 36rem; }
+.ins-eff-eq > div { display: flex; flex-direction: column; padding: var(--s2); background: var(--plate); border: var(--w-hair) solid var(--line); border-radius: var(--r-sign); min-width: 0; }
+.ins-eff-eq .num { font-size: var(--fs-title); letter-spacing: var(--track-fig); line-height: 1.1; white-space: nowrap; }
+@media (min-width: 700px) {
+  .ins-eff-eq > div { padding: var(--s2) var(--s3); }
+  .ins-eff-eq .num { font-size: var(--fs-fig); }
+}
+.ins-eff-eq .num .unit { font-family: var(--font-ui); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0; margin-left: 2px; color: var(--ink-2); }
+.ins-eff-eq small { margin-top: 2px; font-size: var(--fs-label); color: var(--ink-2); }
+.ins-eff-op { font-family: var(--font-num); font-size: var(--fs-title); color: var(--ink-3); }
+.ins-eff-k2 { margin-top: var(--s4); }
+.ins-eff-rows { margin-top: var(--s1); }
+.ins-eff-rows .ins-row-fig { white-space: nowrap; }
+.ins-eff-rows .ins-row-fig .ins-dim { font-size: var(--fs-label); }
+.ins-track i.is-dim { background: var(--bar-dim); }
 
 /* ---------- mix: two-segment bars, drivers ---------- */
 .ins-legend { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin-top: var(--s3); font-size: var(--fs-label); color: var(--ink-2); }

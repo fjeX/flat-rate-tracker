@@ -25,5 +25,11 @@ import { opCodeOrigin, OP_CODE_ORIGIN_LABEL } from "@/lib/insights";
  * lib/insights beside the predicate.
  */
 export function OriginTag({ row }: { row: { key: string } }) {
-  return <span className="ins-origin">{OP_CODE_ORIGIN_LABEL[opCodeOrigin(row)]}</span>;
+  // Library rows go bare (Liem, 2026-10-04: "library" beside every code was
+  // noise — techs know their codes come from their library). Only the
+  // exception is marked, and that alone still tells a library ALIGN from a
+  // typed ALIGN: one row says "custom", the other says nothing.
+  const origin = opCodeOrigin(row);
+  if (origin === "library") return null;
+  return <span className="ins-origin">{OP_CODE_ORIGIN_LABEL[origin]}</span>;
 }

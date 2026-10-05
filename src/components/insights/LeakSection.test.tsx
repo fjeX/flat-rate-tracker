@@ -69,7 +69,8 @@ describe("LeakSection origin tags", () => {
     const codes = screen.getAllByText("WHL-BRG");
     expect(codes).toHaveLength(2);
     // Same code, different tag — the row, not the table, has to carry it.
-    expect(within(codes[0].parentElement as HTMLElement).getByText("library")).toBeTruthy();
+    // Library rows are bare since 2026-10-04; the custom one is the marked one.
+    expect(within(codes[0].parentElement as HTMLElement).queryByText("library")).toBeNull();
     expect(within(codes[1].parentElement as HTMLElement).getByText("custom")).toBeTruthy();
   });
 
@@ -86,7 +87,7 @@ describe("LeakSection origin tags", () => {
   it("tags only the op-code rows on a mixed board", () => {
     render(<LeakSection board={board([LIB, LEDGER, CUSTOM])} />);
 
-    expect(screen.getAllByText("library")).toHaveLength(1);
+    expect(screen.queryAllByText("library")).toHaveLength(0);
     expect(screen.getAllByText("custom")).toHaveLength(1);
   });
 });

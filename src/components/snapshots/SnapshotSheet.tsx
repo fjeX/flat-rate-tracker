@@ -98,9 +98,30 @@ export function SnapshotSheet({
             )}
           </dd>
         </div>
+        {/* Took Photos on file's place (Liem, 2026-10-04): few techs photograph
+            their ROs, and efficiency is the figure a service manager actually
+            asks about. photoCount is still frozen in the stats blob, just not
+            printed. Withheld or absent reads "—", and a withheld figure is
+            explained in the specs below. */}
         <div className="gami-sheet-cell">
-          <dt className="k">Photos on file</dt>
-          <dd className="v">{s.photoCount}</dd>
+          <dt className="k">Overall efficiency</dt>
+          <dd className="v">
+            {eff.kind === "shown" ? (
+              <>
+                {withPt(String(Math.round(eff.pct)))}
+                <small>%</small>
+                <small className="sub">
+                  {s.efficiencySource === "scheduled"
+                    ? "vs scheduled hours"
+                    : s.efficiencySource === "mixed"
+                      ? "vs clocked + scheduled"
+                      : "vs clocked hours"}
+                </small>
+              </>
+            ) : (
+              "—"
+            )}
+          </dd>
         </div>
       </dl>
       <div className="gami-sheet-specs">
@@ -108,17 +129,6 @@ export function SnapshotSheet({
           <>
             <b>Top operations:</b>{" "}
             {s.topOps.map((op) => `${op.code} (${op.count})`).join(" · ")}
-            <br />
-          </>
-        )}
-        {eff.kind === "shown" && (
-          <>
-            <b>Overall efficiency:</b> {Math.round(eff.pct)}%
-            {s.efficiencySource === "scheduled"
-              ? " (vs scheduled hours)"
-              : s.efficiencySource === "mixed"
-                ? " (vs clocked + scheduled hours)"
-                : " (vs clocked hours)"}
             <br />
           </>
         )}

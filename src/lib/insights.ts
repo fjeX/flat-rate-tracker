@@ -1050,6 +1050,172 @@ export function periodTrend(
 }
 
 // ---------------------------------------------------------------------------
+// Overall efficiency — the lifetime figure, and how it got there
+// ---------------------------------------------------------------------------
+
+export type RunningEfficiencyPoint = {
+  key: string;
+  /** The overall figure as it stood at the end of this period, or null when
+   * the shared classifier withholds it. */
+  pct: number | null;
+  display: EfficiencyDisplay;
+};
+
+/**
+ * Overall efficiency as it stood at the end of each period: every period up to
+ * and including this one, summed, then divided once.
+ *
+ * NOT an average of the period percentages. A two-day period at 300% would
+ * count as much as a full fortnight at 110%; summing the hours first is what
+ * makes the last point equal the lifetime figure exactly. Pass the UNCAPPED
+ * trend (periodTrend with limit Infinity) or the first point starts mid-career.
+ *
+ * Built from the trend points rather than from a second walk over the entries,
+ * so a bar and the line above it can never disagree about a period's hours.
+ * Each cumulative point goes through trendEfficiencyDisplay, the same withhold
+ * rule every bar uses.
+ */
+export function runningEfficiency(
+  points: PeriodTrendPoint[],
+): RunningEfficiencyPoint[] {
+  let flagHours = 0;
+  let denomHours = 0;
+  let unpairedFlagHours = 0;
+  let unpairedDays = 0;
+  return points.map((p) => {
+    flagHours += p.flagHours;
+    denomHours += p.denomHours;
+    unpairedFlagHours += p.unpairedFlagHours;
+    unpairedDays += p.unpairedDays;
+    // Nothing flagged at all, counted or not: no figure, the same answer
+    // spanEfficiencyDisplay gives History for that span. Without this a lone
+    // clocked day read "0% overall · paid 0.00h of flag" here and nothing there.
+    const display: EfficiencyDisplay =
+      flagHours <= 0 && unpairedFlagHours <= 0
+        ? { kind: "none" }
+        : trendEfficiencyDisplay({
+            ...p,
+            flagHours,
+            denomHours,
+            efficiency: computeEfficiency(flagHours, denomHours),
+            unpairedFlagHours,
+            unpairedDays,
+          });
+    return {
+      key: p.key,
+      pct: display.kind === "shown" ? display.pct : null,
+      display,
+    };
+  });
+}
+
+/** One op code's share of the overall figure. */
+export type EfficiencyContribution = {
+  key: string;
+  code: string;
+  description: string;
+  /** Flag hours on counted days. */
+  hours: number;
+  /** Percentage points of overall efficiency: hours ÷ shop hours × 100. */
+  points: number;
+};
+
+export type EfficiencyBreakdown = {
+  /** The numerator: flag hours on days that have a length. */
+  flagHours: number;
+  /** The denominator, and where it came from. */
+  shopHours: number;
+  clockedHours: number;
+  clockedDays: number;
+  scheduledHours: number;
+  scheduledDays: number;
+  /** The biggest contributors, largest first. */
+  top: EfficiencyContribution[];
+  /** Everything outside `top`, so top + rest always add up to the figure. */
+  rest: { hours: number; points: number; codes: number };
+  /** Upsold hours on counted days, and the points they are worth. */
+  upsell: { hours: number; points: number };
+};
+
+/**
+ * What generates the overall figure, split the only way it splits exactly.
+ *
+ * Efficiency is flag ÷ shop hours, so every flagged hour on a counted day is
+ * worth `1 ÷ shopHours × 100` points, and a code's points are its hours times
+ * that. The rows add up to the headline figure: no weights, no estimates, no
+ * second formula. "Counted" is denomByDay's key set, the same set
+ * spanEfficiency and periodTrend read, so a flag hour from an unclocked
+ * Saturday is in none of these rows, as it is in no percentage.
+ *
+ * Null when there is no shop time to divide by.
+ */
+export function efficiencyBreakdown(
+  entries: Entry[],
+  denomByDay: Record<string, DayDenom>,
+  library: OpCode[],
+  topN = 5,
+): EfficiencyBreakdown | null {
+  let clockedHours = 0;
+  let clockedDays = 0;
+  let scheduledHours = 0;
+  let scheduledDays = 0;
+  for (const denom of Object.values(denomByDay)) {
+    if (denom.source === "clocked") {
+      clockedHours += denom.hours;
+      clockedDays += 1;
+    } else {
+      scheduledHours += denom.hours;
+      scheduledDays += 1;
+    }
+  }
+  const shopHours = clockedHours + scheduledHours;
+  if (shopHours <= 0) return null;
+  const toPoints = (hours: number) => (hours / shopHours) * 100;
+
+  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+  const byKey = new Map<string, EfficiencyContribution>();
+  let flagHours = 0;
+  let upsellHours = 0;
+  let ungrouped = 0;
+  for (const entry of entries) {
+    if (!denomByDay[entry.date]) continue;
+    for (const line of entry.opCodes) {
+      if (line.flagHours <= 0) continue;
+      flagHours += line.flagHours;
+      if (line.isUpsell) upsellHours += line.flagHours;
+      const id = groupKey(line, libraryById);
+      if (!id) {
+        // A line with no code at all still flagged hours, and still counts.
+        ungrouped += line.flagHours;
+        continue;
+      }
+      const row = byKey.get(id.key);
+      if (row) row.hours += line.flagHours;
+      else byKey.set(id.key, { ...id, hours: line.flagHours, points: 0 });
+    }
+  }
+
+  const rows = [...byKey.values()].sort(
+    (a, b) => b.hours - a.hours || a.code.localeCompare(b.code),
+  );
+  for (const row of rows) row.points = toPoints(row.hours);
+  const top = rows.slice(0, topN);
+  const restRows = rows.slice(topN);
+  const restHours = restRows.reduce((s, r) => s + r.hours, 0) + ungrouped;
+  return {
+    flagHours,
+    shopHours,
+    clockedHours,
+    clockedDays,
+    scheduledHours,
+    scheduledDays,
+    top,
+    rest: { hours: restHours, points: toPoints(restHours), codes: restRows.length },
+    upsell: { hours: upsellHours, points: toPoints(upsellHours) },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Span of the data, for the denominator map the caller has to build
 // ---------------------------------------------------------------------------
 

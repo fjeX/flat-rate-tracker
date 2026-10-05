@@ -5,9 +5,9 @@
 // — so a bar that stops being wired to the row fails here instead of passing on
 // a hand-built props object.
 import { describe, it, expect, afterEach } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
-import { BigJobsSection } from "./JobTimeSections";
+import { BIG_JOBS_COLLAPSED, BigJobsSection } from "./JobTimeSections";
 import { strongestDaySub } from "./InsightsView";
 import { bigJobCoverage, bigJobPerformance } from "@/lib/insights";
 import type { Entry, EntryOpCode } from "@/lib/types";
@@ -114,5 +114,34 @@ describe("strongestDaySub", () => {
   });
   it("goes singular at one day", () => {
     expect(strongestDaySub(4, 1)).toBe("Thursday, over 1 day");
+  });
+});
+
+describe("BigJobsSection — Show all", () => {
+  // Seven timed codes, so two sit behind the toggle.
+  const many = Array.from({ length: BIG_JOBS_COLLAPSED + 2 }, (_, i) =>
+    mk(`j${i}`, `JOB${i}`, 3, 3 + i * 0.1),
+  );
+  const shownRows = (c: HTMLElement) => c.querySelectorAll("tr.ins-cmp-head").length;
+
+  it("shows the first few and says how many there are", () => {
+    const { container } = renderBig(many);
+    expect(shownRows(container)).toBe(BIG_JOBS_COLLAPSED);
+    expect(screen.getByRole("button", { name: `Show all ${many.length}` })).toBeTruthy();
+  });
+
+  it("expands to every job and collapses back", () => {
+    const { container } = renderBig(many);
+    fireEvent.click(screen.getByRole("button", { name: /Show all/ }));
+    expect(shownRows(container)).toBe(many.length);
+    const fewer = screen.getByRole("button", { name: "Show fewer" });
+    expect(fewer.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(fewer);
+    expect(shownRows(container)).toBe(BIG_JOBS_COLLAPSED);
+  });
+
+  it("has no toggle when everything already fits", () => {
+    renderBig(many.slice(0, BIG_JOBS_COLLAPSED));
+    expect(screen.queryByRole("button", { name: /Show/ })).toBeNull();
   });
 });

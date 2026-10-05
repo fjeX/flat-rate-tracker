@@ -10,7 +10,7 @@
 //
 // They are deliberately adjacent so the page reads as one idea with two methods,
 // rather than as a feature and an apology for a missing feature.
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Zone } from "@/components/ui/Zone";
 import { Table, Td, Th } from "@/components/ui/Table";
 import { withPt } from "@/components/ui/Figure";
@@ -28,6 +28,13 @@ import { OriginTag } from "@/components/insights/OriginTag";
 import { HEAVY_FLAG_HOURS } from "@/lib/mix";
 import type { Inference } from "@/lib/time-inference";
 
+/**
+ * Jobs shown before "Show all". Each job is two table rows (figures, then the
+ * bars), so a long list stretched the page far past everything under it
+ * (Liem, 2026-10-04). Exported for the section's test.
+ */
+export const BIG_JOBS_COLLAPSED = 5;
+
 export function BigJobsSection({
   rows,
   coverage,
@@ -35,9 +42,11 @@ export function BigJobsSection({
   rows: BigJobRow[];
   coverage: BigJobCoverage;
 }) {
+  const [expanded, setExpanded] = useState(false);
   if (coverage.lines === 0) return null;
 
   const measured = rows.filter((r) => r.timedUses > 0);
+  const shown = expanded ? measured : measured.slice(0, BIG_JOBS_COLLAPSED);
   const implausible = rows.reduce((sum, r) => sum + r.implausibleUses, 0);
 
   return (
@@ -76,7 +85,7 @@ export function BigJobsSection({
               </tr>
             </thead>
             <tbody>
-              {measured.map((row) => {
+              {shown.map((row) => {
                 const tier = ratioTier(row.ratio);
                 const yourAvg = row.actualTotal / row.timedUses;
                 const bookAvg = row.flagTotal / row.timedUses;
@@ -145,6 +154,18 @@ export function BigJobsSection({
               })}
             </tbody>
           </Table>
+          {measured.length > BIG_JOBS_COLLAPSED && (
+            <div className="ins-table-note">
+              <button
+                type="button"
+                className="btn btn-quiet btn-sm"
+                aria-expanded={expanded}
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? "Show fewer" : `Show all ${measured.length}`}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

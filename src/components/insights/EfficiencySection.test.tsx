@@ -23,11 +23,30 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import React from "react";
-import { TREND_BAR_MAX, TrendSection } from "./InsightsView";
-import { trendEfficiencyDisplay, type PeriodTrendPoint } from "@/lib/insights";
+import { TREND_BAR_MAX, EfficiencySection } from "./EfficiencySection";
+import {
+  efficiencyBreakdown,
+  runningEfficiency,
+  trendEfficiencyDisplay,
+  type PeriodTrendPoint,
+} from "@/lib/insights";
 import { emptyUnpairedByReason } from "@/lib/stats";
 
 afterEach(cleanup);
+
+/** The Trend zone moved into the Efficiency zone (2026-10-04); every guarantee
+ * below carried over. Same props as before plus the running series, built the
+ * way InsightsView builds it. */
+function TrendSection({ points, today }: { points: PeriodTrendPoint[]; today: string }) {
+  return (
+    <EfficiencySection
+      points={points}
+      running={runningEfficiency(points)}
+      breakdown={null}
+      today={today}
+    />
+  );
+}
 
 // ONE locator, used by both the "must not appear" and the "must appear" cases.
 const ANY_PCT = /\d+%/;
@@ -392,5 +411,174 @@ describe("TrendSection — why those hours were not counted", () => {
     const text = document.body.textContent ?? "";
     expect(text).toMatch(/Not counted above/);
     expect(text).toMatch(GO_FIX_IT);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the Efficiency zone added on top of Trend (2026-10-04).
+// ---------------------------------------------------------------------------
+describe("EfficiencySection — the overall figure", () => {
+  it("leads with the lifetime figure, which is the running line's last point", () => {
+    render(<TrendSection points={[JUL_A, JUL_B, AUG_B_MEASURED]} today={TODAY} />);
+    // (80 + 96 + 42) / (80 + 80 + 32) = 113.5%
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/114% overall\./);
+    expect(text).toMatch(/paid 1\.14h of flag/);
+    expect(document.querySelector(".zone-aside, .ins-aside")?.textContent).toMatch(/114%/);
+  });
+
+  it("draws the overall line through every printable point", () => {
+    render(<TrendSection points={[JUL_A, JUL_B, AUG_B_MEASURED]} today={TODAY} />);
+    const line = document.querySelector(".ins-eff-line polyline");
+    expect(line?.getAttribute("points")?.split(" ")).toHaveLength(3);
+  });
+
+  it("withholds the overall figure the way the classifier says, and says why", () => {
+    // Every hour of the only period is on days with no length.
+    render(<TrendSection points={[AUG_B_HOLLOW]} today={TODAY} />);
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/No overall figure yet/);
+    expect(text).not.toMatch(/\d+% overall/);
+    expect(document.querySelector(".ins-eff-line")).toBeNull();
+  });
+
+  it("an unfinished period clips the line rather than setting the scale", () => {
+    // Running after the in-progress period is (80+96+400)/(80+80+8) = 343%.
+    const wildNow = point({ ...AUG_B_MEASURED, flagHours: 400, denomHours: 8, efficiency: 5000 });
+    render(<TrendSection points={[JUL_A, JUL_B, wildNow]} today={TODAY} />);
+    // Ceiling stays at the tallest FINISHED figure (120%), so Jul 16–31 is full height.
+    expect(barHeights()[1]).toBeCloseTo(TREND_BAR_MAX, 5);
+  });
+
+  it("keeps every bar label in the DOM but draws only the current one when dense", () => {
+    const many = Array.from({ length: 14 }, (_, i) =>
+      point({
+        key: `p${i}`,
+        label: `P${i}`,
+        start: `2026-0${1 + Math.floor(i / 2)}-01`,
+        end: "2026-07-15",
+        flagHours: 80,
+        denomHours: 80,
+        efficiency: 100,
+      }),
+    );
+    render(<TrendSection points={many} today={TODAY} />);
+    expect(labels()).toHaveLength(14);
+    expect(document.querySelector(".ins-eff-plot.is-dense")).not.toBeNull();
+    // The screen-reader table carries every period regardless.
+    expect(document.querySelectorAll("table.sr-only tbody tr")).toHaveLength(14);
+  });
+});
+
+describe("EfficiencySection — what makes the figure", () => {
+  const line = (id: string, code: string, flagHours: number, isUpsell = false) => ({
+    id,
+    opCodeId: null,
+    custom: true,
+    customCode: code,
+    customDescription: null,
+    flagHours,
+    actualHours: null,
+    notes: "",
+    position: 0,
+    subOpCodeId: null,
+    laborType: null,
+    paidHours: null,
+    isUpsell,
+  });
+  const entry = (id: string, date: string, lines: ReturnType<typeof line>[]) => ({
+    id,
+    userId: "u",
+    createdAt: "",
+    updatedAt: "",
+    date,
+    roNumber: id,
+    vehicle: { year: "", make: "", model: "", vin: "", mileage: "" },
+    opCodes: lines,
+    flagHours: lines.reduce((s, l) => s + l.flagHours, 0),
+    notes: "",
+  });
+
+  it("splits the figure into points per code that add up to it", () => {
+    // 12h flagged over 8h at the shop = 150%: BRK 9h = 112.5 pts, LOF 3h = 37.5.
+    const entries = [entry("a", "2026-07-03", [line("1", "BRK", 9), line("2", "LOF", 3, true)])];
+    const map = { "2026-07-03": { hours: 8, source: "clocked" as const } };
+    const p = point({ ...JUL_A, flagHours: 12, denomHours: 8, efficiency: 150 });
+    render(
+      <EfficiencySection
+        points={[p]}
+        running={runningEfficiency([p])}
+        breakdown={efficiencyBreakdown(entries, map, [])}
+        today={TODAY}
+      />,
+    );
+    const text = document.body.textContent?.replace(/\s+/g, " ") ?? "";
+    expect(text).toMatch(/What makes 150%/);
+    expect(text).toMatch(/BRK.*\+113 ?pts/);
+    expect(text).toMatch(/LOF.*\+38 ?pts/);
+    expect(text).toMatch(/8\.0h clocked over 1 day/);
+    expect(text).toMatch(/3\.0h of that is work you sold, worth 38 points/);
+  });
+
+  it("shows no breakdown when the overall figure is withheld", () => {
+    render(
+      <EfficiencySection
+        points={[AUG_B_HOLLOW]}
+        running={runningEfficiency([AUG_B_HOLLOW])}
+        breakdown={null}
+        today={TODAY}
+      />,
+    );
+    expect(document.body.textContent).not.toMatch(/What makes/);
+  });
+});
+
+describe("EfficiencySection — verifier findings (2026-10-04)", () => {
+  it("breaks the overall line at a withheld point instead of bridging it", () => {
+    // Running: 100% → withheld (huge unpaired) → still withheld … then shown.
+    const hollowDone = point({
+      key: "2026-07-B",
+      label: "Jul 16–31",
+      start: "2026-07-16",
+      end: "2026-07-31",
+      flagHours: 0,
+      denomHours: 8,
+      efficiency: 0,
+      unpairedFlagHours: 400,
+      unpairedDays: 9,
+    });
+    const big = (key: string, start: string) =>
+      point({ key, label: key, start, end: "2026-08-15", flagHours: 900, denomHours: 800, efficiency: 112.5 });
+    render(
+      <TrendSection
+        points={[JUL_A, hollowDone, big("2026-08-A", "2026-08-01"), big("2026-08-X", "2026-08-02")]}
+        today={TODAY}
+      />,
+    );
+    // JUL_A alone can't make a line; the two points after the gap make one.
+    const polys = document.querySelectorAll(".ins-eff-line polyline");
+    expect(polys).toHaveLength(1);
+    expect(polys[0].getAttribute("points")?.split(" ")).toHaveLength(2);
+  });
+
+  it("never prints a periodic axis label right beside the current one", () => {
+    const many = Array.from({ length: 14 }, (_, i) =>
+      point({
+        key: `p${String(i).padStart(2, "0")}`,
+        label: `P${i}`,
+        start: `2026-01-${String(i + 1).padStart(2, "0")}`,
+        end: "2026-07-15",
+        flagHours: 80,
+        denomHours: 80,
+        efficiency: 100,
+      }),
+    );
+    render(<TrendSection points={many} today={TODAY} />);
+    const xs = Array.from(document.querySelectorAll(".ins-trend-x > span")).map(
+      (s) => s.firstChild?.textContent ?? "",
+    );
+    expect(xs[13]).toBe("P13");
+    expect(xs[12]).toBe(""); // would have collided with P13
+    expect(xs[0]).toBe("P0");
   });
 });

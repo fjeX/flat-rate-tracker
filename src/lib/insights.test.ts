@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   dataRange,
+  efficiencyBreakdown,
   displayedHours,
   displayedUses,
   bigJobCoverage,
@@ -19,10 +20,12 @@ import {
   periodTrend,
   ratioOrder,
   ratioTier,
+  runningEfficiency,
   weekdayEfficiency,
 } from "./insights";
 import { buildUnpaidSummary } from "./unpaid-summary";
-import { dailyDenominators, type DayDenom } from "./stats";
+import { dailyDenominators, spanEfficiency, type DayDenom } from "./stats";
+import { spanEfficiencyDisplay } from "./efficiency-display";
 import type {
   DailyClock,
   Entry,
@@ -1527,5 +1530,132 @@ describe("bigJobReason", () => {
 
   it("never calls it efficiency", () => {
     expect(bigJobReason(rowOf(Array(4).fill([2, 2.9])))).not.toMatch(/efficien|%/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Overall efficiency (2026-10-04) — the lifetime figure and its breakdown.
+// Neither is a new formula: both must land on exactly what spanEfficiency, the
+// History bars and /pay-period compute for the same days.
+// ---------------------------------------------------------------------------
+
+describe("runningEfficiency", () => {
+  const entries = [
+    entry([line({ flagHours: 10 })], { id: "a", date: "2026-07-03" }), // P1
+    entry([line({ flagHours: 30 })], { id: "b", date: "2026-07-20" }), // P2
+    entry([line({ flagHours: 6 })], { id: "c", date: "2026-08-04" }), // P3
+  ];
+  const map = denom({
+    "2026-07-03": 8,
+    "2026-07-20": 8,
+    "2026-07-21": 8, // clocked, no flag: still shop time
+    "2026-08-04": 8,
+  });
+
+  it("sums hours across periods, it does not average the percentages", () => {
+    const trend = periodTrend(entries, map, { splitDay: 15, limit: Infinity });
+    const run = runningEfficiency(trend);
+    expect(run.map((r) => r.key)).toEqual(["2026-07-P1", "2026-07-P2", "2026-08-P1"]);
+    expect(run[0].pct).toBeCloseTo(125, 5); // 10 / 8
+    expect(run[1].pct).toBeCloseTo((40 / 24) * 100, 5); // not (125 + 187.5) / 2
+    expect(run[2].pct).toBeCloseTo((46 / 32) * 100, 5);
+  });
+
+  it("ends on exactly the figure spanEfficiency gives the whole range", () => {
+    const trend = periodTrend(entries, map, { splitDay: 15, limit: Infinity });
+    const last = runningEfficiency(trend).at(-1)!;
+    const span = spanEfficiencyDisplay(spanEfficiency(entries, map, "2026-07-01", "2026-08-31"));
+    expect(span.kind).toBe("shown");
+    expect(last.pct).toBeCloseTo((span as { pct: number }).pct, 9);
+  });
+
+  it("withholds a point exactly when the shared classifier would", () => {
+    // 4h counted, 40h on days with no length: the counted share is under half.
+    const trend = periodTrend(
+      [
+        entry([line({ flagHours: 4 })], { id: "a", date: "2026-07-03" }),
+        entry([line({ flagHours: 40 })], { id: "b", date: "2026-07-04" }),
+      ],
+      denom({ "2026-07-03": 8 }),
+      { splitDay: 15, limit: Infinity },
+    );
+    const run = runningEfficiency(trend);
+    expect(run[0].pct).toBeNull();
+    expect(run[0].display.kind).toBe("mostly_excluded");
+  });
+
+  it("is empty for an empty trend", () => {
+    expect(runningEfficiency([])).toEqual([]);
+  });
+});
+
+describe("efficiencyBreakdown", () => {
+  const entries = [
+    entry(
+      [
+        line({ id: "1", opCodeId: "oc1", flagHours: 6 }),
+        line({ id: "2", opCodeId: "oc2", flagHours: 1, isUpsell: true }),
+      ],
+      { id: "a", date: "2026-07-03" },
+    ),
+    entry([line({ id: "3", opCodeId: "oc1", flagHours: 4 })], { id: "b", date: "2026-07-06" }),
+    // A Saturday nobody clocked: in no percentage, so in no row either.
+    entry([line({ id: "4", opCodeId: "oc2", flagHours: 9 })], { id: "c", date: "2026-07-04" }),
+  ];
+  const map: Record<string, DayDenom> = {
+    "2026-07-03": { hours: 8, source: "clocked" },
+    "2026-07-06": { hours: 8, source: "scheduled" },
+  };
+
+  it("adds up to the overall figure: points are hours over shop hours", () => {
+    const b = efficiencyBreakdown(entries, map, library)!;
+    expect(b.flagHours).toBe(11);
+    expect(b.shopHours).toBe(16);
+    const total =
+      b.top.reduce((sum, r) => sum + r.points, 0) + b.rest.points;
+    expect(total).toBeCloseTo((11 / 16) * 100, 9);
+    const span = spanEfficiency(entries, map, "2026-07-01", "2026-07-31")!;
+    expect(total).toBeCloseTo((span.flagHours / span.denom.hours) * 100, 9);
+  });
+
+  it("ranks codes by flag on counted days only", () => {
+    const b = efficiencyBreakdown(entries, map, library)!;
+    expect(b.top.map((r) => [r.code, r.hours])).toEqual([
+      ["B12", 10],
+      ["LOF", 1], // the uncounted Saturday 9h is not here
+    ]);
+    expect(b.top[0].points).toBeCloseTo(62.5, 9);
+  });
+
+  it("splits the shop hours by where they came from", () => {
+    const b = efficiencyBreakdown(entries, map, library)!;
+    expect([b.clockedHours, b.clockedDays, b.scheduledHours, b.scheduledDays]).toEqual([8, 1, 8, 1]);
+  });
+
+  it("prices the upsold hours in points", () => {
+    const b = efficiencyBreakdown(entries, map, library)!;
+    expect(b.upsell.hours).toBe(1);
+    expect(b.upsell.points).toBeCloseTo(6.25, 9);
+  });
+
+  it("folds everything past the top N into one row so the sum still holds", () => {
+    const b = efficiencyBreakdown(entries, map, library, 1)!;
+    expect(b.top).toHaveLength(1);
+    expect(b.rest).toEqual({ hours: 1, points: 6.25, codes: 1 });
+  });
+
+  it("is null with no shop time to divide by", () => {
+    expect(efficiencyBreakdown(entries, {}, library)).toBeNull();
+  });
+});
+
+describe("runningEfficiency — nothing flagged (verifier finding, 2026-10-04)", () => {
+  it("gives no figure for clocked days with no flag at all, as History does", () => {
+    const map = denom({ "2026-07-03": 8 });
+    const trend = periodTrend([], map, { splitDay: 15, limit: Infinity });
+    const last = runningEfficiency(trend).at(-1)!;
+    expect(last.display.kind).toBe("none");
+    expect(last.pct).toBeNull();
+    expect(spanEfficiencyDisplay(spanEfficiency([], map, "2026-07-01", "2026-07-31")).kind).toBe("none");
   });
 });
