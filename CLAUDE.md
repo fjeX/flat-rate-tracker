@@ -96,7 +96,7 @@ Traefik is already running on this VM and owns ports 80 and 443. **Never add Cad
 
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are baked into the Next.js bundle at build time. Changing `.env` without rebuilding does nothing. Always rebuild after changing these vars.
 
-`NEXT_PUBLIC_SUPABASE_URL` must be `https://api.slimelab.cc`.
+On the VM (the production build), `NEXT_PUBLIC_SUPABASE_URL` must be `https://api.slimelab.cc`. Local dev is the opposite: `.env.local` points at the staging project, and `next.config.ts` refuses to start `next dev` against prod (see `src/lib/supabase/environments.ts`).
 
 ### SUPABASE_INTERNAL_URL Is Runtime-Only
 

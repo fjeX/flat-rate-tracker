@@ -1,6 +1,6 @@
 ---
 name: migrate
-description: "Apply pending Supabase database migrations for the Flat Rate Tracker. VM-only, run from ~/docker/flat-rate-tracker — NEVER run during local dev on the PC or laptop, because local dev points at prod Supabase (api.slimelab.cc). Invoked unconditionally by the rebuild skill on every rebuild; also use when Liem says 'run the migrations' or 'apply the migration' while on the VM."
+description: "Apply pending Supabase database migrations for the Flat Rate Tracker. VM-only, run from ~/docker/flat-rate-tracker — it migrates PROD, so never run it on the PC or laptop (local dev uses the staging project; staging gets migrations via `supabase db push`, see 'Staging first'). Invoked unconditionally by the rebuild skill on every rebuild; also use when Liem says 'run the migrations' or 'apply the migration' while on the VM."
 ---
 
 # Migrate — Apply Pending FRT Database Migrations
@@ -8,6 +8,22 @@ description: "Apply pending Supabase database migrations for the Flat Rate Track
 Apply every migration file that the database has not recorded yet. Uses `docker exec` directly — no Supabase SQL editor needed.
 
 Run the following steps using the Bash tool from `~/docker/flat-rate-tracker`.
+
+## Staging first — before any migration reaches this skill
+
+Every new migration runs on **staging** before it runs on prod (since 2026-10-07).
+On the PC or laptop, from `projects/flat-rate-tracker/` (CLI logged in + linked to
+staging, password in `.env.staging.local`):
+
+```bash
+npx --yes supabase@2.120.0 db push --dry-run   # shows exactly what will run
+npx --yes supabase@2.120.0 db push             # applies to STAGING only
+```
+
+Then record it in staging's `public.applied_migrations` too (`insert ... on conflict
+do nothing`) so both ledgers agree, exercise the change on `npm run dev` (which is on
+staging), and only then push the code and let this skill run on the VM. If the push
+fails on staging, it would have failed on prod — fix the migration, don't skip ahead.
 
 ## What "pending" means — read this before changing anything
 

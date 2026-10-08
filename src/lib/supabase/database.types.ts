@@ -40,6 +40,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          inserted_by: string | null
           message: string
           stack_hash: string | null
           url: string | null
@@ -48,6 +49,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          inserted_by?: string | null
           message: string
           stack_hash?: string | null
           url?: string | null
@@ -56,6 +58,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          inserted_by?: string | null
           message?: string
           stack_hash?: string | null
           url?: string | null
