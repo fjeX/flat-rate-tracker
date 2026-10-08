@@ -539,6 +539,36 @@ export type RecoveryApplication = {
    * claim's own apply having landed.
    */
   moved: MovedRecoveryLine[];
+  /**
+   * needsLineBreakdown claims only: how far each claimed line's paid hours
+   * have risen since the claim froze them, per live line found by its STORED
+   * line id. This is the trace of the tech typing the breakdown in by hand,
+   * which the app has no other record of (the close flow never writes
+   * dispute_lines.recovered_hours). Empty on every other road.
+   *
+   * Each figure is max(0, live paid − frozen paid), capped at that line's own
+   * ask, so an unrelated edit on a claimed line counts for at most what the
+   * line asked for. A line frozen pending (paid null — claimed via "also claim
+   * lines you never marked paid") contributes nothing: its rise is its normal
+   * pay arriving, indistinguishable from recovery. A line pending live
+   * contributes nothing either. A legacy row
+   * (no stored id), a deleted line and an id that no longer resolves
+   * contribute nothing: the note asking for the breakdown keeps showing,
+   * which is today's behaviour.
+   *
+   * Reported, never decided on here: whether these hours are THIS claim's is
+   * a period-level question (another round may share the line), so
+   * periodRecoveryPlan owns the verdict — see PeriodRecovery.breakdownEntered.
+   */
+  enteredLines: EnteredRecoveryLine[];
+};
+
+export type EnteredRecoveryLine = {
+  lineId: string;
+  entryId: string;
+  roNumber: string;
+  /** Paid hours added since the claim froze the line, capped at its ask. */
+  hours: number;
 };
 
 export type MovedRecoveryLine = {
@@ -565,6 +595,7 @@ const EMPTY_APPLICATION: RecoveryApplication = {
   unmappedHours: 0,
   needsLineBreakdown: false,
   moved: [],
+  enteredLines: [],
 };
 
 /**
@@ -659,15 +690,17 @@ export function pendingRecoveryApplication(
   // whole recovery is written as before. Nothing is clamped against flag hours.
   // Whatever fails to map falls out in `unmapped` below.
 
+  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
+
   if (!usePerLine && !fullSettlement && !singleLineRecovery) {
     return {
       ...EMPTY_APPLICATION,
       unmappedHours: dispute.recoveredHours,
       needsLineBreakdown: dispute.lines.length > 0,
+      enteredLines: enteredSinceClaim(dispute, entries, libraryById),
     };
   }
 
-  const libraryById = new Map(library.map((oc) => [oc.id, oc]));
   const rows: RecoveryApplicationRow[] = [];
   let applyHours = 0;
   let matchedRecovery = 0;
@@ -805,7 +838,58 @@ export function pendingRecoveryApplication(
     unmappedHours: exceedsRounding(unmapped) ? unmapped : 0,
     needsLineBreakdown: false,
     moved,
+    enteredLines: [],
   };
+}
+
+/**
+ * The per-line paid-hours rise behind RecoveryApplication.enteredLines.
+ *
+ * Only rows with a STORED line id count, resolved through resolveLiveLines'
+ * pass 0 (the id is authoritative; a duplicate id resolves once). Rows the
+ * heuristic would pair are deliberately ignored: without an id the app cannot
+ * say the line it found is the claimed one, and a wrong "already entered"
+ * hides the one note telling the tech the money is not on the books — so a
+ * legacy claim keeps its note, as before. The heuristic is given 0 hours per
+ * row so it does no settled/pass-2 work whose answer would be thrown away.
+ */
+function enteredSinceClaim(
+  dispute: Dispute,
+  entries: Entry[],
+  libraryById: Map<string, OpCode>,
+): EnteredRecoveryLine[] {
+  const resolved = resolveLiveLines(
+    dispute.lines,
+    () => 0,
+    entries,
+    libraryById,
+    isLineIdEraClaim(dispute),
+  );
+  const out: EnteredRecoveryLine[] = [];
+  dispute.lines.forEach((dl, k) => {
+    const live = resolved[k];
+    if (!dl.lineId || !live || live === SETTLED) return;
+    if (live.line.id !== dl.lineId || !live.trusted) return;
+    // A line frozen PENDING (paid null) was claimed for its whole flag before
+    // the shop had paid it at all, so its rise is its ordinary pay landing on
+    // a normal stub, not this claim's money — reading it as the breakdown hid
+    // the note while a short line still lacked the recovery. It vouches for
+    // nothing (fail-safe: the note stays). A line whose LIVE paid is pending
+    // rises by nothing either, so it contributes nothing on both counts.
+    if (dl.paidHours == null || live.line.paidHours == null) return;
+    const rise = live.line.paidHours - dl.paidHours;
+    // claimedHours 0 is "no recorded ask" — nothing to cap against, so the
+    // line vouches for nothing (fail-safe: the note stays).
+    const hours = Math.min(Math.max(0, dl.claimedHours), Math.max(0, rise));
+    if (hours <= SAME_VALUE_EPS) return;
+    out.push({
+      lineId: live.line.id,
+      entryId: live.entry.id,
+      roNumber: live.entry.roNumber,
+      hours,
+    });
+  });
+  return out;
 }
 
 export type RoundRecovery = {
@@ -879,7 +963,79 @@ export type PeriodRecovery = {
    */
   disarmedHours: number;
   disarmedLines: DisarmedLine[];
+  /**
+   * The NEWEST round needs a per-line breakdown (needsLineBreakdown) and the
+   * tech has visibly entered it already: the paid hours added since that
+   * claim froze its lines account for the whole recovery, within rounding
+   * (exceedsRounding — the module's one 3-minute boundary).
+   *
+   * A separate signal, NOT needsLineBreakdown going false: the card's mutual
+   * exclusions (goodwill / period-total notes, the Apply footnote) read the
+   * raw flag and must keep doing so. Only the "enter the paid hours yourself"
+   * note is gated on this.
+   *
+   * Counted only on lines no OTHER money-bearing closed round, and no OPEN
+   * round (paid or not yet — the shop can pay before the app hears), could
+   * have put hours on — a line another round names by id, or any line on an RO where
+   * another round has an id-less row, is left out; and any other round with
+   * no lines (a period-total claim, whose money the tech may have typed onto
+   * any line) blocks it outright. On a shared line the rise since this claim
+   * froze may be the other round's money entered late, so reading it as this
+   * claim's would hide the note on hours that are not on the books.
+   *
+   * Newest round only. An older round froze its lines BEFORE newer rounds'
+   * money landed, so its rise is not attributable; the older-rounds note is
+   * check-your-stub copy that asks for no entry, and is left as it was.
+   *
+   * Errs toward false (note shown, today's behaviour): legacy claims, deleted
+   * or unresolvable lines, lines claimed while pending and shared lines all
+   * contribute 0. Errs toward true
+   * only through an unrelated edit on a claimed line, capped at that line's
+   * ask (see RecoveryApplication.enteredLines).
+   */
+  breakdownEntered: boolean;
 };
+
+/**
+ * See PeriodRecovery.breakdownEntered. `others` = every other closed round;
+ * `open` = the period's not-yet-closed rounds.
+ *
+ * An open round counts whatever its recoveredHours say: the shop can pay it,
+ * and the tech type its hours onto the lines, before anyone records an answer
+ * or closes it in the app. Its lines are treated exactly like a money-bearing
+ * closed round's — the rise on them may be ITS money, not the newest closed
+ * round's.
+ */
+function newestBreakdownEntered(
+  newest: RoundRecovery | undefined,
+  others: Dispute[],
+  open: Dispute[],
+): boolean {
+  if (!newest || !newest.plan.needsLineBreakdown) return false;
+  const paid = [
+    ...others.filter((d) => d.recoveredHours > SAME_VALUE_EPS),
+    ...open.filter((d) => !isClosed(d.status)),
+  ];
+  if (paid.some((d) => d.lines.length === 0)) return false;
+  const entered = newest.plan.enteredLines
+    .filter(
+      (e) =>
+        !paid.some((d) =>
+          d.lines.some(
+            (ol) =>
+              ol.lineId === e.lineId ||
+              (ol.lineId === null &&
+                ((ol.entryId !== null && ol.entryId === e.entryId) ||
+                  ol.roNumber === e.roNumber)),
+          ),
+        ),
+    )
+    .reduce((s, e) => s + e.hours, 0);
+  return (
+    entered > SAME_VALUE_EPS &&
+    !exceedsRounding(newest.dispute.recoveredHours - entered)
+  );
+}
 
 /**
  * Recovery across every closed claim round on one period.
@@ -891,12 +1047,15 @@ export type PeriodRecovery = {
  * write may have stranded in another.
  *
  * `closedRounds` must be the period's closed disputes, newest first — the
- * order listDisputes returns (generated_at DESC).
+ * order listDisputes returns (generated_at DESC). `openRounds` is the period's
+ * not-yet-closed disputes; only breakdownEntered reads them (an open round's
+ * lines may already carry its money — see newestBreakdownEntered).
  */
 export function periodRecoveryPlan(
   closedRounds: Dispute[],
   entries: Entry[],
   library: OpCode[],
+  openRounds: Dispute[] = [],
 ): PeriodRecovery {
   const rounds = closedRounds.map((dispute) => ({
     dispute,
@@ -994,6 +1153,11 @@ export function periodRecoveryPlan(
     applyRound,
     disarmedHours: disarmedLines.reduce((s, l) => s + l.hours, 0),
     disarmedLines,
+    breakdownEntered: newestBreakdownEntered(
+      rounds[0],
+      closedRounds.slice(1),
+      openRounds,
+    ),
   };
 }
 

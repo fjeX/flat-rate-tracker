@@ -2688,3 +2688,252 @@ describe("id-era decided per claim, and pending never matches paid 0 (wave 4)", 
         }
   });
 });
+
+// ---------------------------------------------------------------------------
+// The missing-breakdown note after a PARTIAL settlement the tech entered by
+// hand (escalation dispute-breakdown-note-partial-settlement)
+// ---------------------------------------------------------------------------
+//
+// A partial settlement leaves the claimed lines short by the unpaid remainder,
+// so "the period still reads short" could not tell "not entered yet" from
+// "entered". PeriodRecovery.breakdownEntered reads the trace instead: the
+// claimed lines' paid hours rising by the recovery since the claim froze them.
+describe("breakdownEntered — the hand-entered partial settlement", () => {
+  const ID_ERA = "2026-10-01T00:00:00.000Z";
+  // 2-line claim asking 3h + 3h (flag 4, frozen paid 1), 2.0h came back.
+  const claim = (over: Partial<Dispute> = {}, lineOver: Partial<DisputeLine>[] = [{}, {}]) =>
+    dispute({
+      id: "r2",
+      status: "resolved",
+      createdAt: ID_ERA,
+      claimedHours: 6,
+      recoveredHours: 2,
+      lines: [
+        line({ id: "a", entryId: "e1", lineId: "l1", code: "BRK-F", flaggedHours: 4, paidHours: 1, claimedHours: 3, ...lineOver[0] }),
+        line({ id: "b", entryId: "e1", lineId: "l2", code: "ALN", flaggedHours: 4, paidHours: 1, claimedHours: 3, ...lineOver[1] }),
+      ],
+      ...over,
+    });
+  const live = (p1: number | null, p2: number | null) => [
+    ro([
+      roLine({ id: "l1", customCode: "BRK-F", flagHours: 4, paidHours: p1 }),
+      roLine({ id: "l2", customCode: "ALN", flagHours: 4, paidHours: p2 }),
+    ]),
+  ];
+  const verdict = (rounds: Dispute[], entries: Entry[]) => {
+    const plan = periodRecoveryPlan(rounds, entries, []);
+    // The raw flag never moves — the card's mutual exclusions read it.
+    expect(plan.rounds[0].plan.needsLineBreakdown).toBe(true);
+    return plan.breakdownEntered;
+  };
+
+  it.each([
+    // [label, live paid l1, live paid l2, entered?]
+    ["nothing entered yet", 1, 1, false],
+    ["1 + 1 entered (the repro)", 2, 2, true],
+    ["0.5 + 0.5 entered — half the money", 1.5, 1.5, false],
+    ["2 entered on one line", 3, 1, true],
+    ["1.95 entered: 3 minutes light is rounding", 1.95, 2, true],
+    ["1.94 entered: 6 minutes light is not", 1.94, 2, false],
+    ["paid cleared to pending", null, null, false],
+    ["paid moved DOWN", 0.5, 0.5, false],
+  ] as const)("%s → %s", (_label, p1, p2, expected) => {
+    expect(verdict([claim()], live(p1, p2))).toBe(expected);
+  });
+
+  describe("a line claimed while PENDING (frozen paid null) vouches for nothing", () => {
+    // dispute_lines.paid_hours is frozen once, at insert. A pending line is
+    // claimed for its whole flag; when it is later paid on a normal stub, that
+    // rise is ordinary pay, not this claim's money.
+    it("all lines pending at claim time, all since paid: the note stays", () => {
+      const c = claim({}, [{ paidHours: null }, { paidHours: null }]);
+      expect(verdict([c], live(1, 1))).toBe(false);
+      expect(verdict([c], live(null, null))).toBe(false);
+    });
+
+    // Verifier repro 1: pending line asks 2h + short line asks 3h, 2.0h back;
+    // the pending line is reconciled to 2, the short line is untouched.
+    const mixed = () =>
+      claim({ claimedHours: 5 }, [
+        { flaggedHours: 2, paidHours: null, claimedHours: 2 },
+        { flaggedHours: 4, paidHours: 1, claimedHours: 3 },
+      ]);
+    const mixedLive = (pPending: number | null, pShort: number) => [
+      ro([
+        roLine({ id: "l1", customCode: "BRK-F", flagHours: 2, paidHours: pPending }),
+        roLine({ id: "l2", customCode: "ALN", flagHours: 4, paidHours: pShort }),
+      ]),
+    ];
+
+    it("pending line paid normally, short line untouched: the note stays (repro 1)", () => {
+      const plan = periodRecoveryPlan([mixed()], mixedLive(2, 1), []);
+      expect(plan.rounds[0].plan.needsLineBreakdown).toBe(true);
+      expect(plan.rounds[0].plan.enteredLines).toEqual([]);
+      expect(plan.breakdownEntered).toBe(false);
+    });
+
+    it("pending line paid, recovery entered on the short line: the note stops", () => {
+      expect(verdict([mixed()], mixedLive(2, 3))).toBe(true);
+      // ...and with the pending line still pending.
+      expect(verdict([mixed()], mixedLive(null, 3))).toBe(true);
+    });
+
+    it("pending 5h line paid 5 normally, 2.0h back: the note stays (repro 2)", () => {
+      const c = claim({ claimedHours: 8 }, [{ flaggedHours: 5, paidHours: null, claimedHours: 5 }, { paidHours: 1, claimedHours: 3 }]);
+      const entries = [
+        ro([
+          roLine({ id: "l1", customCode: "BRK-F", flagHours: 5, paidHours: 5 }),
+          roLine({ id: "l2", customCode: "ALN", flagHours: 4, paidHours: 1 }),
+        ]),
+      ];
+      expect(verdict([c], entries)).toBe(false);
+    });
+
+    it("a line whose LIVE paid is pending contributes nothing", () => {
+      expect(verdict([claim()], live(null, 3))).toBe(true);
+      expect(verdict([claim()], live(null, 2))).toBe(false);
+    });
+  });
+
+  it("caps an unrelated edit at the line's own ask", () => {
+    // A 1.0h-ask line bumped by 5h vouches for 1.0h, not 5h.
+    const c = claim({}, [{ claimedHours: 1 }, { claimedHours: 3 }]);
+    const plan = periodRecoveryPlan([c], live(6, 1), []);
+    expect(plan.rounds[0].plan.enteredLines.map((e) => e.hours)).toEqual([1]);
+    expect(plan.breakdownEntered).toBe(false);
+  });
+
+  it("a line with no recorded ask vouches for nothing", () => {
+    const c = claim({}, [{ claimedHours: 0 }, { claimedHours: 3 }]);
+    expect(verdict([c], live(3, 1))).toBe(false);
+  });
+
+  it("a legacy claim (no stored line ids) keeps the note, whatever the lines read", () => {
+    const legacy = claim({ createdAt: "2026-07-29T10:00:00.000Z" }, [{ lineId: null }, { lineId: null }]);
+    expect(verdict([legacy], live(2, 2))).toBe(false);
+  });
+
+  it("a deleted claimed line contributes nothing", () => {
+    // Line l2 was deleted (FK SET NULL): only l1's rise counts.
+    const c = claim({}, [{}, { lineId: null }]);
+    const gone = [ro([roLine({ id: "l1", customCode: "BRK-F", flagHours: 4, paidHours: 2 })])];
+    expect(verdict([c], gone)).toBe(false);
+    // ...and a stored id that no longer resolves contributes nothing either.
+    expect(verdict([claim()], gone)).toBe(false);
+  });
+
+  it("is never set off the needsLineBreakdown road", () => {
+    // A one-line claim applies itself; nothing to suppress.
+    const one = claim({ claimedHours: 3 }, [{}]);
+    one.lines = one.lines.slice(0, 1);
+    const plan = periodRecoveryPlan([one], live(3, 1), []);
+    expect(plan.rounds[0].plan.needsLineBreakdown).toBe(false);
+    expect(plan.rounds[0].plan.enteredLines).toEqual([]);
+    expect(plan.breakdownEntered).toBe(false);
+  });
+
+  describe("across rounds", () => {
+    // r1 (older, one-line, 1.0h back) claimed l1 too. Its money typed in late
+    // lands on l1 AFTER r2 froze it, and must not be read as r2's.
+    const r1 = (recovered = 1) =>
+      dispute({
+        id: "r1",
+        status: "resolved",
+        createdAt: ID_ERA,
+        claimedHours: 3,
+        recoveredHours: recovered,
+        lines: [line({ id: "r1a", entryId: "e1", lineId: "l1", code: "BRK-F", flaggedHours: 4, paidHours: 0, claimedHours: 3 })],
+      });
+
+    it("a line shared with an older round does not count toward the newest", () => {
+      // l1 +2 (r1's money, or r2's — the data can't say); l2 untouched.
+      expect(verdict([claim(), r1()], live(3, 1))).toBe(false);
+      // Control: the same live numbers on a single-claim period DO count.
+      expect(verdict([claim()], live(3, 1))).toBe(true);
+    });
+
+    it("an unshared line still counts on a multi-claim period", () => {
+      expect(verdict([claim(), r1()], live(1, 3))).toBe(true);
+    });
+
+    it("a denied older round shares nothing (it brought no money)", () => {
+      expect(verdict([claim(), r1(0)], live(3, 1))).toBe(true);
+    });
+
+    it("an older id-less row on the same RO blocks that RO's lines", () => {
+      const legacy = r1();
+      legacy.lines = [{ ...legacy.lines[0], lineId: null }];
+      expect(verdict([claim(), legacy], live(2, 2))).toBe(false);
+    });
+
+    it("an older money-bearing period-total round blocks it outright", () => {
+      const periodTotal = dispute({ id: "r1", status: "resolved", createdAt: ID_ERA, scope: "period", claimedHours: 4, recoveredHours: 2, lines: [] });
+      expect(verdict([claim(), periodTotal], live(2, 2))).toBe(false);
+    });
+
+    it("only the NEWEST round is judged — an older needs-breakdown round never is", () => {
+      // Newest is an applied one-line claim; the older 2-line claim's lines
+      // rose 1+1 — but on its own lines' rise the older round says nothing.
+      const newest = r1();
+      const plan = periodRecoveryPlan([newest, { ...claim(), id: "older" }], live(2, 2), []);
+      expect(plan.rounds[1].plan.needsLineBreakdown).toBe(true);
+      expect(plan.breakdownEntered).toBe(false);
+    });
+  });
+
+  describe("an OPEN later round", () => {
+    // The closed round (claim(): 2.0h back, no split) was never entered. A
+    // second round is opened on the same lines; the shop pays it and the tech
+    // types ITS hours onto the lines before closing it in the app. That rise
+    // is the open round's money, not the closed round's.
+    const open = (over: Partial<Dispute> = {}, lines?: DisputeLine[]) =>
+      dispute({
+        id: "r3",
+        status: "answered",
+        createdAt: "2026-10-05T00:00:00.000Z",
+        claimedHours: 6,
+        recoveredHours: 0,
+        lines: lines ?? [
+          line({ id: "o1", entryId: "e1", lineId: "l1", code: "BRK-F", flaggedHours: 4, paidHours: 1, claimedHours: 3 }),
+          line({ id: "o2", entryId: "e1", lineId: "l2", code: "ALN", flaggedHours: 4, paidHours: 1, claimedHours: 3 }),
+        ],
+        ...over,
+      });
+    const withOpen = (openRounds: Dispute[], entries: Entry[]) => {
+      const plan = periodRecoveryPlan([claim()], entries, [], openRounds);
+      expect(plan.rounds[0].plan.needsLineBreakdown).toBe(true);
+      return plan.breakdownEntered;
+    };
+
+    it("open round on the same lines, lines raised: the note stays", () => {
+      expect(withOpen([open()], live(2, 2))).toBe(false);
+      // Whatever stage the open round is at, recorded answer or not.
+      for (const status of ["generated", "submitted", "answered"] as const) {
+        expect(withOpen([open({ status, recoveredHours: 2 })], live(2, 2))).toBe(false);
+      }
+      // Control: without the open round the same numbers DO count.
+      expect(withOpen([], live(2, 2))).toBe(true);
+    });
+
+    it("an id-less open row on the same RO blocks that RO's lines", () => {
+      const o = open({}, [line({ id: "o1", entryId: "e1", lineId: null, roNumber: "1001", code: "BRK-F", flaggedHours: 4, paidHours: 1, claimedHours: 3 })]);
+      expect(withOpen([o], live(2, 2))).toBe(false);
+    });
+
+    it("open round on a different RO: the closed round's entry still counts", () => {
+      const other = open({}, [
+        line({ id: "o1", entryId: "e2", lineId: "l9", roNumber: "1002", code: "OIL", flaggedHours: 1, paidHours: 0, claimedHours: 1 }),
+      ]);
+      expect(withOpen([other], live(2, 2))).toBe(true);
+    });
+
+    it("an open period-total round blocks it outright", () => {
+      const periodTotal = open({ scope: "period", claimedHours: 4 }, []);
+      expect(withOpen([periodTotal], live(2, 2))).toBe(false);
+    });
+
+    it("a closed round passed as open is ignored (closed rounds go in closedRounds)", () => {
+      expect(withOpen([open({ status: "withdrawn" })], live(2, 2))).toBe(true);
+    });
+  });
+});

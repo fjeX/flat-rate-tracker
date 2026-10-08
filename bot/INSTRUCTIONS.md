@@ -997,32 +997,57 @@ the visible labels, the accessible names are "Currently working", "Hold for
 parts", "Hold for approval" and "Paused").
 
 **This section is split in two on purpose. Do §3a, then leave the page and do
-§3z–§5, then come back for §3b.** The timer needs real elapsed time and you are
+§3z–§5, then come back for §3b.** The timers need real elapsed time and you are
 never allowed to wait for it (see the ⛔ rules at the top) — so it accumulates
 while you test the Pay Period page. This is not optional sequencing: a timer you
 start and save in the same breath records ~0 and proves nothing.
 
-#### 3a. Arm the timer — do this FIRST, before §3z
-- Put an RO on a timer ("Start a timer"), confirm it is **Working**, and note the
-  wall-clock time from `date -u` in one Bash call.
-- Then **go straight to §3z and work through §5.** Do not linger on this page.
-- The "Put an RO on a timer" picker also has a **"Start without an RO"** button
-  (since 2026-09-30). A timer started that way is a **no-RO slot**: the card
-  shows "No RO yet" where the RO number would be, the NEXT field says "Attach an
-  RO to save these hours.", and an **Attach RO** button opens the picker for that
-  slot. **Save stays dashed-disabled until an RO and a line are bound — that is
-  correct, not a bug.** A timer whose RO was later deleted shows the same "No RO
-  yet" card and can be re-attached the same way. You may start **one** no-RO timer per night to exercise
-  this, but you must **Clear** it before you finish (same hygiene as §3b's
-  timers), so it never lingers into the morning.
+#### 3a. Arm the timers — do this FIRST, before §3z
+You arm **two timers on two DIFFERENT ROs**: a **parts-hold timer** and a
+**Working timer**. Call them that from here on.
+- **First, arm the parts-hold timer** (only time spent in Parts writes the
+  unpaid ledger row, §3b/§7b): put an RO on a timer, tap its **Parts** button
+  (accessible name "Hold for parts"), and note `date -u`. Wait or refresh until
+  **Waiting on parts** appears — it renders only once the hold has accrued a
+  moment, so its absence in the first second is NOT a FAIL. A held timer is not
+  Working, so the next step does not displace it (starting a timer only flips
+  other *Working* timers to Paused; a hold keeps accruing).
+- **Then** put a second RO (a different one) on a timer ("Start a timer"),
+  confirm it is **Working**, and note the wall-clock time from `date -u` in one
+  Bash call. This Working timer is the one whose hours you check for
+  plausibility in §3b.
+- Then **go straight to §3z and work through §5.** Do not linger on this page,
+  and do not start any other timer until the Working timer is saved (§3b) — a
+  third timer set to Working would pause it and corrupt the elapsed gap.
 
-#### 3b. Close it out — after you finish §5, return to /timer
+#### 3b. Close out both timers — after you finish §5, return to /timer
 - Note `date -u` again. The gap since §3a is your expected elapsed time; it will
   be several minutes, which is fine and better than the old fixed wait.
-- Save the timer to a line and verify the recorded actual hours are **plausible
-  against that gap** — not 0, not hours longer than the gap. An exact match is
-  not required (see the throttling note below); an order-of-magnitude mismatch
-  is a bug.
+- **Save the Working timer first**, to a line, and verify the recorded actual
+  hours are **plausible against that gap** — not 0, not hours longer than the
+  gap. An exact match is not required (see the throttling note below); an
+  order-of-magnitude mismatch is a bug. The plausibility check applies to this
+  timer only.
+- **Then save the parts-hold timer** to a line on its RO. Its worked time is
+  only the few seconds before you tapped Parts — that is expected, so do NOT
+  check it for plausibility (saving a hold-only timer with 0 work hours is
+  allowed; Save enables once a line is picked). Its value is the ledger row
+  from the hold, which is §7b's ledger row.
+- **Every other timer check in §3 (no-RO slot, only-one-Working, the 4th-timer
+  limit, attaching the same RO, multi-timer mechanics) runs only AFTER both
+  saves above, and every timer those checks start must be Cleared before you
+  leave §3.** Leftover slots carry into tomorrow's run, and with all 3 full
+  §3a has no "Start a timer" to arm with.
+- **Optional no-RO exercise (after both saves, never before):** the "Put an RO
+  on a timer" picker also has a **"Start without an RO"** button (since
+  2026-09-30). A timer started that way is a **no-RO slot**: the card shows
+  "No RO yet" where the RO number would be, the NEXT field says "Attach an RO to
+  save these hours.", and an **Attach RO** button opens the picker for that
+  slot. **Save stays dashed-disabled until an RO and a line are bound — that is
+  correct, not a bug.** A timer whose RO was later deleted shows the same "No RO
+  yet" card and can be re-attached the same way. You may start **one** no-RO
+  timer per night to exercise this, but you must **Clear** it before you finish
+  (same hygiene as the other timers), so it never lingers into the morning.
 - Everything below applies to §3b unless it obviously belongs to arming.
 - **The big number is WORKED time only, and it is SUPPOSED to stop moving when
   the status is Parts / Approval / Pause.** A frozen readout while on hold is
@@ -1039,10 +1064,16 @@ start and save in the same breath records ~0 and proves nothing.
     record" is CORRECT. Do not file it. To exercise the ledger deliberately,
     hold for **at least a full minute**.
   - **Required every night (2026-09-27):** put one timer on **Waiting on
-    parts for at least 2 minutes** before saving it. That hold's ledger row
-    is §7b's ledger row (the only source on this account now that §2c is
-    permanently SKIPPED) — without it every §7b ledger check, including the
-    delete, has nothing to run on.
+    parts for at least a full minute** before saving it (twice the 30s ledger
+    gate, about 0.02h, well clear of the 18–54s band that rounds to 0.01h).
+    That hold's ledger row is §7b's ledger row (the only source on this
+    account now that §2c is permanently SKIPPED) — without it every §7b
+    ledger check, including the delete, has nothing to run on. §3a starts
+    the parts-hold timer before the walk, so by now it has run far longer than
+    a minute — do not wait on it, and it is not dead browser time. If it was
+    NOT started in §3a, do not flip to Parts and save seconds later (under 30s
+    writes no row): start it now, do the remaining work, and save it only
+    after at least a full minute has passed on the clock — never idle for it.
   - The modal's "Waiting time is logged as unpaid time against this RO"
     sentence is gated on the same 30s rule. A sub-30s hold shows its duration
     but NOT that sentence — also correct.
@@ -1051,7 +1082,11 @@ start and save in the same breath records ~0 and proves nothing.
     on a hold that then writes nothing.
 - **Only one timer may be "Working" at a time.** Setting a second one to
   Working must flip the first to **Paused** (not to a hold reason). If two
-  cards show Working simultaneously, that IS a bug.
+  cards show Working simultaneously, that IS a bug. Exercise it only AFTER both
+  §3b saves (so it can't disturb the plausibility gap): start two throwaway
+  timers in turn (the no-RO one counts as the first), confirm the first flips to
+  Paused when the second goes Working, then Clear both. A timer on Parts is
+  never flipped by this — it stays on hold and keeps accruing; that is correct.
 - **Saves are additive.** Saving a timer to a line that already has actual
   hours must ADD to it, not replace it — the save modal shows the running total
   ("1.50h + 0.03h = 1.53h"). A replaced value is a bug.
@@ -1138,7 +1173,7 @@ start and save in the same breath records ~0 and proves nothing.
   it longer, and never start it and immediately save.
 
 #### 3c. The floating mini-timer (two bugs fixed 2026-08-02 — re-check both)
-While the §3a timer is armed, a floating panel rides along on every page except
+While the §3a timers are armed, a floating panel rides along on every page except
 /timer. Your §3z–§5 walk is the only part of the run that exercises it, so check
 these as you go — both of these were real, and both came from your own reports:
 - **No hydration errors.** Watch the browser console across those navigations.
@@ -1179,8 +1214,8 @@ several minutes:
 
 ### 3z. Pay Period page shape (REDESIGNED 2026-07-30 — read before §4–§7)
 
-**Before this section: §3a should already be done and a timer running.** If it
-isn't, go back and arm it now — it needs these sections' worth of elapsed time.
+**Before this section: §3a should already be done and both timers (parts hold
++ Working) running.** If it isn't, go back and arm them now — it needs these sections' worth of elapsed time.
 
 The page is a title bar (H1, period picker, status tag), a **Period totals**
 zone, a **Check the pay** zone holding the two folds, and — in the right-hand
@@ -1443,9 +1478,10 @@ tapping ⓘ also expands the fold, report it.
   reporting a false negative. **Do not** expect the offer while a claim for that
   period is still OPEN — one live claim per period is enforced by the database.
 
-**➡️ Now go back to /timer and do §3b.** The timer you armed in §3a has been
-running through §3z–§5 and that is its whole elapsed time. Close it out and
-verify the saved hours before continuing to §6.
+**➡️ Now go back to /timer and do §3b.** The two timers you armed in §3a (parts
+hold + Working) have been running through §3z–§5 and that is their whole
+elapsed time. Save the Working timer first and check its hours for plausibility,
+then save the parts-hold timer, before continuing to §6.
 
 ### 6. Spiffs & bonuses
 - Add one spiff via the quick-add flow (plausible: "alignment spiff $25",
@@ -1848,6 +1884,25 @@ Use §5 to reconcile a line to fewer hours than it flagged.
     per-line breakdown** must REFUSE to apply and ask for the breakdown. It
     must never split the money across lines by guessing — that would invent
     the shop's decision.
+    **New 2026-10-07:** the ask ("…enter the paid hours on each line
+    yourself") is hidden once the paid hours you added, summed across the
+    claimed lines, reach the recovered figure within 0.05h (3 minutes). Per
+    line, only the rise since the claim was created counts, capped at that line's
+    ask; a line still pending when the claim was created counts nothing. It applies
+    to the NEWEST closed claim only, and stays shown if another closed claim
+    with money back, or ANY still-open claim, names the same lines or ROs
+    (see the 2+ claim rule above). Apply
+    still never appears; the note's absence after a hand-entered split is
+    correct, NOT A BUG. **To test it,
+    record each claimed line's paid hours (or "pending") at the moment you
+    CREATE the claim** — you cannot reconstruct that later. **FAIL (fingerprint
+    `dispute-breakdown-note-partial-settlement`):** every claimed line was
+    non-pending at creation, the period has exactly one closed claim and no
+    open one, each
+    line's raise is no more than that line's ask, the raises total at least the
+    recovered figure, and the ask note is still shown. Worked example: two
+    lines asking 1.0h and 1.0h, recovered 1.0h, you raise them +0.6h and +0.4h
+    (total 1.0h) — the note must be gone; if it's still there, FAIL.
   - **Exception, shipped 2026-09-16:** a claim with exactly ONE line and a
     partial recovery offers **Apply** straight away — there is nothing to
     split, the whole recovery belongs to that line. Apply must move that

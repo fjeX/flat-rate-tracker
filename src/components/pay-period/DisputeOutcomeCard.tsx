@@ -57,6 +57,7 @@ const EMPTY_PLAN: RecoveryApplication = {
   unmappedHours: 0,
   needsLineBreakdown: false,
   moved: [],
+  enteredLines: [],
 };
 
 function OutcomeForm({
@@ -317,6 +318,11 @@ export function DisputeOutcomeCard({
         allDisputes.filter(closedIn(periodKey)),
         entries,
         library,
+        // Open rounds only gate breakdownEntered: a round the shop has paid
+        // but the app hasn't closed may be what raised the claimed lines.
+        allDisputes.filter(
+          (d) => d.periodKey === periodKey && !isClosed(d.status),
+        ),
       ),
     [allDisputes, periodKey, entries, library],
   );
@@ -522,7 +528,16 @@ export function DisputeOutcomeCard({
   // once the period no longer reads short, the hours are already entered.
   // Only the RENDER is gated; unmappedIsUnplaceable and showApplyFootnote read
   // needsLineBreakdown raw, for mutual exclusion, and must keep doing so.
-  const showBreakdownNote = recovery.needsLineBreakdown && shortedHours > 0;
+  //
+  // shortedHours alone cannot see a PARTIAL settlement entered by hand: the
+  // claimed lines still read short by the part the shop didn't pay, so the
+  // note kept asking for "Xh … enter it" after the tech had — an add-it-again
+  // prompt. breakdownEntered is the claimed lines' paid hours having risen by
+  // the recovery since the claim froze them (see PeriodRecovery).
+  const showBreakdownNote =
+    recovery.needsLineBreakdown &&
+    shortedHours > 0 &&
+    !periodRecovery.breakdownEntered;
   const ordinal = (n: number) => {
     const t = n % 100;
     if (t >= 11 && t <= 13) return `${n}th`;

@@ -361,12 +361,14 @@ function renderCard(over: {
   allDisputes: Dispute[];
   entries?: Entry[];
   shortedHours?: number;
+  /** As the page passes it: the period's not-closed round, also in allDisputes. */
+  openDispute?: Dispute | null;
 }) {
   const { container } = render(
     <DisputeOutcomeCard
       periodKey={PERIOD_KEY}
       periodLabel={PERIOD_LABEL}
-      openDispute={null}
+      openDispute={over.openDispute ?? null}
       allDisputes={over.allDisputes}
       entries={over.entries ?? []}
       library={[]}
@@ -1040,6 +1042,200 @@ describe("DisputeOutcomeCard multi-claim wording", () => {
         "shows hours not already on a line.",
     ]);
     expect((container.textContent ?? "").replace(/\s+/g, " ")).not.toContain("yourself");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The missing-breakdown note after a partial settlement entered by hand
+// ---------------------------------------------------------------------------
+//
+// dispute-breakdown-note-partial-settlement: the claimed lines still read short
+// by the part the shop didn't pay, so `shortedHours > 0` kept the note up after
+// the tech had typed the breakdown in — "2.0h came back… enter the paid hours"
+// beside lines already carrying it, an add-it-again prompt. The note now also
+// stops once the claimed lines' paid hours have risen by the recovery.
+describe("DisputeOutcomeCard breakdown note after a hand-entered partial settlement", () => {
+  const flat = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll("p")).map((p) =>
+      (p.textContent ?? "").replace(/\s+/g, " ").trim(),
+    );
+  // Line-id era (stored ids are 2026-09-27+), so pass 0 is trusted by date
+  // as well as by the stored id.
+  const ID_ERA = "2026-10-01T00:00:00Z";
+  // 2-line claim asking 3h + 3h at frozen paid 1, line ids stored; 2.0h back.
+  const lines = () => [
+    disputeLine({ id: "a", lineId: "l1", flaggedHours: 4, paidHours: 1, claimedHours: 3 }),
+    disputeLine({ id: "b", lineId: "l2", code: "ALN", flaggedHours: 4, paidHours: 1, claimedHours: 3 }),
+  ];
+  const entries = (p1: number, p2: number) => [
+    liveRO([
+      liveLine({ id: "l1", flagHours: 4, paidHours: p1 }),
+      liveLine({ id: "l2", customCode: "ALN", flagHours: 4, paidHours: p2 }),
+    ]),
+  ];
+  // Still short by the unpaid 4h whatever the tech entered.
+  const render1 = (p1: number, p2: number, extra: Dispute[] = []) =>
+    renderCard({
+      allDisputes: [{ ...itemizedRound(2, lines(), 6), id: "d2", createdAt: ID_ERA }, ...extra],
+      entries: entries(p1, p2),
+      shortedHours: 4,
+    });
+
+  it("single claim, nothing entered yet: the note asks, verbatim", () => {
+    expect(flat(render1(1, 1)).filter((t) => t.includes("recorded against individual lines"))).toEqual([
+      "2.0h came back on the closed claim, but it isn't recorded against " +
+        "individual lines — so FRT can't tell which ROs to mark paid. Open " +
+        "“Which lines came up short?” and enter the paid hours on each line " +
+        "yourself.",
+    ]);
+  });
+
+  it("single claim, 1 + 1 entered by hand: the note stops (the repro)", () => {
+    const container = render1(2, 2);
+    expect(noteCounts(container)).toEqual({ goodwill: 0, periodTotal: 0, breakdown: 0 });
+    // Control: the card still rendered — the re-offer for the unpaid 4h is up.
+    expect(container.textContent).toContain("still short 4.0h");
+  });
+
+  it("single claim, only 0.5 + 0.5 entered: the note keeps asking", () => {
+    expect(noteCounts(render1(1.5, 1.5))).toEqual({ goodwill: 0, periodTotal: 0, breakdown: 1 });
+  });
+
+  it("multi-claim: an older round on another RO doesn't stop the newest round's note going quiet", () => {
+    const older: Dispute = {
+      ...itemizedRound(1, [disputeLine({ id: "o", entryId: "e9", roNumber: "2002", lineId: "l9", claimedHours: 1 })], 1),
+      id: "d1",
+    };
+    expect(noteCounts(render1(2, 2, [older])).breakdown).toBe(0);
+    cleanup();
+    expect(noteCounts(render1(1, 1, [older])).breakdown).toBe(1);
+  });
+
+  it("multi-claim: an older round on the SAME line keeps the newest round's note up", () => {
+    const older: Dispute = {
+      ...itemizedRound(1, [disputeLine({ id: "o", lineId: "l1", claimedHours: 3 })], 3),
+      id: "d1",
+    };
+    expect(noteCounts(render1(2, 2, [older])).breakdown).toBe(1);
+  });
+
+  describe("a line claimed while pending (frozen paid null)", () => {
+    // Pending line asks 2h (flag 2, never paid at claim time) + short line asks
+    // 3h (flag 4, paid 1); 2.0h back, no per-line split recorded.
+    const mixedLines = () => [
+      disputeLine({ id: "a", lineId: "l1", flaggedHours: 2, paidHours: null, claimedHours: 2 }),
+      disputeLine({ id: "b", lineId: "l2", code: "ALN", flaggedHours: 4, paidHours: 1, claimedHours: 3 }),
+    ];
+    const renderMixed = (pPending: number | null, pShort: number, shorted: number) =>
+      renderCard({
+        allDisputes: [{ ...itemizedRound(2, mixedLines(), 5), id: "d2", createdAt: ID_ERA }],
+        entries: [
+          liveRO([
+            liveLine({ id: "l1", flagHours: 2, paidHours: pPending }),
+            liveLine({ id: "l2", customCode: "ALN", flagHours: 4, paidHours: pShort }),
+          ]),
+        ],
+        shortedHours: shorted,
+      });
+
+    it("pending line paid on a normal stub, short line untouched: the note stays (verifier repro 1)", () => {
+      // Short line still 3h short; the 2.0h was never entered.
+      expect(noteCounts(renderMixed(2, 1, 3))).toEqual({ goodwill: 0, periodTotal: 0, breakdown: 1 });
+    });
+
+    it("the recovery entered on the short line: the note stops", () => {
+      const container = renderMixed(2, 3, 1);
+      expect(noteCounts(container).breakdown).toBe(0);
+      expect(container.textContent).toContain("still short 1.0h");
+    });
+
+    it("pending 5h line paid 5 normally, 2.0h back: the note stays (verifier repro 2)", () => {
+      const container = renderCard({
+        allDisputes: [
+          {
+            ...itemizedRound(2, [
+              disputeLine({ id: "a", lineId: "l1", flaggedHours: 5, paidHours: null, claimedHours: 5 }),
+              disputeLine({ id: "b", lineId: "l2", code: "ALN", flaggedHours: 4, paidHours: 1, claimedHours: 3 }),
+            ], 8),
+            id: "d2",
+            createdAt: ID_ERA,
+          },
+        ],
+        entries: [
+          liveRO([
+            liveLine({ id: "l1", flagHours: 5, paidHours: 5 }),
+            liveLine({ id: "l2", customCode: "ALN", flagHours: 4, paidHours: 1 }),
+          ]),
+        ],
+        shortedHours: 3,
+      });
+      expect(noteCounts(container).breakdown).toBe(1);
+    });
+  });
+
+  it("older-round note is left as it was: it still names the unrecorded split, and asks for no entry", () => {
+    // The breakdown round is OLDER here (an applied one-line round is newest),
+    // and its lines already rose 1 + 1. Its rise is not attributable (newer
+    // money may sit on its lines), so the check-your-stub note stays.
+    const newest: Dispute = {
+      ...itemizedRound(0.5, [disputeLine({ id: "n", entryId: "e9", roNumber: "2002", lineId: "l9", recoveredHours: 0.5 })], 0.5),
+      id: "d3",
+    };
+    const container = renderCard({
+      allDisputes: [newest, { ...itemizedRound(2, lines(), 6), id: "d2" }],
+      entries: entries(2, 2),
+      shortedHours: 4,
+    });
+    const notes = flat(container).filter((t) => t.includes("can't place on a line"));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("because no per-line split was recorded");
+    expect(notes[0]).toMatch(/check your pay stub\.$/);
+    expect(notes[0].toLowerCase()).not.toContain("enter the paid hours");
+  });
+
+  describe("an OPEN later round", () => {
+    // The closed round's 2.0h was never entered. A second round is opened; the
+    // shop pays it and the tech types ITS hours on before closing it in the
+    // app. The page passes the open round as openDispute AND in allDisputes.
+    const openRound = (lines: DisputeLine[], over: Partial<Dispute> = {}): Dispute => ({
+      ...closedRound("d3", 0),
+      scope: "lines",
+      status: "submitted",
+      claimedHours: 6,
+      answeredAt: null,
+      resolvedAt: null,
+      createdAt: "2026-10-05T00:00:00Z",
+      updatedAt: "2026-10-05T00:00:00Z",
+      lines,
+      ...over,
+    });
+    const renderWithOpen = (open: Dispute) =>
+      renderCard({
+        allDisputes: [open, { ...itemizedRound(2, lines(), 6), id: "d2", createdAt: ID_ERA }],
+        openDispute: open,
+        entries: entries(2, 2),
+        shortedHours: 4,
+      });
+
+    it("open round on the SAME lines, lines raised by its money: round 1's note stays", () => {
+      const open = openRound([
+        disputeLine({ id: "o1", disputeId: "d3", lineId: "l1", flaggedHours: 4, paidHours: 1, claimedHours: 3 }),
+        disputeLine({ id: "o2", disputeId: "d3", lineId: "l2", code: "ALN", flaggedHours: 4, paidHours: 1, claimedHours: 3 }),
+      ]);
+      expect(noteCounts(renderWithOpen(open)).breakdown).toBe(1);
+    });
+
+    it("open round on a different RO: round 1's note goes quiet once entered", () => {
+      const open = openRound([
+        disputeLine({ id: "o1", disputeId: "d3", entryId: "e9", roNumber: "2002", lineId: "l9", claimedHours: 1 }),
+      ]);
+      expect(noteCounts(renderWithOpen(open)).breakdown).toBe(0);
+    });
+
+    it("an open period-total round blocks it outright", () => {
+      const open = openRound([], { scope: "period", claimedHours: 4 });
+      expect(noteCounts(renderWithOpen(open)).breakdown).toBe(1);
+    });
   });
 });
 
