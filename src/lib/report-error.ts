@@ -50,8 +50,21 @@
 //   * The 20260717 throttle trigger stamps `inserted_by := auth.uid()` from the
 //     JWT on every row, so real attribution exists in the DB even when user_id
 //     comes back null.
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/client";
 import { authCookieName } from "@/lib/supabase/config";
+
+// Identity = the Supabase user id only; the scrubber strips anything else.
+function captureToSentry(error: unknown, userId: string | null): void {
+  try {
+    Sentry.withScope((scope) => {
+      if (userId) scope.setUser({ id: userId });
+      Sentry.captureException(error);
+    });
+  } catch (err) {
+    warn("sentry capture threw", err);
+  }
+}
 
 const WINDOW_MS = 60_000;
 // hash -> last-report epoch ms. Module-scoped so it survives re-renders.
@@ -273,6 +286,10 @@ export async function reportError(
       url,
     };
     beacon = beaconInsert(row, session);
+    // Sentry runs in parallel with client_errors (launch plan step 3: ~2 weeks
+    // side by side, then decide whether to retire the table). AFTER the beacon,
+    // so it can never delay the keepalive write. Synchronous: it only queues.
+    captureToSentry(error, session?.userId ?? null);
   } catch (err) {
     warn("could not build the report", err);
     return;
@@ -295,6 +312,18 @@ export async function reportError(
     if (insertError) warn("fallback insert failed", insertError.message);
   } catch (err) {
     warn("fallback insert threw", err);
+  }
+}
+
+// The signed-in user's id, read synchronously from the session cookie (same
+// read as the reporter above). Used by the browser Sentry init so errors that
+// never pass through reportError (uncaught exceptions, unhandled rejections)
+// still carry the user id. Never throws.
+export function sessionUserId(): string | null {
+  try {
+    return readSessionFromCookie()?.userId ?? null;
+  } catch {
+    return null;
   }
 }
 

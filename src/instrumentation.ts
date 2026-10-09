@@ -23,11 +23,24 @@
  *
  * This is inert unless FRT_FIXTURE_MODE=1, which is set on the canary container
  * only — never on the app service.
+ *
+ * SENTRY (launch plan step 3) starts here too, but ONLY outside fixture mode:
+ * the canary must never report, and the two branches never both run. With no
+ * NEXT_PUBLIC_SENTRY_DSN baked into the build (dev, CI) init is a no-op.
  */
+import * as Sentry from "@sentry/nextjs";
 import { FIXTURE_MODE, FIXTURE_NOW_ISO, FIXTURE_NOW_MS } from "@/lib/fixtures/enabled";
+import { sentryOptions } from "@/lib/sentry/options";
+
+// Errors thrown in Server Components, route handlers and server actions that no
+// try/catch handled. A no-op when Sentry was never initialised.
+export const onRequestError = Sentry.captureRequestError;
 
 export function register() {
-  if (!FIXTURE_MODE) return;
+  if (!FIXTURE_MODE) {
+    Sentry.init(sentryOptions());
+    return;
+  }
 
   const RealDate = Date;
 

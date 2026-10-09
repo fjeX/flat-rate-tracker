@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 import { classifySupabaseUrl } from "./src/lib/supabase/environments";
 
@@ -28,7 +29,7 @@ const nextConfig: NextConfig = {
 // Escape hatch for reproducing a prod-only bug, on the COMMAND LINE only:
 //   FRT_ALLOW_PROD_DEV=1 NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… npm run dev
 // Never put it in .env.local — then the guard is off for every session after.
-export default function config(phase: string): NextConfig {
+function config(phase: string): NextConfig {
   if (phase === PHASE_DEVELOPMENT_SERVER && process.env.FRT_ALLOW_PROD_DEV !== "1") {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (classifySupabaseUrl(url) === "other") {
@@ -42,3 +43,24 @@ export default function config(phase: string): NextConfig {
   }
   return nextConfig;
 }
+
+// Sentry build step (launch plan step 3): upload source maps so stack traces
+// point at real file:line, and stamp the bundle with the release (git SHA).
+//
+// Only does anything when the VM's Docker build passes SENTRY_AUTH_TOKEN (as a
+// BuildKit secret, never an image layer) + SENTRY_RELEASE from deploy.sh. Local
+// and CI builds have no token, so the upload is skipped and nothing is sent.
+// Maps are deleted after upload, so the public site never serves them.
+export default withSentryConfig(config, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  release: { name: process.env.SENTRY_RELEASE || undefined },
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+    deleteSourcemapsAfterUpload: true,
+  },
+  widenClientFileUpload: true,
+  silent: !process.env.SENTRY_AUTH_TOKEN,
+  telemetry: false,
+});

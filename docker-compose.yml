@@ -5,6 +5,14 @@ services:
       args:
         - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
         - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+        # Sentry. Unset = Sentry off in this build. SENTRY_RELEASE is exported
+        # by scripts/deploy.sh (git SHA); the rest live in .env.
+        - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+        - SENTRY_ORG=${SENTRY_ORG:-}
+        - SENTRY_PROJECT=${SENTRY_PROJECT:-}
+        - SENTRY_RELEASE=${SENTRY_RELEASE:-}
+      secrets:
+        - sentry_auth_token
     restart: unless-stopped
     environment:
       # Server-side Supabase calls go straight to Kong over the proxy network
@@ -56,6 +64,13 @@ services:
       # on this VM. Anything here must be a port nothing else on the homelab
       # wants, or every deploy fails on a port bind.
       - "127.0.0.1:${CANARY_PORT:-3901}:3000"
+
+# Build-time only (see Dockerfile): the source-map upload token, mounted for the
+# `npm run build` step and never stored in the image. Read from SENTRY_AUTH_TOKEN
+# in .env.
+secrets:
+  sentry_auth_token:
+    environment: SENTRY_AUTH_TOKEN
 
 networks:
   proxy:

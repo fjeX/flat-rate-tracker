@@ -11,7 +11,18 @@ ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-RUN npm run build
+# Sentry (launch plan step 3). The DSN is public by design and baked into the
+# bundle like the Supabase vars. Org/project/release are not secrets either.
+ARG NEXT_PUBLIC_SENTRY_DSN
+ARG SENTRY_ORG
+ARG SENTRY_PROJECT
+ARG SENTRY_RELEASE
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN     SENTRY_ORG=$SENTRY_ORG     SENTRY_PROJECT=$SENTRY_PROJECT     SENTRY_RELEASE=$SENTRY_RELEASE
+# The auth token (uploads source maps) IS a secret: it arrives as a BuildKit
+# secret mount, exists only for this RUN, and is never written to a layer — an
+# ARG/ENV would be readable by anyone with the image (`docker history`).
+# No secret supplied (local/CI builds) = the upload is skipped, build still works.
+RUN --mount=type=secret,id=sentry_auth_token     if [ -s /run/secrets/sentry_auth_token ]; then       export SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token)";     fi;     npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app

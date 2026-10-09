@@ -55,6 +55,26 @@ ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
 die()  { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
+# Tell Sentry this release went live, so issues show "first seen in deploy X".
+# Only after the smoke accepts the deploy: a rolled-back build never counts as
+# deployed. Never fatal — Sentry being down must not fail a good deploy.
+sentry_mark_deploy() {
+  local token org
+  token="$(grep -m1 '^SENTRY_AUTH_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)"
+  org="$(grep -m1 '^SENTRY_ORG=' .env 2>/dev/null | cut -d= -f2- || true)"
+  if [[ -z "$token" || -z "$org" || -z "${SENTRY_RELEASE:-}" ]]; then
+    warn "Sentry deploy not marked (no SENTRY_AUTH_TOKEN/SENTRY_ORG in .env)"
+    return 0
+  fi
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -X POST \
+    -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
+    -d '{"environment":"production"}' \
+    "https://us.sentry.io/api/0/organizations/$org/releases/$SENTRY_RELEASE/deploys/" || true)"
+  if [[ "$code" == "201" ]]; then ok "Sentry: release ${SENTRY_RELEASE:0:12} marked deployed"
+  else warn "Sentry deploy mark returned HTTP $code (release missing? source map upload may have been skipped)"; fi
+}
+
 # ── Preconditions ───────────────────────────────────────────────────────────
 [[ -f docker-compose.yml ]] || die "not in the FRT repo ($REPO_DIR)"
 command -v docker >/dev/null || die "docker not found — this script is VM-only"
@@ -112,6 +132,12 @@ fi
 # ── 2. Build ────────────────────────────────────────────────────────────────
 # `next build` type-checks, so a tsc error fails here and never reaches the site.
 log "Building"
+# Sentry release = the commit being built. docker-compose.yml passes it as a
+# build arg; the Sentry build step stamps it into the bundle and uploads source
+# maps under it (SENTRY_AUTH_TOKEN reaches the build as a BuildKit secret).
+# Every error in Sentry then says which deploy it happened in.
+export SENTRY_RELEASE="$(git rev-parse HEAD)"
+ok "Sentry release ${SENTRY_RELEASE:0:12}"
 docker compose build || die "build FAILED — nothing was deployed, the old container is untouched"
 ok "image built"
 
@@ -229,4 +255,5 @@ run_smoke || rollback "smoke FAILED on the new image"
 
 log "Deploy accepted"
 ok "smoke passed against $SMOKE_BASE_URL"
+sentry_mark_deploy
 docker compose ps
